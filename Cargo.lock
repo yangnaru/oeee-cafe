@@ -516,6 +516,7 @@ dependencies = [
  "minijinja",
  "minijinja-autoreload",
  "tokio",
+ "tower",
 ]
 
 [[package]]
