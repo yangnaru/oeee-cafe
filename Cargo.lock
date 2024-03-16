@@ -537,6 +537,7 @@ dependencies = [
  "axum",
  "minijinja",
  "minijinja-autoreload",
+ "serde",
  "tokio",
  "tower",
  "tower-http",
