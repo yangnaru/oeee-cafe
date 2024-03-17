@@ -20,6 +20,7 @@ minijinja-autoreload = "1.0.12"
 minijinja-contrib = { version = "1.0.12", features = ["datetime", "timezone"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_with = "3.7.0"
+sha256 = "1.5.0"
 time = "0.3.34"
 tokio = { version = "1.36.0", features = ["full"] }
 tower = "0.4.13"

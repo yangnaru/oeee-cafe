@@ -12,6 +12,12 @@ pub struct AppConfig {
     pub db_max_connections: u32,
     #[serde_as(as = "DurationSeconds<u64>")]
     pub db_acquire_timeout: Duration,
+
+    pub aws_access_key_id: String,
+    pub aws_secret_access_key: String,
+    pub aws_region: String,
+    pub aws_s3_bucket: String,
+    pub r2_endpoint_url: String,
 }
 
 impl AppConfig {

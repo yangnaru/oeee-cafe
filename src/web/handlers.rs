@@ -4,6 +4,11 @@ use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, CommunityDraft,
 };
 use crate::models::user::{create_user, update_user, AuthSession, Credentials, UserDraft};
+use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
+use aws_sdk_s3::error::SdkError;
+use aws_sdk_s3::operation::put_object::{PutObjectError, PutObjectOutput};
+use aws_sdk_s3::primitives::ByteStream;
+use aws_sdk_s3::Client;
 use axum::debug_handler;
 use axum::extract::{Path, Query};
 use axum::response::{IntoResponse, Redirect};
@@ -18,6 +23,7 @@ use data_url::DataUrl;
 use minijinja::context;
 use minijinja_autoreload::EnvironmentGuard;
 use serde::Deserialize;
+use sha256::{digest, try_digest};
 use std::{fs::File, io::Write};
 use uuid::Uuid;
 
@@ -366,27 +372,81 @@ pub async fn start_draw(
     Ok(Html(rendered))
 }
 
+pub async fn upload_object(
+    client: &Client,
+    bucket_name: &str,
+    bytes: Vec<u8>,
+    key: &str,
+) -> Result<PutObjectOutput, SdkError<PutObjectError>> {
+    let body = ByteStream::from(bytes);
+    client
+        .put_object()
+        .bucket(bucket_name)
+        .key(key)
+        .body(body)
+        .send()
+        .await
+}
+
 pub async fn draw_finish(
     State(_state): State<AppState>,
     mut multipart: Multipart,
 ) -> Result<Html<String>, StatusCode> {
+    let credentials: AwsCredentials = AwsCredentials::new(
+        _state.config.aws_access_key_id.clone(),
+        _state.config.aws_secret_access_key.clone(),
+        None,
+        None,
+        "",
+    );
+    let credentials_provider = SharedCredentialsProvider::new(credentials);
+    let config = aws_sdk_s3::Config::builder()
+        .endpoint_url(_state.config.r2_endpoint_url.clone())
+        .region(Region::new(_state.config.aws_region.clone()))
+        .credentials_provider(credentials_provider)
+        .behavior_version_latest()
+        .build();
+    let client = Client::from_conf(config);
+
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
         let data = field.bytes().await.unwrap();
 
-        // Write to file
         if name == "image" {
             let url = DataUrl::process(std::str::from_utf8(data.as_ref()).unwrap()).unwrap();
             let (body, _fragment) = url.decode_to_vec().unwrap();
+            let digest: String = digest(&body);
 
             assert_eq!(url.mime_type().type_, "image");
             assert_eq!(url.mime_type().subtype, "png");
 
-            let mut file = File::create(format!("{name}.png")).unwrap();
-            file.write_all(&body).unwrap();
+            upload_object(
+                &client,
+                &_state.config.aws_s3_bucket,
+                body,
+                &format!(
+                    "image/{}{}/{}.png",
+                    digest.chars().nth(0).unwrap(),
+                    digest.chars().nth(1).unwrap(),
+                    digest
+                ),
+            )
+            .await;
         } else if name == "animation" {
-            let mut file = File::create(format!("{name}.pch")).unwrap();
-            file.write_all(&data).unwrap();
+            let digest = digest(&*data);
+
+            upload_object(
+                &client,
+                &_state.config.aws_s3_bucket,
+                data.to_vec(),
+                &format!(
+                    "replay/{}{}/{}.pch",
+                    digest.chars().nth(0).unwrap(),
+                    digest.chars().nth(1).unwrap(),
+                    digest
+                ),
+            )
+            .await;
         }
 
         println!("Length of `{}` is {} bytes", name, data.len());
