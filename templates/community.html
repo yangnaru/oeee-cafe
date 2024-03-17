@@ -1,0 +1,38 @@
+{% extends "base.html" %} {% block body %}
+<h2>{{ community.name }}</h2>
+<p>{{ community.description }}</p>
+<form action="/draw" method="post">
+  <select name="width" title="너비">
+    <option value="300">300</option>
+    <option value="350" selected>350</option>
+    <option value="400">400</option>
+    <option value="450">450</option>
+    <option value="500">500</option>
+    <option value="550">550</option>
+    <option value="600">600</option>
+    <option value="650">650</option>
+    <option value="700">700</option>
+    <option value="750">750</option>
+    <option value="800">800</option>
+    <option value="850">850</option>
+    <option value="900">900</option>
+    <option value="950">950</option>
+    <option value="1000">1000</option>
+  </select>
+  X
+  <select name="height" title="높이">
+    <option value="300">300</option>
+    <option value="350">350</option>
+    <option value="400" selected>400</option>
+    <option value="450">450</option>
+    <option value="500">500</option>
+    <option value="550">550</option>
+    <option value="600">600</option>
+    <option value="650">650</option>
+    <option value="700">700</option>
+    <option value="750">750</option>
+    <option value="800">800</option>
+  </select>
+  <input type="submit" value="새 그림 그리기" />
+</form>
+{% endblock %}

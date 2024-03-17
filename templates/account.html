@@ -1,0 +1,60 @@
+{% extends "base.html" %} {% block body %}
+<h2>계정</h2>
+
+<form method="post">
+  <fieldset>
+    <legend>기본 정보</legend>
+    <input type="hidden" name="user_id" value="{{ current_user.id }}" />
+    <p>
+      <span>아이디: {{ current_user.login_name }}</span>
+    </p>
+    <p>
+      가입일: {{ current_user.created_at|dateformat(format="short",
+      tz="Asia/Seoul") }}
+    </p>
+    <p>
+      <label for="display_name">닉네임:</label>
+      <input
+        name="display_name"
+        id="display_name"
+        value="{{ current_user.display_name }}"
+      />
+    </p>
+    <p>
+      <label for="email">이메일:</label>
+      <input
+        name="email"
+        id="email"
+        type="email"
+        value="{{ current_user.email }}"
+      />
+    </p>
+  </fieldset>
+  <input type="submit" value="수정" />
+</form>
+
+<form>
+  <fieldset>
+    <legend>비밀번호 변경</legend>
+    <input type="hidden" name="user_id" value="{{ current_user.id }}" />
+    <p>
+      <label for="current_password">현재 비밀번호:</label>
+      <input name="current_password" id="current_password" type="password" />
+    </p>
+    <p>
+      <label for="current_password">새 비밀번호:</label>
+      <input name="current_password" id="new_password" type="password" />
+    </p>
+    <p>
+      <label for="current_password">새 비밀번호 (한 번 더):</label>
+      <input
+        name="current_password"
+        id="new_password_confirm"
+        type="password"
+      />
+    </p>
+  </fieldset>
+  <input type="submit" value="수정" />
+</form>
+
+{% endblock %}

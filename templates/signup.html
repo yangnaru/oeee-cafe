@@ -1,0 +1,30 @@
+{% extends "base.html" %} {% block body %}
+<form method="post">
+  <fieldset>
+    <legend>회원가입</legend>
+    <p>
+      <label for="login_name">아이디</label>
+      <input name="login_name" id="login_name" />
+    </p>
+    <p>
+      <label for="password">비밀번호</label>
+      <input name="password" id="password" type="password" />
+    </p>
+    <p>
+      <label for="password_confirm">비밀번호 (한 번 더)</label>
+      <input name="password_confirm" id="password_confirm" type="password" />
+    </p>
+    <p>
+      <label for="display_name">닉네임</label>
+      <input name="display_name" id="display_name" />
+    </p>
+    <p>
+      <label for="email">이메일</label>
+      <input name="email" id="email" type="email" />
+    </p>
+  </fieldset>
+
+  <input type="submit" value="회원가입" />
+</form>
+
+{% endblock %}

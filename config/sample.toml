@@ -1,0 +1,3 @@
+db_url = "postgres://"
+db_max_connections = 5
+db_acquire_timeout = 3

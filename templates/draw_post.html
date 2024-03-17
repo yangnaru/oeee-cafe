@@ -1,0 +1,54 @@
+{% extends "base.html" %} {% block title %}{{ super() }} | {{ title }}{%
+endblock %} {% block body %}
+<h1>{{ title }}</h1>
+<link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
+<script src="/static/neo/dist/neo.js" charset="utf-8"></script>
+<script>
+  const w = {{ width + 150 }};
+  const h = {{ height + 172 }};
+  const iw = {{ width }};
+  const ih = {{ height }};
+</script>
+<script>
+  document.write(`
+       <applet-dummy name="paintbbs" width="${w}" height="${h}" >
+         <param name="image_width" value="${iw}">
+         <param name="image_height" value="${ih}">
+         <param name="thumbnail_type" value="animation">
+       </applet-dummy>
+     `);
+
+  document.paintBBSCallback = function (str) {
+    if (str === "check") {
+      const image = Neo.painter.getImage();
+      const animation = Neo.painter.getThumbnail("animation");
+
+      const form = new FormData();
+      form.append("image", image.toDataURL("image/png"));
+      form.append("animation", animation);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/finish", true);
+      xhr.send(form);
+
+      return false;
+    }
+  };
+</script>
+<br />
+
+<style>
+  img.sample {
+    border: 1px solid black;
+    margin-bottom: 5px;
+    display: block;
+  }
+  input {
+    width: 100px;
+  }
+  #pageView {
+    margin: 0 !important;
+  }
+</style>
+
+{% endblock %}

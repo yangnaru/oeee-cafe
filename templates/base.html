@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>{% block title %}오이카페{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css" type="text/css" />
+  </head>
+
+  <body>
+    <header>
+      <h1>오이카페 🥒</h1>
+      <nav>
+        <div id="menubar">
+          <div><a href="/">홈</a></div>
+          <div><a href="/about">오이카페?</a></div>
+          {% if current_user %}
+          <div><a href="/communities/new">커뮤니티 만들기</a></div>
+          <div><a href="/account">계정</a></div>
+          <form action="/logout" method="post">
+            <button type="submit">로그아웃</button>
+          </form>
+          {% else %}
+          <a href="/login">로그인</a>
+          <a href="/signup">회원가입</a>
+          {% endif %}
+        </div>
+      </nav>
+      <ul>
+        {% for message in messages %}
+        <li>
+          <span><strong>{{ message.m }}</strong></span>
+        </li>
+        {% endfor %}
+      </ul>
+    </header>
+    <main>{% block body %}{% endblock %}</main>
+  </body>
+</html>
