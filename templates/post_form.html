@@ -1,0 +1,26 @@
+{% extends "base.html" %} {% block body %}
+<div class="center">
+  <h2>{{ post.title }}</h2>
+  <p>{{ post.content }}</p>
+  <p>{{ post.created_at }}</p>
+  <p>
+    커뮤니티:
+    <a href="/communities/{{ post.community_id }}">{{ post.community_name }}</a>
+  </p>
+  <img
+    src="{{ r2_public_endpoint_url}}/image/{{ post.image_sha256[:2] }}/{{ post.image_sha256 }}.png"
+  />
+  <form action="/posts/publish" method="post">
+    <input type="hidden" name="post_id" value="{{ post.id }}" />
+    <p>
+      <label for="title">제목:</label>
+      <input type="text" name="title" />
+    </p>
+    <p>
+      <label for="content">내용:</label>
+      <textarea name="content"></textarea>
+    </p>
+    <input type="submit" value="게시" />
+  </form>
+</div>
+{% endblock %}

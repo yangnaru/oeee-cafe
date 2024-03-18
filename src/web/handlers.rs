@@ -1,7 +1,12 @@
+use std::collections::HashMap;
+
 use super::state::AppState;
 use crate::app_error::AppError;
 use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, CommunityDraft,
+};
+use crate::models::post::{
+    create_post, find_post_by_id, find_published_posts_by_community_id, publish_post, PostDraft,
 };
 use crate::models::user::{create_user, update_user, AuthSession, Credentials, UserDraft};
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
@@ -9,9 +14,9 @@ use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::operation::put_object::{PutObjectError, PutObjectOutput};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
-use axum::debug_handler;
 use axum::extract::{Path, Query};
 use axum::response::{IntoResponse, Redirect};
+use axum::{debug_handler, Json};
 use axum::{
     extract::{Multipart, State},
     http::StatusCode,
@@ -19,15 +24,15 @@ use axum::{
     Form,
 };
 use axum_messages::Messages;
+use chrono::Duration;
 use data_url::DataUrl;
 use minijinja::context;
 use minijinja_autoreload::EnvironmentGuard;
-use serde::Deserialize;
-use sha256::{digest, try_digest};
-use std::{fs::File, io::Write};
+use serde::{Deserialize, Serialize};
+use sha256::digest;
+use sqlx::postgres::types::PgInterval;
 use uuid::Uuid;
 
-#[debug_handler]
 pub async fn home(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -44,18 +49,15 @@ pub async fn home(
         None => vec![],
     };
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("home.html").unwrap();
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("home.html")?;
 
-    let rendered = template
-        .clone()
-        .render(context! {
-            title => "홈",
-            current_user => auth_session.user,
-            messages => messages.into_iter().collect::<Vec<_>>(),
-            communities,
-        })
-        .unwrap();
+    let rendered = template.clone().render(context! {
+        title => "홈",
+        current_user => auth_session.user,
+        messages => messages.into_iter().collect::<Vec<_>>(),
+        communities,
+    })?;
 
     Ok(Html(rendered))
 }
@@ -63,16 +65,14 @@ pub async fn home(
 pub async fn account(
     auth_session: AuthSession,
     State(state): State<AppState>,
-) -> Result<Html<String>, StatusCode> {
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("account.html").unwrap();
+) -> Result<Html<String>, AppError> {
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("account.html")?;
 
-    let rendered = template
-        .render(context! {
-            title => "계정",
-            current_user => auth_session.user,
-        })
-        .unwrap();
+    let rendered = template.render(context! {
+        title => "계정",
+        current_user => auth_session.user,
+    })?;
 
     Ok(Html(rendered))
 }
@@ -86,15 +86,13 @@ pub async fn new_community_post(
     let mut tx = db.begin().await?;
     let community = find_community_by_id(&mut tx, id).await?;
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("draw_post.html").unwrap();
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("draw_post.html")?;
 
-    let rendered = template
-        .render(context! {
-            current_user => auth_session.user,
-            community => community,
-        })
-        .unwrap();
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        community => community,
+    })?;
 
     Ok(Html(rendered))
 }
@@ -112,14 +110,25 @@ pub async fn community(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("community.html").unwrap();
-    let rendered = template
-        .render(context! {
-            community => community,
-            current_user => auth_session.user,
-        })
-        .unwrap();
+    let posts = find_published_posts_by_community_id(&mut tx, id).await?;
+
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("community.html")?;
+    let rendered = template.render(context! {
+        community => community,
+        current_user => auth_session.user,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        posts => posts.iter().map(|post| {
+            HashMap::<String, String>::from_iter(vec![
+                ("id".to_string(), post.id.to_string()),
+                ("author_id".to_string(), post.author_id.to_string()),
+                ("image_sha256".to_string(), post.image_sha256.to_string()),
+                ("replay_sha256".to_string(), post.replay_sha256.to_string()),
+                ("created_at".to_string(), post.created_at.to_string()),
+                ("updated_at".to_string(), post.updated_at.to_string()),
+            ])
+        }).collect::<Vec<_>>(),
+    })?;
 
     Ok(Html(rendered).into_response())
 }
@@ -147,10 +156,72 @@ pub async fn edit_account(
     Ok(Redirect::to("/account").into_response())
 }
 
+pub async fn post_form(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Html<String>, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let post = find_post_by_id(&mut tx, id).await?;
+
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("post_form.html")?;
+
+    let rendered = template.render(context! {
+        title => "글쓰기",
+        current_user => auth_session.user,
+        community_id => id,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        post => {
+            match post {
+                Some(post) => Some(post),
+                None => None,
+            }
+        },
+    })?;
+
+    Ok(Html(rendered))
+}
+
+#[derive(Deserialize)]
+pub struct PostPublishForm {
+    post_id: String,
+    title: String,
+    content: String,
+}
+
+pub async fn post_publish(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Form(form): Form<PostPublishForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let post_id = Uuid::parse_str(&form.post_id)?;
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let post = find_post_by_id(&mut tx, post_id).await?;
+    if post.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let author_id = Uuid::parse_str(post.unwrap().get("author_id").unwrap())?;
+    let user_id = auth_session.user.unwrap().id;
+    if author_id != user_id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let _ = publish_post(&mut tx, post_id, form.title, form.content).await;
+    let _ = tx.commit().await;
+
+    Ok(Redirect::to("/").into_response())
+}
+
 #[derive(Deserialize)]
 pub struct CreateCommunityForm {
     name: String,
     description: String,
+    is_private: Option<String>,
 }
 
 pub async fn do_create_community(
@@ -166,6 +237,7 @@ pub async fn do_create_community(
         CommunityDraft {
             name: form.name,
             description: form.description,
+            is_private: form.is_private == Some("on".to_string()),
         },
     )
     .await;
@@ -177,16 +249,14 @@ pub async fn do_create_community(
 pub async fn create_community_form(
     auth_session: AuthSession,
     State(state): State<AppState>,
-) -> Result<Html<String>, StatusCode> {
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("create_community.html").unwrap();
+) -> Result<Html<String>, AppError> {
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("create_community.html")?;
 
-    let rendered = template
-        .render(context! {
-            title => "커뮤니티 생성",
-            current_user => auth_session.user,
-        })
-        .unwrap();
+    let rendered = template.render(context! {
+        title => "커뮤니티 생성",
+        current_user => auth_session.user,
+    })?;
 
     Ok(Html(rendered))
 }
@@ -202,18 +272,16 @@ pub async fn signup(
     messages: Messages,
     Query(NextUrl { next }): Query<NextUrl>,
     State(state): State<crate::web::state::AppState>,
-) -> impl IntoResponse {
-    let env = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("signup.html").unwrap();
+) -> Result<impl IntoResponse, AppError> {
+    let env = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("signup.html")?;
 
-    let rendered: String = template
-        .render(context! {
-            messages => messages.into_iter().collect::<Vec<_>>(),
-            next => next,
-        })
-        .unwrap();
+    let rendered: String = template.render(context! {
+        messages => messages.into_iter().collect::<Vec<_>>(),
+        next => next,
+    })?;
 
-    Html(rendered)
+    Ok(Html(rendered))
 }
 
 #[derive(Deserialize)]
@@ -264,20 +332,18 @@ pub async fn login(
     messages: Messages,
     Query(NextUrl { next }): Query<NextUrl>,
     State(state): State<crate::web::state::AppState>,
-) -> impl IntoResponse {
-    let env = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("login.html").unwrap();
+) -> Result<impl IntoResponse, AppError> {
+    let env = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("login.html")?;
 
     let collected_messages: Vec<axum_messages::Message> = messages.into_iter().collect();
 
-    let rendered: String = template
-        .render(context! {
-            messages => collected_messages,
-            next => next,
-        })
-        .unwrap();
+    let rendered: String = template.render(context! {
+        messages => collected_messages,
+        next => next,
+    })?;
 
-    Html(rendered)
+    Ok(Html(rendered))
 }
 
 pub async fn do_login(
@@ -330,19 +396,17 @@ pub async fn do_logout(mut auth_session: AuthSession) -> impl IntoResponse {
 pub async fn draw(
     State(state): State<AppState>,
     auth_session: AuthSession,
-) -> Result<Html<String>, StatusCode> {
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("draw.html").unwrap();
+) -> Result<Html<String>, AppError> {
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("draw.html")?;
 
     let some_example_entries: Vec<&str> = vec!["Data 1", "Data 2", "Data 3"];
 
-    let rendered = template
-        .render(context! {
-            title => "그리기",
-            entries => some_example_entries,
-            current_user => auth_session.user,
-        })
-        .unwrap();
+    let rendered = template.render(context! {
+        title => "그리기",
+        entries => some_example_entries,
+        current_user => auth_session.user,
+    })?;
 
     Ok(Html(rendered))
 }
@@ -351,23 +415,25 @@ pub async fn draw(
 pub struct Input {
     width: String,
     height: String,
+    community_id: String,
 }
 
 pub async fn start_draw(
+    auth_session: AuthSession,
     State(state): State<AppState>,
     Form(input): Form<Input>,
-) -> Result<Html<String>, StatusCode> {
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("draw_post.html").unwrap();
+) -> Result<Html<String>, AppError> {
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("draw_post.html")?;
 
-    let rendered = template
-        .render(context! {
-            title => "그리기",
-            message => "그림을 그렸습니다!",
-            width => input.width.parse::<u32>().unwrap(),
-            height => input.height.parse::<u32>().unwrap(),
-        })
-        .unwrap();
+    let rendered = template.render(context! {
+        title => "그리기",
+        message => "그림을 그렸습니다!",
+        width => input.width.parse::<u32>()?,
+        height => input.height.parse::<u32>()?,
+        community_id => input.community_id,
+        current_user => auth_session.user,
+    })?;
 
     Ok(Html(rendered))
 }
@@ -388,25 +454,37 @@ pub async fn upload_object(
         .await
 }
 
+#[derive(Serialize)]
+pub struct DrawFinishResponse {
+    pub community_id: Uuid,
+    pub post_id: Uuid,
+}
+
+#[debug_handler]
 pub async fn draw_finish(
-    State(_state): State<AppState>,
+    auth_session: AuthSession,
+    State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<Html<String>, StatusCode> {
+) -> Result<Json<DrawFinishResponse>, AppError> {
     let credentials: AwsCredentials = AwsCredentials::new(
-        _state.config.aws_access_key_id.clone(),
-        _state.config.aws_secret_access_key.clone(),
+        state.config.aws_access_key_id.clone(),
+        state.config.aws_secret_access_key.clone(),
         None,
         None,
         "",
     );
     let credentials_provider = SharedCredentialsProvider::new(credentials);
     let config = aws_sdk_s3::Config::builder()
-        .endpoint_url(_state.config.r2_endpoint_url.clone())
-        .region(Region::new(_state.config.aws_region.clone()))
+        .endpoint_url(state.config.r2_endpoint_url.clone())
+        .region(Region::new(state.config.aws_region.clone()))
         .credentials_provider(credentials_provider)
         .behavior_version_latest()
         .build();
     let client = Client::from_conf(config);
+
+    let mut image_sha256 = String::new();
+    let mut replay_sha256 = String::new();
+    let mut community_id = Uuid::nil();
 
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
@@ -415,57 +493,78 @@ pub async fn draw_finish(
         if name == "image" {
             let url = DataUrl::process(std::str::from_utf8(data.as_ref()).unwrap()).unwrap();
             let (body, _fragment) = url.decode_to_vec().unwrap();
-            let digest: String = digest(&body);
+            image_sha256 = digest(&body);
 
             assert_eq!(url.mime_type().type_, "image");
             assert_eq!(url.mime_type().subtype, "png");
 
             upload_object(
                 &client,
-                &_state.config.aws_s3_bucket,
+                &state.config.aws_s3_bucket,
                 body,
                 &format!(
                     "image/{}{}/{}.png",
-                    digest.chars().nth(0).unwrap(),
-                    digest.chars().nth(1).unwrap(),
-                    digest
+                    image_sha256.chars().nth(0).unwrap(),
+                    image_sha256.chars().nth(1).unwrap(),
+                    image_sha256
                 ),
             )
-            .await;
+            .await?;
         } else if name == "animation" {
-            let digest = digest(&*data);
+            replay_sha256 = digest(&*data);
 
             upload_object(
                 &client,
-                &_state.config.aws_s3_bucket,
+                &state.config.aws_s3_bucket,
                 data.to_vec(),
                 &format!(
                     "replay/{}{}/{}.pch",
-                    digest.chars().nth(0).unwrap(),
-                    digest.chars().nth(1).unwrap(),
-                    digest
+                    replay_sha256.chars().nth(0).unwrap(),
+                    replay_sha256.chars().nth(1).unwrap(),
+                    replay_sha256
                 ),
             )
-            .await;
+            .await?;
+        } else if name == "community_id" {
+            community_id = Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap()).unwrap();
         }
 
         println!("Length of `{}` is {} bytes", name, data.len());
     }
-    Ok(Html("".to_string()))
+
+    let post_draft = PostDraft {
+        author_id: auth_session.user.unwrap().id,
+        community_id,
+        paint_duration: PgInterval::try_from(Duration::try_seconds(0).unwrap_or_default())
+            .unwrap_or_default(),
+        image_sha256,
+        replay_sha256,
+    };
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let post = create_post(&mut tx, post_draft).await?;
+    let t = tx.commit().await;
+
+    println!("{:?}", post);
+    println!("{:?}", t);
+
+    Ok(Json(DrawFinishResponse {
+        community_id,
+        post_id: post.id,
+    }))
 }
 
 pub async fn about(
     State(state): State<AppState>,
     auth_session: AuthSession,
-) -> Result<Html<String>, StatusCode> {
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("about.html").unwrap();
+) -> Result<Html<String>, AppError> {
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("about.html")?;
 
-    let rendered: String = template
-        .render(context! {
-            current_user => auth_session.user,
-        })
-        .unwrap();
+    let rendered: String = template.render(context! {
+        current_user => auth_session.user,
+    })?;
 
     Ok(Html(rendered))
 }

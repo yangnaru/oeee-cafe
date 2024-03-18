@@ -1,11 +1,11 @@
 {% extends "base.html" %} {% block title %}{{ super() }} | {{ title }}{%
 endblock %} {% block body %} {% if current_user %}
-<p>안녕하세요, {{ current_user.display_name }}!</p>
-<h2>내 커뮤니티</h2>
-<ul>
-  {% for community in communities %}
-  <li><a href="/communities/{{ community.id }}">{{ community.name }}</a></li>
-  {% endfor %} {% else %}
-</ul>
-<p>안녕하세요, 방문자님!</p>
+<div class="center">
+  <h2>내 커뮤니티</h2>
+  <ul>
+    {% for community in communities %}
+    <li><a href="/communities/{{ community.id }}">{{ community.name }}</a></li>
+    {% endfor %} {% else %}
+  </ul>
+</div>
 {% endif %} {% endblock %}

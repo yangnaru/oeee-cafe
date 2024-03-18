@@ -13,6 +13,7 @@ pub struct Community {
     pub owner_id: Uuid,
     pub name: String,
     pub description: String,
+    pub is_private: bool,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
 }
@@ -20,6 +21,7 @@ pub struct Community {
 pub struct CommunityDraft {
     pub name: String,
     pub description: String,
+    pub is_private: bool,
 }
 
 pub async fn get_own_communities(
@@ -53,14 +55,16 @@ pub async fn create_community(
             INSERT INTO communities (
                 owner_id,
                 name,
-                description
+                description,
+                is_private
             )
-            VALUES ($1, $2, $3)
+            VALUES ($1, $2, $3, $4)
             RETURNING id, created_at, updated_at
         ",
         owner_id,
         community_draft.name,
         community_draft.description,
+        community_draft.is_private,
     );
     let result = q.fetch_one(&mut **tx).await?;
 
@@ -69,6 +73,7 @@ pub async fn create_community(
         owner_id,
         name: community_draft.name,
         description: community_draft.description,
+        is_private: community_draft.is_private,
         created_at: result.created_at,
         updated_at: result.updated_at,
     })

@@ -1,21 +1,24 @@
 {% extends "base.html" %} {% block title %}{{ super() }} | 커뮤니티 만들기{%
 endblock %} {% block body %}
-<h2>커뮤니티 만들기</h2>
-
-<form method="post" action="/communities">
-  <fieldset>
-    <legend>새 커뮤니티</legend>
-    <p>
-      <label for="name">커뮤니티 이름:</label>
-      <input name="name" id="name" />
-    </p>
-    <p>
-      <label for="email">커뮤니티 설명:</label>
-      <textarea name="description" id="description"></textarea>
-    </p>
-  </fieldset>
-
-  <input type="submit" value="만들기" />
-</form>
-
+<div class="center">
+  <h2>커뮤니티 만들기</h2>
+  <form method="post" action="/communities">
+    <fieldset>
+      <legend>새 커뮤니티</legend>
+      <p>
+        <label for="name">커뮤니티 이름:</label>
+        <input name="name" id="name" />
+      </p>
+      <p>
+        <label for="email">커뮤니티 설명:</label>
+        <textarea name="description" id="description"></textarea>
+      </p>
+      <p>
+        <label for="is_private">비공개:</label>
+        <input type="checkbox" name="is_private" id="is_private" />
+      </p>
+    </fieldset>
+    <input type="submit" value="만들기" />
+  </form>
+</div>
 {% endblock %}

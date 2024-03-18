@@ -1,4 +1,7 @@
 {
+  "rust-analyzer.server.extraEnv": {
+    "DATABASE_URL": "postgres://localhost/oeee"
+  },
   "editor.formatOnSave": true,
   "files.associations": {
     "templates/**/*.html": "jinja-html"

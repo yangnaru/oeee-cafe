@@ -19,19 +19,21 @@ CREATE TABLE communities (
   owner_id uuid NOT NULL REFERENCES users (id),
   name varchar(255) NOT NULL,
   description text NOT NULL,
+  is_private boolean NOT NULL,
   created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE posts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  paint_duration interval NOT NULL,
-  title varchar(255) NOT NULL,
-  content text NOT NULL,
+  title varchar(255),
+  content text,
   author_id uuid NOT NULL REFERENCES users (id),
   community_id uuid NOT NULL REFERENCES communities (id),
+  paint_duration interval NOT NULL,
   image_sha256 bytea NOT NULL,
-  animation_sha256 bytea NOT NULL,
+  replay_sha256 bytea NOT NULL,
+  published_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

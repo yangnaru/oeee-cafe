@@ -18,6 +18,7 @@ pub struct AppConfig {
     pub aws_region: String,
     pub aws_s3_bucket: String,
     pub r2_endpoint_url: String,
+    pub r2_public_endpoint_url: String,
 }
 
 impl AppConfig {

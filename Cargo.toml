@@ -15,6 +15,7 @@ axum-messages = "0.5.0"
 chrono = { version = "0.4.35", features = ["serde"] }
 config = "0.14.0"
 data-url = "0.3.1"
+hex = "0.4.3"
 minijinja = { version = "1.0.12", features = ["loader"] }
 minijinja-autoreload = "1.0.12"
 minijinja-contrib = { version = "1.0.12", features = ["datetime", "timezone"] }

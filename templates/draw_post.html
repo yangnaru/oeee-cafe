@@ -1,21 +1,17 @@
 {% extends "base.html" %} {% block title %}{{ super() }} | {{ title }}{%
 endblock %} {% block body %}
-<h1>{{ title }}</h1>
+<h2 class="center">{{ title }}</h2>
 <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
 <script src="/static/neo/dist/neo.js" charset="utf-8"></script>
 <script>
-  const w = {{ width + 150 }};
-  const h = {{ height + 172 }};
-  const iw = {{ width }};
-  const ih = {{ height }};
-</script>
-<script>
   document.write(`
-       <applet-dummy name="paintbbs" width="${w}" height="${h}" >
-         <param name="image_width" value="${iw}">
-         <param name="image_height" value="${ih}">
+  <div id="appstage">
+       <applet-dummy name="paintbbs" width="{{ width + 150 }}" height="{{ height + 172 }}" >
+         <param name="image_width" value="{{ width }}">
+         <param name="image_height" value="{{ height }}">
          <param name="thumbnail_type" value="animation">
        </applet-dummy>
+       </div>
      `);
 
   document.paintBBSCallback = function (str) {
@@ -26,29 +22,31 @@ endblock %} {% block body %}
       const form = new FormData();
       form.append("image", image.toDataURL("image/png"));
       form.append("animation", animation);
+      form.append("community_id", "{{ community_id }}");
 
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/finish", true);
-      xhr.send(form);
+      // post form using fetch
+      fetch("/finish", {
+        method: "POST",
+        body: form,
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          console.log(data);
+          if (data?.error) {
+            alert(data.error);
+          } else {
+            location.href = `/posts/${data.post_id}`;
+          }
+        })
+        .catch((error) => {
+          alert(
+            "그림을 게시하는 도중 오류가 발생했습니다. 다시 제출해 보세요."
+          );
+        });
 
       return false;
     }
   };
 </script>
 <br />
-
-<style>
-  img.sample {
-    border: 1px solid black;
-    margin-bottom: 5px;
-    display: block;
-  }
-  input {
-    width: 100px;
-  }
-  #pageView {
-    margin: 0 !important;
-  }
-</style>
-
 {% endblock %}

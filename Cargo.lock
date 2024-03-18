@@ -1922,6 +1922,7 @@ dependencies = [
  "chrono",
  "config",
  "data-url",
+ "hex",
  "minijinja",
  "minijinja-autoreload",
  "minijinja-contrib",
