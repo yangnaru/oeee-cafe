@@ -31,8 +31,9 @@ CREATE TABLE posts (
   author_id uuid NOT NULL REFERENCES users (id),
   community_id uuid NOT NULL REFERENCES communities (id),
   paint_duration interval NOT NULL,
-  image_sha256 bytea NOT NULL,
-  replay_sha256 bytea NOT NULL,
+  stroke_count int NOT NULL,
+  image_filename varchar(255) NOT NULL,
+  replay_filename varchar(255) NOT NULL,
   published_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP

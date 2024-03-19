@@ -26,3 +26,9 @@ h1 > a:visited, nav a:visited {
     margin: 0 auto;
     max-width: 750px;
 }
+
+.posts-grid {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}

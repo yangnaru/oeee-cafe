@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::state::AppState;
 use crate::app_error::AppError;
@@ -6,7 +7,8 @@ use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, CommunityDraft,
 };
 use crate::models::post::{
-    create_post, find_post_by_id, find_published_posts_by_community_id, publish_post, PostDraft,
+    create_post, find_draft_posts_by_author_id, find_post_by_id,
+    find_published_posts_by_community_id, get_draft_post_count, publish_post, PostDraft,
 };
 use crate::models::user::{create_user, update_user, AuthSession, Credentials, UserDraft};
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
@@ -38,15 +40,22 @@ pub async fn home(
     State(state): State<AppState>,
     messages: Messages,
 ) -> Result<Html<String>, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
     let communities = match auth_session.user.clone() {
         Some(user) => {
-            let db = state.config.connect_database().await?;
-            let mut tx = db.begin().await?;
             let communities = get_own_communities(&mut tx, user.id).await?;
-            let _ = tx.commit().await;
             communities
         }
         None => vec![],
+    };
+
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
     };
 
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
@@ -56,6 +65,7 @@ pub async fn home(
         title => "홈",
         current_user => auth_session.user,
         messages => messages.into_iter().collect::<Vec<_>>(),
+        draft_post_count,
         communities,
     })?;
 
@@ -66,12 +76,21 @@ pub async fn account(
     auth_session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("account.html")?;
-
     let rendered = template.render(context! {
         title => "계정",
         current_user => auth_session.user,
+        draft_post_count,
     })?;
 
     Ok(Html(rendered))
@@ -85,6 +104,12 @@ pub async fn new_community_post(
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let community = find_community_by_id(&mut tx, id).await?;
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
 
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("draw_post.html")?;
@@ -92,6 +117,7 @@ pub async fn new_community_post(
     let rendered = template.render(context! {
         current_user => auth_session.user,
         community => community,
+        draft_post_count,
     })?;
 
     Ok(Html(rendered))
@@ -111,6 +137,12 @@ pub async fn community(
     }
 
     let posts = find_published_posts_by_community_id(&mut tx, id).await?;
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
 
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("community.html")?;
@@ -122,12 +154,13 @@ pub async fn community(
             HashMap::<String, String>::from_iter(vec![
                 ("id".to_string(), post.id.to_string()),
                 ("author_id".to_string(), post.author_id.to_string()),
-                ("image_sha256".to_string(), post.image_sha256.to_string()),
-                ("replay_sha256".to_string(), post.replay_sha256.to_string()),
+                ("image_filename".to_string(), post.image_filename.to_string()),
+                ("replay_filename".to_string(), post.replay_filename.to_string()),
                 ("created_at".to_string(), post.created_at.to_string()),
                 ("updated_at".to_string(), post.updated_at.to_string()),
             ])
         }).collect::<Vec<_>>(),
+        draft_post_count,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -156,6 +189,33 @@ pub async fn edit_account(
     Ok(Redirect::to("/account").into_response())
 }
 
+pub async fn draft_posts(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<Html<String>, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+    let posts =
+        find_draft_posts_by_author_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("draft_posts.html")?;
+    let rendered = template.render(context! {
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        current_user => auth_session.user,
+        posts => posts,
+        draft_post_count,
+    })?;
+
+    Ok(Html(rendered))
+}
+
 pub async fn post_form(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -164,6 +224,12 @@ pub async fn post_form(
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, id).await?;
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
 
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("post_form.html")?;
@@ -179,6 +245,7 @@ pub async fn post_form(
                 None => None,
             }
         },
+        draft_post_count,
     })?;
 
     Ok(Html(rendered))
@@ -205,7 +272,7 @@ pub async fn post_publish(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let author_id = Uuid::parse_str(post.unwrap().get("author_id").unwrap())?;
+    let author_id = Uuid::parse_str(post.clone().unwrap().get("author_id").unwrap())?;
     let user_id = auth_session.user.unwrap().id;
     if author_id != user_id {
         return Ok(StatusCode::FORBIDDEN.into_response());
@@ -214,7 +281,11 @@ pub async fn post_publish(
     let _ = publish_post(&mut tx, post_id, form.title, form.content).await;
     let _ = tx.commit().await;
 
-    Ok(Redirect::to("/").into_response())
+    Ok(Redirect::to(&format!(
+        "/communities/{}",
+        post.unwrap().get("community_id").unwrap()
+    ))
+    .into_response())
 }
 
 #[derive(Deserialize)]
@@ -250,12 +321,21 @@ pub async fn create_community_form(
     auth_session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
+    let db: sqlx::Pool<sqlx::Postgres> = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("create_community.html")?;
-
     let rendered = template.render(context! {
         title => "커뮤니티 생성",
         current_user => auth_session.user,
+        draft_post_count,
     })?;
 
     Ok(Html(rendered))
@@ -393,23 +473,6 @@ pub async fn do_logout(mut auth_session: AuthSession) -> impl IntoResponse {
     }
 }
 
-pub async fn draw(
-    State(state): State<AppState>,
-    auth_session: AuthSession,
-) -> Result<Html<String>, AppError> {
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("draw.html")?;
-
-    let some_example_entries: Vec<&str> = vec!["Data 1", "Data 2", "Data 3"];
-
-    let rendered = template.render(context! {
-        title => "그리기",
-        entries => some_example_entries,
-        current_user => auth_session.user,
-    })?;
-
-    Ok(Html(rendered))
-}
 #[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 pub struct Input {
@@ -485,6 +548,8 @@ pub async fn draw_finish(
     let mut image_sha256 = String::new();
     let mut replay_sha256 = String::new();
     let mut community_id = Uuid::nil();
+    let mut security_timer = 0;
+    let mut security_count = 0;
 
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
@@ -527,18 +592,41 @@ pub async fn draw_finish(
             .await?;
         } else if name == "community_id" {
             community_id = Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap()).unwrap();
+        } else if name == "security_timer" {
+            security_timer = std::str::from_utf8(data.as_ref())
+                .unwrap()
+                .parse::<u128>()
+                .unwrap();
+        } else if name == "security_count" {
+            security_count = std::str::from_utf8(data.as_ref())
+                .unwrap()
+                .parse::<i32>()
+                .unwrap();
         }
-
         println!("Length of `{}` is {} bytes", name, data.len());
     }
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    println!(
+        "duration_secs: {:?}",
+        (since_the_epoch.as_millis() - security_timer)
+    );
+    let duration_ms = since_the_epoch.as_millis() - security_timer;
+
+    println!("{} {}", security_timer, security_count);
 
     let post_draft = PostDraft {
         author_id: auth_session.user.unwrap().id,
         community_id,
-        paint_duration: PgInterval::try_from(Duration::try_seconds(0).unwrap_or_default())
-            .unwrap_or_default(),
-        image_sha256,
-        replay_sha256,
+        paint_duration: PgInterval::try_from(
+            Duration::try_milliseconds(duration_ms as i64).unwrap_or_default(),
+        )
+        .unwrap_or_default(),
+        stroke_count: security_count,
+        image_filename: format!("{}.png", image_sha256),
+        replay_filename: format!("{}.pch", replay_sha256),
     };
 
     let db = state.config.connect_database().await?;
@@ -559,11 +647,20 @@ pub async fn about(
     State(state): State<AppState>,
     auth_session: AuthSession,
 ) -> Result<Html<String>, AppError> {
+    let db: sqlx::Pool<sqlx::Postgres> = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("about.html")?;
-
     let rendered: String = template.render(context! {
         current_user => auth_session.user,
+        draft_post_count,
     })?;
 
     Ok(Html(rendered))

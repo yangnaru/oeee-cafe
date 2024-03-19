@@ -1,12 +1,11 @@
 use super::handlers::{
-    about, account, do_login, do_logout, do_signup, draw, draw_finish, home, login, signup,
-    start_draw,
+    about, account, do_login, do_logout, do_signup, draw_finish, home, login, signup, start_draw,
 };
 use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::{
-    community, create_community_form, do_create_community, edit_account, new_community_post,
-    post_form, post_publish,
+    community, create_community_form, do_create_community, draft_posts, edit_account,
+    new_community_post, post_form, post_publish,
 };
 use anyhow::Result;
 use axum::routing::{get, post};
@@ -72,9 +71,9 @@ impl App {
             .route("/communities/:id", get(community))
             .route("/communities/:id/draw", get(new_community_post))
             .route("/logout", post(do_logout))
-            .route("/draw", get(draw))
             .route("/draw", post(start_draw))
             .route("/finish", post(draw_finish))
+            .route("/posts/drafts", get(draft_posts))
             .route("/posts/:id", get(post_form))
             .route("/posts/publish", post(post_publish))
             .route_layer(login_required!(Backend, login_url = "/login"));

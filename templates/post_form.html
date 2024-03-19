@@ -8,7 +8,7 @@
     <a href="/communities/{{ post.community_id }}">{{ post.community_name }}</a>
   </p>
   <img
-    src="{{ r2_public_endpoint_url}}/image/{{ post.image_sha256[:2] }}/{{ post.image_sha256 }}.png"
+    src="{{ r2_public_endpoint_url}}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
   />
   <form action="/posts/publish" method="post">
     <input type="hidden" name="post_id" value="{{ post.id }}" />

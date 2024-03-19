@@ -40,18 +40,18 @@
   <h3>최근 그림</h3>
 
   {% if posts %}
-  <ul>
+  <div class="posts-grid">
     {% for post in posts %}
-    <li>
-      <a href="/draw/{{ post.id }}"
+    <div>
+      <a href="/posts/{{ post.id }}"
         ><span>{{ post.title }}</span>
         <img
-          src="{{ r2_public_endpoint_url }}/image/{{ post.image_sha256[:2] }}/{{ post.image_sha256 }}.png"
+          src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}.png"
         />
       </a>
-    </li>
+    </div>
     {% endfor %}
-  </ul>
+  </div>
 
   {% else %}
   <p>게시된 그림이 없습니다.</p>

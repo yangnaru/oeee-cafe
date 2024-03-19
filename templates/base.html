@@ -17,7 +17,11 @@
         <div id="menubar">
           <div><a href="/">홈</a></div>
           <div><a href="/about">오이카페?</a></div>
-          {% if current_user %}
+          {% if current_user %} {% if draft_post_count > 0 %}
+          <div>
+            <a href="/posts/drafts">임시 보관함 ({{ draft_post_count }})</a>
+          </div>
+          {% endif %}
           <div><a href="/communities/new">커뮤니티 만들기</a></div>
           <div><a href="/account">계정</a></div>
           <form action="/logout" method="post">

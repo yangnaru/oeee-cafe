@@ -12,8 +12,23 @@ pub struct Post {
     pub id: Uuid,
     pub author_id: Uuid,
     pub paint_duration: PgInterval,
-    pub image_sha256: String,
-    pub replay_sha256: String,
+    pub stroke_count: i32,
+    pub image_filename: String,
+    pub replay_filename: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+
+pub struct SerializablePost {
+    pub id: Uuid,
+    pub author_id: Uuid,
+    pub paint_duration: String,
+    pub stroke_count: i32,
+    pub image_filename: String,
+    pub replay_filename: String,
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -29,8 +44,9 @@ pub struct PostDraft {
     pub author_id: Uuid,
     pub community_id: Uuid,
     pub paint_duration: PgInterval,
-    pub image_sha256: String,
-    pub replay_sha256: String,
+    pub stroke_count: i32,
+    pub image_filename: String,
+    pub replay_filename: String,
 }
 
 pub async fn find_posts_by_community_id(
@@ -43,8 +59,9 @@ pub async fn find_posts_by_community_id(
                 id,
                 author_id,
                 paint_duration,
-                image_sha256,
-                replay_sha256,
+                stroke_count,
+                image_filename,
+                replay_filename,
                 published_at,
                 created_at,
                 updated_at
@@ -60,8 +77,62 @@ pub async fn find_posts_by_community_id(
             id: row.id,
             author_id: row.author_id,
             paint_duration: row.paint_duration,
-            image_sha256: hex::encode(row.image_sha256),
-            replay_sha256: hex::encode(row.replay_sha256),
+            stroke_count: row.stroke_count,
+            image_filename: row.image_filename,
+            replay_filename: row.replay_filename,
+            published_at: row.published_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+        .collect())
+}
+
+pub async fn get_draft_post_count(
+    tx: &mut Transaction<'_, Postgres>,
+    author_id: Uuid,
+) -> Result<i64> {
+    let q = query!(
+        "
+            SELECT COUNT(*) FROM posts WHERE author_id = $1 AND published_at IS NULL
+        ",
+        author_id
+    );
+    let result = q.fetch_one(&mut **tx).await?;
+    Ok(result.count.unwrap_or(0))
+}
+
+pub async fn find_draft_posts_by_author_id(
+    tx: &mut Transaction<'_, Postgres>,
+    author_id: Uuid,
+) -> Result<Vec<SerializablePost>> {
+    let q = query!(
+        "
+            SELECT
+                id,
+                author_id,
+                paint_duration,
+                stroke_count,
+                image_filename,
+                replay_filename,
+                published_at,
+                created_at,
+                updated_at
+            FROM posts
+            WHERE author_id = $1
+            AND published_at IS NULL
+        ",
+        author_id
+    );
+    let result = q.fetch_all(&mut **tx).await?;
+    Ok(result
+        .into_iter()
+        .map(|row| SerializablePost {
+            id: row.id,
+            author_id: row.author_id,
+            paint_duration: row.paint_duration.microseconds.to_string(),
+            stroke_count: row.stroke_count,
+            image_filename: row.image_filename,
+            replay_filename: row.replay_filename,
             published_at: row.published_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -79,8 +150,9 @@ pub async fn find_published_posts_by_community_id(
                 id,
                 author_id,
                 paint_duration,
-                image_sha256,
-                replay_sha256,
+                stroke_count,
+                image_filename,
+                replay_filename,
                 published_at,
                 created_at,
                 updated_at
@@ -97,8 +169,9 @@ pub async fn find_published_posts_by_community_id(
             id: row.id,
             author_id: row.author_id,
             paint_duration: row.paint_duration,
-            image_sha256: hex::encode(row.image_sha256),
-            replay_sha256: hex::encode(row.replay_sha256),
+            stroke_count: row.stroke_count,
+            image_filename: row.image_filename,
+            replay_filename: row.replay_filename,
             published_at: row.published_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -116,17 +189,19 @@ pub async fn create_post(
                 author_id,
                 community_id,
                 paint_duration,
-                image_sha256,
-                replay_sha256
+                stroke_count,
+                image_filename,
+                replay_filename
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id, created_at, updated_at
         ",
         post_draft.author_id,
         post_draft.community_id,
         post_draft.paint_duration,
-        hex::decode(&post_draft.image_sha256).unwrap(),
-        hex::decode(&post_draft.replay_sha256).unwrap(),
+        post_draft.stroke_count,
+        &post_draft.image_filename,
+        &post_draft.replay_filename,
     );
     let result = q.fetch_one(&mut **tx).await?;
 
@@ -134,8 +209,9 @@ pub async fn create_post(
         id: result.id,
         author_id: post_draft.author_id,
         paint_duration: post_draft.paint_duration,
-        image_sha256: post_draft.image_sha256,
-        replay_sha256: post_draft.replay_sha256,
+        stroke_count: post_draft.stroke_count,
+        image_filename: post_draft.image_filename,
+        replay_filename: post_draft.replay_filename,
         published_at: None,
         created_at: result.created_at,
         updated_at: result.updated_at,
@@ -154,8 +230,8 @@ pub async fn find_post_by_id(
                 posts.id,
                 posts.author_id,
                 posts.paint_duration,
-                posts.image_sha256,
-                posts.replay_sha256,
+                posts.image_filename,
+                posts.replay_filename,
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at,
@@ -173,8 +249,8 @@ pub async fn find_post_by_id(
         let mut map = HashMap::new();
         map.insert("id".to_string(), row.id.to_string());
         map.insert("author_id".to_string(), row.author_id.to_string());
-        map.insert("image_sha256".to_string(), hex::encode(row.image_sha256));
-        map.insert("replay_sha256".to_string(), hex::encode(row.replay_sha256));
+        map.insert("image_filename".to_string(), row.image_filename);
+        map.insert("replay_filename".to_string(), row.replay_filename);
         map.insert("created_at".to_string(), row.created_at.to_string());
         map.insert("updated_at".to_string(), row.updated_at.to_string());
         map.insert("community_id".to_string(), row.community_id.to_string());
