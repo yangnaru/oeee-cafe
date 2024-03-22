@@ -259,10 +259,12 @@ pub async fn find_post_by_id(
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at,
+                users.display_name AS display_name,
                 communities.id AS community_id,
                 communities.name AS community_name
             FROM posts
             LEFT JOIN communities ON posts.community_id = communities.id
+            LEFT JOIN users ON posts.author_id = users.id
             WHERE posts.id = $1
         ",
         id
@@ -273,6 +275,7 @@ pub async fn find_post_by_id(
         let mut map: HashMap<String, Option<String>> = HashMap::new();
         map.insert("id".to_string(), Some(row.id.to_string()));
         map.insert("author_id".to_string(), Some(row.author_id.to_string()));
+        map.insert("display_name".to_string(), Some(row.display_name));
         map.insert("title".to_string(), row.title);
         map.insert("content".to_string(), row.content);
 
