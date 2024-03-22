@@ -20,6 +20,7 @@ use time::Duration;
 use tokio::signal;
 use tokio::task::AbortHandle;
 use tower_http::services::ServeDir;
+use tower_sessions::cookie::SameSite;
 use tower_sessions::{session_store::ExpiredDeletion, Expiry, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 
@@ -56,6 +57,7 @@ impl App {
 
         let session_layer = SessionManagerLayer::new(session_store)
             .with_secure(true)
+            .with_same_site(SameSite::Lax)
             .with_expiry(Expiry::OnInactivity(Duration::seconds(60 * 60 * 24 * 30)));
 
         let auth_layer = AuthManagerLayerBuilder::new(authn_backend, session_layer).build();
