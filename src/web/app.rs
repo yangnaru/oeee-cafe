@@ -56,7 +56,7 @@ impl App {
         );
 
         let session_layer = SessionManagerLayer::new(session_store)
-            .with_secure(false)
+            .with_secure(true)
             .with_expiry(Expiry::OnInactivity(Duration::seconds(60 * 60 * 24 * 30)));
 
         let auth_layer = AuthManagerLayerBuilder::new(authn_backend, session_layer).build();
