@@ -40,12 +40,11 @@ impl App {
         let db = self.state.config.connect_database().await.unwrap();
         let authn_backend: Backend = Backend { db: db.to_owned() };
 
-        let schema_name = self.state.config.db_url.rsplit("/").next().unwrap();
         let pool = PgPool::connect(&self.state.config.db_url).await?;
         let session_store = PostgresStore::new(pool)
             .with_table_name("sessions")
             .unwrap()
-            .with_schema_name(schema_name)
+            .with_schema_name("public")
             .unwrap();
         session_store.migrate().await?;
 
