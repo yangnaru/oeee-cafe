@@ -10,6 +10,9 @@ body {
 nav {
     padding: 8px;
     background-color: greenyellow;
+    border-width: 1px;
+    border-color: green;
+    border-style: solid;
 }
 
 h1 > a:visited, nav a:visited {
@@ -31,4 +34,15 @@ h1 > a:visited, nav a:visited {
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
+    gap: 50px;
 }
+
+.posts-grid-item {
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+}
+
+#viewer {
+    margin-top: 1em;
+  }

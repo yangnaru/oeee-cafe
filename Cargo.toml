@@ -13,9 +13,11 @@ axum = { version = "0.7.4", features = ["macros", "multipart"] }
 axum-login = "0.14.0"
 axum-messages = "0.5.0"
 chrono = { version = "0.4.35", features = ["serde"] }
+chrono-tz = "0.8.6"
 config = "0.14.0"
 data-encoding = "2.5.0"
 data-url = "0.3.1"
+humantime = "2.1.0"
 minijinja = { version = "1.0.12", features = ["loader"] }
 minijinja-autoreload = "1.0.12"
 minijinja-contrib = { version = "1.0.12", features = ["datetime", "timezone"] }

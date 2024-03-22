@@ -8,8 +8,9 @@ CREATE TABLE users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   login_name varchar(255) NOT NULL UNIQUE,
   display_name varchar(255) NOT NULL,
-  email varchar(320) NOT NULL,
   password_hash text NOT NULL,
+  email varchar(320) NOT NULL,
+  email_verified_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -28,8 +29,11 @@ CREATE TABLE posts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title varchar(255),
   content text,
+  is_sensitive boolean NOT NULL,
   author_id uuid NOT NULL REFERENCES users (id),
   community_id uuid NOT NULL REFERENCES communities (id),
+  width int NOT NULL,
+  height int NOT NULL,
   paint_duration interval NOT NULL,
   stroke_count int NOT NULL,
   image_filename varchar(255) NOT NULL,

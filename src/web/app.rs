@@ -5,9 +5,11 @@ use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::{
     community, create_community_form, do_create_community, draft_posts, edit_account,
-    new_community_post, post_form, post_publish,
+    edit_password, handler_404, new_community_post, post_publish, post_publish_form,
+    post_replay_view, post_view,
 };
 use anyhow::Result;
+use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, post};
 use axum::Router;
 use axum_login::{login_required, AuthManagerLayerBuilder};
@@ -66,25 +68,32 @@ impl App {
         let protected_router = Router::new()
             .route("/account", get(account))
             .route("/account", post(edit_account))
+            .route("/account/password", post(edit_password))
             .route("/communities/new", get(create_community_form))
-            .route("/communities", post(do_create_community))
-            .route("/communities/:id", get(community))
             .route("/communities/:id/draw", get(new_community_post))
             .route("/logout", post(do_logout))
             .route("/draw", post(start_draw))
-            .route("/finish", post(draw_finish))
+            .route(
+                "/finish",
+                post(draw_finish).layer(DefaultBodyLimit::max(10 * 1024 * 1024)),
+            )
             .route("/posts/drafts", get(draft_posts))
-            .route("/posts/:id", get(post_form))
             .route("/posts/publish", post(post_publish))
+            .route("/posts/:id/publish", get(post_publish_form))
+            .route("/posts/:id/replay", get(post_replay_view))
             .route_layer(login_required!(Backend, login_url = "/login"));
 
         let app = Router::new()
             .route("/", get(home))
+            .route("/communities", post(do_create_community))
+            .route("/communities/:id", get(community))
+            .route("/posts/:id", get(post_view))
             .route("/about", get(about))
             .route("/signup", get(signup))
             .route("/signup", post(do_signup))
             .route("/login", get(login))
             .route("/login", post(do_login))
+            .fallback(handler_404)
             .merge(protected_router)
             .layer(MessagesManagerLayer)
             .layer(auth_layer)

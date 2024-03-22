@@ -7,8 +7,8 @@ use axum::async_trait;
 use axum_login::{AuthUser, AuthnBackend, UserId};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::types::Uuid;
 use sqlx::{query, query_as, PgPool, Postgres, Transaction};
-use uuid::Uuid;
 
 pub struct UserDraft {
     pub login_name: String,
@@ -52,6 +52,7 @@ pub struct User {
     pub password_hash: String,
     pub display_name: String,
     pub email: String,
+    pub email_verified_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
 }
@@ -65,6 +66,42 @@ impl User {
     }
 }
 
+pub async fn update_password(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    new_password: String,
+) -> Result<User> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let password_hash = argon2
+        .hash_password(new_password.as_bytes(), &salt)?
+        .serialize()
+        .to_string();
+
+    let q = query!(
+        "
+            UPDATE users
+            SET password_hash = $1, updated_at = now()
+            WHERE id = $2
+            RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at
+        ",
+        password_hash,
+        id,
+    );
+    let result = q.fetch_one(&mut **tx).await?;
+
+    Ok(User {
+        id: result.id,
+        login_name: result.login_name,
+        password_hash: result.password_hash,
+        display_name: result.display_name,
+        email: result.email,
+        email_verified_at: result.email_verified_at,
+        created_at: result.created_at,
+        updated_at: result.updated_at,
+    })
+}
+
 pub async fn update_user(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
@@ -76,7 +113,7 @@ pub async fn update_user(
             UPDATE users
             SET display_name = $1, email = $2, updated_at = now()
             WHERE id = $3
-            RETURNING id, login_name, password_hash, display_name, email, created_at, updated_at
+            RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at
         ",
         display_name,
         email,
@@ -90,6 +127,7 @@ pub async fn update_user(
         password_hash: result.password_hash,
         display_name: result.display_name,
         email: result.email,
+        email_verified_at: result.email_verified_at,
         created_at: result.created_at,
         updated_at: result.updated_at,
     })
@@ -123,6 +161,7 @@ pub async fn create_user(
         password_hash: user_draft.password_hash,
         display_name: user_draft.display_name,
         email: user_draft.email,
+        email_verified_at: None,
         created_at: result.created_at,
         updated_at: result.updated_at,
     })
@@ -141,7 +180,7 @@ impl AuthUser for User {
     }
 
     fn session_auth_hash(&self) -> &[u8] {
-        self.password_hash.as_bytes()
+        self.id.as_bytes()
     }
 }
 

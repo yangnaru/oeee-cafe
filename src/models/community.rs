@@ -37,6 +37,24 @@ pub async fn get_own_communities(
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
+pub async fn get_public_communities(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<Community>> {
+    // Select communities ordered by latest published post
+    let q = query_as!(
+        Community,
+        "
+            SELECT communities.*
+            FROM communities
+            LEFT JOIN posts ON communities.id = posts.community_id
+            WHERE communities.is_private = false
+            GROUP BY communities.id
+            HAVING MAX(posts.published_at) IS NOT NULL
+            ORDER BY MAX(posts.published_at) DESC
+        "
+    );
+
+    Ok(q.fetch_all(&mut **tx).await?)
+}
+
 pub async fn find_community_by_id(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,

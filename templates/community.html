@@ -2,6 +2,8 @@
 <div class="center">
   <h2>{{ community.name }}</h2>
   <p>{{ community.description }}</p>
+
+  {% if current_user %}
   <form action="/draw" method="post">
     <input type="hidden" name="community_id" value="{{ community.id }}" />
     <select name="width" title="너비">
@@ -37,18 +39,17 @@
     </select>
     <input type="submit" value="새 그림 그리기" />
   </form>
-  <h3>최근 그림</h3>
+  {% endif %}
 
+  <h3>최근 그림</h3>
   {% if posts %}
   <div class="posts-grid">
     {% for post in posts %}
-    <div>
+    <div class="posts-grid-item">
       <a href="/posts/{{ post.id }}"
-        ><span>{{ post.title }}</span>
-        <img
+        ><img
           src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-        />
-      </a>
+      /></a>
     </div>
     {% endfor %}
   </div>

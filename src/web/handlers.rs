@@ -1,16 +1,16 @@
-use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use super::state::AppState;
 use crate::app_error::AppError;
 use crate::models::community::{
-    create_community, find_community_by_id, get_own_communities, CommunityDraft,
+    create_community, find_community_by_id, get_own_communities, get_public_communities,
+    CommunityDraft,
 };
 use crate::models::post::{
     create_post, find_draft_posts_by_author_id, find_post_by_id,
     find_published_posts_by_community_id, get_draft_post_count, publish_post, PostDraft,
 };
-use crate::models::user::{create_user, update_user, AuthSession, Credentials, UserDraft};
+use crate::models::user::{
+    create_user, find_user_by_id, update_password, update_user, AuthSession, Credentials, UserDraft,
+};
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::operation::put_object::{PutObjectError, PutObjectOutput};
@@ -26,13 +26,16 @@ use axum::{
     Form,
 };
 use axum_messages::Messages;
-use chrono::Duration;
+use chrono::{naive, Duration};
+use data_encoding::BASE64URL_NOPAD;
 use data_url::DataUrl;
 use minijinja::context;
 use minijinja_autoreload::EnvironmentGuard;
 use serde::{Deserialize, Serialize};
 use sha256::digest;
 use sqlx::postgres::types::PgInterval;
+use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 pub async fn home(
@@ -43,13 +46,57 @@ pub async fn home(
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
 
-    let communities = match auth_session.user.clone() {
-        Some(user) => {
-            let communities = get_own_communities(&mut tx, user.id).await?;
-            communities
-        }
+    let own_communities = match auth_session.user.clone() {
+        Some(user) => get_own_communities(&mut tx, user.id).await?,
         None => vec![],
     };
+
+    let own_communities = own_communities
+        .iter()
+        .map(|community| {
+            let name = community.name.clone();
+            let description = community.description.clone();
+            let is_private = community.is_private;
+            let updated_at = community.updated_at.to_string();
+            let created_at = community.created_at.to_string();
+            let link = format!(
+                "/communities/{}",
+                BASE64URL_NOPAD.encode(community.id.as_bytes())
+            );
+            HashMap::<String, String>::from_iter(vec![
+                ("name".to_string(), name),
+                ("description".to_string(), description),
+                ("is_private".to_string(), is_private.to_string()),
+                ("updated_at".to_string(), updated_at),
+                ("created_at".to_string(), created_at),
+                ("link".to_string(), link),
+            ])
+        })
+        .collect::<Vec<_>>();
+
+    let public_communities = get_public_communities(&mut tx)
+        .await?
+        .iter()
+        .map(|community| {
+            let name = community.name.clone();
+            let description = community.description.clone();
+            let is_private = community.is_private;
+            let updated_at = community.updated_at.to_string();
+            let created_at = community.created_at.to_string();
+            let link = format!(
+                "/communities/{}",
+                BASE64URL_NOPAD.encode(community.id.as_bytes())
+            );
+            HashMap::<String, String>::from_iter(vec![
+                ("name".to_string(), name),
+                ("description".to_string(), description),
+                ("is_private".to_string(), is_private.to_string()),
+                ("updated_at".to_string(), updated_at),
+                ("created_at".to_string(), created_at),
+                ("link".to_string(), link),
+            ])
+        })
+        .collect::<Vec<_>>();
 
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
@@ -57,6 +104,8 @@ pub async fn home(
             .unwrap_or_default(),
         None => 0,
     };
+
+    println!("{:?}", public_communities);
 
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("home.html")?;
@@ -66,13 +115,15 @@ pub async fn home(
         current_user => auth_session.user,
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count,
-        communities,
+        public_communities,
+        own_communities,
     })?;
 
     Ok(Html(rendered))
 }
 
 pub async fn account(
+    messages: Messages,
     auth_session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
@@ -91,9 +142,52 @@ pub async fn account(
         title => "계정",
         current_user => auth_session.user,
         draft_post_count,
+        messages => messages.into_iter().collect::<Vec<_>>(),
     })?;
 
     Ok(Html(rendered))
+}
+
+#[derive(Deserialize)]
+pub struct EditPasswordForm {
+    current_password: String,
+    new_password: String,
+    new_password_confirm: String,
+}
+
+#[debug_handler]
+pub async fn edit_password(
+    auth_session: AuthSession,
+    messages: Messages,
+    State(state): State<AppState>,
+    Form(form): Form<EditPasswordForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let user = auth_session.user.clone().unwrap();
+    let user_id = user.id;
+    let user = find_user_by_id(&mut tx, user_id).await?;
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+    let user = user.unwrap();
+    if user.verify_password(&form.current_password).is_err() {
+        messages.error("기존 비밀번호가 틀렸습니다.");
+        return Ok(Redirect::to("/account").into_response());
+    }
+    if form.new_password != form.new_password_confirm {
+        messages.error("새로운 비밀번호가 일치하지 않습니다.");
+        return Ok(Redirect::to("/account").into_response());
+    }
+    if form.new_password.len() < 8 {
+        messages.error("비밀번호는 8자 이상이어야 합니다.");
+        return Ok(Redirect::to("/account").into_response());
+    }
+    let _ = update_password(&mut tx, user_id, form.new_password).await;
+    let _ = tx.commit().await;
+
+    messages.success("비밀번호가 변경되었습니다.");
+    Ok(Redirect::to("/account").into_response())
 }
 
 pub async fn new_community_post(
@@ -126,17 +220,18 @@ pub async fn new_community_post(
 pub async fn community(
     auth_session: AuthSession,
     State(state): State<AppState>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
+    let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice())?;
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    let community = find_community_by_id(&mut tx, id).await?;
+    let community = find_community_by_id(&mut tx, uuid).await?;
 
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let posts = find_published_posts_by_community_id(&mut tx, id).await?;
+    let posts = find_published_posts_by_community_id(&mut tx, uuid).await?;
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
             .await
@@ -153,6 +248,7 @@ pub async fn community(
         posts => posts.iter().map(|post| {
             HashMap::<String, String>::from_iter(vec![
                 ("id".to_string(), post.id.to_string()),
+                ("title".to_string(), post.title.clone().unwrap_or_default().to_string()),
                 ("author_id".to_string(), post.author_id.to_string()),
                 ("image_filename".to_string(), post.image_filename.to_string()),
                 ("replay_filename".to_string(), post.replay_filename.to_string()),
@@ -216,14 +312,132 @@ pub async fn draft_posts(
     Ok(Html(rendered))
 }
 
-pub async fn post_form(
+pub async fn handler_404() -> impl IntoResponse {
+    (StatusCode::NOT_FOUND, "nothing to see here")
+}
+
+pub async fn post_view(
     auth_session: AuthSession,
     State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> Result<Html<String>, AppError> {
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+    let db = state.config.connect_database().await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
+    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    if post == None {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let community_id = Uuid::parse_str(
+        post.clone()
+            .as_ref()
+            .unwrap()
+            .get("community_id")
+            .unwrap()
+            .as_ref()
+            .unwrap(),
+    )
+    .unwrap();
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+    let encoded_community_id = BASE64URL_NOPAD.encode(community_id.as_bytes());
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
+    let template: minijinja::Template<'_, '_> = env.get_template("post_view.html").unwrap();
+    let rendered = template
+        .render(context! {
+            current_user => auth_session.user,
+            r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+            post => {
+                match post {
+                    Some(ref post) => Some(post),
+                    None => None,
+                }
+            },
+            encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
+            encoded_community_id,
+            draft_post_count,
+        })
+        .unwrap();
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn post_replay_view(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+    let db = state.config.connect_database().await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
+    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    if post == None {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    println!("{:?}", post);
+
+    let community_id = Uuid::parse_str(
+        post.clone()
+            .as_ref()
+            .unwrap()
+            .get("community_id")
+            .unwrap()
+            .as_ref()
+            .unwrap(),
+    )
+    .unwrap();
+
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+    let encoded_community_id = BASE64URL_NOPAD.encode(community_id.as_bytes());
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
+    let template: minijinja::Template<'_, '_> = env.get_template("post_replay_view.html").unwrap();
+    let rendered = template
+        .render(context! {
+            current_user => auth_session.user,
+            r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+            post => {
+                match post {
+                    Some(ref post) => Some(post),
+                    None => None,
+                }
+            },
+            encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
+            encoded_community_id,
+            draft_post_count,
+        })
+        .unwrap();
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn post_publish_form(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let post_uuid =
+        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    let post = find_post_by_id(&mut tx, id).await?;
+    let post = find_post_by_id(&mut tx, post_uuid).await?;
+
+    println!("{:?}", post);
+
+    let published_at = post.clone().unwrap().get("published_at").unwrap().clone();
+    if published_at != None {
+        return Ok(Redirect::to(&format!("/posts/{}", id)).into_response());
+    }
+
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
             .await
@@ -231,13 +445,26 @@ pub async fn post_form(
         None => 0,
     };
 
+    let community_id = Uuid::parse_str(
+        &post
+            .clone()
+            .unwrap()
+            .get("community_id")
+            .unwrap()
+            .as_ref()
+            .unwrap(),
+    )?;
+    let link = format!(
+        "/communities/{}",
+        BASE64URL_NOPAD.encode(community_id.as_bytes())
+    );
+
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("post_form.html")?;
 
     let rendered = template.render(context! {
-        title => "글쓰기",
         current_user => auth_session.user,
-        community_id => id,
+        link,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         post => {
             match post {
@@ -248,7 +475,7 @@ pub async fn post_form(
         draft_post_count,
     })?;
 
-    Ok(Html(rendered))
+    Ok(Html(rendered).into_response())
 }
 
 #[derive(Deserialize)]
@@ -256,6 +483,7 @@ pub struct PostPublishForm {
     post_id: String,
     title: String,
     content: String,
+    is_sensitive: Option<String>,
 }
 
 pub async fn post_publish(
@@ -272,20 +500,36 @@ pub async fn post_publish(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let author_id = Uuid::parse_str(post.clone().unwrap().get("author_id").unwrap())?;
+    let author_id = Uuid::parse_str(
+        post.clone()
+            .unwrap()
+            .clone()
+            .get("author_id")
+            .unwrap()
+            .as_ref()
+            .clone()
+            .unwrap(),
+    )?;
     let user_id = auth_session.user.unwrap().id;
     if author_id != user_id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let _ = publish_post(&mut tx, post_id, form.title, form.content).await;
+    let is_sensitive = form.is_sensitive == Some("on".to_string());
+    let _ = publish_post(&mut tx, post_id, form.title, form.content, is_sensitive).await;
     let _ = tx.commit().await;
 
-    Ok(Redirect::to(&format!(
-        "/communities/{}",
-        post.unwrap().get("community_id").unwrap()
-    ))
-    .into_response())
+    let community_id = Uuid::parse_str(
+        &post
+            .clone()
+            .unwrap()
+            .get("community_id")
+            .unwrap()
+            .clone()
+            .unwrap(),
+    )?;
+    let encoded_community_id = { BASE64URL_NOPAD.encode(community_id.as_bytes()) };
+    Ok(Redirect::to(&format!("/communities/{}", encoded_community_id)).into_response())
 }
 
 #[derive(Deserialize)]
@@ -519,8 +763,8 @@ pub async fn upload_object(
 
 #[derive(Serialize)]
 pub struct DrawFinishResponse {
-    pub community_id: Uuid,
-    pub post_id: Uuid,
+    pub community_id: String,
+    pub post_id: String,
 }
 
 #[debug_handler]
@@ -545,6 +789,8 @@ pub async fn draw_finish(
         .build();
     let client = Client::from_conf(config);
 
+    let mut width = 0;
+    let mut height = 0;
     let mut image_sha256 = String::new();
     let mut replay_sha256 = String::new();
     let mut community_id = Uuid::nil();
@@ -602,6 +848,16 @@ pub async fn draw_finish(
                 .unwrap()
                 .parse::<i32>()
                 .unwrap();
+        } else if name == "width" {
+            width = std::str::from_utf8(data.as_ref())
+                .unwrap()
+                .parse::<i32>()
+                .unwrap();
+        } else if name == "height" {
+            height = std::str::from_utf8(data.as_ref())
+                .unwrap()
+                .parse::<i32>()
+                .unwrap();
         }
         println!("Length of `{}` is {} bytes", name, data.len());
     }
@@ -615,16 +871,16 @@ pub async fn draw_finish(
     );
     let duration_ms = since_the_epoch.as_millis() - security_timer;
 
-    println!("{} {}", security_timer, security_count);
-
     let post_draft = PostDraft {
         author_id: auth_session.user.unwrap().id,
-        community_id,
+        community_id: community_id.clone(),
         paint_duration: PgInterval::try_from(
             Duration::try_milliseconds(duration_ms as i64).unwrap_or_default(),
         )
         .unwrap_or_default(),
         stroke_count: security_count,
+        width,
+        height,
         image_filename: format!("{}.png", image_sha256),
         replay_filename: format!("{}.pch", replay_sha256),
     };
@@ -638,7 +894,7 @@ pub async fn draw_finish(
     println!("{:?}", t);
 
     Ok(Json(DrawFinishResponse {
-        community_id,
+        community_id: BASE64URL_NOPAD.encode(community_id.as_ref()),
         post_id: post.id,
     }))
 }

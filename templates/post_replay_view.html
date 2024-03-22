@@ -1,0 +1,46 @@
+{% extends "base.html" %} {% block body %}
+<script>
+  document.write(`
+      <applet-dummy name="pch" width="{{ post.width }}" height="{{ post.height }}" >
+      </applet-dummy>
+    `);
+
+  const url =
+    "{{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}";
+
+  fetch(url)
+    .then((response) => response.arrayBuffer())
+    .then((result) => {
+      const pch = Neo.decodePCH(result);
+      console.log(pch);
+
+      Neo.createViewer(document.querySelector("#viewer"));
+      Neo.config.width = pch.width;
+      Neo.config.height = pch.height;
+      Neo.initViewer(pch);
+      Neo.startViewer();
+    });
+</script>
+
+<link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
+<script src="/static/neo/dist/neo.js" charset="utf-8"></script>
+
+<div class="center">
+  <p>그린 시각: {{ post.created_at }}</p>
+  <p>소요 시간: {{ post.paint_duration }}</p>
+  <p>
+    커뮤니티:
+    <a href="/communities/{{ encoded_community_id }}"
+      >{{ post.community_name }}</a
+    >
+  </p>
+  <input type="hidden" id="viewer" />
+  <p>
+    제목:
+    <a href="/posts/{{ encoded_post_id }}"
+      >{% if post.title %}{{ post.title }}{% else %}무제{% endif %}</a
+    >
+  </p>
+  <p>내용: {{ post.content }}</p>
+</div>
+{% endblock %}

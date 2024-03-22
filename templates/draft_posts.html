@@ -6,7 +6,7 @@ endblock %} {% block body %}
     {% for post in posts %}
     <div style="padding: 4px">
       <h3>
-        <a href="/posts/{{ post.id }}">
+        <a href="/posts/{{ post.id }}/publish">
           {{ post.created_at|dateformat(format="short", tz="Asia/Seoul") }}</a
         >
       </h3>

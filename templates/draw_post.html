@@ -25,6 +25,8 @@ endblock %} {% block body %}
       form.append("community_id", "{{ community_id }}");
       form.append("security_timer", Neo.painter.securityTimer);
       form.append("security_count", Neo.painter.securityCount);
+      form.append("width", image.width);
+      form.append("height", image.height);
 
       // post form using fetch
       fetch("/finish", {
@@ -33,17 +35,14 @@ endblock %} {% block body %}
       })
         .then((response) => response.json())
         .then(async (data) => {
-          console.log(data);
           if (data?.error) {
             alert(data.error);
           } else {
-            Neo.painter.clearSession();
-
-            location.href = `/posts/${data.post_id}`;
+            Neo.uploaded = true;
+            location.href = `/posts/${data.post_id}/publish`;
           }
         })
         .catch((error) => {
-          console.log(error);
           alert(
             "그림을 게시하는 도중 오류가 발생했습니다. 다시 제출해 보세요."
           );
