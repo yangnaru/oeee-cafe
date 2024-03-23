@@ -1,4 +1,10 @@
-{% extends "base.html" %} {% block body %}
+{% extends "base.html" %}
+
+{% block head %}
+<meta property="og:image" content="{{ r2_public_endpoint_url}}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+{% endblock %}
+
+{% block body %}
 <div class="center">
   <p>그린 시각: {{ post.created_at }}</p>
   <p>
