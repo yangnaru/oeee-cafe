@@ -29,7 +29,7 @@ endblock %} {% block body %}
       form.append("height", image.height);
 
       // post form using fetch
-      fetch("/finish", {
+      fetch("/draw/finish", {
         method: "POST",
         body: form,
       })

@@ -75,7 +75,7 @@ impl App {
             .route("/logout", post(do_logout))
             .route("/draw", post(start_draw))
             .route(
-                "/finish",
+                "/draw/finish",
                 post(draw_finish).layer(DefaultBodyLimit::max(10 * 1024 * 1024)),
             )
             .route("/posts/drafts", get(draft_posts))
