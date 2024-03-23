@@ -9,6 +9,9 @@
   "[html]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",
   },
+  "[css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer"
   },
@@ -20,5 +23,5 @@
   },
   "[jinja-html]": {
     "editor.indentSize": 2
-  }
+  },
 }
