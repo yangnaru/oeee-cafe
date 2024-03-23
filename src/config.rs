@@ -8,6 +8,8 @@ use serde_with::{serde_as, DurationSeconds};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct AppConfig {
+    pub env: String,
+
     pub db_url: String,
     pub db_max_connections: u32,
     #[serde_as(as = "DurationSeconds<u64>")]

@@ -56,7 +56,7 @@ impl App {
         );
 
         let session_layer = SessionManagerLayer::new(session_store)
-            .with_secure(true)
+            .with_secure(self.state.config.env == "production")
             .with_same_site(SameSite::Lax)
             .with_expiry(Expiry::OnInactivity(Duration::seconds(60 * 60 * 24 * 30)));
 
