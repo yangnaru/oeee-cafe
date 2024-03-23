@@ -31,6 +31,12 @@ nav a:visited {
   max-width: 750px;
 }
 
+.post-image {
+  max-width: 100%;
+  margin: 0 auto;
+  display: flex;
+}
+
 .posts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
