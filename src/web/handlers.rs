@@ -370,6 +370,7 @@ pub async fn post_view(
             encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
             encoded_community_id,
             draft_post_count,
+            base_url => state.config.base_url.clone(),
         })
         .unwrap();
     Ok(Html(rendered).into_response())

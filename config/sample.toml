@@ -1,4 +1,5 @@
 env = "dev"
+base_url = "http://localhost:3000"
 
 db_url = "postgres://"
 db_max_connections = 5
