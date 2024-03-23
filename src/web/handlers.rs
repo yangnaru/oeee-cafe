@@ -1,5 +1,6 @@
 use super::state::AppState;
 use crate::app_error::AppError;
+use crate::models::comment::{create_comment, find_comments_by_post_id, CommentDraft};
 use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, get_public_communities,
     CommunityDraft,
@@ -38,6 +39,46 @@ use sqlx::postgres::types::PgInterval;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+
+#[derive(Deserialize)]
+pub struct CreateCommentForm {
+    pub post_id: String,
+    pub content: String,
+}
+
+pub async fn do_create_comment(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Form(form): Form<CreateCommentForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let user_id = auth_session.user.unwrap().id;
+    let post_id = Uuid::from_slice(
+        BASE64URL_NOPAD
+            .decode(form.post_id.as_bytes())
+            .unwrap()
+            .as_slice(),
+    )?;
+    let _ = create_comment(
+        &mut tx,
+        CommentDraft {
+            user_id,
+            post_id,
+            content: form.content,
+        },
+    )
+    .await;
+    let comments = find_comments_by_post_id(&mut tx, post_id).await?;
+    let _ = tx.commit().await;
+
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("post_comments.html")?;
+    let rendered = template.render(context! {
+        comments => comments,
+    })?;
+    Ok(Html(rendered).into_response())
+}
 
 pub async fn home(
     auth_session: AuthSession,
@@ -336,6 +377,8 @@ pub async fn post_view(
         }
     }
 
+    let comments = find_comments_by_post_id(&mut tx, uuid).await.unwrap();
+
     let community_id = Uuid::parse_str(
         post.clone()
             .as_ref()
@@ -371,6 +414,7 @@ pub async fn post_view(
             encoded_community_id,
             draft_post_count,
             base_url => state.config.base_url.clone(),
+            comments,
         })
         .unwrap();
     Ok(Html(rendered).into_response())

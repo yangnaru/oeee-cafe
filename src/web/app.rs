@@ -4,8 +4,8 @@ use super::handlers::{
 use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::{
-    community, create_community_form, do_create_community, draft_posts, edit_account,
-    edit_password, handler_404, new_community_post, post_publish, post_publish_form,
+    community, create_community_form, do_create_comment, do_create_community, draft_posts,
+    edit_account, edit_password, handler_404, new_community_post, post_publish, post_publish_form,
     post_replay_view, post_view,
 };
 use anyhow::Result;
@@ -70,6 +70,7 @@ impl App {
             .route("/account", get(account))
             .route("/account", post(edit_account))
             .route("/account/password", post(edit_password))
+            .route("/comments", post(do_create_comment))
             .route("/communities/new", get(create_community_form))
             .route("/communities/:id/draw", get(new_community_post))
             .route("/logout", post(do_logout))

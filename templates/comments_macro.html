@@ -1,0 +1,10 @@
+{% macro comments(comments) %} {% for comment in comments %}
+<div class="comment">
+  <p>
+    작성일: {{ comment.created_at|datetimeformat(format="short",
+    tz="Asia/Seoul") }}
+  </p>
+  <p>닉네임: {{ comment.user_display_name }}</p>
+  <pre>{{ comment.content }}</pre>
+</div>
+{% endfor %} {% endmacro %}
