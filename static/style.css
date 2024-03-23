@@ -1,48 +1,53 @@
 body {
-    font-family: Arial, Helvetica, sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 #appstage {
-    max-width: 1150px;
-    margin: 0 auto;
+  max-width: 1150px;
+  margin: 0 auto;
 }
 
 nav {
-    padding: 8px;
-    background-color: greenyellow;
-    border-width: 1px;
-    border-color: green;
-    border-style: solid;
+  padding: 8px;
+  background-color: greenyellow;
+  border-width: 1px;
+  border-color: green;
+  border-style: solid;
 }
 
-h1 > a:visited, nav a:visited {
-    color: blue;
+h1 > a:visited,
+nav a:visited {
+  color: blue;
 }
 
 #menubar {
-    display: flex;
-    flex-direction: row;
-    gap: 8px;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
 }
 
 .center {
-    margin: 0 auto;
-    max-width: 750px;
+  margin: 0 auto;
+  max-width: 750px;
 }
 
 .posts-grid {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 50px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  grid-auto-rows: minmax(100px, auto);
 }
 
-.posts-grid-item {
-    display: flex;
-    flex-direction: column;
-    cursor: pointer;
+.posts-grid-item img {
+  cursor: pointer;
+  object-fit: cover;
+  object-position: center;
+  width: 240px;
+  height: 240px;
 }
+
+/* Width should take up 30% of screen size */
 
 #viewer {
-    margin-top: 1em;
-  }
+  margin-top: 1em;
+}
