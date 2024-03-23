@@ -17,6 +17,6 @@
   />
   <p>그린이: {{ post.display_name }}</p>
   <p>제목: {% if post.title %}{{ post.title }}{% else %}무제{% endif %}</p>
-  <p>내용: {{ post.content }}</p>
+  <p>내용: <pre>{{ post.content }}</pre></p>
 </div>
 {% endblock %}
