@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block head %}
+<meta property="og:title" content="{{ post.title }}" />
 <meta property="og:image" content="{{ r2_public_endpoint_url}}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
 {% endblock %}
 
