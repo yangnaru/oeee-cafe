@@ -1,0 +1,1 @@
+ALTER TABLE posts ADD COLUMN viewer_count int NOT NULL DEFAULT 0;

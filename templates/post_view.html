@@ -1,8 +1,11 @@
 {% extends "base.html" %} {% block body %}
 <div class="center">
   <p>그린 시각: {{ post.created_at }}</p>
-  <p>소요 시간: {{ post.paint_duration }}</p>
-  <p><a href="/posts/{{ encoded_post_id }}/replay">리플레이</a></p>
+  <p>
+    소요 시간: {{ post.paint_duration }}
+    <a href="/posts/{{ encoded_post_id }}/replay">리플레이</a>
+  </p>
+  <p>HIT: {{ post.viewer_count }}</p>
   <p>
     커뮤니티:
     <a href="/communities/{{ encoded_community_id }}"

@@ -17,6 +17,7 @@ pub struct Post {
     pub stroke_count: i32,
     pub image_filename: String,
     pub replay_filename: String,
+    pub viewer_count: i32,
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -67,6 +68,7 @@ pub async fn find_posts_by_community_id(
                 stroke_count,
                 image_filename,
                 replay_filename,
+                viewer_count,
                 published_at,
                 created_at,
                 updated_at
@@ -87,6 +89,7 @@ pub async fn find_posts_by_community_id(
                 stroke_count: row.stroke_count,
                 image_filename: row.image_filename,
                 replay_filename: row.replay_filename,
+                viewer_count: row.viewer_count,
                 published_at: row.published_at,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
@@ -162,6 +165,7 @@ pub async fn find_published_posts_by_community_id(
                 stroke_count,
                 image_filename,
                 replay_filename,
+                viewer_count,
                 published_at,
                 created_at,
                 updated_at
@@ -183,6 +187,7 @@ pub async fn find_published_posts_by_community_id(
             stroke_count: row.stroke_count,
             image_filename: row.image_filename,
             replay_filename: row.replay_filename,
+            viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -230,13 +235,28 @@ pub async fn create_post(
         stroke_count: post_draft.stroke_count,
         image_filename: post_draft.image_filename,
         replay_filename: post_draft.replay_filename,
+        viewer_count: 0,
         published_at: None,
         created_at: result.created_at,
         updated_at: result.updated_at,
     })
 }
 
-// ...
+pub async fn increment_post_viewer_count(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+) -> Result<()> {
+    let q = query!(
+        "
+            UPDATE posts
+            SET viewer_count = viewer_count + 1
+            WHERE id = $1
+        ",
+        id
+    );
+    q.execute(&mut **tx).await?;
+    Ok(())
+}
 
 pub async fn find_post_by_id(
     tx: &mut Transaction<'_, Postgres>,
@@ -254,6 +274,7 @@ pub async fn find_post_by_id(
                 posts.height,
                 posts.image_filename,
                 posts.replay_filename,
+                posts.viewer_count,
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at,
@@ -291,6 +312,10 @@ pub async fn find_post_by_id(
         map.insert("height".to_string(), Some(row.height.to_string()));
         map.insert("image_filename".to_string(), Some(row.image_filename));
         map.insert("replay_filename".to_string(), Some(row.replay_filename));
+        map.insert(
+            "viewer_count".to_string(),
+            Some(row.viewer_count.to_string()),
+        );
 
         let created_at_seoul = row.created_at.with_timezone(&Seoul);
         let created_at_human_readable = created_at_seoul.format("%Y-%m-%d %H:%M").to_string();

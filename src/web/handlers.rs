@@ -6,7 +6,8 @@ use crate::models::community::{
 };
 use crate::models::post::{
     create_post, find_draft_posts_by_author_id, find_post_by_id,
-    find_published_posts_by_community_id, get_draft_post_count, publish_post, PostDraft,
+    find_published_posts_by_community_id, get_draft_post_count, increment_post_viewer_count,
+    publish_post, PostDraft,
 };
 use crate::models::user::{
     create_user, find_user_by_id, update_password, update_user, AuthSession, Credentials, UserDraft,
@@ -325,8 +326,14 @@ pub async fn post_view(
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
-    if post == None {
-        return Ok(StatusCode::NOT_FOUND.into_response());
+
+    match post {
+        Some(_) => {
+            increment_post_viewer_count(&mut tx, uuid).await.unwrap();
+        }
+        None => {
+            return Ok(StatusCode::NOT_FOUND.into_response());
+        }
     }
 
     let community_id = Uuid::parse_str(
@@ -345,6 +352,8 @@ pub async fn post_view(
             .unwrap_or_default(),
         None => 0,
     };
+    tx.commit().await?;
+
     let encoded_community_id = BASE64URL_NOPAD.encode(community_id.as_bytes());
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
     let template: minijinja::Template<'_, '_> = env.get_template("post_view.html").unwrap();
