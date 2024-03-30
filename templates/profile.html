@@ -45,6 +45,7 @@ user.login_name }}) {% endblock %} {% block body %}
     {% for following in followings|rejectattr("banner_image_filename") %}
     <li>
       <a href="/@{{ following.login_name }}">{{ following.display_name }}</a>
+      <br />
       <span class="muted">@{{ following.login_name }}</span>
     </li>
     {% endfor %}

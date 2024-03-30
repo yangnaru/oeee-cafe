@@ -118,4 +118,18 @@ nav a:visited {
 
 .followings-list {
   columns: 3;
+  column-gap: 4px;
+  list-style: none;
+  padding-left: 0;
+}
+
+.followings-list li {
+  break-inside: avoid-column;
+  border: 1px solid black;
+  padding: 8px;
+  margin: 4px 0;
+}
+
+.followings-list li:first-of-type {
+  margin-top: 0;
 }
