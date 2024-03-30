@@ -112,6 +112,45 @@ pub async fn get_draft_post_count(
     Ok(result.count.unwrap_or(0))
 }
 
+pub async fn find_published_posts_by_author_id(
+    tx: &mut Transaction<'_, Postgres>,
+    author_id: Uuid,
+) -> Result<Vec<SerializablePost>> {
+    let q = query!(
+        "
+            SELECT
+                id,
+                author_id,
+                paint_duration,
+                stroke_count,
+                image_filename,
+                replay_filename,
+                published_at,
+                created_at,
+                updated_at
+            FROM posts
+            WHERE author_id = $1
+            AND published_at IS NOT NULL
+        ",
+        author_id
+    );
+    let result = q.fetch_all(&mut **tx).await?;
+    Ok(result
+        .into_iter()
+        .map(|row| SerializablePost {
+            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            author_id: row.author_id,
+            paint_duration: row.paint_duration.microseconds.to_string(),
+            stroke_count: row.stroke_count,
+            image_filename: row.image_filename,
+            replay_filename: row.replay_filename,
+            published_at: row.published_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+        .collect())
+}
+
 pub async fn find_draft_posts_by_author_id(
     tx: &mut Transaction<'_, Postgres>,
     author_id: Uuid,
@@ -279,6 +318,7 @@ pub async fn find_post_by_id(
                 posts.created_at,
                 posts.updated_at,
                 users.display_name AS display_name,
+                users.login_name AS login_name,
                 communities.id AS community_id,
                 communities.name AS community_name
             FROM posts
@@ -295,6 +335,7 @@ pub async fn find_post_by_id(
         map.insert("id".to_string(), Some(row.id.to_string()));
         map.insert("author_id".to_string(), Some(row.author_id.to_string()));
         map.insert("display_name".to_string(), Some(row.display_name));
+        map.insert("login_name".to_string(), Some(row.login_name));
         map.insert("title".to_string(), row.title);
         map.insert("content".to_string(), row.content);
 

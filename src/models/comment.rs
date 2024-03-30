@@ -27,6 +27,7 @@ pub struct SerializableComment {
     pub user_id: Uuid,
     pub content: String,
     pub user_display_name: String,
+    pub user_login_name: String,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
 }
@@ -44,7 +45,8 @@ pub async fn find_comments_by_post_id(
             comments.updated_at,
             comments.created_at,
             comments.content,
-            users.display_name AS user_display_name
+            users.display_name AS user_display_name,
+            users.login_name AS user_login_name
         FROM comments
         LEFT JOIN users ON comments.user_id = users.id
         WHERE post_id = $1
@@ -63,6 +65,7 @@ pub async fn find_comments_by_post_id(
             user_id: comment.user_id,
             content: comment.content,
             user_display_name: comment.user_display_name,
+            user_login_name: comment.user_login_name,
             updated_at: comment.updated_at,
             created_at: comment.created_at,
         })

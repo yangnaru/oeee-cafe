@@ -6,12 +6,13 @@ use crate::models::community::{
     CommunityDraft,
 };
 use crate::models::post::{
-    create_post, find_draft_posts_by_author_id, find_post_by_id,
+    create_post, find_draft_posts_by_author_id, find_post_by_id, find_published_posts_by_author_id,
     find_published_posts_by_community_id, get_draft_post_count, increment_post_viewer_count,
     publish_post, PostDraft,
 };
 use crate::models::user::{
-    create_user, find_user_by_id, update_password, update_user, AuthSession, Credentials, UserDraft,
+    create_user, find_user_by_id, find_user_by_login_name, update_password, update_user,
+    AuthSession, Credentials, UserDraft,
 };
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::error::SdkError;
@@ -39,6 +40,41 @@ use sqlx::postgres::types::PgInterval;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+
+pub async fn profile(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let posts = find_published_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
+
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("profile.html")?;
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        user,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        posts,
+        draft_post_count,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
 
 #[derive(Deserialize)]
 pub struct CreateCommentForm {

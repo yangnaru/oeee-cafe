@@ -172,6 +172,18 @@ pub async fn find_user_by_id(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Re
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
+pub async fn find_user_by_login_name(
+    tx: &mut Transaction<'_, Postgres>,
+    login_name: &str,
+) -> Result<Option<User>> {
+    let q = query_as!(
+        User,
+        "SELECT * FROM users WHERE login_name = $1",
+        login_name
+    );
+    Ok(q.fetch_optional(&mut **tx).await?)
+}
+
 impl AuthUser for User {
     type Id = Uuid;
 

@@ -4,7 +4,13 @@
     작성일: {{ comment.created_at|datetimeformat(format="short",
     tz="Asia/Seoul") }}
   </p>
-  <p>닉네임: {{ comment.user_display_name }}</p>
+  <p>
+    닉네임:
+    <a href="/@{{ comment.user_login_name }}"
+      >{{ comment.user_display_name }}</a
+    >
+    <span class="muted">@{{ comment.user_login_name }}</span>
+  </p>
   <pre>{{ comment.content }}</pre>
 </div>
 {% endfor %} {% endmacro %}

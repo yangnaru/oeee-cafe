@@ -31,7 +31,7 @@
   src="{{ r2_public_endpoint_url}}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
 />
 <div class="center">
-  <p>그린이: {{ post.display_name }}</p>
+  <p>그린이: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted">@{{ post.login_name }}</span></p>
   <p>제목: {% if post.title %}{{ post.title }}{% else %}무제{% endif %}</p>
   <p>내용: <pre>{{ post.content }}</pre></p>
   <a href="https://twitter.com/share?ref_src=twsrc%5Etfw" class="twitter-share-button" data-via="oeee_cafe" data-hashtags="오이카페" data-related="oeee_cafe" data-show-count="false">Tweet</a><script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>

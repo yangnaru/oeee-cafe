@@ -1,0 +1,24 @@
+{% extends "base.html" %} {% block title %}{{ super() }} | {{ user.display_name
+}} (@{{ user.login_name }}) {% endblock %} {% block body %}
+<div class="center">
+  <h2>
+    {{ user.display_name }} <span class="muted">@{{ user.login_name }}</span>
+  </h2>
+  <h3>공개 커뮤니티에서 그린 그림</h3>
+  {% if posts %}
+  <div class="posts-grid">
+    {% for post in posts %}
+    <div class="posts-grid-item">
+      <a href="/posts/{{ post.id }}"
+        ><img
+          src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+      /></a>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <p>공개 커뮤니티에서 그린 그림이 없습니다.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -63,3 +63,7 @@ nav a:visited {
   margin: 1em 0;
   padding: 1em;
 }
+
+.muted {
+  color: gray;
+}
