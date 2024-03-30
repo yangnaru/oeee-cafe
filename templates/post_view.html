@@ -2,7 +2,7 @@
 
 {% extends "base.html" %}
 
-{% block title %}{{ post.title }}{% endblock %}
+{% block title %}{{ super() }} | {% if post.title %}{{ post.title }}{% else %}무제{% endif %}{% endblock %}
 
 {% block head %}
 <meta property="og:title" content="{{ post.title }}" />

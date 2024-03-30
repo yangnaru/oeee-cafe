@@ -1,4 +1,5 @@
-{% extends "base.html" %} {% block body %}
+{% extends "base.html" %}{% block title %}{{ super() }} | {{ community.name }}{%
+endblock %} {% block body %}
 <div class="center">
   <h2>{{ community.name }}</h2>
   <p>{{ community.description }}</p>

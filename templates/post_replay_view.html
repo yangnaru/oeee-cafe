@@ -1,4 +1,5 @@
-{% extends "base.html" %} {% block body %}
+{% extends "base.html" %} {% block title %}{{ super() }} | {% if post.title %}{{
+post.title }}{% else %}무제{% endif %} (리플레이){% endblock %} {% block body %}
 <script>
   document.write(`
       <applet-dummy name="pch" width="{{ post.width }}" height="{{ post.height }}" >
