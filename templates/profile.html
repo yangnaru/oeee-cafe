@@ -41,7 +41,7 @@ user.login_name }}) {% endblock %} {% block body %}
   </div>
   {% endif %} {% if followings|rejectattr("banner_image_filename")|length > 0 %}
   <h3>동맹</h3>
-  <ul>
+  <ul class="followings-list">
     {% for following in followings|rejectattr("banner_image_filename") %}
     <li>
       <a href="/@{{ following.login_name }}">{{ following.display_name }}</a>

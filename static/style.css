@@ -115,3 +115,7 @@ nav a:visited {
   flex-direction: row;
   align-items: center;
 }
+
+.followings-list {
+  columns: 3;
+}
