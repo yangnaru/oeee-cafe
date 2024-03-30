@@ -4,9 +4,9 @@ use super::handlers::{
 use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::{
-    community, create_community_form, do_create_comment, do_create_community, draft_posts,
-    edit_account, edit_password, handler_404, new_community_post, post_publish, post_publish_form,
-    post_replay_view, post_view, profile,
+    community, create_community_form, do_create_comment, do_create_community, do_follow_profile,
+    do_unfollow_profile, draft_posts, edit_account, edit_password, handler_404, new_community_post,
+    post_publish, post_publish_form, post_replay_view, post_view, profile,
 };
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
@@ -83,6 +83,8 @@ impl App {
             .route("/posts/publish", post(post_publish))
             .route("/posts/:id/publish", get(post_publish_form))
             .route("/posts/:id/replay", get(post_replay_view))
+            .route("/@:login_name/follow", post(do_follow_profile))
+            .route("/@:login_name/unfollow", post(do_unfollow_profile))
             .route_layer(login_required!(Backend, login_url = "/login"));
 
         let app = Router::new()

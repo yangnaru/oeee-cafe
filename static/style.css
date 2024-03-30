@@ -67,3 +67,27 @@ nav a:visited {
 .muted {
   color: gray;
 }
+
+.button-follow {
+  background-color: green;
+  color: white;
+  padding: 8px;
+  border: solid 1px darkgreen;
+  cursor: pointer;
+}
+
+.button-follow:hover {
+  background-color: darkgreen;
+}
+
+.button-unfollow {
+  background-color: red;
+  color: white;
+  padding: 8px;
+  border: solid 1px darkred;
+  cursor: pointer;
+}
+
+.button-unfollow:hover {
+  background-color: darkred;
+}

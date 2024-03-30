@@ -1,9 +1,12 @@
-{% extends "base.html" %} {% block title %}{{ super() }} | {{ user.display_name
-}} (@{{ user.login_name }}) {% endblock %} {% block body %}
+{% from "follow_macro.html" import follow_button, unfollow_button %} {% extends
+"base.html" %} {% block title %}{{ super() }} | {{ user.display_name }} (@{{
+user.login_name }}) {% endblock %} {% block body %}
 <div class="center">
   <h2>
     {{ user.display_name }} <span class="muted">@{{ user.login_name }}</span>
   </h2>
+  {% if is_following %} {{ unfollow_button() }} {% else %} {{ follow_button() }}
+  {% endif %}
   <h3>공개 커뮤니티에서 그린 그림</h3>
   {% if posts %}
   <div class="posts-grid">

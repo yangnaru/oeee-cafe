@@ -5,6 +5,7 @@ use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, get_public_communities,
     CommunityDraft,
 };
+use crate::models::follow::{follow_user, is_following, unfollow_user};
 use crate::models::post::{
     create_post, find_draft_posts_by_author_id, find_post_by_id, find_published_posts_by_author_id,
     find_published_posts_by_community_id, get_draft_post_count, increment_post_viewer_count,
@@ -41,6 +42,93 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
+pub async fn do_follow_profile(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let follow = follow_user(
+        &mut tx,
+        auth_session.user.clone().unwrap().id,
+        user.clone().unwrap().id,
+    )
+    .await?;
+    println!("{:?}", follow);
+
+    let posts = find_published_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
+
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+    let _ = tx.commit().await;
+
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("unfollow_button.html")?;
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        user,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        posts,
+        draft_post_count,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn do_unfollow_profile(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    unfollow_user(
+        &mut tx,
+        auth_session.user.clone().unwrap().id,
+        user.clone().unwrap().id,
+    )
+    .await;
+
+    let posts = find_published_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
+
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+    let _ = tx.commit().await;
+
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("follow_button.html")?;
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        user,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        posts,
+        draft_post_count,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
 pub async fn profile(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -63,9 +151,17 @@ pub async fn profile(
         None => 0,
     };
 
+    let is_following = is_following(
+        &mut tx,
+        auth_session.user.clone().unwrap().id,
+        user.clone().unwrap().id,
+    )
+    .await?;
+
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("profile.html")?;
     let rendered = template.render(context! {
+        is_following,
         current_user => auth_session.user,
         user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
