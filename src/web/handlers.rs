@@ -151,19 +151,18 @@ pub async fn profile(
         None => 0,
     };
 
-    let is_following = is_following(
-        &mut tx,
-        auth_session.user.clone().unwrap().id,
-        user.clone().unwrap().id,
-    )
-    .await?;
+    let mut is_current_user_following = false;
+    if let Some(current_user) = auth_session.user.clone() {
+        is_current_user_following =
+            is_following(&mut tx, current_user.id, user.clone().unwrap().id).await?;
+    }
 
     let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id).await?;
 
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("profile.html")?;
     let rendered = template.render(context! {
-        is_following,
+        is_following => is_current_user_following,
         followings,
         current_user => auth_session.user,
         user,
