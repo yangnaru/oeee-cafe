@@ -342,6 +342,7 @@ pub async fn community(
 
 #[derive(Deserialize)]
 pub struct EditUserForm {
+    login_name: String,
     user_id: String,
     display_name: String,
     email: String,
@@ -356,7 +357,14 @@ pub async fn edit_account(
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    let _ = update_user(&mut tx, user_id, form.display_name, form.email).await;
+    let _ = update_user(
+        &mut tx,
+        user_id,
+        form.login_name,
+        form.display_name,
+        form.email,
+    )
+    .await;
     let _ = tx.commit().await;
 
     messages.success("계정 정보가 수정되었습니다.");

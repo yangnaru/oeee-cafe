@@ -105,16 +105,18 @@ pub async fn update_password(
 pub async fn update_user(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
+    login_name: String,
     display_name: String,
     email: String,
 ) -> Result<User> {
     let q = query!(
         "
             UPDATE users
-            SET display_name = $1, email = $2, updated_at = now()
-            WHERE id = $3
+            SET login_name = $1, display_name = $2, email = $3, updated_at = now()
+            WHERE id = $4
             RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at
         ",
+        login_name,
         display_name,
         email,
         id,
