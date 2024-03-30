@@ -22,9 +22,9 @@ user.login_name }}) {% endblock %} {% block body %}
     <a href="/banners/draw" class="button">동맹 배너 그리기</a>
     {% endif %} {% endif %}
   </div>
-  {% if is_following %} {{ unfollow_button() }} {% else %} {{ follow_button() }}
-  {% endif %} {% if followings|length > 0 %} {% if
-  followings|selectattr("banner_image_filename")|length > 0 %}
+  {% if current_user %} {% if is_following %} {{ unfollow_button() }} {% else %}
+  {{ follow_button() }} {% endif %} {% endif %} {% if followings|length > 0 %}
+  {% if followings|selectattr("banner_image_filename")|length > 0 %}
   <h3>동맹 배너</h3>
   <div class="banners-grid">
     {% for following in followings|selectattr("banner_image_filename") %}
