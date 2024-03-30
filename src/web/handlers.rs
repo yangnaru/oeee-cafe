@@ -5,7 +5,7 @@ use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, get_public_communities,
     CommunityDraft,
 };
-use crate::models::follow::{follow_user, is_following, unfollow_user};
+use crate::models::follow::{find_followings_by_user_id, follow_user, is_following, unfollow_user};
 use crate::models::post::{
     create_post, find_draft_posts_by_author_id, find_post_by_id, find_published_posts_by_author_id,
     find_published_posts_by_community_id, get_draft_post_count, increment_post_viewer_count,
@@ -158,10 +158,13 @@ pub async fn profile(
     )
     .await?;
 
+    let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id).await?;
+
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("profile.html")?;
     let rendered = template.render(context! {
         is_following,
+        followings,
         current_user => auth_session.user,
         user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),

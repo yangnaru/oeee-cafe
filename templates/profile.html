@@ -6,6 +6,16 @@ user.login_name }}) {% endblock %} {% block body %}
     {{ user.display_name }} <span class="muted">@{{ user.login_name }}</span>
   </h2>
   {% if is_following %} {{ unfollow_button() }} {% else %} {{ follow_button() }}
+  {% endif %} {% if followings|length > 0 %}
+  <h3>동맹</h3>
+  <ul>
+    {% for following in followings %}
+    <li>
+      <a href="/@{{ following.login_name }}">{{ following.display_name }}</a>
+      <span class="muted">@{{ following.login_name }}</span>
+    </li>
+    {% endfor %}
+  </ul>
   {% endif %}
   <h3>공개 커뮤니티에서 그린 그림</h3>
   {% if posts %}

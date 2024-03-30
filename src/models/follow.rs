@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{postgres::PgRow, query, Postgres, Transaction};
+use sqlx::{query, Postgres, Transaction};
 use uuid::Uuid;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -63,4 +63,36 @@ pub async fn is_following(
     .expect("Failed to check follow");
 
     Ok(query.count == Some(1))
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct FollowingInfo {
+    pub user_id: Uuid,
+    pub login_name: String,
+    pub display_name: String,
+}
+
+pub async fn find_followings_by_user_id(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<Vec<FollowingInfo>> {
+    let query = query!(
+        "SELECT follows.following_id, users.login_name, users.display_name
+        FROM follows
+        LEFT JOIN users ON follows.following_id = users.id
+        WHERE follower_id = $1",
+        user_id
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .expect("Failed to find followings");
+
+    Ok(query
+        .iter()
+        .map(|row| FollowingInfo {
+            user_id: row.following_id,
+            login_name: row.login_name.clone(),
+            display_name: row.display_name.clone(),
+        })
+        .collect())
 }
