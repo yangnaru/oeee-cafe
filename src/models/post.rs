@@ -10,13 +10,11 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct Post {
-    pub id: String,
+    pub id: Uuid,
+    pub image_id: Uuid,
     pub title: Option<String>,
     pub author_id: Uuid,
     pub paint_duration: PgInterval,
-    pub stroke_count: i32,
-    pub image_filename: String,
-    pub replay_filename: String,
     pub viewer_count: i32,
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
@@ -27,9 +25,11 @@ pub struct Post {
 
 pub struct SerializablePost {
     pub id: String,
+    pub title: Option<String>,
     pub author_id: Uuid,
     pub paint_duration: String,
     pub stroke_count: i32,
+    pub viewer_count: i32,
     pub image_filename: String,
     pub replay_filename: String,
     pub published_at: Option<DateTime<Utc>>,
@@ -57,22 +57,23 @@ pub struct PostDraft {
 pub async fn find_posts_by_community_id(
     tx: &mut Transaction<'_, Postgres>,
     community_id: Uuid,
-) -> Result<Vec<Post>> {
+) -> Result<Vec<SerializablePost>> {
     let q = query!(
         "
             SELECT
-                id,
-                title,
-                author_id,
-                paint_duration,
-                stroke_count,
-                image_filename,
-                replay_filename,
-                viewer_count,
-                published_at,
-                created_at,
-                updated_at
+                posts.id,
+                posts.title,
+                posts.author_id,
+                images.paint_duration AS paint_duration,
+                images.stroke_count AS stroke_count,
+                images.image_filename AS image_filename,
+                images.replay_filename AS replay_filename,
+                posts.viewer_count,
+                posts.published_at,
+                posts.created_at,
+                posts.updated_at
             FROM posts
+            LEFT JOIN images ON posts.image_id = images.id
             WHERE community_id = $1
         ",
         community_id
@@ -81,11 +82,11 @@ pub async fn find_posts_by_community_id(
     Ok(result
         .into_iter()
         .map(|row| {
-            return Post {
+            return SerializablePost {
                 id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
                 title: row.title,
                 author_id: row.author_id,
-                paint_duration: row.paint_duration,
+                paint_duration: row.paint_duration.microseconds.to_string(),
                 stroke_count: row.stroke_count,
                 image_filename: row.image_filename,
                 replay_filename: row.replay_filename,
@@ -119,16 +120,19 @@ pub async fn find_published_posts_by_author_id(
     let q = query!(
         "
             SELECT
-                id,
-                author_id,
-                paint_duration,
-                stroke_count,
-                image_filename,
-                replay_filename,
-                published_at,
-                created_at,
-                updated_at
+                posts.id,
+                posts.author_id,
+                posts.title,
+                posts.viewer_count,
+                images.paint_duration,
+                images.stroke_count,
+                images.image_filename,
+                images.replay_filename,
+                posts.published_at,
+                posts.created_at,
+                posts.updated_at
             FROM posts
+            LEFT JOIN images ON posts.image_id = images.id
             WHERE author_id = $1
             AND published_at IS NOT NULL
         ",
@@ -139,6 +143,8 @@ pub async fn find_published_posts_by_author_id(
         .into_iter()
         .map(|row| SerializablePost {
             id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            title: row.title,
+            viewer_count: row.viewer_count,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
@@ -158,16 +164,19 @@ pub async fn find_draft_posts_by_author_id(
     let q = query!(
         "
             SELECT
-                id,
-                author_id,
-                paint_duration,
-                stroke_count,
-                image_filename,
-                replay_filename,
-                published_at,
-                created_at,
-                updated_at
+                posts.id,
+                posts.author_id,
+                posts.title,
+                posts.viewer_count,
+                images.paint_duration,
+                images.stroke_count,
+                images.image_filename,
+                images.replay_filename,
+                posts.published_at,
+                posts.created_at,
+                posts.updated_at
             FROM posts
+            LEFT JOIN images ON posts.image_id = images.id
             WHERE author_id = $1
             AND published_at IS NULL
         ",
@@ -178,6 +187,8 @@ pub async fn find_draft_posts_by_author_id(
         .into_iter()
         .map(|row| SerializablePost {
             id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            title: row.title,
+            viewer_count: row.viewer_count,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
@@ -193,22 +204,23 @@ pub async fn find_draft_posts_by_author_id(
 pub async fn find_published_posts_by_community_id(
     tx: &mut Transaction<'_, Postgres>,
     community_id: Uuid,
-) -> Result<Vec<Post>> {
+) -> Result<Vec<SerializablePost>> {
     let q = query!(
         "
             SELECT
-                id,
-                title,
-                author_id,
-                paint_duration,
-                stroke_count,
-                image_filename,
-                replay_filename,
-                viewer_count,
-                published_at,
-                created_at,
-                updated_at
+                posts.id,
+                posts.title,
+                posts.author_id,
+                images.paint_duration,
+                images.stroke_count,
+                images.image_filename,
+                images.replay_filename,
+                posts.viewer_count,
+                posts.published_at,
+                posts.created_at,
+                posts.updated_at
             FROM posts
+            LEFT JOIN images ON posts.image_id = images.id
             WHERE community_id = $1
             AND published_at IS NOT NULL
             ORDER BY published_at DESC
@@ -218,11 +230,11 @@ pub async fn find_published_posts_by_community_id(
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result
         .into_iter()
-        .map(|row| Post {
+        .map(|row| SerializablePost {
             id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
             title: row.title,
             author_id: row.author_id,
-            paint_duration: row.paint_duration,
+            paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
             image_filename: row.image_filename,
             replay_filename: row.replay_filename,
@@ -237,47 +249,60 @@ pub async fn find_published_posts_by_community_id(
 pub async fn create_post(
     tx: &mut Transaction<'_, Postgres>,
     post_draft: PostDraft,
-) -> Result<Post> {
-    let q = query!(
+) -> Result<SerializablePost> {
+    let image = query!(
         "
-            INSERT INTO posts (
-                author_id,
-                community_id,
-                is_sensitive,
+            INSERT INTO images (
                 paint_duration,
                 stroke_count,
                 width,
                 height,
                 image_filename,
                 replay_filename
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING id, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
         ",
-        post_draft.author_id,
-        post_draft.community_id,
-        false,
         post_draft.paint_duration,
         post_draft.stroke_count,
         post_draft.width,
         post_draft.height,
-        &post_draft.image_filename,
-        &post_draft.replay_filename,
-    );
-    let result = q.fetch_one(&mut **tx).await?;
+        post_draft.image_filename,
+        post_draft.replay_filename
+    )
+    .fetch_one(&mut **tx)
+    .await?;
 
-    Ok(Post {
-        id: BASE64URL_NOPAD.encode(result.id.as_bytes()),
+    let post = query!(
+        "
+            INSERT INTO posts (
+                author_id,
+                image_id,
+                community_id,
+                is_sensitive
+            )
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, created_at, updated_at
+        ",
+        post_draft.author_id,
+        image.id,
+        post_draft.community_id,
+        false
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(SerializablePost {
+        id: BASE64URL_NOPAD.encode(post.id.as_bytes()),
         title: None,
         author_id: post_draft.author_id,
-        paint_duration: post_draft.paint_duration,
+        paint_duration: post_draft.paint_duration.microseconds.to_string(),
         stroke_count: post_draft.stroke_count,
         image_filename: post_draft.image_filename,
         replay_filename: post_draft.replay_filename,
         viewer_count: 0,
         published_at: None,
-        created_at: result.created_at,
-        updated_at: result.updated_at,
+        created_at: post.created_at,
+        updated_at: post.updated_at,
     })
 }
 
@@ -308,11 +333,11 @@ pub async fn find_post_by_id(
                 posts.title,
                 posts.content,
                 posts.author_id,
-                posts.paint_duration,
-                posts.width,
-                posts.height,
-                posts.image_filename,
-                posts.replay_filename,
+                images.paint_duration,
+                images.width,
+                images.height,
+                images.image_filename,
+                images.replay_filename,
                 posts.viewer_count,
                 posts.published_at,
                 posts.created_at,
@@ -322,6 +347,7 @@ pub async fn find_post_by_id(
                 communities.id AS community_id,
                 communities.name AS community_name
             FROM posts
+            LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
             LEFT JOIN users ON posts.author_id = users.id
             WHERE posts.id = $1

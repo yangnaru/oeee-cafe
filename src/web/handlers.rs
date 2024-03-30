@@ -1084,10 +1084,7 @@ pub async fn draw_finish(
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let post = create_post(&mut tx, post_draft).await?;
-    let t = tx.commit().await;
-
-    println!("{:?}", post);
-    println!("{:?}", t);
+    let _ = tx.commit().await;
 
     Ok(Json(DrawFinishResponse {
         community_id: BASE64URL_NOPAD.encode(community_id.as_ref()),
