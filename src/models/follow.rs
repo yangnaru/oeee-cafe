@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{query, Postgres, Transaction};
+use sqlx::{query, query_as, Postgres, Transaction};
 use uuid::Uuid;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -77,30 +77,23 @@ pub async fn find_followings_by_user_id(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
 ) -> Result<Vec<FollowingInfo>> {
-    let query = query!(
-        "SELECT
-            follows.following_id,
+    let query = query_as!(
+        FollowingInfo,
+        r#"SELECT
+            follows.following_id AS user_id,
             users.login_name,
             users.display_name,
-            images.image_filename AS banner_image_filename
+            images.image_filename AS "banner_image_filename?"
         FROM follows
         LEFT JOIN users ON follows.following_id = users.id
         LEFT JOIN banners ON users.banner_id = banners.id
         LEFT JOIN images ON banners.image_id = images.id
-        WHERE follower_id = $1",
+        WHERE follower_id = $1"#,
         user_id
     )
     .fetch_all(&mut **tx)
     .await
     .expect("Failed to find followings");
 
-    Ok(query
-        .iter()
-        .map(|row| FollowingInfo {
-            user_id: row.following_id,
-            login_name: row.login_name.clone(),
-            display_name: row.display_name.clone(),
-            banner_image_filename: Some(row.banner_image_filename.clone()),
-        })
-        .collect())
+    Ok(query)
 }
