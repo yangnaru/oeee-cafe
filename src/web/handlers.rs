@@ -180,7 +180,7 @@ pub async fn start_banner_draw(
     let template: minijinja::Template<'_, '_> = env.get_template("draw_banner.html")?;
 
     let rendered = template.render(context! {
-        title => "배너 그리기",
+        title => "동맹 배너 그리기",
         width => 200,
         height => 40,
         current_user => auth_session.user,
