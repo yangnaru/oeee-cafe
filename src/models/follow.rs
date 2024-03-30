@@ -22,8 +22,7 @@ pub async fn follow_user(
         following_id,
     )
     .fetch_one(&mut **tx)
-    .await
-    .expect("Failed to insert follow");
+    .await?;
 
     Ok(Follow {
         follower_id: query.follower_id,
@@ -44,7 +43,7 @@ pub async fn unfollow_user(
     )
     .execute(&mut **tx)
     .await
-    .expect("Failed to delete follow");
+    .unwrap_or_default();
 }
 
 // Check if user is following another user
@@ -59,8 +58,7 @@ pub async fn is_following(
         following_id
     )
     .fetch_one(&mut **tx)
-    .await
-    .expect("Failed to check follow");
+    .await?;
 
     Ok(query.count == Some(1))
 }
@@ -92,8 +90,7 @@ pub async fn find_followings_by_user_id(
         user_id
     )
     .fetch_all(&mut **tx)
-    .await
-    .expect("Failed to find followings");
+    .await?;
 
     Ok(query)
 }
