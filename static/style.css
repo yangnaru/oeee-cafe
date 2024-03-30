@@ -28,7 +28,7 @@ nav a:visited {
 
 .center {
   margin: 0 auto;
-  max-width: 750px;
+  max-width: 829px;
 }
 
 .post-image {
@@ -40,7 +40,7 @@ nav a:visited {
 .posts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 10px;
+  gap: 17px;
   grid-auto-rows: minmax(100px, auto);
 }
 
@@ -48,11 +48,28 @@ nav a:visited {
   cursor: pointer;
   object-fit: cover;
   object-position: center;
-  width: 240px;
-  height: 240px;
+  width: 265px;
+  height: 265px;
 }
 
-/* Width should take up 30% of screen size */
+.banner {
+  border: 1px solid black;
+  width: 200px;
+  height: 40px;
+}
+
+.banners-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 7px;
+  grid-auto-rows: minmax(33px, auto);
+}
+
+.banners-grid-item img {
+  cursor: pointer;
+  width: 200px;
+  height: 40px;
+}
 
 #viewer {
   margin-top: 1em;
@@ -90,4 +107,11 @@ nav a:visited {
 
 .button-unfollow:hover {
   background-color: darkred;
+}
+
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  flex-direction: row;
+  align-items: center;
 }

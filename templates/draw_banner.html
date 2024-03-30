@@ -1,0 +1,55 @@
+{% extends "base.html" %} {% block title %}{{ super() }} | {{ title }}{%
+endblock %} {% block body %}
+<h2 class="center">{{ title }}</h2>
+<link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
+<script src="/static/neo/dist/neo.js" charset="utf-8"></script>
+<script>
+  document.write(`
+  <div id="appstage">
+       <applet-dummy name="paintbbs" width="{{ 750 }}" height="{{ 500 }}" >
+         <param name="image_width" value="{{ width }}">
+         <param name="image_height" value="{{ height }}">
+         <param name="thumbnail_type" value="animation">
+       </applet-dummy>
+       </div>
+     `);
+
+  document.paintBBSCallback = function (str) {
+    if (str === "check") {
+      const image = Neo.painter.getImage();
+      const animation = Neo.painter.getThumbnail("animation");
+
+      const form = new FormData();
+      form.append("image", image.toDataURL("image/png"));
+      form.append("animation", animation);
+      form.append("security_timer", Neo.painter.securityTimer);
+      form.append("security_count", Neo.painter.securityCount);
+      form.append("width", image.width);
+      form.append("height", image.height);
+
+      // post form using fetch
+      fetch("/banners/draw/finish", {
+        method: "POST",
+        body: form,
+      })
+        .then((response) => response.json())
+        .then(async (data) => {
+          if (data?.error) {
+            alert(data.error);
+          } else {
+            Neo.uploaded = true;
+            location.href = `/@{{ current_user.login_name}}`;
+          }
+        })
+        .catch((error) => {
+          alert(
+            "그림을 게시하는 도중 오류가 발생했습니다. 다시 제출해 보세요."
+          );
+        });
+
+      return false;
+    }
+  };
+</script>
+<br />
+{% endblock %}

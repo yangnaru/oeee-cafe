@@ -2,21 +2,54 @@
 "base.html" %} {% block title %}{{ super() }} | {{ user.display_name }} (@{{
 user.login_name }}) {% endblock %} {% block body %}
 <div class="center">
-  <h2>
-    {{ user.display_name }} <span class="muted">@{{ user.login_name }}</span>
-  </h2>
+  <div class="profile-header">
+    <h2>
+      {{ user.display_name }}
+      <span class="muted">@{{ user.login_name }}</span>
+    </h2>
+    {% if banner %} {% if user.id == current_user.id %}<a href="/banners/draw">
+      <img
+        class="banner"
+        src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
+      />
+    </a>
+    {% else %}
+    <img
+      class="banner"
+      src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
+    />
+    {% endif %} {% else %} {% if user.id == current_user.id %}
+    <a href="/banners/draw" class="button">동맹 배너 그리기</a>
+    {% endif %} {% endif %}
+  </div>
   {% if is_following %} {{ unfollow_button() }} {% else %} {{ follow_button() }}
-  {% endif %} {% if followings|length > 0 %}
+  {% endif %} {% if followings|length > 0 %} {% if
+  followings|selectattr("banner_image_filename")|length > 0 %}
+  <h3>동맹 배너</h3>
+  <div class="banners-grid">
+    {% for following in followings|selectattr("banner_image_filename") %}
+    <div class="banners-grid-item">
+      <a
+        href="/@{{ following.login_name }}"
+        alt="{{ following.display_name }} (@{{ following.login_name }})"
+        ><img
+          class="banner"
+          src="{{ r2_public_endpoint_url }}/image/{{ following.banner_image_filename[:2] }}/{{ following.banner_image_filename }}"
+      /></a>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %} {% if followings|rejectattr("banner_image_filename")|length > 0 %}
   <h3>동맹</h3>
   <ul>
-    {% for following in followings %}
+    {% for following in followings|rejectattr("banner_image_filename") %}
     <li>
       <a href="/@{{ following.login_name }}">{{ following.display_name }}</a>
       <span class="muted">@{{ following.login_name }}</span>
     </li>
     {% endfor %}
   </ul>
-  {% endif %}
+  {% endif %} {% endif %}
   <h3>공개 커뮤니티에서 그린 그림</h3>
   {% if posts %}
   <div class="posts-grid">

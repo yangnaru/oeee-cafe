@@ -70,6 +70,7 @@ pub struct FollowingInfo {
     pub user_id: Uuid,
     pub login_name: String,
     pub display_name: String,
+    pub banner_image_filename: Option<String>,
 }
 
 pub async fn find_followings_by_user_id(
@@ -77,9 +78,15 @@ pub async fn find_followings_by_user_id(
     user_id: Uuid,
 ) -> Result<Vec<FollowingInfo>> {
     let query = query!(
-        "SELECT follows.following_id, users.login_name, users.display_name
+        "SELECT
+            follows.following_id,
+            users.login_name,
+            users.display_name,
+            images.image_filename AS banner_image_filename
         FROM follows
         LEFT JOIN users ON follows.following_id = users.id
+        LEFT JOIN banners ON users.banner_id = banners.id
+        LEFT JOIN images ON banners.image_id = images.id
         WHERE follower_id = $1",
         user_id
     )
@@ -93,6 +100,7 @@ pub async fn find_followings_by_user_id(
             user_id: row.following_id,
             login_name: row.login_name.clone(),
             display_name: row.display_name.clone(),
+            banner_image_filename: Some(row.banner_image_filename.clone()),
         })
         .collect())
 }

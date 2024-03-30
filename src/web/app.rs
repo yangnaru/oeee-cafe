@@ -4,9 +4,10 @@ use super::handlers::{
 use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::{
-    community, create_community_form, do_create_comment, do_create_community, do_follow_profile,
-    do_unfollow_profile, draft_posts, edit_account, edit_password, handler_404, new_community_post,
-    post_publish, post_publish_form, post_replay_view, post_view, profile,
+    banner_draw_finish, community, create_community_form, do_create_comment, do_create_community,
+    do_follow_profile, do_unfollow_profile, draft_posts, edit_account, edit_password, handler_404,
+    new_community_post, post_publish, post_publish_form, post_replay_view, post_view, profile,
+    start_banner_draw,
 };
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
@@ -81,6 +82,8 @@ impl App {
             )
             .route("/posts/drafts", get(draft_posts))
             .route("/posts/publish", post(post_publish))
+            .route("/banners/draw", get(start_banner_draw))
+            .route("/banners/draw/finish", post(banner_draw_finish))
             .route("/posts/:id/publish", get(post_publish_form))
             .route("/posts/:id/replay", get(post_replay_view))
             .route("/@:login_name/follow", post(do_follow_profile))

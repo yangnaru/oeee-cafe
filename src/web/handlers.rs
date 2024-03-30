@@ -1,5 +1,6 @@
 use super::state::AppState;
 use crate::app_error::AppError;
+use crate::models::banner::{create_banner, find_banner_by_id, BannerDraft};
 use crate::models::comment::{create_comment, find_comments_by_post_id, CommentDraft};
 use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, get_public_communities,
@@ -41,6 +42,152 @@ use sqlx::postgres::types::PgInterval;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+
+#[debug_handler]
+pub async fn banner_draw_finish(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> Result<Json<BannerDrawFinishResponse>, AppError> {
+    let credentials: AwsCredentials = AwsCredentials::new(
+        state.config.aws_access_key_id.clone(),
+        state.config.aws_secret_access_key.clone(),
+        None,
+        None,
+        "",
+    );
+    let credentials_provider = SharedCredentialsProvider::new(credentials);
+    let config = aws_sdk_s3::Config::builder()
+        .endpoint_url(state.config.r2_endpoint_url.clone())
+        .region(Region::new(state.config.aws_region.clone()))
+        .credentials_provider(credentials_provider)
+        .behavior_version_latest()
+        .build();
+    let client = Client::from_conf(config);
+
+    let mut width = 0;
+    let mut height = 0;
+    let mut image_sha256 = String::new();
+    let mut replay_sha256 = String::new();
+    let mut security_timer = 0;
+    let mut security_count = 0;
+
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        let name = field.name().unwrap().to_string();
+        let data = field.bytes().await.unwrap();
+
+        if name == "image" {
+            let url = DataUrl::process(std::str::from_utf8(data.as_ref()).unwrap()).unwrap();
+            let (body, _fragment) = url.decode_to_vec().unwrap();
+            image_sha256 = digest(&body);
+
+            assert_eq!(url.mime_type().type_, "image");
+            assert_eq!(url.mime_type().subtype, "png");
+
+            upload_object(
+                &client,
+                &state.config.aws_s3_bucket,
+                body,
+                &format!(
+                    "image/{}{}/{}.png",
+                    image_sha256.chars().nth(0).unwrap(),
+                    image_sha256.chars().nth(1).unwrap(),
+                    image_sha256
+                ),
+            )
+            .await?;
+        } else if name == "animation" {
+            replay_sha256 = digest(&*data);
+
+            upload_object(
+                &client,
+                &state.config.aws_s3_bucket,
+                data.to_vec(),
+                &format!(
+                    "replay/{}{}/{}.pch",
+                    replay_sha256.chars().nth(0).unwrap(),
+                    replay_sha256.chars().nth(1).unwrap(),
+                    replay_sha256
+                ),
+            )
+            .await?;
+        } else if name == "security_timer" {
+            security_timer = std::str::from_utf8(data.as_ref())
+                .unwrap()
+                .parse::<u128>()
+                .unwrap();
+        } else if name == "security_count" {
+            security_count = std::str::from_utf8(data.as_ref())
+                .unwrap()
+                .parse::<i32>()
+                .unwrap();
+        } else if name == "width" {
+            width = std::str::from_utf8(data.as_ref())
+                .unwrap()
+                .parse::<i32>()
+                .unwrap();
+        } else if name == "height" {
+            height = std::str::from_utf8(data.as_ref())
+                .unwrap()
+                .parse::<i32>()
+                .unwrap();
+        }
+        println!("Length of `{}` is {} bytes", name, data.len());
+    }
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    println!(
+        "duration_secs: {:?}",
+        (since_the_epoch.as_millis() - security_timer)
+    );
+    let duration_ms = since_the_epoch.as_millis() - security_timer;
+
+    let banner_draft = BannerDraft {
+        author_id: auth_session.user.unwrap().id,
+        paint_duration: PgInterval::try_from(
+            Duration::try_milliseconds(duration_ms as i64).unwrap_or_default(),
+        )
+        .unwrap_or_default(),
+        stroke_count: security_count,
+        width,
+        height,
+        image_filename: format!("{}.png", image_sha256),
+        replay_filename: format!("{}.pch", replay_sha256),
+    };
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let banner = create_banner(&mut tx, banner_draft).await?;
+    let _ = tx.commit().await;
+
+    Ok(Json(BannerDrawFinishResponse {
+        banner_id: banner.id,
+    }))
+}
+
+#[derive(Serialize)]
+pub struct BannerDrawFinishResponse {
+    pub banner_id: String,
+}
+
+pub async fn start_banner_draw(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<Html<String>, AppError> {
+    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
+    let template: minijinja::Template<'_, '_> = env.get_template("draw_banner.html")?;
+
+    let rendered = template.render(context! {
+        title => "배너 그리기",
+        width => 200,
+        height => 40,
+        current_user => auth_session.user,
+    })?;
+
+    Ok(Html(rendered))
+}
 
 pub async fn do_follow_profile(
     auth_session: AuthSession,
@@ -159,9 +306,15 @@ pub async fn profile(
 
     let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id).await?;
 
+    let banner = match user.clone().unwrap().banner_id {
+        Some(banner_id) => Some(find_banner_by_id(&mut tx, banner_id).await?),
+        None => None,
+    };
+
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
     let template: minijinja::Template<'_, '_> = env.get_template("profile.html")?;
     let rendered = template.render(context! {
+        banner,
         is_following => is_current_user_following,
         followings,
         current_user => auth_session.user,

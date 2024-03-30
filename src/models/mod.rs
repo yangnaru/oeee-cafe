@@ -1,3 +1,4 @@
+pub mod banner;
 pub mod comment;
 pub mod community;
 pub mod follow;

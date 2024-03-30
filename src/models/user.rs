@@ -55,6 +55,7 @@ pub struct User {
     pub email_verified_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+    pub banner_id: Option<Uuid>,
 }
 
 impl User {
@@ -83,7 +84,7 @@ pub async fn update_password(
             UPDATE users
             SET password_hash = $1, updated_at = now()
             WHERE id = $2
-            RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at
+            RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at, banner_id
         ",
         password_hash,
         id,
@@ -99,6 +100,7 @@ pub async fn update_password(
         email_verified_at: result.email_verified_at,
         created_at: result.created_at,
         updated_at: result.updated_at,
+        banner_id: result.banner_id,
     })
 }
 
@@ -114,7 +116,7 @@ pub async fn update_user(
             UPDATE users
             SET login_name = $1, display_name = $2, email = $3, updated_at = now()
             WHERE id = $4
-            RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at
+            RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at, banner_id
         ",
         login_name,
         display_name,
@@ -132,6 +134,7 @@ pub async fn update_user(
         email_verified_at: result.email_verified_at,
         created_at: result.created_at,
         updated_at: result.updated_at,
+        banner_id: result.banner_id,
     })
 }
 
@@ -166,6 +169,7 @@ pub async fn create_user(
         email_verified_at: None,
         created_at: result.created_at,
         updated_at: result.updated_at,
+        banner_id: None,
     })
 }
 
