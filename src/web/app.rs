@@ -64,6 +64,9 @@ impl App {
 
         let static_router = Router::new()
             .nest_service("/static/neo/dist", ServeDir::new("neo/dist"))
+            .nest_service("/static/tegaki/css", ServeDir::new("tegaki/css"))
+            .nest_service("/static/tegaki/js", ServeDir::new("tegaki/js"))
+            .nest_service("/static/tegaki/lib", ServeDir::new("tegaki/lib"))
             .nest_service("/static", ServeDir::new("static"));
 
         let protected_router = Router::new()

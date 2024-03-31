@@ -545,6 +545,7 @@ pub async fn community(
     let template: minijinja::Template<'_, '_> = env.get_template("community.html")?;
     let rendered = template.render(context! {
         community => community,
+        encoded_community_id => BASE64URL_NOPAD.encode(uuid.as_bytes()),
         current_user => auth_session.user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         posts => posts.iter().map(|post| {
@@ -701,8 +702,6 @@ pub async fn post_replay_view(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    println!("{:?}", post);
-
     let community_id = Uuid::parse_str(
         post.clone()
             .as_ref()
@@ -721,8 +720,24 @@ pub async fn post_replay_view(
         None => 0,
     };
     let encoded_community_id = BASE64URL_NOPAD.encode(community_id.as_bytes());
+
+    let template_filename = match post.clone().unwrap().get("replay_filename") {
+        Some(replay_filename) => {
+            let replay_filename = replay_filename.as_ref().unwrap();
+            if replay_filename.ends_with(".pch") {
+                "post_replay_view_pch.html"
+            } else if replay_filename.ends_with(".tgkr") {
+                "post_replay_view_tgkr.html"
+            } else {
+                "post_replay_view_pch.html"
+            }
+        }
+        None => "post_replay_view_pch.html",
+    };
+
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("post_replay_view.html").unwrap();
+
+    let template: minijinja::Template<'_, '_> = env.get_template(template_filename).unwrap();
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
@@ -1044,6 +1059,7 @@ pub async fn do_logout(mut auth_session: AuthSession) -> impl IntoResponse {
 pub struct Input {
     width: String,
     height: String,
+    tool: String,
     community_id: String,
 }
 
@@ -1052,12 +1068,18 @@ pub async fn start_draw(
     State(state): State<AppState>,
     Form(input): Form<Input>,
 ) -> Result<Html<String>, AppError> {
+    let template_filename = match input.tool.as_str() {
+        "neo" => "draw_post_neo.html",
+        "tegaki" => "draw_post_tegaki.html",
+        _ => "draw_post_neo.html",
+    };
+
     let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("draw_post.html")?;
+    let template: minijinja::Template<'_, '_> = env.get_template(template_filename)?;
 
     let rendered = template.render(context! {
         title => "그리기",
-        message => "그림을 그렸습니다!",
+        tool => input.tool,
         width => input.width.parse::<u32>()?,
         height => input.height.parse::<u32>()?,
         community_id => input.community_id,
@@ -1094,7 +1116,7 @@ pub async fn draw_finish(
     auth_session: AuthSession,
     State(state): State<AppState>,
     mut multipart: Multipart,
-) -> Result<Json<DrawFinishResponse>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let credentials: AwsCredentials = AwsCredentials::new(
         state.config.aws_access_key_id.clone(),
         state.config.aws_secret_access_key.clone(),
@@ -1115,9 +1137,11 @@ pub async fn draw_finish(
     let mut height = 0;
     let mut image_sha256 = String::new();
     let mut replay_sha256 = String::new();
+    let mut replay_data = Vec::new();
     let mut community_id = Uuid::nil();
     let mut security_timer = 0;
     let mut security_count = 0;
+    let mut tool = String::new();
 
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
@@ -1145,21 +1169,11 @@ pub async fn draw_finish(
             .await?;
         } else if name == "animation" {
             replay_sha256 = digest(&*data);
-
-            upload_object(
-                &client,
-                &state.config.aws_s3_bucket,
-                data.to_vec(),
-                &format!(
-                    "replay/{}{}/{}.pch",
-                    replay_sha256.chars().nth(0).unwrap(),
-                    replay_sha256.chars().nth(1).unwrap(),
-                    replay_sha256
-                ),
-            )
-            .await?;
+            replay_data = data.to_vec();
         } else if name == "community_id" {
-            community_id = Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap()).unwrap();
+            community_id =
+                Uuid::from_slice(BASE64URL_NOPAD.decode(data.as_ref()).unwrap().as_slice())
+                    .unwrap();
         } else if name == "security_timer" {
             security_timer = std::str::from_utf8(data.as_ref())
                 .unwrap()
@@ -1180,6 +1194,8 @@ pub async fn draw_finish(
                 .unwrap()
                 .parse::<i32>()
                 .unwrap();
+        } else if name == "tool" {
+            tool = std::str::from_utf8(data.as_ref()).unwrap().to_string();
         }
         println!("Length of `{}` is {} bytes", name, data.len());
     }
@@ -1193,6 +1209,42 @@ pub async fn draw_finish(
     );
     let duration_ms = since_the_epoch.as_millis() - security_timer;
 
+    if tool == "neo" {
+        upload_object(
+            &client,
+            &state.config.aws_s3_bucket,
+            replay_data,
+            &format!(
+                "replay/{}{}/{}.pch",
+                replay_sha256.chars().nth(0).unwrap(),
+                replay_sha256.chars().nth(1).unwrap(),
+                replay_sha256
+            ),
+        )
+        .await?;
+    } else if tool == "tegaki" {
+        upload_object(
+            &client,
+            &state.config.aws_s3_bucket,
+            replay_data,
+            &format!(
+                "replay/{}{}/{}.tgkr",
+                replay_sha256.chars().nth(0).unwrap(),
+                replay_sha256.chars().nth(1).unwrap(),
+                replay_sha256
+            ),
+        )
+        .await?;
+    }
+
+    let replay_filename = if tool == "neo" {
+        format!("{}.pch", replay_sha256)
+    } else if tool == "tegaki" {
+        format!("{}.tgkr", replay_sha256)
+    } else {
+        return Ok(StatusCode::BAD_REQUEST.into_response());
+    };
+
     let post_draft = PostDraft {
         author_id: auth_session.user.unwrap().id,
         community_id: community_id.clone(),
@@ -1204,7 +1256,7 @@ pub async fn draw_finish(
         width,
         height,
         image_filename: format!("{}.png", image_sha256),
-        replay_filename: format!("{}.pch", replay_sha256),
+        replay_filename,
     };
 
     let db = state.config.connect_database().await?;
@@ -1215,7 +1267,8 @@ pub async fn draw_finish(
     Ok(Json(DrawFinishResponse {
         community_id: BASE64URL_NOPAD.encode(community_id.as_ref()),
         post_id: post.id,
-    }))
+    })
+    .into_response())
 }
 
 pub async fn about(

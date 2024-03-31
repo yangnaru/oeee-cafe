@@ -6,7 +6,15 @@ endblock %} {% block body %}
 
   {% if current_user %}
   <form action="/draw" method="post">
-    <input type="hidden" name="community_id" value="{{ community.id }}" />
+    <input
+      type="hidden"
+      name="community_id"
+      value="{{ encoded_community_id }}"
+    />
+    <select name="tool" title="그림판">
+      <option value="neo" selected>PaintBBS NEO</option>
+      <option value="tegaki">Tegaki</option>
+    </select>
     <select name="width" title="너비">
       <option value="300" selected>300</option>
       <option value="350">350</option>

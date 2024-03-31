@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>
+      오이카페 | {% if post.title %}{{ post.title }}{% else %}무제{% endif %}
+      (리플레이)
+    </title>
+    <link rel="stylesheet" href="/static/tegaki/css/tegaki.css" />
+    <script src="/static/tegaki/js/strings/en.js"></script>
+    <script src="/static/tegaki/js/tools/tool.js"></script>
+    <script src="/static/tegaki/js/tools/brush.js"></script>
+    <script src="/static/tegaki/js/tools/pencil.js"></script>
+    <script src="/static/tegaki/js/tools/pen.js"></script>
+    <script src="/static/tegaki/js/tools/airbrush.js"></script>
+    <script src="/static/tegaki/js/tools/blur.js"></script>
+    <script src="/static/tegaki/js/tools/bucket.js"></script>
+    <script src="/static/tegaki/js/tools/eraser.js"></script>
+    <script src="/static/tegaki/js/tools/pipette.js"></script>
+    <script src="/static/tegaki/js/tools/tone.js"></script>
+    <script src="/static/tegaki/js/$T.js"></script>
+    <script src="/static/tegaki/js/cursor.js"></script>
+    <script src="/static/tegaki/js/history.js"></script>
+    <script src="/static/tegaki/js/layers.js"></script>
+    <script src="/static/tegaki/js/keybinds.js"></script>
+    <script src="/static/tegaki/js/palettes.js"></script>
+    <script src="/static/tegaki/js/ui.js"></script>
+    <script src="/static/tegaki/js/pressure.js"></script>
+    <script src="/static/tegaki/js/replayevents.js"></script>
+    <script src="/static/tegaki/js/replayrecorder.js"></script>
+    <script src="/static/tegaki/js/replayviewer.js"></script>
+    <script src="/static/tegaki/js/binary.js"></script>
+    <script src="/static/tegaki/js/main.js"></script>
+    <script src="/static/tegaki/lib/UZIP/UZIP.js"></script>
+  </head>
+  <body>
+    <script type="text/javascript">
+      Tegaki.onCloseViewerClick = function () {
+        window.location.href = "/posts/{{ encoded_post_id }}";
+      };
+
+      Tegaki.open({
+        replayMode: true,
+        replayURL:
+          "{{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}",
+      });
+    </script>
+  </body>
+</html>

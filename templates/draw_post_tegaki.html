@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>오이카페 | 그리기</title>
+    <link rel="stylesheet" href="/static/tegaki/css/tegaki.css" />
+    <script src="/static/tegaki/js/strings/en.js"></script>
+    <script src="/static/tegaki/js/tools/tool.js"></script>
+    <script src="/static/tegaki/js/tools/brush.js"></script>
+    <script src="/static/tegaki/js/tools/pencil.js"></script>
+    <script src="/static/tegaki/js/tools/pen.js"></script>
+    <script src="/static/tegaki/js/tools/airbrush.js"></script>
+    <script src="/static/tegaki/js/tools/blur.js"></script>
+    <script src="/static/tegaki/js/tools/bucket.js"></script>
+    <script src="/static/tegaki/js/tools/eraser.js"></script>
+    <script src="/static/tegaki/js/tools/pipette.js"></script>
+    <script src="/static/tegaki/js/tools/tone.js"></script>
+    <script src="/static/tegaki/js/$T.js"></script>
+    <script src="/static/tegaki/js/cursor.js"></script>
+    <script src="/static/tegaki/js/history.js"></script>
+    <script src="/static/tegaki/js/layers.js"></script>
+    <script src="/static/tegaki/js/keybinds.js"></script>
+    <script src="/static/tegaki/js/palettes.js"></script>
+    <script src="/static/tegaki/js/ui.js"></script>
+    <script src="/static/tegaki/js/pressure.js"></script>
+    <script src="/static/tegaki/js/replayevents.js"></script>
+    <script src="/static/tegaki/js/replayrecorder.js"></script>
+    <script src="/static/tegaki/js/binary.js"></script>
+    <script src="/static/tegaki/js/main.js"></script>
+    <script src="/static/tegaki/lib/UZIP/UZIP.js"></script>
+  </head>
+  <body>
+    <script type="text/javascript">
+      function onTegakiDone() {
+        Tegaki.replayRecorder.stop();
+        const image = Tegaki.flatten();
+        const animation = Tegaki.replayRecorder.toBlob();
+
+        const form = new FormData();
+        form.append("image", image.toDataURL("image/png"));
+        form.append("animation", animation, "blob");
+        form.append("community_id", "{{ community_id }}");
+        form.append("security_timer", Tegaki.startTimeStamp);
+        form.append("security_count", securityCount);
+        form.append("width", image.width);
+        form.append("height", image.height);
+        form.append("tool", "tegaki");
+
+        // post form using fetch
+        fetch("/draw/finish", {
+          method: "POST",
+          body: form,
+        })
+          .then((response) => response.json())
+          .then(async (data) => {
+            if (data?.error) {
+              alert(data.error);
+            } else {
+              location.href = `/posts/${data.post_id}/publish`;
+            }
+          })
+          .catch((error) => {
+            alert(
+              "그림을 게시하는 도중 오류가 발생했습니다. 다시 제출해 보세요."
+            );
+          });
+
+        return false;
+      }
+
+      Tegaki.open({
+        saveReplay: true,
+        onDone: onTegakiDone,
+        width: {{ width }},
+        height: {{ height }},
+      });
+
+      Tegaki.onCancelCb = function () {
+        window.location.href = "/communities/{{ community_id }}";
+      };
+
+      let securityCount = 0;
+      document.getElementById("tegaki").addEventListener("pointerdown", () => {
+        securityCount++;
+      });
+    </script>
+    <style>
+      #tegaki-menu-bar > span:nth-child(1) {
+        display: none;
+      }
+
+      #tegaki-menu-bar > span:nth-child(2) {
+        display: none;
+      }
+    </style>
+  </body>
+</html>

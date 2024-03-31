@@ -13,7 +13,6 @@ post.title }}{% else %}무제{% endif %} (리플레이){% endblock %} {% block b
     .then((response) => response.arrayBuffer())
     .then((result) => {
       const pch = Neo.decodePCH(result);
-      console.log(pch);
 
       Neo.createViewer(document.querySelector("#viewer"));
       Neo.config.width = pch.width;

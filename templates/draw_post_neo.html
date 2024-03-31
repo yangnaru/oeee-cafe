@@ -1,6 +1,7 @@
 {% extends "base.html" %} {% block title %}{{ super() }} | {{ title }}{%
 endblock %} {% block body %}
 <h2 class="center">{{ title }}</h2>
+
 <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
 <script src="/static/neo/dist/neo.js" charset="utf-8"></script>
 <script>
@@ -27,6 +28,7 @@ endblock %} {% block body %}
       form.append("security_count", Neo.painter.securityCount);
       form.append("width", image.width);
       form.append("height", image.height);
+      form.append("tool", "neo");
 
       // post form using fetch
       fetch("/draw/finish", {
