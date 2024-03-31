@@ -16,8 +16,8 @@ use crate::models::post::{
     publish_post, PostDraft,
 };
 use crate::models::user::{
-    create_user, find_user_by_email, find_user_by_id, find_user_by_login_name, update_password,
-    update_user, update_user_email_verified_at, AuthSession, Credentials, UserDraft,
+    create_user, find_user_by_id, find_user_by_login_name, update_password, update_user,
+    update_user_email_verified_at, AuthSession, Credentials, UserDraft,
 };
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::error::SdkError;
