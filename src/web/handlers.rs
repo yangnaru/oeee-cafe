@@ -35,7 +35,6 @@ use chrono::Duration;
 use data_encoding::BASE64URL_NOPAD;
 use data_url::DataUrl;
 use minijinja::context;
-use minijinja_autoreload::EnvironmentGuard;
 use serde::{Deserialize, Serialize};
 use sha256::digest;
 use sqlx::postgres::types::PgInterval;
@@ -176,8 +175,7 @@ pub async fn start_banner_draw(
     auth_session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("draw_banner.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("draw_banner.html")?;
 
     let rendered = template.render(context! {
         title => "동맹 배너 그리기",
@@ -220,8 +218,7 @@ pub async fn do_follow_profile(
     };
     let _ = tx.commit().await;
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("unfollow_button.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("unfollow_button.html")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         user,
@@ -263,8 +260,7 @@ pub async fn do_unfollow_profile(
     };
     let _ = tx.commit().await;
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("follow_button.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("follow_button.html")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         user,
@@ -311,8 +307,7 @@ pub async fn profile(
         None => None,
     };
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("profile.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile.html")?;
     let rendered = template.render(context! {
         banner,
         is_following => is_current_user_following,
@@ -359,8 +354,7 @@ pub async fn do_create_comment(
     let comments = find_comments_by_post_id(&mut tx, post_id).await?;
     let _ = tx.commit().await;
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("post_comments.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_comments.html")?;
     let rendered = template.render(context! {
         comments => comments,
     })?;
@@ -436,8 +430,7 @@ pub async fn home(
 
     println!("{:?}", public_communities);
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("home.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("home.html")?;
 
     let rendered = template.clone().render(context! {
         title => "홈",
@@ -465,8 +458,7 @@ pub async fn account(
         None => 0,
     };
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("account.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("account.html")?;
     let rendered = template.render(context! {
         title => "계정",
         current_user => auth_session.user,
@@ -541,8 +533,7 @@ pub async fn community(
         None => 0,
     };
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("community.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community.html")?;
     let rendered = template.render(context! {
         community => community,
         encoded_community_id => BASE64URL_NOPAD.encode(uuid.as_bytes()),
@@ -603,8 +594,7 @@ pub async fn draft_posts(
     let posts =
         find_draft_posts_by_author_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("draft_posts.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("draft_posts.html")?;
     let rendered = template.render(context! {
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         current_user => auth_session.user,
@@ -659,8 +649,7 @@ pub async fn post_view(
     tx.commit().await?;
 
     let encoded_community_id = BASE64URL_NOPAD.encode(community_id.as_bytes());
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-    let template: minijinja::Template<'_, '_> = env.get_template("post_view.html").unwrap();
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.html").unwrap();
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
@@ -724,9 +713,7 @@ pub async fn post_replay_view(
         None => "post_replay_view_pch.html",
     };
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env().unwrap();
-
-    let template: minijinja::Template<'_, '_> = env.get_template(template_filename).unwrap();
+    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename).unwrap();
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
@@ -781,8 +768,7 @@ pub async fn post_publish_form(
         BASE64URL_NOPAD.encode(community_id.as_bytes())
     );
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("post_form.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.html")?;
 
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -892,8 +878,7 @@ pub async fn create_community_form(
         None => 0,
     };
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("create_community.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("create_community.html")?;
     let rendered = template.render(context! {
         title => "커뮤니티 생성",
         current_user => auth_session.user,
@@ -915,8 +900,7 @@ pub async fn signup(
     Query(NextUrl { next }): Query<NextUrl>,
     State(state): State<crate::web::state::AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let env = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("signup.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("signup.html")?;
 
     let rendered: String = template.render(context! {
         messages => messages.into_iter().collect::<Vec<_>>(),
@@ -969,8 +953,7 @@ pub async fn login(
     Query(NextUrl { next }): Query<NextUrl>,
     State(state): State<crate::web::state::AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let env = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("login.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("login.html")?;
 
     let collected_messages: Vec<axum_messages::Message> = messages.into_iter().collect();
 
@@ -1049,8 +1032,7 @@ pub async fn start_draw(
         _ => "draw_post_neo.html",
     };
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template(template_filename)?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
 
     let rendered = template.render(context! {
         title => "그리기",
@@ -1259,8 +1241,7 @@ pub async fn about(
         None => 0,
     };
 
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("about.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("about.html")?;
     let rendered: String = template.render(context! {
         current_user => auth_session.user,
         draft_post_count,

@@ -1,12 +1,10 @@
 use minijinja::{path_loader, Environment};
-use minijinja_autoreload::AutoReloader;
 use oeee::web::app::App;
 use oeee::web::state::AppState;
 use oeee::AppConfig;
-use std::env::{self, args};
+use std::env::args;
 use std::path::PathBuf;
 use std::process::exit;
-use std::sync::Arc;
 use tracing::Level;
 
 fn main() {
@@ -40,34 +38,14 @@ fn main() {
 
             tracing::debug!("config: {:?}", cfg);
 
-            // If DISABLE_AUTORELOAD is set, then the path tracking is disabled.
-            let disable_autoreload = env::var("DISABLE_AUTORELOAD").as_deref() == Ok("1");
-
-            // If FAST_AUTORELOAD is set, then fast reloading is enabled.
-            let fast_autoreload = env::var("FAST_AUTORELOAD").as_deref() == Ok("1");
-
-            // The closure is invoked every time the environment is outdated to
-            // recreate it.
-            let reloader = AutoReloader::new(move |notifier| {
-                let template_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates");
-                let mut env = Environment::new();
-                minijinja_contrib::add_to_environment(&mut env);
-                env.set_loader(path_loader(&template_path));
-
-                if fast_autoreload {
-                    notifier.set_fast_reload(true);
-                }
-
-                // if watch_path is never called, no fs watcher is created
-                if !disable_autoreload {
-                    notifier.watch_path(&template_path, true);
-                }
-                Ok(env)
-            });
+            let template_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates");
+            let mut env = Environment::new();
+            minijinja_contrib::add_to_environment(&mut env);
+            env.set_loader(path_loader(&template_path));
 
             let state = AppState {
                 config: cfg.clone(),
-                reloader: Arc::new(reloader),
+                env,
             };
 
             App::new(state).await.unwrap().serve().await.unwrap()

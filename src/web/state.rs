@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
-use minijinja_autoreload::AutoReloader;
+use minijinja::Environment;
 
 use crate::AppConfig;
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: AppConfig,
-    pub reloader: Arc<AutoReloader>,
+    pub env: Environment<'static>,
 }

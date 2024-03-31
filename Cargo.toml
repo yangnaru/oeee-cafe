@@ -22,7 +22,6 @@ data-encoding = "2.5.0"
 data-url = "0.3.1"
 humantime = "2.1.0"
 minijinja = { version = "1.0.12", features = ["loader"] }
-minijinja-autoreload = "1.0.12"
 minijinja-contrib = { version = "1.0.12", features = ["datetime", "timezone"] }
 sentry = { version = "0.32.2", features = ["anyhow"] }
 serde = { version = "1.0.197", features = ["derive"] }
