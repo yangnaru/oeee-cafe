@@ -7,24 +7,27 @@ user.login_name }}) {% endblock %} {% block body %}
       {{ user.display_name }}
       <span class="muted">@{{ user.login_name }}</span>
     </h2>
-    {% if banner %} {% if user.id == current_user.id %}<a href="/banners/draw">
+    <div class="banner-controls">
+      {% if current_user %} {% if is_following %} {{ unfollow_button() }} {%
+      else %} {{ follow_button() }} {% endif %} {% endif %} {% if banner %} {%
+      if user.id == current_user.id %}<a href="/banners/draw">
+        <img
+          class="banner"
+          src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
+        />
+      </a>
+      {% else %}
       <img
         class="banner"
         src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
       />
-    </a>
-    {% else %}
-    <img
-      class="banner"
-      src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
-    />
-    {% endif %} {% else %} {% if user.id == current_user.id %}
-    <a href="/banners/draw" class="button">동맹 배너 그리기</a>
-    {% endif %} {% endif %}
+      {% endif %} {% else %} {% if user.id == current_user.id %}
+      <a href="/banners/draw" class="button">동맹 배너 그리기</a>
+      {% endif %} {% endif %}
+    </div>
   </div>
-  {% if current_user %} {% if is_following %} {{ unfollow_button() }} {% else %}
-  {{ follow_button() }} {% endif %} {% endif %} {% if followings|length > 0 %}
-  {% if followings|selectattr("banner_image_filename")|length > 0 %}
+  {% if followings|length > 0 %} {% if
+  followings|selectattr("banner_image_filename")|length > 0 %}
   <h3>동맹 배너</h3>
   <div class="banners-grid">
     {% for following in followings|selectattr("banner_image_filename") %}

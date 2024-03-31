@@ -52,6 +52,13 @@ nav a:visited {
   vertical-align: bottom;
 }
 
+.banner-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
 .banner {
   border: 1px solid black;
   width: 200px;
@@ -89,8 +96,9 @@ nav a:visited {
   background-color: green;
   color: white;
   padding: 8px;
-  border: solid 1px darkgreen;
+  border: solid 1px black;
   cursor: pointer;
+  height: 42px;
 }
 
 .button-follow:hover {
@@ -101,8 +109,9 @@ nav a:visited {
   background-color: red;
   color: white;
   padding: 8px;
-  border: solid 1px darkred;
+  border: solid 1px black;
   cursor: pointer;
+  height: 42px;
 }
 
 .button-unfollow:hover {
