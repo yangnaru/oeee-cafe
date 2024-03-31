@@ -128,7 +128,15 @@ pub async fn request_email_verification_code(
     let edit_email_template = state.env.get_template("email_edit.html")?;
 
     let current_email = auth_session.user.clone().unwrap().email;
-    if current_email.is_some() && current_email.unwrap() == form.email {
+    if current_email.is_some()
+        && current_email.unwrap() == form.email
+        && auth_session
+            .user
+            .clone()
+            .unwrap()
+            .email_verified_at
+            .is_some()
+    {
         return Ok(Html(edit_email_template.render(context! {
             current_user => auth_session.user,
             message => "이미 인증된 이메일 주소입니다.".to_string(),
