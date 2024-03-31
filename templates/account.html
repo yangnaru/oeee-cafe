@@ -54,5 +54,33 @@
     </fieldset>
     <input type="submit" value="수정" />
   </form>
+
+  <form hx-post="/account/request-verify-email" hx-swap="outerHTML">
+    <fieldset>
+      <legend>이메일 변경</legend>
+      {% if current_user.email_verified_at %}
+      <p>
+        이메일 인증: {{
+        current_user.email_verified_at|dateformat(format="short",
+        tz="Asia/Seoul") }}
+      </p>
+      {% else %}
+      <p class="dangerous">
+        이메일이 인증되지 않았습니다. 비밀번호를 분실하면 계정을 다시 찾을 수
+        없습니다.
+      </p>
+      {% endif %}
+      <p>
+        <label for="email">이메일:</label>
+        <input
+          name="email"
+          id="email"
+          type="email"
+          value="{% if current_user.email %}{{ current_user.email }}{% endif %}"
+        />
+      </p>
+    </fieldset>
+    <input type="submit" value="이메일 인증 요청" />
+  </form>
 </div>
 {% endblock %}

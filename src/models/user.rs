@@ -60,6 +60,38 @@ impl User {
     }
 }
 
+pub async fn update_user_email_verified_at(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    email: String,
+    email_verified_at: DateTime<Utc>,
+) -> Result<User> {
+    let q = query!(
+        "
+            UPDATE users
+            SET email = $1, email_verified_at = $2, updated_at = now()
+            WHERE id = $3
+            RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at, banner_id
+        ",
+        email,
+        email_verified_at,
+        id,
+    );
+    let result = q.fetch_one(&mut **tx).await?;
+
+    Ok(User {
+        id: result.id,
+        login_name: result.login_name,
+        password_hash: result.password_hash,
+        display_name: result.display_name,
+        email: result.email,
+        email_verified_at: result.email_verified_at,
+        created_at: result.created_at,
+        updated_at: result.updated_at,
+        banner_id: result.banner_id,
+    })
+}
+
 pub async fn update_password(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,

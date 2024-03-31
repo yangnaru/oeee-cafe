@@ -142,3 +142,11 @@ nav a:visited {
 .followings-list li:first-of-type {
   margin-top: 0;
 }
+
+.dangerous {
+  color: red;
+}
+
+.safe {
+  color: green;
+}

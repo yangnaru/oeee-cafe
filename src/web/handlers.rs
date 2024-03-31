@@ -6,6 +6,9 @@ use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, get_public_communities,
     CommunityDraft,
 };
+use crate::models::email_verification_challenge::{
+    create_email_verification_challenge, find_email_verification_challenge_by_id,
+};
 use crate::models::follow::{find_followings_by_user_id, follow_user, is_following, unfollow_user};
 use crate::models::post::{
     create_post, find_draft_posts_by_author_id, find_post_by_id, find_published_posts_by_author_id,
@@ -13,8 +16,8 @@ use crate::models::post::{
     publish_post, PostDraft,
 };
 use crate::models::user::{
-    create_user, find_user_by_id, find_user_by_login_name, update_password, update_user,
-    AuthSession, Credentials, UserDraft,
+    create_user, find_user_by_email, find_user_by_id, find_user_by_login_name, update_password,
+    update_user, update_user_email_verified_at, AuthSession, Credentials, UserDraft,
 };
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::error::SdkError;
@@ -31,16 +34,161 @@ use axum::{
     Form,
 };
 use axum_messages::Messages;
-use chrono::Duration;
+use chrono::{Duration, TimeDelta, Utc};
 use data_encoding::BASE64URL_NOPAD;
 use data_url::DataUrl;
+use lettre::transport::smtp::authentication::Credentials as SmtpCredentials;
+use lettre::{Message, SmtpTransport, Transport};
 use minijinja::context;
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use sha256::digest;
 use sqlx::postgres::types::PgInterval;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+
+#[derive(Deserialize)]
+pub struct EmailVerificationChallengeResponseForm {
+    pub challenge_id: Uuid,
+    pub token: String,
+}
+
+#[debug_handler]
+pub async fn verify_email_verification_code(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Form(form): Form<EmailVerificationChallengeResponseForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await.unwrap();
+    let mut tx = db.begin().await.unwrap();
+    let challenge = find_email_verification_challenge_by_id(&mut tx, form.challenge_id)
+        .await
+        .unwrap();
+    if challenge.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let challenge = challenge.unwrap();
+    let now = Utc::now();
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("email_verify.html")?;
+
+    if challenge.token != form.token {
+        let rendered = template.render(context! {
+            challenge_id => challenge.id,
+            email => challenge.email,
+            message => "인증 코드가 일치하지 않습니다.".to_string(),
+            success => false,
+        })?;
+
+        return Ok(Html(rendered).into_response());
+    }
+
+    if challenge.expires_at < now {
+        let rendered = template.render(context! {
+            challenge_id => challenge.id,
+            email => challenge.email,
+            message => "인증 코드가 만료되었습니다.".to_string(),
+            success => false,
+        })?;
+
+        return Ok(Html(rendered).into_response());
+    }
+
+    let _ = update_user_email_verified_at(
+        &mut tx,
+        auth_session.user.unwrap().id,
+        challenge.clone().email,
+        now,
+    )
+    .await;
+    let _ = tx.commit().await;
+
+    let rendered = template.render(context! {
+        challenge_id => challenge.id,
+        email => challenge.email,
+        message => "이메일 주소가 인증되었습니다.".to_string(),
+        success => true,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct RequestEmailVerificationCodeForm {
+    email: String,
+}
+
+pub async fn request_email_verification_code(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Form(form): Form<RequestEmailVerificationCodeForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let edit_email_template = state.env.get_template("email_edit.html")?;
+
+    let current_email = auth_session.user.clone().unwrap().email;
+    if current_email.is_some() && current_email.unwrap() == form.email {
+        return Ok(Html(edit_email_template.render(context! {
+            current_user => auth_session.user,
+            message => "이미 인증된 이메일 주소입니다.".to_string(),
+        })?)
+        .into_response());
+    }
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    let token = {
+        let mut rng = thread_rng();
+        let token: String = (0..6)
+            .map(|_| rng.gen_range(0..10).to_string())
+            .collect::<Vec<String>>()
+            .join("");
+        token
+    };
+
+    let expires_at = Utc::now() + TimeDelta::try_seconds(60 * 5).unwrap();
+
+    let email_verification_challenge = create_email_verification_challenge(
+        &mut tx,
+        auth_session.user.unwrap().id,
+        &form.email,
+        &token,
+        expires_at,
+    )
+    .await?;
+    let _ = tx.commit().await;
+
+    let email = Message::builder()
+        .from(state.config.email_from_address.clone().parse().unwrap())
+        .to(form.email.clone().parse().unwrap())
+        .subject("오이카페 이메일 주소 인증 코드")
+        .body(format!(
+            "인증 코드: {}",
+            email_verification_challenge.token.clone()
+        ))
+        .unwrap();
+
+    let mailer = SmtpTransport::relay(&state.config.smtp_host)
+        .unwrap()
+        .credentials(SmtpCredentials::new(
+            state.config.smtp_user.clone(),
+            state.config.smtp_password.clone(),
+        ))
+        .build();
+
+    let _ = mailer.send(&email).unwrap();
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("email_verify.html")?;
+
+    let rendered = template.render(context! {
+        challenge_id => email_verification_challenge.id,
+        email => form.email,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
 
 #[debug_handler]
 pub async fn banner_draw_finish(

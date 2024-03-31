@@ -21,8 +21,10 @@ config = "0.14.0"
 data-encoding = "2.5.0"
 data-url = "0.3.1"
 humantime = "2.1.0"
+lettre = "0.11.6"
 minijinja = { version = "1.0.12", features = ["loader"] }
 minijinja-contrib = { version = "1.0.12", features = ["datetime", "timezone"] }
+rand = "0.8.5"
 sentry = { version = "0.32.2", features = ["anyhow"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_with = "3.7.0"

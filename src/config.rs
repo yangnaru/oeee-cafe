@@ -22,6 +22,12 @@ pub struct AppConfig {
     pub aws_s3_bucket: String,
     pub r2_endpoint_url: String,
     pub r2_public_endpoint_url: String,
+
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_user: String,
+    pub smtp_password: String,
+    pub email_from_address: String,
 }
 
 impl AppConfig {

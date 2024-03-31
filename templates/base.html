@@ -30,7 +30,12 @@
           {% endif %}
           <div><a href="/communities/new">커뮤니티 만들기</a></div>
           <div><a href="/@{{ current_user.login_name }}">프로필</a></div>
-          <div><a href="/account">계정</a></div>
+          <div>
+            <a href="/account">계정</a> {% if not current_user.email_verified_at
+            %}
+            <span class="dangerous">(이메일 미인증)</span>
+            {% endif %}
+          </div>
           <form action="/logout" method="post">
             <button type="submit">로그아웃</button>
           </form>

@@ -11,3 +11,9 @@ aws_region = "aws_region"
 aws_s3_bucket = "aws_s3_bucket"
 r2_endpoint_url = "r2_endpoint_url"
 r2_public_endpoint_url = "r2_public_endpoint_url"
+
+smtp_host = ""
+smtp_port = 587
+smtp_user = ""
+smtp_password = ""
+email_from_address = ""
