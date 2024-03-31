@@ -570,7 +570,6 @@ pub struct EditUserForm {
     login_name: String,
     user_id: String,
     display_name: String,
-    email: String,
 }
 
 pub async fn edit_account(
@@ -582,14 +581,7 @@ pub async fn edit_account(
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    let _ = update_user(
-        &mut tx,
-        user_id,
-        form.login_name,
-        form.display_name,
-        form.email,
-    )
-    .await;
+    let _ = update_user(&mut tx, user_id, form.login_name, form.display_name).await;
     let _ = tx.commit().await;
 
     messages.success("계정 정보가 수정되었습니다.");
@@ -777,8 +769,7 @@ pub async fn post_publish_form(
     };
 
     let community_id = Uuid::parse_str(
-        post
-            .clone()
+        post.clone()
             .unwrap()
             .get("community_id")
             .unwrap()
@@ -941,7 +932,6 @@ pub struct CreateUserForm {
     password: String,
     password_confirm: String,
     display_name: String,
-    email: String,
     next: Option<String>,
 }
 
@@ -956,12 +946,7 @@ pub async fn do_signup(
         return Ok(Redirect::to("/signup").into_response());
     }
 
-    let user_draft = UserDraft::new(
-        form.login_name,
-        form.password,
-        form.display_name,
-        form.email,
-    )?;
+    let user_draft = UserDraft::new(form.login_name, form.password, form.display_name)?;
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let user = create_user(&mut tx, user_draft).await?;

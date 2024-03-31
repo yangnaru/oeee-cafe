@@ -14,16 +14,10 @@ pub struct UserDraft {
     pub login_name: String,
     pub password_hash: String,
     pub display_name: String,
-    pub email: String,
 }
 
 impl UserDraft {
-    pub fn new(
-        login_name: String,
-        password: String,
-        display_name: String,
-        email: String,
-    ) -> Result<Self> {
+    pub fn new(login_name: String, password: String, display_name: String) -> Result<Self> {
         if password.len() < 8 {
             return Err(anyhow::anyhow!("비밀번호는 8자 이상이어야 합니다"));
         }
@@ -39,7 +33,6 @@ impl UserDraft {
             login_name,
             password_hash,
             display_name,
-            email,
         })
     }
 }
@@ -51,7 +44,7 @@ pub struct User {
     #[serde(skip_serializing)]
     pub password_hash: String,
     pub display_name: String,
-    pub email: String,
+    pub email: Option<String>,
     pub email_verified_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -109,18 +102,16 @@ pub async fn update_user(
     id: Uuid,
     login_name: String,
     display_name: String,
-    email: String,
 ) -> Result<User> {
     let q = query!(
         "
             UPDATE users
-            SET login_name = $1, display_name = $2, email = $3, updated_at = now()
-            WHERE id = $4
+            SET login_name = $1, display_name = $2, updated_at = now()
+            WHERE id = $3
             RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at, banner_id
         ",
         login_name,
         display_name,
-        email,
         id,
     );
     let result = q.fetch_one(&mut **tx).await?;
@@ -147,16 +138,14 @@ pub async fn create_user(
             INSERT INTO users (
                 login_name,
                 password_hash,
-                display_name,
-                email
+                display_name
             )
-            VALUES ($1, $2, $3, $4)
+            VALUES ($1, $2, $3)
             RETURNING id, created_at, updated_at
         ",
         user_draft.login_name,
         user_draft.password_hash.to_string(),
         user_draft.display_name,
-        user_draft.email,
     );
     let result = q.fetch_one(&mut **tx).await?;
 
@@ -165,7 +154,7 @@ pub async fn create_user(
         login_name: user_draft.login_name,
         password_hash: user_draft.password_hash,
         display_name: user_draft.display_name,
-        email: user_draft.email,
+        email: None,
         email_verified_at: None,
         created_at: result.created_at,
         updated_at: result.updated_at,
