@@ -22,7 +22,7 @@ fn main() {
         .block_on(async {
             let args: Vec<String> = args().collect();
             if args.len() < 2 {
-                println!("usage: {} CFG", args.get(0).unwrap_or(&"oeee".to_string()));
+                println!("usage: {} CFG", args.first().unwrap_or(&"oeee".to_string()));
                 exit(1);
             }
 

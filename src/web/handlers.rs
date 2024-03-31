@@ -90,7 +90,7 @@ pub async fn banner_draw_finish(
                 body,
                 &format!(
                     "image/{}{}/{}.png",
-                    image_sha256.chars().nth(0).unwrap(),
+                    image_sha256.chars().next().unwrap(),
                     image_sha256.chars().nth(1).unwrap(),
                     image_sha256
                 ),
@@ -105,7 +105,7 @@ pub async fn banner_draw_finish(
                 data.to_vec(),
                 &format!(
                     "replay/{}{}/{}.pch",
-                    replay_sha256.chars().nth(0).unwrap(),
+                    replay_sha256.chars().next().unwrap(),
                     replay_sha256.chars().nth(1).unwrap(),
                     replay_sha256
                 ),
@@ -674,12 +674,9 @@ pub async fn post_view(
             current_user => auth_session.user,
             r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
             post => {
-                match post {
-                    Some(ref post) => Some(post),
-                    None => None,
-                }
+                post.as_ref()
             },
-            encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
+            encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
             encoded_community_id,
             draft_post_count,
             base_url => state.config.base_url.clone(),
@@ -698,7 +695,7 @@ pub async fn post_replay_view(
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
-    if post == None {
+    if post.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
@@ -743,12 +740,9 @@ pub async fn post_replay_view(
             current_user => auth_session.user,
             r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
             post => {
-                match post {
-                    Some(ref post) => Some(post),
-                    None => None,
-                }
+                post.as_ref()
             },
-            encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
+            encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
             encoded_community_id,
             draft_post_count,
         })
@@ -771,7 +765,7 @@ pub async fn post_publish_form(
     println!("{:?}", post);
 
     let published_at = post.clone().unwrap().get("published_at").unwrap().clone();
-    if published_at != None {
+    if published_at.is_some() {
         return Ok(Redirect::to(&format!("/posts/{}", id)).into_response());
     }
 
@@ -783,7 +777,7 @@ pub async fn post_publish_form(
     };
 
     let community_id = Uuid::parse_str(
-        &post
+        post
             .clone()
             .unwrap()
             .get("community_id")
@@ -804,10 +798,7 @@ pub async fn post_publish_form(
         link,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         post => {
-            match post {
-                Some(post) => Some(post),
-                None => None,
-            }
+            post
         },
         draft_post_count,
     })?;
@@ -844,7 +835,6 @@ pub async fn post_publish(
             .get("author_id")
             .unwrap()
             .as_ref()
-            .clone()
             .unwrap(),
     )?;
     let user_id = auth_session.user.unwrap().id;
@@ -1161,7 +1151,7 @@ pub async fn draw_finish(
                 body,
                 &format!(
                     "image/{}{}/{}.png",
-                    image_sha256.chars().nth(0).unwrap(),
+                    image_sha256.chars().next().unwrap(),
                     image_sha256.chars().nth(1).unwrap(),
                     image_sha256
                 ),
@@ -1216,7 +1206,7 @@ pub async fn draw_finish(
             replay_data,
             &format!(
                 "replay/{}{}/{}.pch",
-                replay_sha256.chars().nth(0).unwrap(),
+                replay_sha256.chars().next().unwrap(),
                 replay_sha256.chars().nth(1).unwrap(),
                 replay_sha256
             ),
@@ -1229,7 +1219,7 @@ pub async fn draw_finish(
             replay_data,
             &format!(
                 "replay/{}{}/{}.tgkr",
-                replay_sha256.chars().nth(0).unwrap(),
+                replay_sha256.chars().next().unwrap(),
                 replay_sha256.chars().nth(1).unwrap(),
                 replay_sha256
             ),
@@ -1247,7 +1237,7 @@ pub async fn draw_finish(
 
     let post_draft = PostDraft {
         author_id: auth_session.user.unwrap().id,
-        community_id: community_id.clone(),
+        community_id,
         paint_duration: PgInterval::try_from(
             Duration::try_milliseconds(duration_ms as i64).unwrap_or_default(),
         )
