@@ -8,4 +8,4 @@ ALTER TABLE users
   ADD CONSTRAINT CK_users_display_name_MinLength CHECK (LENGTH(display_name) >= 1);
 
 ALTER TABLE users
-  ADD CONSTRAINT CK_users_display_name_RegularExpression CHECK (display_name ~ '^\\S.*?\\S$|^\\S$');
+  ADD CONSTRAINT CK_users_display_name_RegularExpression CHECK (display_name !~ '^\\S.*?\\S$|^\\S$');
