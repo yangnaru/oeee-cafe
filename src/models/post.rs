@@ -135,6 +135,7 @@ pub async fn find_published_posts_by_author_id(
             LEFT JOIN images ON posts.image_id = images.id
             WHERE author_id = $1
             AND published_at IS NOT NULL
+            ORDER BY published_at DESC
         ",
         author_id
     );
