@@ -519,33 +519,6 @@ pub async fn edit_password(
     Ok(Redirect::to("/account").into_response())
 }
 
-pub async fn new_community_post(
-    auth_session: AuthSession,
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-) -> Result<Html<String>, AppError> {
-    let db = state.config.connect_database().await?;
-    let mut tx = db.begin().await?;
-    let community = find_community_by_id(&mut tx, id).await?;
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
-
-    let env: EnvironmentGuard<'_> = state.reloader.acquire_env()?;
-    let template: minijinja::Template<'_, '_> = env.get_template("draw_post.html")?;
-
-    let rendered = template.render(context! {
-        current_user => auth_session.user,
-        community => community,
-        draft_post_count,
-    })?;
-
-    Ok(Html(rendered))
-}
-
 pub async fn community(
     auth_session: AuthSession,
     State(state): State<AppState>,

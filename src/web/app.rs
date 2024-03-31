@@ -6,8 +6,7 @@ use crate::models::user::Backend;
 use crate::web::handlers::{
     banner_draw_finish, community, create_community_form, do_create_comment, do_create_community,
     do_follow_profile, do_unfollow_profile, draft_posts, edit_account, edit_password, handler_404,
-    new_community_post, post_publish, post_publish_form, post_replay_view, post_view, profile,
-    start_banner_draw,
+    post_publish, post_publish_form, post_replay_view, post_view, profile, start_banner_draw,
 };
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
@@ -73,7 +72,6 @@ impl App {
             .route("/account/password", post(edit_password))
             .route("/comments", post(do_create_comment))
             .route("/communities/new", get(create_community_form))
-            .route("/communities/:id/draw", get(new_community_post))
             .route("/logout", post(do_logout))
             .route("/draw", post(start_draw))
             .route(
