@@ -11,9 +11,9 @@ use crate::models::email_verification_challenge::{
 };
 use crate::models::follow::{find_followings_by_user_id, follow_user, is_following, unfollow_user};
 use crate::models::post::{
-    create_post, find_draft_posts_by_author_id, find_post_by_id, find_published_posts_by_author_id,
-    find_published_posts_by_community_id, get_draft_post_count, increment_post_viewer_count,
-    publish_post, PostDraft,
+    create_post, find_draft_posts_by_author_id, find_post_by_id,
+    find_published_posts_by_community_id, find_published_public_posts_by_author_id,
+    get_draft_post_count, increment_post_viewer_count, publish_post, PostDraft,
 };
 use crate::models::user::{
     create_user, find_user_by_id, find_user_by_login_name, update_password, update_user,
@@ -416,7 +416,7 @@ pub async fn profile(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let posts = find_published_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
+    let posts = find_published_public_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
 
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)

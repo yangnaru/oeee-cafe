@@ -113,7 +113,7 @@ pub async fn get_draft_post_count(
     Ok(result.count.unwrap_or(0))
 }
 
-pub async fn find_published_posts_by_author_id(
+pub async fn find_published_public_posts_by_author_id(
     tx: &mut Transaction<'_, Postgres>,
     author_id: Uuid,
 ) -> Result<Vec<SerializablePost>> {
@@ -133,7 +133,9 @@ pub async fn find_published_posts_by_author_id(
                 posts.updated_at
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
+            LEFT JOIN communities ON posts.community_id = communities.id
             WHERE author_id = $1
+            AND communities.is_private = FALSE
             AND published_at IS NOT NULL
             ORDER BY published_at DESC
         ",
