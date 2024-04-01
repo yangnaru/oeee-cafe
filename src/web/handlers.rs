@@ -356,31 +356,18 @@ pub async fn do_follow_profile(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let follow = follow_user(
+    follow_user(
         &mut tx,
         auth_session.user.clone().unwrap().id,
         user.clone().unwrap().id,
     )
     .await?;
-    println!("{:?}", follow);
-
-    let posts = find_published_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
-
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("unfollow_button.html")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         user,
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        posts,
-        draft_post_count,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -405,24 +392,12 @@ pub async fn do_unfollow_profile(
         user.clone().unwrap().id,
     )
     .await;
-
-    let posts = find_published_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
-
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("follow_button.html")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         user,
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        posts,
-        draft_post_count,
     })?;
 
     Ok(Html(rendered).into_response())
