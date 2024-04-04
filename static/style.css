@@ -50,6 +50,7 @@ nav a:visited {
   max-width: 100%;
   height: auto;
   vertical-align: bottom;
+  aspect-ratio: 1 / 1;
 }
 
 .banner-controls {
