@@ -12,6 +12,7 @@ user.login_name }}) {% endblock %} {% block body %}
       else %} {{ follow_button() }} {% endif %} {% endif %} {% if banner %} {%
       if user.id == current_user.id %}<a href="/banners/draw">
         <img
+          alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
           class="banner"
           src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
         />
@@ -36,6 +37,7 @@ user.login_name }}) {% endblock %} {% block body %}
         href="/@{{ following.login_name }}"
         alt="{{ following.display_name }} (@{{ following.login_name }})"
         ><img
+          alt="{{ following.display_name }} (@{{ following.login_name }}) 동맹 배너"
           class="banner"
           src="{{ r2_public_endpoint_url }}/image/{{ following.banner_image_filename[:2] }}/{{ following.banner_image_filename }}"
       /></a>

@@ -3,6 +3,7 @@
   <p>그린 시각: {{ post.created_at }}</p>
   <p>소요 시간: {{ post.paint_duration }}</p>
   <img
+    alt="임시 보관된 그림"
     src="{{ r2_public_endpoint_url}}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
   />
   <form action="/posts/publish" method="post">

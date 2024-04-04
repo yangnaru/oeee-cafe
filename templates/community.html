@@ -57,6 +57,7 @@ endblock %} {% block body %}
     <div class="posts-grid-item">
       <a href="/posts/{{ post.id }}"
         ><img
+          alt="{{ post.title }}"
           src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
       /></a>
     </div>
