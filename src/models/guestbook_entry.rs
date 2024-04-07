@@ -1,8 +1,8 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use data_encoding::BASE64URL_NOPAD;
-use serde::{Deserialize, Serialize};
-use sqlx::{postgres::types::PgInterval, query, Postgres, Transaction};
+
+use serde::{Serialize};
+use sqlx::{query, Postgres, Transaction};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize)]
