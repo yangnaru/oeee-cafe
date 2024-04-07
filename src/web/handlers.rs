@@ -222,6 +222,12 @@ pub async fn guestbook(
         None => None,
     };
 
+    let mut is_current_user_following = false;
+    if let Some(current_user) = auth_session.user.clone() {
+        is_current_user_following =
+            is_following(&mut tx, current_user.id, user.clone().unwrap().id).await?;
+    }
+
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook.html")?;
     let rendered = template.render(context! {
         banner,
@@ -229,6 +235,7 @@ pub async fn guestbook(
         user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         draft_post_count,
+        is_following => is_current_user_following,
         guestbook_entries,
     })?;
 
