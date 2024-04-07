@@ -33,10 +33,13 @@ user.login_name }}) {% endblock %} {% block body %}
     <textarea name="content" title="방명록"></textarea>
     <input type="submit" value="방명록 남기기" />
   </form>
-  {% endif %}
+  {% endif %} {% if guestbook_entries|length == 0 %}
+  <p class="muted">방명록이 비어 있습니다.</p>
+  {% else %}
   <div class="guestbook-entries">
     {% for entry in guestbook_entries %} {{ guestbook_entry(entry) }} {% endfor
     %}
   </div>
+  {% endif %}
 </div>
 {% endblock %}
