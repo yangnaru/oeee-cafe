@@ -1,0 +1,47 @@
+{% macro guestbook_entry(entry) %}
+<div class="guestbook-entry">
+  <div>
+    {{ entry.author_display_name }}
+    <span class="muted">@{{ entry.author_login_name }}</span>
+  </div>
+  <span class="muted">
+    {{ entry.created_at|dateformat(format="short", tz="Asia/Seoul") }}
+  </span>
+  <div>
+    <pre>{{ entry.content }}</pre>
+  </div>
+  {% if entry.reply %} {{ guestbook_entry_reply(entry) }} {% else %} {% if
+  current_user and current_user.id == entry.recipient_id %}
+  <form
+    hx-post="/@{{ user.login_name }}/guestbook/{{ entry.id }}/reply"
+    hx-swap="outerHTML"
+  >
+    <textarea name="content" title="답글"></textarea>
+    <input type="submit" value="답글 남기기" />
+  </form>
+  {% endif %} {% endif %} {% if current_user and (current_user.id ==
+  entry.author_id and not entry.reply) or (current_user.id ==
+  entry.recipient_id) %}
+  <form
+    hx-delete="/@{{ user.login_name }}/guestbook/{{ entry.id }}"
+    hx-swap="outerHTML"
+    hx-target="closest .guestbook-entry"
+  >
+    <input type="submit" value="삭제" />
+  </form>
+  {% endif %}
+</div>
+{% endmacro %} {% macro guestbook_entry_reply(entry) %}
+<div class="guestbook-reply">
+  <div>
+    {{ entry.recipient_display_name }}
+    <span class="muted">@{{ entry.recipient_login_name }}</span>
+  </div>
+  <span class="muted">
+    {{ entry.replied_at|dateformat(format="short", tz="Asia/Seoul") }}
+  </span>
+  <div>
+    <pre>{{ entry.reply }}</pre>
+  </div>
+</div>
+{% endmacro %}

@@ -10,6 +10,10 @@ use crate::models::email_verification_challenge::{
     create_email_verification_challenge, find_email_verification_challenge_by_id,
 };
 use crate::models::follow::{find_followings_by_user_id, follow_user, is_following, unfollow_user};
+use crate::models::guestbook_entry::{
+    add_guestbook_entry_reply, create_guestbook_entry, delete_guestbook_entry,
+    find_guestbook_entries_by_recipient_id, find_guestbook_entry_by_id, GuestbookEntryDraft,
+};
 use crate::models::post::{
     create_post, find_draft_posts_by_author_id, find_post_by_id,
     find_published_posts_by_community_id, find_published_public_posts_by_author_id,
@@ -52,6 +56,183 @@ use uuid::Uuid;
 pub struct EmailVerificationChallengeResponseForm {
     pub challenge_id: Uuid,
     pub token: String,
+}
+
+#[derive(Deserialize)]
+pub struct AddGuestbookEntryReplyForm {
+    pub content: String,
+}
+
+#[debug_handler]
+pub async fn do_reply_guestbook_entry(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((login_name, entry_id)): Path<(String, Uuid)>,
+    Form(form): Form<AddGuestbookEntryReplyForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?;
+    if entry.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+    let entry = entry.unwrap();
+    if entry.recipient_id != auth_session.user.clone().unwrap().id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let author = find_user_by_login_name(&mut tx, &login_name).await?;
+    if author.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+    let author = author.unwrap();
+    if author.id != entry.recipient_id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let guestbook_entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?;
+    if guestbook_entry.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+    let mut guestbook_entry = guestbook_entry.unwrap();
+
+    let replied_at = add_guestbook_entry_reply(&mut tx, entry_id, form.content.clone()).await?;
+    guestbook_entry.reply = Some(form.content);
+    guestbook_entry.replied_at = Some(replied_at);
+
+    let _ = tx.commit().await;
+
+    let template: minijinja::Template<'_, '_> =
+        state.env.get_template("guestbook_entry_reply.html")?;
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        user => author,
+        entry => guestbook_entry,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct CreateGuestbookEntryForm {
+    pub content: String,
+}
+
+pub async fn do_delete_guestbook_entry(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((login_name, entry_id)): Path<(String, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?;
+    if entry.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+    let entry = entry.unwrap();
+    if entry.author_id != auth_session.user.clone().unwrap().id
+        && entry.recipient_id != auth_session.user.clone().unwrap().id
+    {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    // Check if login_name matches recipient_id
+    let recipient = find_user_by_login_name(&mut tx, &login_name).await?;
+    if recipient.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+    let recipient = recipient.unwrap();
+    if recipient.id != entry.recipient_id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let _ = delete_guestbook_entry(&mut tx, entry_id).await;
+    let _ = tx.commit().await;
+
+    Ok(StatusCode::OK.into_response())
+}
+
+#[debug_handler]
+pub async fn do_write_guestbook_entry(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+    Form(form): Form<CreateGuestbookEntryForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let current_user_id = auth_session.user.clone().unwrap().id;
+    let recipient_user = find_user_by_login_name(&mut tx, &login_name).await?;
+    let recipient_id = recipient_user.clone().unwrap().id;
+    println!("{:?}", recipient_id);
+    println!("{:?}", current_user_id);
+
+    if current_user_id == recipient_id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let guestbook_entry = create_guestbook_entry(
+        &mut tx,
+        GuestbookEntryDraft {
+            author_id: current_user_id,
+            recipient_id,
+            content: form.content,
+        },
+    )
+    .await;
+    let _ = tx.commit().await;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook_entry.html")?;
+    println!("{:?}", guestbook_entry);
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        user => recipient_user.unwrap(),
+        entry => guestbook_entry.unwrap()
+    })?;
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn guestbook(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let guestbook_entries =
+        find_guestbook_entries_by_recipient_id(&mut tx, user.clone().unwrap().id)
+            .await
+            .unwrap();
+
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+
+    let banner = match user.clone().unwrap().banner_id {
+        Some(banner_id) => Some(find_banner_by_id(&mut tx, banner_id).await?),
+        None => None,
+    };
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook.html")?;
+    let rendered = template.render(context! {
+        banner,
+        current_user => auth_session.user,
+        user,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        draft_post_count,
+        guestbook_entries,
+    })?;
+
+    Ok(Html(rendered).into_response())
 }
 
 #[debug_handler]

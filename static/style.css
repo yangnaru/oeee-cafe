@@ -151,3 +151,15 @@ nav a:visited {
 .safe {
   color: green;
 }
+
+.guestbook-entry {
+  border: 1px solid black;
+  padding: 8px;
+  margin: 8px 0;
+}
+
+.guestbook-reply {
+  border: 1px solid black;
+  padding: 8px;
+  margin: 8px 0;
+}

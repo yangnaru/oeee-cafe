@@ -5,13 +5,14 @@ use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::{
     banner_draw_finish, community, create_community_form, do_create_comment, do_create_community,
-    do_follow_profile, do_unfollow_profile, draft_posts, edit_account, edit_password, handler_404,
+    do_delete_guestbook_entry, do_follow_profile, do_reply_guestbook_entry, do_unfollow_profile,
+    do_write_guestbook_entry, draft_posts, edit_account, edit_password, guestbook, handler_404,
     post_publish, post_publish_form, post_replay_view, post_view, profile,
     request_email_verification_code, start_banner_draw, verify_email_verification_code,
 };
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::Router;
 use axum_login::{login_required, AuthManagerLayerBuilder};
 use axum_messages::MessagesManagerLayer;
@@ -98,6 +99,15 @@ impl App {
             .route("/posts/:id/replay", get(post_replay_view))
             .route("/@:login_name/follow", post(do_follow_profile))
             .route("/@:login_name/unfollow", post(do_unfollow_profile))
+            .route("/@:login_name/guestbook", post(do_write_guestbook_entry))
+            .route(
+                "/@:login_name/guestbook/:entry_id",
+                delete(do_delete_guestbook_entry),
+            )
+            .route(
+                "/@:login_name/guestbook/:entry_id/reply",
+                post(do_reply_guestbook_entry),
+            )
             .route_layer(login_required!(Backend, login_url = "/login"));
 
         let app = Router::new()
@@ -105,6 +115,7 @@ impl App {
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))
             .route("/@:login_name", get(profile))
+            .route("/@:login_name/guestbook", get(guestbook))
             .route("/posts/:id", get(post_view))
             .route("/about", get(about))
             .route("/signup", get(signup))

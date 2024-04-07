@@ -27,6 +27,7 @@ user.login_name }}) {% endblock %} {% block body %}
       {% endif %} {% endif %}
     </div>
   </div>
+  <a href="/@{{ user.login_name }}/guestbook">방명록</a>
   {% if followings|length > 0 %} {% if
   followings|selectattr("banner_image_filename")|length > 0 %}
   <h3>동맹 배너</h3>
