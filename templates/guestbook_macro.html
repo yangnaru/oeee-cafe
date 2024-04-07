@@ -1,7 +1,9 @@
 {% macro guestbook_entry(entry) %}
 <div class="guestbook-entry">
   <div>
-    {{ entry.author_display_name }}
+    <a href="/@{{ entry.author_login_name }}"
+      >{{ entry.author_display_name }}</a
+    >
     <span class="muted">@{{ entry.author_login_name }}</span>
   </div>
   <span class="muted">
@@ -35,7 +37,9 @@
 {% endmacro %} {% macro guestbook_entry_reply(entry) %}
 <div class="guestbook-reply">
   <div>
-    {{ entry.recipient_display_name }}
+    <a href="/@{{ entry.recipient_login_name }}"
+      >{{ entry.recipient_display_name }}</a
+    >
     <span class="muted">@{{ entry.recipient_login_name }}</span>
   </div>
   <span class="muted">
