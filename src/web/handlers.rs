@@ -1409,8 +1409,16 @@ pub async fn start_draw(
         _ => "draw_post_neo.html",
     };
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
 
+    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
     let rendered = template.render(context! {
         title => "그리기",
         tool => input.tool,
@@ -1418,6 +1426,7 @@ pub async fn start_draw(
         height => input.height.parse::<u32>()?,
         community_id => input.community_id,
         current_user => auth_session.user,
+        draft_post_count,
     })?;
 
     Ok(Html(rendered))
