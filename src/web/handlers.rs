@@ -28,9 +28,12 @@ use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::operation::put_object::{PutObjectError, PutObjectOutput};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
-use axum::extract::{Path, Query};
+use axum::extract::{FromRequestParts, Path, Query};
+use axum::http::header::USER_AGENT;
+use axum::http::request::Parts;
+use axum::http::HeaderValue;
 use axum::response::{IntoResponse, Redirect};
-use axum::{debug_handler, Json};
+use axum::{async_trait, debug_handler, Json};
 use axum::{
     extract::{Multipart, State},
     http::StatusCode,
@@ -680,9 +683,28 @@ pub async fn do_create_comment(
     Ok(Html(rendered).into_response())
 }
 
+pub struct ExtractUserAgent(HeaderValue);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for ExtractUserAgent
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        if let Some(user_agent) = parts.headers.get(USER_AGENT) {
+            Ok(ExtractUserAgent(user_agent.clone()))
+        } else {
+            Err((StatusCode::BAD_REQUEST, "`User-Agent` header is missing"))
+        }
+    }
+}
+
 pub async fn home(
     auth_session: AuthSession,
     State(state): State<AppState>,
+    ExtractUserAgent(user_agent): ExtractUserAgent,
     messages: Messages,
 ) -> Result<Html<String>, AppError> {
     let db = state.config.connect_database().await?;
@@ -747,11 +769,11 @@ pub async fn home(
         None => 0,
     };
 
-    println!("{:?}", public_communities);
-
+    println!("{:?}", user_agent);
     let template: minijinja::Template<'_, '_> = state.env.get_template("home.html")?;
 
     let rendered = template.clone().render(context! {
+        is_app => user_agent.to_str().unwrap().contains("OeeeCafe"),
         title => "홈",
         current_user => auth_session.user,
         messages => messages.into_iter().collect::<Vec<_>>(),

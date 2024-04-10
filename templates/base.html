@@ -11,14 +11,16 @@
     ></script>
     <meta
       name="viewport"
-      content="width=device-width,initial-scale=1.0,minimum-scale=1.0"
+      content="width=device-width,initial-scale=1.0,minimum-scale=1.0,user-scalable=no"
     />
     {% block head %}{% endblock %}
   </head>
 
   <body>
     <header class="center">
+      {% if not is_app %}
       <h1><a href="/">오이카페 🥒</a></h1>
+      {% endif %}
       <nav>
         <div id="menubar">
           <div><a href="/">홈</a></div>
