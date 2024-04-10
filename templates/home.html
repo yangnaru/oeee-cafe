@@ -1,25 +1,23 @@
 {% extends "base.html" %} {% block title %}{{ super() }} | {{ title }}{%
 endblock %} {% block body %}
 <div class="center">
-  <h2>최근 활동 공개 커뮤니티</h2>
-  {% if public_communities %}
-  <ul>
-    {% for community in public_communities %}
-    <li><a href="{{ community.link }}">{{ community.name }}</a></li>
+  <h2>타임라인</h2>
+  {% if posts|length > 0 %}
+  <div class="posts-grid">
+    {% for post in posts %}
+    <div class="posts-grid-item">
+      <a href="/posts/{{ post.id }}"
+        ><img
+          src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+      /></a>
+    </div>
     {% endfor %}
-  </ul>
+  </div>
   {% else %}
-  <p>활동 중인 공개 커뮤니티가 없습니다.</p>
-  {% endif %} {% if current_user %}
-  <h2>내 커뮤니티</h2>
-  {% if own_communities %}
-  <ul>
-    {% for community in own_communities %}
-    <li><a href="{{ community.link }}">{{ community.name }}</a></li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p>내가 만든 커뮤니티가 없습니다.</p>
-  {% endif %} {% endif %}
+  <p>
+    타임라인이 비어 있습니다. <a href="/communities">커뮤니티</a>에서 다른
+    사람과 동맹을 맺어 보세요!
+  </p>
+  {% endif %}
 </div>
 {% endblock %}

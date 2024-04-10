@@ -437,3 +437,51 @@ pub async fn publish_post(
     q.execute(&mut **tx).await?;
     Ok(())
 }
+
+pub async fn find_following_posts_by_user_id(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<Vec<SerializablePost>> {
+    let q = query!(
+        "
+            SELECT
+                posts.id,
+                posts.title,
+                posts.author_id,
+                images.paint_duration,
+                images.stroke_count,
+                images.image_filename,
+                images.replay_filename,
+                posts.viewer_count,
+                posts.published_at,
+                posts.created_at,
+                posts.updated_at
+            FROM posts
+            LEFT JOIN images ON posts.image_id = images.id
+            LEFT JOIN follows ON posts.author_id = follows.following_id
+            LEFT JOIN communities ON posts.community_id = communities.id
+            WHERE follows.follower_id = $1
+            AND communities.is_private = FALSE
+            AND posts.published_at IS NOT NULL
+            ORDER BY posts.published_at DESC
+        ",
+        user_id
+    );
+    let result = q.fetch_all(&mut **tx).await?;
+    Ok(result
+        .into_iter()
+        .map(|row| SerializablePost {
+            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            title: row.title,
+            author_id: row.author_id,
+            paint_duration: row.paint_duration.microseconds.to_string(),
+            stroke_count: row.stroke_count,
+            image_filename: row.image_filename,
+            replay_filename: row.replay_filename,
+            viewer_count: row.viewer_count,
+            published_at: row.published_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+        .collect())
+}

@@ -15,7 +15,7 @@ use crate::models::guestbook_entry::{
     find_guestbook_entries_by_recipient_id, find_guestbook_entry_by_id, GuestbookEntryDraft,
 };
 use crate::models::post::{
-    create_post, find_draft_posts_by_author_id, find_post_by_id,
+    create_post, find_draft_posts_by_author_id, find_following_posts_by_user_id, find_post_by_id,
     find_published_posts_by_community_id, find_published_public_posts_by_author_id,
     get_draft_post_count, increment_post_viewer_count, publish_post, PostDraft,
 };
@@ -684,6 +684,75 @@ pub async fn home(
     auth_session: AuthSession,
     State(state): State<AppState>,
     messages: Messages,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    if auth_session.user.is_none() {
+        let public_communities = get_public_communities(&mut tx)
+            .await?
+            .iter()
+            .map(|community| {
+                let name = community.name.clone();
+                let description = community.description.clone();
+                let is_private = community.is_private;
+                let updated_at = community.updated_at.to_string();
+                let created_at = community.created_at.to_string();
+                let link = format!(
+                    "/communities/{}",
+                    BASE64URL_NOPAD.encode(community.id.as_bytes())
+                );
+                HashMap::<String, String>::from_iter(vec![
+                    ("name".to_string(), name),
+                    ("description".to_string(), description),
+                    ("is_private".to_string(), is_private.to_string()),
+                    ("updated_at".to_string(), updated_at),
+                    ("created_at".to_string(), created_at),
+                    ("link".to_string(), link),
+                ])
+            })
+            .collect::<Vec<_>>();
+
+        let template = state.env.get_template("communities.html")?;
+        let rendered = template.render(context! {
+            title => "홈",
+            public_communities,
+            current_user => auth_session.user,
+            messages => messages.clone().into_iter().collect::<Vec<_>>(),
+        })?;
+
+        return Ok(Html(rendered).into_response());
+    }
+
+    let timeline_posts = match auth_session.user.clone() {
+        Some(user) => find_following_posts_by_user_id(&mut tx, user.id).await?,
+        None => vec![],
+    };
+
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("home.html")?;
+    let rendered = template.render(context! {
+        title => "타임라인",
+        current_user => auth_session.user,
+        messages => messages.into_iter().collect::<Vec<_>>(),
+        posts => timeline_posts,
+        draft_post_count,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn communities(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    messages: Messages,
 ) -> Result<Html<String>, AppError> {
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -749,7 +818,7 @@ pub async fn home(
 
     println!("{:?}", public_communities);
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("home.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("communities.html")?;
 
     let rendered = template.clone().render(context! {
         title => "홈",
