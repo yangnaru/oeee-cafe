@@ -1,77 +1,82 @@
 {% from "follow_macro.html" import follow_button, unfollow_button %} {% extends
-"base.html" %} {% block title %}{{ super() }} | {{ user.display_name }} (@{{
-user.login_name }}) {% endblock %} {% block body %}
-<div class="center">
-  <div class="profile-header">
-    <h2>
-      {{ user.display_name }}
-      <span class="muted">@{{ user.login_name }}</span>
-    </h2>
-    <div class="banner-controls">
-      {% if current_user %} {% if is_following %} {{ unfollow_button() }} {%
-      else %} {{ follow_button() }} {% endif %} {% endif %} {% if banner %} {%
-      if user.id == current_user.id %}<a href="/banners/draw">
-        <img
-          alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
-          class="banner"
-          src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
-        />
-      </a>
+"base.html" %}
+{% block title %}
+  {{ super() }} | {{ user.display_name }} (@{{ user.login_name }})
+{% endblock title %}
+{% block body %}
+  <div class="center">
+    <div class="profile-header">
+      <h2>
+        {{ user.display_name }}
+        <span class="muted">@{{ user.login_name }}</span>
+      </h2>
+      <div class="banner-controls">
+        {% if current_user %}
+          {% if is_following %}
+            {{ unfollow_button() }} {%
+            else %} {{ follow_button() }}
+          {% endif %}
+        {% endif %}
+        {% if banner %}
+          {%
+          if user.id == current_user.id %}<a href="/banners/draw">
+          <img alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
+               class="banner"
+               src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
+        </a>
       {% else %}
-      <img
-        class="banner"
-        src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
-      />
-      {% endif %} {% else %} {% if user.id == current_user.id %}
-      <a href="/banners/draw" class="button">동맹 배너 그리기</a>
-      {% endif %} {% endif %}
-    </div>
+        <img class="banner"
+             src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
+      {% endif %}
+    {% else %}
+      {% if user.id == current_user.id %}<a href="/banners/draw" class="button">동맹 배너 그리기</a>{% endif %}
+    {% endif %}
   </div>
-  <a href="/@{{ user.login_name }}/guestbook">방명록</a>
-  {% if followings|length > 0 %} {% if
-  followings|selectattr("banner_image_filename")|length > 0 %}
-  <h3>동맹 배너</h3>
-  <div class="banners-grid">
-    {% for following in followings|selectattr("banner_image_filename") %}
-    <div class="banners-grid-item">
-      <a
-        href="/@{{ following.login_name }}"
-        alt="{{ following.display_name }} (@{{ following.login_name }})"
-        ><img
-          alt="{{ following.display_name }} (@{{ following.login_name }}) 동맹 배너"
-          class="banner"
-          src="{{ r2_public_endpoint_url }}/image/{{ following.banner_image_filename[:2] }}/{{ following.banner_image_filename }}"
-      /></a>
+</div>
+<a href="/@{{ user.login_name }}/guestbook">방명록</a>
+{% if followings|length > 0 %}
+  {% if
+    followings|selectattr("banner_image_filename")|length > 0 %}
+    <h3>동맹 배너</h3>
+    <div class="banners-grid">
+      {% for following in followings|selectattr("banner_image_filename") %}
+        <div class="banners-grid-item">
+          <a href="/@{{ following.login_name }}"
+             alt="{{ following.display_name }} (@{{ following.login_name }})">
+            <img alt="{{ following.display_name }} (@{{ following.login_name }}) 동맹 배너"
+                 class="banner"
+                 src="{{ r2_public_endpoint_url }}/image/{{ following.banner_image_filename[:2] }}/{{ following.banner_image_filename }}" />
+          </a>
+        </div>
+      {% endfor %}
     </div>
-    {% endfor %}
-  </div>
-  {% endif %} {% if followings|rejectattr("banner_image_filename")|length > 0 %}
-  <h3>동맹</h3>
-  <ul class="followings-list">
-    {% for following in followings|rejectattr("banner_image_filename") %}
-    <li>
-      <a href="/@{{ following.login_name }}">{{ following.display_name }}</a>
-      <br />
-      <span class="muted">@{{ following.login_name }}</span>
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %} {% endif %}
-  <h3>공개 커뮤니티에서 그린 그림</h3>
-  {% if posts %}
+  {% endif %}
+  {% if followings|rejectattr("banner_image_filename")|length > 0 %}
+    <h3>동맹</h3>
+    <ul class="followings-list">
+      {% for following in followings|rejectattr("banner_image_filename") %}
+        <li>
+          <a href="/@{{ following.login_name }}">{{ following.display_name }}</a>
+          <br />
+          <span class="muted">@{{ following.login_name }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endif %}
+<h3>공개 커뮤니티에서 그린 그림</h3>
+{% if posts %}
   <div class="posts-grid">
     {% for post in posts %}
-    <div class="posts-grid-item">
-      <a href="/posts/{{ post.id }}"
-        ><img
-          src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-      /></a>
-    </div>
+      <div class="posts-grid-item">
+        <a href="/posts/{{ post.id }}">
+          <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+        </a>
+      </div>
     {% endfor %}
   </div>
-
-  {% else %}
+{% else %}
   <p>공개 커뮤니티에서 그린 그림이 없습니다.</p>
-  {% endif %}
+{% endif %}
 </div>
-{% endblock %}
+{% endblock body %}

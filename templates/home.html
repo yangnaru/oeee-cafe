@@ -1,23 +1,25 @@
-{% extends "base.html" %} {% block title %}{{ super() }} | {{ title }}{%
-endblock %} {% block body %}
-<div class="center">
-  <h2>타임라인</h2>
-  {% if posts|length > 0 %}
-  <div class="posts-grid">
-    {% for post in posts %}
-    <div class="posts-grid-item">
-      <a href="/posts/{{ post.id }}"
-        ><img
-          src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-      /></a>
-    </div>
-    {% endfor %}
+{% extends "base.html" %}
+{% block title %}
+  {{ super() }} | {{ title }}
+{% endblock title %}
+{% block body %}
+  <div class="center">
+    <h2>타임라인</h2>
+    {% if posts|length > 0 %}
+      <div class="posts-grid">
+        {% for post in posts %}
+          <div class="posts-grid-item">
+            <a href="/posts/{{ post.id }}">
+              <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+            </a>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p>
+        타임라인이 비어 있습니다. <a href="/communities">커뮤니티</a>에서 다른
+        사람과 동맹을 맺어 보세요!
+      </p>
+    {% endif %}
   </div>
-  {% else %}
-  <p>
-    타임라인이 비어 있습니다. <a href="/communities">커뮤니티</a>에서 다른
-    사람과 동맹을 맺어 보세요!
-  </p>
-  {% endif %}
-</div>
-{% endblock %}
+{% endblock body %}

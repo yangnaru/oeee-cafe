@@ -1,13 +1,15 @@
-{% extends "base.html" %} {% block title %}{{ super() }} | {{ title }}{%
-endblock %} {% block body %}
-<h2 class="center">{{ title }}</h2>
-
-<link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
-<script src="/static/neo/dist/neo.js" charset="utf-8"></script>
-<script>
+{% extends "base.html" %}
+{% block title %}
+  {{ super() }} | {{ title }}
+{% endblock title %}
+{% block body %}
+  <h2 class="center">{{ title }}</h2>
+  <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
+  <script src="/static/neo/dist/neo.js" charset="utf-8"></script>
+  <script>
   document.write(`
   <div id="appstage">
-       <applet-dummy name="paintbbs" width="{{ width + 150 }}" height="{{ height + 172 }}" >
+       <applet-dummy name="paintbbs" width="{{ width + 150 }}" height="{{ height + 172 }}">
          <param name="image_width" value="{{ width }}">
          <param name="image_height" value="{{ height }}">
          <param name="thumbnail_type" value="animation">
@@ -53,6 +55,6 @@ endblock %} {% block body %}
       return false;
     }
   };
-</script>
-<br />
-{% endblock %}
+  </script>
+  <br />
+{% endblock body %}

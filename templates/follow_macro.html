@@ -1,10 +1,15 @@
-{% macro follow_button() %} {% if current_user.id != user.id %}
-<form hx-post="/@{{ user.login_name }}/follow" hx-swap="outerHTML">
-  <button type="submit" class="button-follow">동맹 맺기</button>
-</form>
-{% endif %} {% endmacro %} {% macro unfollow_button() %} {% if current_user.id
-!= user.id %}
-<form hx-post="/@{{ user.login_name }}/unfollow" hx-swap="outerHTML">
-  <button type="submit" class="button-unfollow">동맹 끊기</button>
-</form>
-{% endif %} {% endmacro %}
+{% macro follow_button() %}
+  {% if current_user.id != user.id %}
+    <form hx-post="/@{{ user.login_name }}/follow" hx-swap="outerHTML">
+      <button type="submit" class="button-follow">동맹 맺기</button>
+    </form>
+  {% endif %}
+{% endmacro %}
+{% macro unfollow_button() %}
+  {% if current_user.id
+    != user.id %}
+    <form hx-post="/@{{ user.login_name }}/unfollow" hx-swap="outerHTML">
+      <button type="submit" class="button-unfollow">동맹 끊기</button>
+    </form>
+  {% endif %}
+{% endmacro %}

@@ -1,11 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
   <head>
     <meta charset="utf-8" />
     <title>
-      오이카페 | {% if post.title %}{{ post.title }}{% else %}무제{% endif %}
+      오이카페 |
+      {% if post.title %}
+        {{ post.title }}
+      {% else %}
+        무제
+      {% endif %}
       (리플레이)
     </title>
+    <meta name="keywords" content="오이카페, 오에카키, 커뮤니티" />
+    <meta name="description"
+          content="옛날에는 오에카키를 오이깎이라고도 불렀습니다. 오이를 깎을 수 있는 카페 오이카페입니다." />
     <link rel="stylesheet" href="/static/tegaki/css/tegaki.css" />
     <script src="/static/tegaki/js/strings/en.js"></script>
     <script src="/static/tegaki/js/tools/tool.js"></script>

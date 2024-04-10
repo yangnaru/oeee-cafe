@@ -4,24 +4,21 @@
     <legend>이메일 변경</legend>
     <p>
       <label for="email">이메일:</label>
-      <input
-        name="email"
-        id="email"
-        type="email"
-        value="{{ email }}"
-        disabled
-      />
+      <input name="email" id="email" type="email" value="{{ email }}" disabled />
     </p>
     {% if not success %}
-    <p>
-      <label for="token">인증 코드:</label>
-      <input name="token" id="token" type="text" pattern="\d*" maxlength="6" />
-    </p>
-    {% endif %} {% if message %} {% if success %}
-    <p class="safe">{{ message }}</p>
-    {% else %}
-    <p class="dangerous">{{ message }}</p>
-    {% endif %}{% endif %}
+      <p>
+        <label for="token">인증 코드:</label>
+        <input name="token" id="token" type="text" pattern="\d*" maxlength="6" />
+      </p>
+    {% endif %}
+    {% if message %}
+      {% if success %}
+        <p class="safe">{{ message }}</p>
+      {% else %}
+        <p class="dangerous">{{ message }}</p>
+      {% endif %}
+    {% endif %}
   </fieldset>
   <input type="submit" value="이메일 인증" />
 </form>

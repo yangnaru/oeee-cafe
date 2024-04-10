@@ -1,30 +1,29 @@
-{% extends "base.html" %} {% block body %}
-<div class="center">
-  <p>그린 시각: {{ post.created_at }}</p>
-  <p>소요 시간: {{ post.paint_duration }}</p>
-  <img
-    alt="임시 보관된 그림"
-    src="{{ r2_public_endpoint_url}}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-  />
-  <form action="/posts/publish" method="post">
-    <input type="hidden" name="post_id" value="{{ post.id }}" />
-    <p>
-      커뮤니티:
-      <a href="{{ link }}">{{ post.community_name }}</a>
-    </p>
-    <p>
-      <label for="title">제목:</label>
-      <input type="text" name="title" />
-    </p>
-    <p>
-      <label for="content">내용:</label>
-      <textarea name="content"></textarea>
-    </p>
-    <p>
-      <label for="is_sensitive">민감한 내용:</label>
-      <input type="checkbox" name="is_sensitive" />
-    </p>
-    <input type="submit" value="게시" />
-  </form>
-</div>
-{% endblock %}
+{% extends "base.html" %}
+{% block body %}
+  <div class="center">
+    <p>그린 시각: {{ post.created_at }}</p>
+    <p>소요 시간: {{ post.paint_duration }}</p>
+    <img alt="임시 보관된 그림"
+         src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+    <form action="/posts/publish" method="post">
+      <input type="hidden" name="post_id" value="{{ post.id }}" />
+      <p>
+        커뮤니티:
+        <a href="{{ link }}">{{ post.community_name }}</a>
+      </p>
+      <p>
+        <label for="title">제목:</label>
+        <input type="text" name="title" />
+      </p>
+      <p>
+        <label for="content">내용:</label>
+        <textarea name="content"></textarea>
+      </p>
+      <p>
+        <label for="is_sensitive">민감한 내용:</label>
+        <input type="checkbox" name="is_sensitive" />
+      </p>
+      <input type="submit" value="게시" />
+    </form>
+  </div>
+{% endblock body %}

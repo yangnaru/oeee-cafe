@@ -1,45 +1,55 @@
 {% from "guestbook_macro.html" import guestbook_entry %} {% from
 "follow_macro.html" import follow_button, unfollow_button %} {% extends
-"base.html" %} {% block title %}{{ super() }} | {{ user.display_name }} (@{{
-user.login_name }}) {% endblock %} {% block body %}
-<div class="center">
-  <div class="profile-header">
-    <h2>
-      {{ user.display_name }}
-      <span class="muted">@{{ user.login_name }}</span>
-    </h2>
-    <div class="banner-controls">
-      {% if current_user %} {% if is_following %} {{ unfollow_button() }} {%
-      else %} {{ follow_button() }} {% endif %} {% endif %} {% if banner %} {%
-      if user.id == current_user.id %}<a href="/banners/draw">
-        <img
-          alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
-          class="banner"
-          src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
-        />
-      </a>
+"base.html" %}
+{% block title %}
+  {{ super() }} | {{ user.display_name }} (@{{
+  user.login_name }})
+{% endblock title %}
+{% block body %}
+  <div class="center">
+    <div class="profile-header">
+      <h2>
+        {{ user.display_name }}
+        <span class="muted">@{{ user.login_name }}</span>
+      </h2>
+      <div class="banner-controls">
+        {% if current_user %}
+          {% if is_following %}
+            {{ unfollow_button() }} {%
+            else %} {{ follow_button() }}
+          {% endif %}
+        {% endif %}
+        {% if banner %}
+          {%
+          if user.id == current_user.id %}<a href="/banners/draw">
+          <img alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
+               class="banner"
+               src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
+        </a>
       {% else %}
-      <img
-        class="banner"
-        src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
-      />
-      {% endif %} {% else %} {% if user.id == current_user.id %}
-      <a href="/banners/draw" class="button">동맹 배너 그리기</a>
-      {% endif %} {% endif %}
-    </div>
+        <img class="banner"
+             src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
+      {% endif %}
+    {% else %}
+      {% if user.id == current_user.id %}<a href="/banners/draw" class="button">동맹 배너 그리기</a>{% endif %}
+    {% endif %}
   </div>
-  {% if current_user and current_user.id != user.id %}
+</div>
+{% if current_user and current_user.id != user.id %}
   <form hx-post="/@{{ user.login_name }}/guestbook" hx-swap="outerHTML">
     <textarea name="content" title="방명록"></textarea>
     <input type="submit" value="방명록 남기기" />
   </form>
-  {% endif %} {% if guestbook_entries|length == 0 %}
+{% endif %}
+{% if guestbook_entries|length == 0 %}
   <p class="muted">방명록이 비어 있습니다.</p>
-  {% else %}
+{% else %}
   <div class="guestbook-entries">
-    {% for entry in guestbook_entries %} {{ guestbook_entry(entry) }} {% endfor
+    {% for entry in guestbook_entries %}
+      {{ guestbook_entry(entry) }}
+    {% endfor
     %}
   </div>
-  {% endif %}
+{% endif %}
 </div>
-{% endblock %}
+{% endblock body %}

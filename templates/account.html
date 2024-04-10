@@ -1,87 +1,73 @@
-{% extends "base.html" %} {% block title %}{{ super() }} | 계정 {% endblock %}
+{% extends "base.html" %}
+{% block title %}
+  {{ super() }} | 계정
+{% endblock title %}
 {% block body %}
-<div class="center">
-  <h2>계정</h2>
-
-  <form method="post">
-    <fieldset>
-      <legend>기본 정보</legend>
-      <input type="hidden" name="user_id" value="{{ current_user.id }}" />
-      <p>
-        가입일: {{ current_user.created_at|dateformat(format="short",
-        tz="Asia/Seoul") }}
-      </p>
-      <p>
-        <label for="login_name">아이디:</label>
-        <input
-          name="login_name"
-          id="login_name"
-          autocapitalize="none"
-          value="{{ current_user.login_name }}"
-        />
-      </p>
-      <p>
-        <label for="display_name">닉네임:</label>
-        <input
-          name="display_name"
-          id="display_name"
-          value="{{ current_user.display_name }}"
-        />
-      </p>
-    </fieldset>
-    <input type="submit" value="수정" />
-  </form>
-
-  <form method="post" action="/account/password">
-    <fieldset>
-      <legend>비밀번호 변경</legend>
-      <input type="hidden" name="user_id" value="{{ current_user.id }}" />
-      <p>
-        <label for="current_password">현재 비밀번호:</label>
-        <input name="current_password" id="current_password" type="password" />
-      </p>
-      <p>
-        <label for="new_password">새 비밀번호:</label>
-        <input name="new_password" id="new_password" type="password" />
-      </p>
-      <p>
-        <label for="new_password_confirm">새 비밀번호 (한 번 더):</label>
-        <input
-          name="new_password_confirm"
-          id="new_password_confirm"
-          type="password"
-        />
-      </p>
-    </fieldset>
-    <input type="submit" value="수정" />
-  </form>
-
-  <form hx-post="/account/request-verify-email" hx-swap="outerHTML">
-    <fieldset>
-      <legend>이메일 변경</legend>
-      {% if current_user.email_verified_at %}
-      <p>
-        이메일 인증: {{
-        current_user.email_verified_at|dateformat(format="short",
-        tz="Asia/Seoul") }}
-      </p>
-      {% else %}
-      <p class="dangerous">
-        이메일이 인증되지 않았습니다. 비밀번호를 분실하면 계정을 다시 찾을 수
-        없습니다.
-      </p>
-      {% endif %}
-      <p>
-        <label for="email">이메일:</label>
-        <input
-          name="email"
-          id="email"
-          type="email"
-          value="{% if current_user.email %}{{ current_user.email }}{% endif %}"
-        />
-      </p>
-    </fieldset>
-    <input type="submit" value="이메일 인증 요청" />
-  </form>
-</div>
-{% endblock %}
+  <div class="center">
+    <h2>계정</h2>
+    <form method="post">
+      <fieldset>
+        <legend>기본 정보</legend>
+        <input type="hidden" name="user_id" value="{{ current_user.id }}" />
+        <p>가입일: {{ current_user.created_at|dateformat(format="short", tz="Asia/Seoul") }}</p>
+        <p>
+          <label for="login_name">아이디:</label>
+          <input name="login_name"
+                 id="login_name"
+                 autocapitalize="none"
+                 value="{{ current_user.login_name }}" />
+        </p>
+        <p>
+          <label for="display_name">닉네임:</label>
+          <input name="display_name"
+                 id="display_name"
+                 value="{{ current_user.display_name }}" />
+        </p>
+      </fieldset>
+      <input type="submit" value="수정" />
+    </form>
+    <form method="post" action="/account/password">
+      <fieldset>
+        <legend>비밀번호 변경</legend>
+        <input type="hidden" name="user_id" value="{{ current_user.id }}" />
+        <p>
+          <label for="current_password">현재 비밀번호:</label>
+          <input name="current_password" id="current_password" type="password" />
+        </p>
+        <p>
+          <label for="new_password">새 비밀번호:</label>
+          <input name="new_password" id="new_password" type="password" />
+        </p>
+        <p>
+          <label for="new_password_confirm">새 비밀번호 (한 번 더):</label>
+          <input name="new_password_confirm" id="new_password_confirm" type="password" />
+        </p>
+      </fieldset>
+      <input type="submit" value="수정" />
+    </form>
+    <form hx-post="/account/request-verify-email" hx-swap="outerHTML">
+      <fieldset>
+        <legend>이메일 변경</legend>
+        {% if current_user.email_verified_at %}
+          <p>
+            이메일 인증: {{ current_user.email_verified_at|dateformat(format="short",
+             tz="Asia/Seoul") }}
+          </p>
+        {% else %}
+          <p class="dangerous">
+            이메일이 인증되지 않았습니다. 비밀번호를 분실하면 계정을 다시 찾을 수
+            없습니다.
+          </p>
+        {% endif %}
+        <p>
+          <label for="email">이메일:</label>
+          <input name="email"
+                 id="email"
+                 type="email"
+                 value="{%- if current_user.email -%}{{ current_user.email }}{%- endif -%}" />
+        </p>
+      </fieldset>
+      <input type="submit" value="이메일 인증 요청" />
+    </form>
+  </div>
+{% endblock body %}

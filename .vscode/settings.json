@@ -22,6 +22,7 @@
     "editor.defaultFormatter": "vscode.json-language-features",
   },
   "[jinja-html]": {
-    "editor.indentSize": 2
+    "editor.indentSize": 2,
+    "editor.defaultFormatter": "monosans.djlint"
   },
 }
