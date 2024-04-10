@@ -31,6 +31,8 @@
     </p>
   </div>
   <img class="post-image"
+       width="{{ post.image_width }}"
+       height="{{ post.image_height }}"
        alt="{{ post.title }}"
        src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
   <div class="center">

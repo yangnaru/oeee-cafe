@@ -54,6 +54,8 @@
           <div class="posts-grid-item">
             <a href="/posts/{{ post.id }}">
               <img alt="{{ post.title }}"
+                   width="{{ post.image_width }}"
+                   height="{{ post.image_height }}"
                    src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
             </a>
           </div>

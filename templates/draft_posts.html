@@ -7,11 +7,13 @@
     <h2>임시 보관함</h2>
     <div class="posts-grid">
       {% for post in posts %}
-        <div style="padding: 4px">
+        <div class="posts-grid-item">
           <h3>
             <a href="/posts/{{ post.id }}/publish">{{ post.created_at|dateformat(format="short", tz="Asia/Seoul") }}</a>
           </h3>
-          <img alt="임시 보관된 그림"
+          <img width="{{ post.image_width }}"
+               height="{{ post.image_height }}"
+               alt="임시 보관된 그림"
                src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
         </div>
       {% endfor %}

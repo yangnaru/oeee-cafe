@@ -69,6 +69,8 @@ pub struct FollowingInfo {
     pub login_name: String,
     pub display_name: String,
     pub banner_image_filename: Option<String>,
+    pub banner_image_width: Option<i32>,
+    pub banner_image_height: Option<i32>,
 }
 
 pub async fn find_followings_by_user_id(
@@ -81,7 +83,9 @@ pub async fn find_followings_by_user_id(
             follows.following_id AS user_id,
             users.login_name,
             users.display_name,
-            images.image_filename AS "banner_image_filename?"
+            images.image_filename AS "banner_image_filename?",
+            images.width AS "banner_image_width?",
+            images.height AS "banner_image_height?"
         FROM follows
         LEFT JOIN users ON follows.following_id = users.id
         LEFT JOIN banners ON users.banner_id = banners.id

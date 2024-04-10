@@ -1,9 +1,8 @@
-{% from "guestbook_macro.html" import guestbook_entry %} {% from
-"follow_macro.html" import follow_button, unfollow_button %} {% extends
-"base.html" %}
+{% from "guestbook_macro.html" import guestbook_entry %}
+{% from "follow_macro.html" import follow_button, unfollow_button %}
+{% extends "base.html" %}
 {% block title %}
-  {{ super() }} | {{ user.display_name }} (@{{
-  user.login_name }})
+  {{ super() }} | {{ user.display_name }} (@{{ user.login_name }})
 {% endblock title %}
 {% block body %}
   <div class="center">
@@ -22,12 +21,17 @@
         {% if banner %}
           {%
           if user.id == current_user.id %}<a href="/banners/draw">
-          <img alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
+          <img width="{{ banner.width }}"
+               height="{{ banner.height }}"
+               alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
                class="banner"
                src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
         </a>
       {% else %}
-        <img class="banner"
+        <img width="{{ banner.width }}"
+             height="{{ banner.height }}"
+             alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
+             class="banner"
              src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
       {% endif %}
     {% else %}

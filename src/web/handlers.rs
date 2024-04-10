@@ -922,6 +922,8 @@ pub async fn community(
                 ("title".to_string(), post.title.clone().unwrap_or_default().to_string()),
                 ("author_id".to_string(), post.author_id.to_string()),
                 ("image_filename".to_string(), post.image_filename.to_string()),
+                ("image_width".to_string(), post.image_width.to_string()),
+                ("image_height".to_string(), post.image_height.to_string()),
                 ("replay_filename".to_string(), post.replay_filename.to_string()),
                 ("created_at".to_string(), post.created_at.to_string()),
                 ("updated_at".to_string(), post.updated_at.to_string()),

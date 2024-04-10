@@ -10,7 +10,10 @@
         {% for post in posts %}
           <div class="posts-grid-item">
             <a href="/posts/{{ post.id }}">
-              <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+              <img width="{{ post.image_width }}"
+                   height="{{ post.image_height }}"
+                   alt="{{ post.title }}"
+                   src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
             </a>
           </div>
         {% endfor %}
