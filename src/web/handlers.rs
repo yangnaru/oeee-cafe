@@ -164,8 +164,6 @@ pub async fn do_write_guestbook_entry(
     let current_user_id = auth_session.user.clone().unwrap().id;
     let recipient_user = find_user_by_login_name(&mut tx, &login_name).await?;
     let recipient_id = recipient_user.clone().unwrap().id;
-    println!("{:?}", recipient_id);
-    println!("{:?}", current_user_id);
 
     if current_user_id == recipient_id {
         return Ok(StatusCode::FORBIDDEN.into_response());
@@ -183,7 +181,6 @@ pub async fn do_write_guestbook_entry(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook_entry.html")?;
-    println!("{:?}", guestbook_entry);
     let rendered = template.render(context! {
         current_user => auth_session.user,
         user => recipient_user.unwrap(),
@@ -475,16 +472,11 @@ pub async fn banner_draw_finish(
                 .parse::<i32>()
                 .unwrap();
         }
-        println!("Length of `{}` is {} bytes", name, data.len());
     }
     let start = SystemTime::now();
     let since_the_epoch = start
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");
-    println!(
-        "duration_secs: {:?}",
-        (since_the_epoch.as_millis() - security_timer)
-    );
     let duration_ms = since_the_epoch.as_millis() - security_timer;
 
     let banner_draft = BannerDraft {
@@ -816,10 +808,7 @@ pub async fn communities(
         None => 0,
     };
 
-    println!("{:?}", public_communities);
-
     let template: minijinja::Template<'_, '_> = state.env.get_template("communities.html")?;
-
     let rendered = template.clone().render(context! {
         title => "홈",
         current_user => auth_session.user,
@@ -1128,8 +1117,6 @@ pub async fn post_publish_form(
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
-
-    println!("{:?}", post);
 
     let published_at = post.clone().unwrap().get("published_at").unwrap().clone();
     if published_at.is_some() {
@@ -1542,16 +1529,11 @@ pub async fn draw_finish(
         } else if name == "tool" {
             tool = std::str::from_utf8(data.as_ref()).unwrap().to_string();
         }
-        println!("Length of `{}` is {} bytes", name, data.len());
     }
     let start = SystemTime::now();
     let since_the_epoch = start
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");
-    println!(
-        "duration_secs: {:?}",
-        (since_the_epoch.as_millis() - security_timer)
-    );
     let duration_ms = since_the_epoch.as_millis() - security_timer;
 
     if tool == "neo" {
