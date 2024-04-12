@@ -8,7 +8,7 @@
                 <ul>
                     {% for link in links %}
                         <li>
-                            <a href="{{ link.url }}">{{ link.description }}</a> (순서: {{ link.index }})
+                            <a href="{{ link.url }}" target="_blank">{{ link.description }}</a> (순서: {{ link.index }})
                             <button hx-post="/@{{ user.login_name }}/settings/links/{{ link.id }}/up"
                                     hx-target="#links">위로</button>
                             <button hx-post="/@{{ user.login_name }}/settings/links/{{ link.id }}/down"
