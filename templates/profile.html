@@ -42,7 +42,7 @@
   <h3>링크</h3>
   {% if user.id == current_user.id %}<a href="/@{{ user.login_name }}/settings">관리</a>{% endif %}
 </div>
-<ul>
+<ul class="links">
   <li>
     <a href="/@{{ user.login_name }}/guestbook">방명록</a>
   </li>

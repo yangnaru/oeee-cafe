@@ -171,3 +171,7 @@ nav a:visited {
   gap: 8px;
   align-items: center;
 }
+
+.links {
+  margin-top: 0;
+}
