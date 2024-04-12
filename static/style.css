@@ -35,6 +35,7 @@ nav a:visited {
   max-width: 100%;
   margin: 0 auto;
   display: flex;
+  object-fit: contain;
 }
 
 .posts-grid {
