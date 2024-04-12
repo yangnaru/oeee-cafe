@@ -14,7 +14,8 @@
                             <button hx-post="/@{{ user.login_name }}/settings/links/{{ link.id }}/down"
                                     hx-target="#links">아래로</button>
                             <button hx-delete="/@{{ user.login_name }}/settings/links/{{ link.id }}"
-                                    hx-target="#links">삭제</button>
+                                    hx-target="#links"
+                                    hx-confirm="정말 삭제하시겠습니까?">삭제</button>
                         </li>
                     {% endfor %}
                 </ul>
