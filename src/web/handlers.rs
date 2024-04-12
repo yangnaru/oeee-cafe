@@ -200,6 +200,10 @@ pub async fn do_add_link(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
+    if !user.unwrap().email_verified_at.is_some() {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
     let _ = create_link(
         &mut tx,
         LinkDraft {
