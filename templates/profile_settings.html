@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block body %}
+    <div class="center">
+        <h2>프로필 설정</h2>
+        <h3>링크 관리</h3>
+        {% block links %}
+            <div id="links">
+                <ul>
+                    {% for link in links %}
+                        <li>
+                            <a href="{{ link.url }}">{{ link.description }}</a> (순서: {{ link.index }})
+                            <button hx-post="/@{{ user.login_name }}/settings/links/{{ link.id }}/up"
+                                    hx-target="#links">위로</button>
+                            <button hx-post="/@{{ user.login_name }}/settings/links/{{ link.id }}/down"
+                                    hx-target="#links">아래로</button>
+                            <button hx-delete="/@{{ user.login_name }}/settings/links/{{ link.id }}"
+                                    hx-target="#links">삭제</button>
+                        </li>
+                    {% endfor %}
+                </ul>
+                <form hx-post="/@{{ user.login_name }}/settings/links" hx-target="#links">
+                    <fieldset>
+                        <legend>링크 추가</legend>
+                        <input type="url" name="url" placeholder="https://example.com">
+                        <input type="text" name="description" placeholder="링크 설명">
+                        <input type="submit" value="추가">
+                    </fieldset>
+                </form>
+            </div>
+        {% endblock links %}
+    </div>
+{% endblock body %}

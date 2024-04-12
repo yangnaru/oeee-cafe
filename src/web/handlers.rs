@@ -14,6 +14,9 @@ use crate::models::guestbook_entry::{
     add_guestbook_entry_reply, create_guestbook_entry, delete_guestbook_entry,
     find_guestbook_entries_by_recipient_id, find_guestbook_entry_by_id, GuestbookEntryDraft,
 };
+use crate::models::link::{
+    create_link, delete_link, find_links_by_user_id, update_link_order, LinkDraft,
+};
 use crate::models::post::{
     create_post, find_draft_posts_by_author_id, find_following_posts_by_user_id, find_post_by_id,
     find_published_posts_by_community_id, find_published_public_posts_by_author_id,
@@ -51,6 +54,209 @@ use sqlx::postgres::types::PgInterval;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+
+pub async fn do_move_link_down(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((login_name, link_id)): Path<(String, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if user.clone().unwrap().id != auth_session.user.clone().unwrap().id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let link = links.iter().find(|link| link.id == link_id);
+
+    if link.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let link = link.unwrap();
+    let index = link.index;
+
+    update_link_order(&mut tx, link_id, index + 1).await?;
+    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let _ = tx.commit().await;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let rendered = template
+        .eval_to_state(context! {
+            user => auth_session.user,
+            links => links,
+        })?
+        .render_block("links")?;
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn do_move_link_up(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((login_name, link_id)): Path<(String, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if user.clone().unwrap().id != auth_session.user.clone().unwrap().id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let link = links.iter().find(|link| link.id == link_id);
+
+    if link.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let link = link.unwrap();
+    let index = link.index;
+
+    update_link_order(&mut tx, link_id, index - 1).await?;
+    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let _ = tx.commit().await;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let rendered = template
+        .eval_to_state(context! {
+            user => auth_session.user,
+            links => links,
+        })?
+        .render_block("links")?;
+    Ok(Html(rendered).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct AddLinkForm {
+    pub url: String,
+    pub description: String,
+}
+
+pub async fn do_delete_link(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((login_name, link_id)): Path<(String, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if user.clone().unwrap().id != auth_session.user.clone().unwrap().id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let link = links.iter().find(|link| link.id == link_id);
+
+    if link.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    delete_link(&mut tx, link_id).await?;
+
+    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let _ = tx.commit().await;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let rendered = template
+        .eval_to_state(context! {
+            user => auth_session.user,
+            links => links,
+        })?
+        .render_block("links")?;
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn do_add_link(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+    Form(form): Form<AddLinkForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if user.clone().unwrap().id != auth_session.user.clone().unwrap().id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let _ = create_link(
+        &mut tx,
+        LinkDraft {
+            user_id: auth_session.user.clone().unwrap().id,
+            url: form.url,
+            description: form.description,
+        },
+    )
+    .await;
+    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let _ = tx.commit().await;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let rendered = template
+        .eval_to_state(context! {
+            user => auth_session.user,
+            links => links,
+        })?
+        .render_block("links")?;
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn profile_settings(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let user = find_user_by_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+
+    if user.clone().is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if user.clone().unwrap().id != auth_session.user.clone().unwrap().id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+
+    let links = find_links_by_user_id(&mut tx, user.clone().unwrap().id).await?;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        draft_post_count,
+        links,
+        user,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
 
 #[derive(Deserialize)]
 pub struct EmailVerificationChallengeResponseForm {
@@ -618,8 +824,11 @@ pub async fn profile(
         None => None,
     };
 
+    let links = find_links_by_user_id(&mut tx, user.clone().unwrap().id).await?;
+
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile.html")?;
     let rendered = template.render(context! {
+        links,
         banner,
         is_following => is_current_user_following,
         followings,

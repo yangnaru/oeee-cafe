@@ -4,11 +4,13 @@ use super::handlers::{
 use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::{
-    banner_draw_finish, communities, community, create_community_form, do_create_comment,
-    do_create_community, do_delete_guestbook_entry, do_follow_profile, do_reply_guestbook_entry,
+    banner_draw_finish, communities, community, create_community_form, do_add_link,
+    do_create_comment, do_create_community, do_delete_guestbook_entry, do_delete_link,
+    do_follow_profile, do_move_link_down, do_move_link_up, do_reply_guestbook_entry,
     do_unfollow_profile, do_write_guestbook_entry, draft_posts, edit_account, edit_password,
     guestbook, handler_404, post_publish, post_publish_form, post_replay_view, post_view, profile,
-    request_email_verification_code, start_banner_draw, verify_email_verification_code,
+    profile_settings, request_email_verification_code, start_banner_draw,
+    verify_email_verification_code,
 };
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
@@ -116,6 +118,14 @@ impl App {
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))
             .route("/@:login_name", get(profile))
+            .route("/@:login_name/settings/links", post(do_add_link))
+            .route("/@:login_name/settings/links/:id", delete(do_delete_link))
+            .route("/@:login_name/settings/links/:id/up", post(do_move_link_up))
+            .route(
+                "/@:login_name/settings/links/:id/down",
+                post(do_move_link_down),
+            )
+            .route("/@:login_name/settings", get(profile_settings))
             .route("/@:login_name/guestbook", get(guestbook))
             .route("/posts/:id", get(post_view))
             .route("/about", get(about))

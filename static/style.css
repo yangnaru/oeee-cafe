@@ -164,3 +164,10 @@ nav a:visited {
   padding: 8px;
   margin: 8px 0;
 }
+
+.flex-inline {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}

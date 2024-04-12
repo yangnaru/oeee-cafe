@@ -38,7 +38,20 @@
     {% endif %}
   </div>
 </div>
-<a href="/@{{ user.login_name }}/guestbook">방명록</a>
+<div class="flex-inline">
+  <h3>링크</h3>
+  {% if user.id == current_user.id %}<a href="/@{{ user.login_name }}/settings">관리</a>{% endif %}
+</div>
+<ul>
+  <li>
+    <a href="/@{{ user.login_name }}/guestbook">방명록</a>
+  </li>
+  {% for link in links %}
+    <li>
+      <a href="{{ link.url }}" target="_blank">{{ link.description }}</a>
+    </li>
+  {% endfor %}
+</ul>
 {% if followings|length > 0 %}
   {% if
     followings|selectattr("banner_image_filename")|length > 0 %}
