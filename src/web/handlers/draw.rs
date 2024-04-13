@@ -11,7 +11,7 @@ use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
 use axum::extract::Path;
 use axum::response::IntoResponse;
-use axum::{debug_handler, Json};
+use axum::Json;
 use axum::{
     extract::{Multipart, State},
     http::StatusCode,
@@ -96,7 +96,6 @@ pub struct DrawFinishResponse {
     pub post_id: String,
 }
 
-#[debug_handler]
 pub async fn draw_finish(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -254,7 +253,6 @@ pub async fn draw_finish(
     .into_response())
 }
 
-#[debug_handler]
 pub async fn banner_draw_finish(
     auth_session: AuthSession,
     State(state): State<AppState>,

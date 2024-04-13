@@ -7,7 +7,6 @@ use crate::models::user::{
     find_user_by_id, update_password, update_user, update_user_email_verified_at, AuthSession,
 };
 use crate::web::state::AppState;
-use axum::debug_handler;
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
 use axum_messages::Messages;
@@ -57,7 +56,6 @@ pub struct EditPasswordForm {
     new_password_confirm: String,
 }
 
-#[debug_handler]
 pub async fn edit_password(
     auth_session: AuthSession,
     messages: Messages,
@@ -92,7 +90,6 @@ pub async fn edit_password(
     Ok(Redirect::to("/account").into_response())
 }
 
-#[debug_handler]
 pub async fn verify_email_verification_code(
     auth_session: AuthSession,
     State(state): State<AppState>,

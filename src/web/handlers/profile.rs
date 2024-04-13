@@ -11,7 +11,6 @@ use crate::models::link::{
 use crate::models::post::{find_published_public_posts_by_author_id, get_draft_post_count};
 use crate::models::user::{find_user_by_id, find_user_by_login_name, AuthSession};
 use crate::web::state::AppState;
-use axum::debug_handler;
 use axum::extract::Path;
 use axum::response::IntoResponse;
 use axum::{extract::State, http::StatusCode, response::Html, Form};
@@ -314,7 +313,6 @@ pub struct AddGuestbookEntryReplyForm {
     pub content: String,
 }
 
-#[debug_handler]
 pub async fn do_reply_guestbook_entry(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -403,7 +401,6 @@ pub async fn do_delete_guestbook_entry(
     Ok(StatusCode::OK.into_response())
 }
 
-#[debug_handler]
 pub async fn do_write_guestbook_entry(
     auth_session: AuthSession,
     State(state): State<AppState>,
