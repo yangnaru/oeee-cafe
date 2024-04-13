@@ -1967,7 +1967,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "oeee"
+name = "oeee-cafe"
 version = "0.1.0"
 dependencies = [
  "anyhow",

@@ -1,7 +1,7 @@
 use minijinja::{path_loader, Environment};
-use oeee::web::app::App;
-use oeee::web::state::AppState;
-use oeee::AppConfig;
+use oeee_cafe::web::app::App;
+use oeee_cafe::web::state::AppState;
+use oeee_cafe::AppConfig;
 use std::env::args;
 use std::path::PathBuf;
 use std::process::exit;
