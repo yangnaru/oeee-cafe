@@ -42,8 +42,9 @@ use axum::{
 };
 use axum_messages::Messages;
 use chrono::{Duration, TimeDelta, Utc};
-use data_encoding::BASE64URL_NOPAD;
+use data_encoding::{BASE64, BASE64URL_NOPAD};
 use data_url::DataUrl;
+use hex::decode;
 use lettre::transport::smtp::authentication::Credentials as SmtpCredentials;
 use lettre::{Message, SmtpTransport, Transport};
 use minijinja::context;
@@ -644,6 +645,7 @@ pub async fn banner_draw_finish(
                     image_sha256.chars().nth(1).unwrap(),
                     image_sha256
                 ),
+                &BASE64.encode(&decode(image_sha256.clone()).unwrap()),
             )
             .await?;
         } else if name == "animation" {
@@ -659,6 +661,7 @@ pub async fn banner_draw_finish(
                     replay_sha256.chars().nth(1).unwrap(),
                     replay_sha256
                 ),
+                &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
             )
             .await?;
         } else if name == "security_timer" {
@@ -1650,12 +1653,14 @@ pub async fn upload_object(
     bucket_name: &str,
     bytes: Vec<u8>,
     key: &str,
+    checksum_sha256: &str,
 ) -> Result<PutObjectOutput, SdkError<PutObjectError>> {
     let body = ByteStream::from(bytes);
     client
         .put_object()
         .bucket(bucket_name)
         .key(key)
+        .checksum_sha256(checksum_sha256)
         .body(body)
         .send()
         .await
@@ -1721,6 +1726,7 @@ pub async fn draw_finish(
                     image_sha256.chars().nth(1).unwrap(),
                     image_sha256
                 ),
+                &BASE64.encode(&decode(image_sha256.clone()).unwrap()),
             )
             .await?;
         } else if name == "animation" {
@@ -1771,6 +1777,7 @@ pub async fn draw_finish(
                 replay_sha256.chars().nth(1).unwrap(),
                 replay_sha256
             ),
+            &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
         )
         .await?;
     } else if tool == "tegaki" {
@@ -1784,6 +1791,7 @@ pub async fn draw_finish(
                 replay_sha256.chars().nth(1).unwrap(),
                 replay_sha256
             ),
+            &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
         )
         .await?;
     }
