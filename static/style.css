@@ -33,7 +33,6 @@ nav a:visited {
 
 .post-image {
   max-width: 100%;
-  margin: 0 auto;
   display: flex;
   object-fit: contain;
 }
@@ -174,4 +173,20 @@ nav a:visited {
 
 .links {
   margin-top: 0;
+}
+
+.post-sidebar {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-content: center;
+  flex-wrap: wrap;
+}
+
+.post-main {
+  flex-grow: 1;
+}
+
+.post-comments {
+  flex-grow: 1;
 }
