@@ -84,6 +84,17 @@ pub async fn profile(
     };
 
     let links = find_links_by_user_id(&mut tx, user.clone().unwrap().id).await?;
+    let links = links
+        .iter()
+        .map(|link| {
+            let target = if link.url.starts_with(&state.config.base_url) {
+                "_self"
+            } else {
+                "_blank"
+            };
+            (link, target)
+        })
+        .collect::<Vec<_>>();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile.html")?;
     let rendered = template.render(context! {
