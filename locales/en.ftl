@@ -11,6 +11,8 @@ sign-in = Sign in
 sign-up = Sign up
 sign-out = Sign out
 
+message-incorrect-credentials = Incorrect credentials.
+
 account = Account
 email-not-verified = Email not verified
 login-name = Username
@@ -97,6 +99,7 @@ account-change-password-current = Current password
 account-change-password-new = New password
 account-change-password-new-repeat = New password (again)
 account-change-password-error-incorrect-current = The password you have entered is incorrect.
+account-change-password-error-mismatch = Passwords do not match.
 account-change-password-error-new-mismatch = New passwords do not match.
 account-change-password-error-too-short = Password must be longer than 8 characters.
 account-change-password-success = Your have successfully changed your password.

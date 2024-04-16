@@ -13,6 +13,8 @@ sign-in = ログイン
 sign-up = 会員登録
 sign-out = ログアウト
 
+message-incorrect-credentials = IDまたはパスワードが間違っています。
+
 account = アカウント
 email-not-verified = メール未認証
 login-name = ID
@@ -99,6 +101,7 @@ account-change-password-current = 現在のパスワード
 account-change-password-new = 新しいパスワード
 account-change-password-new-repeat = 新しいパスワード (もう一度)
 account-change-password-error-incorrect-current = 既存のパスワードが間違っています。
+account-change-password-error-mismatch = パスワードが一致しません。
 account-change-password-error-new-mismatch = 新しいパスワードが一致しません。
 account-change-password-error-too-short = パスワードは8文字以上でなければなりません。
 account-change-password-success = パスワードが変更されました。

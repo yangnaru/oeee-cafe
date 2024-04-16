@@ -13,6 +13,8 @@ sign-in = 로그인
 sign-up = 회원가입
 sign-out = 로그아웃
 
+message-incorrect-credentials = 아이디 또는 비밀번호가 틀렸습니다.
+
 account = 계정
 email-not-verified = 이메일 미인증
 login-name = 아이디
@@ -99,6 +101,7 @@ account-change-password-current = 현재 비밀번호
 account-change-password-new = 새 비밀번호
 account-change-password-new-repeat = 새 비밀번호 (한 번 더)
 account-change-password-error-incorrect-current = 기존 비밀번호가 틀렸습니다.
+account-change-password-error-mismatch = 비밀번호가 일치하지 않습니다.
 account-change-password-error-new-mismatch = 새로운 비밀번호가 일치하지 않습니다.
 account-change-password-error-too-short = 비밀번호는 8자 이상이어야 합니다.
 account-change-password-success = 비밀번호가 변경되었습니다.

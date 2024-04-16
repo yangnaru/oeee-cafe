@@ -48,12 +48,30 @@ pub struct CreateUserForm {
 
 pub async fn do_signup(
     mut auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     messages: Messages,
     State(state): State<AppState>,
     Form(form): Form<CreateUserForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
     if form.password != form.password_confirm {
-        messages.error("비밀번호가 일치하지 않습니다.");
+        messages.error(
+            bundle.format_pattern(
+                bundle
+                    .get_message("account-change-password-error-mismatch")
+                    .unwrap()
+                    .value()
+                    .unwrap(),
+                None,
+                &mut vec![],
+            ),
+        );
         return Ok(Redirect::to("/signup").into_response());
     }
 
@@ -67,7 +85,12 @@ pub async fn do_signup(
         return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response());
     }
 
-    messages.success(format!("{}님, 환영합니다!", user.login_name));
+    let pattern = bundle.get_message("welcome").unwrap().value().unwrap();
+    let mut args = FluentArgs::new();
+    args.set("name", FluentValue::from(user.display_name));
+    let message = bundle.format_pattern(pattern, Some(&args), &mut vec![]);
+    messages.success(message);
+
     if let Some(ref next) = form.next {
         Ok(Redirect::to(next).into_response())
     } else {
@@ -101,10 +124,27 @@ pub async fn do_login(
     messages: Messages,
     Form(creds): Form<Credentials>,
 ) -> impl IntoResponse {
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
     let user = match auth_session.authenticate(creds.clone()).await {
         Ok(Some(user)) => user,
         Ok(None) => {
-            messages.error("아이디 또는 비밀번호가 틀렸습니다.");
+            messages.error(
+                bundle.format_pattern(
+                    bundle
+                        .get_message("message-incorrect-credentials")
+                        .unwrap()
+                        .value()
+                        .unwrap(),
+                    None,
+                    &mut vec![],
+                ),
+            );
 
             let mut login_url = "/login".to_string();
             if let Some(next) = creds.next {
@@ -120,12 +160,6 @@ pub async fn do_login(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
     let pattern = bundle.get_message("welcome").unwrap().value().unwrap();
     let mut args = FluentArgs::new();
     args.set("name", FluentValue::from(user.display_name));
