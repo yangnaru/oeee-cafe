@@ -26,7 +26,7 @@ pub async fn about(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let template: minijinja::Template<'_, '_> = state.env.get_template("about.html")?;
     let rendered: String = template.render(context! {

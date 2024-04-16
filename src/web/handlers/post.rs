@@ -63,7 +63,7 @@ pub async fn post_view(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .render(context! {
@@ -135,7 +135,7 @@ pub async fn post_replay_view(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .render(context! {
@@ -196,7 +196,7 @@ pub async fn post_publish_form(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -286,7 +286,7 @@ pub async fn draft_posts(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),

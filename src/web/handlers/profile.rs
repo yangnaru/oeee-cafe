@@ -48,7 +48,7 @@ pub async fn do_follow_profile(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -86,7 +86,7 @@ pub async fn do_unfollow_profile(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -151,7 +151,7 @@ pub async fn profile(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         links,
@@ -206,7 +206,7 @@ pub async fn do_move_link_down(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .eval_to_state(context! {
@@ -255,7 +255,7 @@ pub async fn do_move_link_up(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .eval_to_state(context! {
@@ -308,7 +308,7 @@ pub async fn do_delete_link(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .eval_to_state(context! {
@@ -360,7 +360,7 @@ pub async fn do_add_link(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .eval_to_state(context! {
@@ -403,7 +403,7 @@ pub async fn profile_settings(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -466,7 +466,7 @@ pub async fn do_reply_guestbook_entry(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -550,7 +550,7 @@ pub async fn do_write_guestbook_entry(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -603,7 +603,7 @@ pub async fn guestbook(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         banner,

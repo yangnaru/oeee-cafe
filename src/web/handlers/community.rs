@@ -46,7 +46,7 @@ pub async fn community(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let template: minijinja::Template<'_, '_> = state.env.get_template("community.html")?;
     let rendered = template.render(context! {
@@ -147,7 +147,7 @@ pub async fn communities(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.clone().render(context! {
         current_user => auth_session.user,
@@ -209,7 +209,7 @@ pub async fn create_community_form(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,

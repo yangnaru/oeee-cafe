@@ -65,7 +65,7 @@ pub async fn start_draw(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         tool => input.tool,
@@ -396,7 +396,7 @@ pub async fn start_banner_draw(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         width => 200,

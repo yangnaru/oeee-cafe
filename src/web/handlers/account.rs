@@ -47,7 +47,7 @@ pub async fn account(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     let languages = vec![("ko", "한국어"), ("ja", "日本語"), ("en", "English")];
@@ -105,7 +105,7 @@ pub async fn edit_password(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     let db = state.config.connect_database().await?;
@@ -199,7 +199,7 @@ pub async fn verify_email_verification_code(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     if challenge.token != form.token {
@@ -261,7 +261,7 @@ pub async fn request_email_verification_code(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let edit_email_template = state.env.get_template("email_edit.html")?;
 
@@ -370,7 +370,7 @@ pub async fn edit_account(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     let db = state.config.connect_database().await?;

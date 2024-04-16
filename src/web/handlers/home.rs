@@ -27,7 +27,7 @@ pub async fn home(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     if auth_session.user.is_none() {

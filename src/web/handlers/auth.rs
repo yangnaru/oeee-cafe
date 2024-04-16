@@ -124,7 +124,7 @@ pub async fn do_login(
         .user
         .clone()
         .map(|u| u.preferred_language)
-        .unwrap();
+        .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let pattern = bundle.get_message("welcome").unwrap().value().unwrap();
     let mut args = FluentArgs::new();
