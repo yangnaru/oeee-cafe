@@ -1,6 +1,6 @@
 use crate::app_error::AppError;
 use crate::models::banner::find_banner_by_id;
-use crate::models::follow::{find_followings_by_user_id, is_following, unfollow_user};
+use crate::models::follow::{find_followings_by_user_id, follow_user, is_following, unfollow_user};
 use crate::models::guestbook_entry::{
     add_guestbook_entry_reply, create_guestbook_entry, delete_guestbook_entry,
     find_guestbook_entries_by_recipient_id, find_guestbook_entry_by_id, GuestbookEntryDraft,
@@ -10,6 +10,7 @@ use crate::models::link::{
 };
 use crate::models::post::{find_published_public_posts_by_author_id, get_draft_post_count};
 use crate::models::user::{find_user_by_id, find_user_by_login_name, AuthSession};
+use crate::web::handlers::{create_base_ftl_context, get_bundle};
 use crate::web::state::AppState;
 use axum::extract::Path;
 use axum::response::IntoResponse;
@@ -18,8 +19,49 @@ use minijinja::context;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use super::ExtractAcceptLanguage;
+
+pub async fn do_follow_profile(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    follow_user(
+        &mut tx,
+        auth_session.user.clone().unwrap().id,
+        user.clone().unwrap().id,
+    )
+    .await?;
+    let _ = tx.commit().await;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("unfollow_button.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        user,
+        ..create_base_ftl_context(&bundle),
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
 pub async fn do_unfollow_profile(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -40,9 +82,16 @@ pub async fn do_unfollow_profile(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("follow_button.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
         user,
+        ..create_base_ftl_context(&bundle),
     })?;
 
     Ok(Html(rendered).into_response())
@@ -50,6 +99,7 @@ pub async fn do_unfollow_profile(
 
 pub async fn profile(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -97,6 +147,12 @@ pub async fn profile(
         .collect::<Vec<_>>();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         links,
         banner,
@@ -107,6 +163,7 @@ pub async fn profile(
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         posts,
         draft_post_count,
+        ..create_base_ftl_context(&bundle),
     })?;
 
     Ok(Html(rendered).into_response())
@@ -114,6 +171,7 @@ pub async fn profile(
 
 pub async fn do_move_link_down(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -144,10 +202,17 @@ pub async fn do_move_link_down(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
             links => links,
+            ..create_base_ftl_context(&bundle),
         })?
         .render_block("links")?;
     Ok(Html(rendered).into_response())
@@ -155,6 +220,7 @@ pub async fn do_move_link_down(
 
 pub async fn do_move_link_up(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -185,10 +251,17 @@ pub async fn do_move_link_up(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
             links => links,
+            ..create_base_ftl_context(&bundle),
         })?
         .render_block("links")?;
     Ok(Html(rendered).into_response())
@@ -202,6 +275,7 @@ pub struct AddLinkForm {
 
 pub async fn do_delete_link(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -230,10 +304,17 @@ pub async fn do_delete_link(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
             links => links,
+            ..create_base_ftl_context(&bundle),
         })?
         .render_block("links")?;
     Ok(Html(rendered).into_response())
@@ -241,6 +322,7 @@ pub async fn do_delete_link(
 
 pub async fn do_add_link(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
     Form(form): Form<AddLinkForm>,
@@ -274,10 +356,17 @@ pub async fn do_add_link(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
             links => links,
+            ..create_base_ftl_context(&bundle),
         })?
         .render_block("links")?;
     Ok(Html(rendered).into_response())
@@ -285,6 +374,7 @@ pub async fn do_add_link(
 
 pub async fn profile_settings(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     let db = state.config.connect_database().await?;
@@ -309,11 +399,18 @@ pub async fn profile_settings(
     let links = find_links_by_user_id(&mut tx, user.clone().unwrap().id).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
         draft_post_count,
         links,
         user,
+        ..create_base_ftl_context(&bundle),
     })?;
 
     Ok(Html(rendered).into_response())
@@ -326,6 +423,7 @@ pub struct AddGuestbookEntryReplyForm {
 
 pub async fn do_reply_guestbook_entry(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path((login_name, entry_id)): Path<(String, Uuid)>,
     Form(form): Form<AddGuestbookEntryReplyForm>,
@@ -364,10 +462,17 @@ pub async fn do_reply_guestbook_entry(
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("guestbook_entry_reply.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
         user => author,
         entry => guestbook_entry,
+        ..create_base_ftl_context(&bundle),
     })?;
 
     Ok(Html(rendered).into_response())
@@ -414,6 +519,7 @@ pub async fn do_delete_guestbook_entry(
 
 pub async fn do_write_guestbook_entry(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
     Form(form): Form<CreateGuestbookEntryForm>,
@@ -440,16 +546,24 @@ pub async fn do_write_guestbook_entry(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook_entry.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
         user => recipient_user.unwrap(),
-        entry => guestbook_entry.unwrap()
+        entry => guestbook_entry.unwrap(),
+        ..create_base_ftl_context(&bundle),
     })?;
     Ok(Html(rendered).into_response())
 }
 
 pub async fn guestbook(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -485,6 +599,12 @@ pub async fn guestbook(
     }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         banner,
         current_user => auth_session.user,
@@ -493,6 +613,7 @@ pub async fn guestbook(
         draft_post_count,
         is_following => is_current_user_following,
         guestbook_entries,
+        ..create_base_ftl_context(&bundle),
     })?;
 
     Ok(Html(rendered).into_response())

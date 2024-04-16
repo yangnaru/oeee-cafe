@@ -15,8 +15,8 @@
         current_user and current_user.id == entry.recipient_id %}
         <form hx-post="/@{{ user.login_name }}/guestbook/{{ entry.id }}/reply"
               hx-swap="outerHTML">
-          <textarea name="content" title="답글"></textarea>
-          <input type="submit" value="답글 남기기" />
+          <textarea name="content" title="{{ ftl_guestbook_reply }}"></textarea>
+          <input type="submit" value="{{ ftl_guestbook_reply_write }}" />
         </form>
       {% endif %}
     {% endif %}
@@ -26,8 +26,8 @@
       <form hx-delete="/@{{ user.login_name }}/guestbook/{{ entry.id }}"
             hx-swap="outerHTML"
             hx-target="closest .guestbook-entry"
-            hx-confirm="정말로 삭제하시겠습니까?">
-        <input type="submit" value="삭제" />
+            hx-confirm="{{ ftl_guestbook_delete_confirm }}">
+        <input type="submit" value="{{ ftl_guestbook_delete }}" />
       </form>
     {% endif %}
   </div>

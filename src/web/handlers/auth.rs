@@ -1,12 +1,16 @@
 use crate::app_error::AppError;
 use crate::models::user::{create_user, AuthSession, Credentials, UserDraft};
+use crate::web::handlers::{create_base_ftl_context, get_bundle};
 use crate::web::state::AppState;
 use axum::extract::Query;
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
 use axum_messages::Messages;
+use fluent::{FluentArgs, FluentValue};
 use minijinja::context;
 use serde::Deserialize;
+
+use super::ExtractAcceptLanguage;
 
 // This allows us to extract the "next" field from the query string. We use this
 // to redirect after log in.
@@ -17,14 +21,17 @@ pub struct NextUrl {
 
 pub async fn signup(
     messages: Messages,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Query(NextUrl { next }): Query<NextUrl>,
     State(state): State<crate::web::state::AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     let template: minijinja::Template<'_, '_> = state.env.get_template("signup.html")?;
 
+    let bundle = get_bundle(&accept_language, None);
     let rendered: String = template.render(context! {
         messages => messages.into_iter().collect::<Vec<_>>(),
         next => next,
+        ..create_base_ftl_context(&bundle)
     })?;
 
     Ok(Html(rendered))
@@ -70,6 +77,7 @@ pub async fn do_signup(
 
 pub async fn login(
     messages: Messages,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Query(NextUrl { next }): Query<NextUrl>,
     State(state): State<crate::web::state::AppState>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -77,9 +85,11 @@ pub async fn login(
 
     let collected_messages: Vec<axum_messages::Message> = messages.into_iter().collect();
 
+    let bundle = get_bundle(&accept_language, None);
     let rendered: String = template.render(context! {
         messages => collected_messages,
         next => next,
+        ..create_base_ftl_context(&bundle)
     })?;
 
     Ok(Html(rendered))
@@ -87,6 +97,7 @@ pub async fn login(
 
 pub async fn do_login(
     mut auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     messages: Messages,
     Form(creds): Form<Credentials>,
 ) -> impl IntoResponse {
@@ -109,7 +120,17 @@ pub async fn do_login(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    messages.success(format!("{}님, 환영합니다!", user.login_name));
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let pattern = bundle.get_message("welcome").unwrap().value().unwrap();
+    let mut args = FluentArgs::new();
+    args.set("name", FluentValue::from(user.display_name));
+    let message = bundle.format_pattern(pattern, Some(&args), &mut vec![]);
+    messages.success(message);
 
     if let Some(ref next) = creds.next {
         Redirect::to(next)

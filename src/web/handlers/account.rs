@@ -4,8 +4,10 @@ use crate::models::email_verification_challenge::{
 };
 use crate::models::post::get_draft_post_count;
 use crate::models::user::{
-    find_user_by_id, update_password, update_user, update_user_email_verified_at, AuthSession,
+    find_user_by_id, update_password, update_user, update_user_email_verified_at,
+    update_user_preferred_language, AuthSession, Language,
 };
+use crate::web::handlers::{create_base_ftl_context, get_bundle};
 use crate::web::state::AppState;
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
@@ -18,6 +20,8 @@ use rand::{thread_rng, Rng};
 use serde::Deserialize;
 use uuid::Uuid;
 
+use super::ExtractAcceptLanguage;
+
 #[derive(Deserialize)]
 pub struct EmailVerificationChallengeResponseForm {
     pub challenge_id: Uuid,
@@ -26,6 +30,7 @@ pub struct EmailVerificationChallengeResponseForm {
 
 pub async fn account(
     messages: Messages,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     auth_session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
@@ -38,15 +43,48 @@ pub async fn account(
         None => 0,
     };
 
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
+    let languages = vec![("ko", "한국어"), ("ja", "日本語"), ("en", "English")];
     let template: minijinja::Template<'_, '_> = state.env.get_template("account.html")?;
     let rendered = template.render(context! {
-        title => "계정",
         current_user => auth_session.user,
+        languages,
         draft_post_count,
         messages => messages.into_iter().collect::<Vec<_>>(),
+        ..create_base_ftl_context(&bundle)
     })?;
 
     Ok(Html(rendered))
+}
+
+#[derive(Deserialize)]
+pub struct LanguageEditForm {
+    pub language: Option<String>,
+}
+
+pub async fn save_language(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Form(form): Form<LanguageEditForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let language = match form.language.as_deref() {
+        Some("ko") => Some(Language::Ko),
+        Some("ja") => Some(Language::Ja),
+        Some("en") => Some(Language::En),
+        _ => None,
+    };
+    let _ = update_user_preferred_language(&mut tx, auth_session.user.unwrap().id, language).await;
+    let _ = tx.commit().await;
+
+    Ok(Redirect::to("/account").into_response())
 }
 
 #[derive(Deserialize)]
@@ -58,10 +96,18 @@ pub struct EditPasswordForm {
 
 pub async fn edit_password(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     messages: Messages,
     State(state): State<AppState>,
     Form(form): Form<EditPasswordForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let user = auth_session.user.clone().unwrap();
@@ -72,26 +118,67 @@ pub async fn edit_password(
     }
     let user = user.unwrap();
     if user.verify_password(&form.current_password).is_err() {
-        messages.error("기존 비밀번호가 틀렸습니다.");
+        messages.error(
+            bundle.format_pattern(
+                bundle
+                    .get_message("account-change-password-error-incorrect-current")
+                    .unwrap()
+                    .value()
+                    .unwrap(),
+                None,
+                &mut vec![],
+            ),
+        );
         return Ok(Redirect::to("/account").into_response());
     }
     if form.new_password != form.new_password_confirm {
-        messages.error("새로운 비밀번호가 일치하지 않습니다.");
+        messages.error(
+            bundle.format_pattern(
+                bundle
+                    .get_message("account-change-password-error-new-mismatch")
+                    .unwrap()
+                    .value()
+                    .unwrap(),
+                None,
+                &mut vec![],
+            ),
+        );
         return Ok(Redirect::to("/account").into_response());
     }
     if form.new_password.len() < 8 {
-        messages.error("비밀번호는 8자 이상이어야 합니다.");
+        messages.error(
+            bundle.format_pattern(
+                bundle
+                    .get_message("account-change-password-error-too-short")
+                    .unwrap()
+                    .value()
+                    .unwrap(),
+                None,
+                &mut vec![],
+            ),
+        );
         return Ok(Redirect::to("/account").into_response());
     }
     let _ = update_password(&mut tx, user_id, form.new_password).await;
     let _ = tx.commit().await;
 
-    messages.success("비밀번호가 변경되었습니다.");
+    messages.success(
+        bundle.format_pattern(
+            bundle
+                .get_message("account-change-password-success")
+                .unwrap()
+                .value()
+                .unwrap(),
+            None,
+            &mut vec![],
+        ),
+    );
     Ok(Redirect::to("/account").into_response())
 }
 
 pub async fn verify_email_verification_code(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Form(form): Form<EmailVerificationChallengeResponseForm>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -108,13 +195,20 @@ pub async fn verify_email_verification_code(
     let now = Utc::now();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("email_verify.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
 
     if challenge.token != form.token {
         let rendered = template.render(context! {
             challenge_id => challenge.id,
             email => challenge.email,
-            message => "인증 코드가 일치하지 않습니다.".to_string(),
+            message => bundle.format_pattern(bundle.get_message("account-change-email-error-token-mismatch").unwrap().value().unwrap(), None, &mut vec![]),
             success => false,
+            ..create_base_ftl_context(&bundle)
         })?;
 
         return Ok(Html(rendered).into_response());
@@ -124,8 +218,9 @@ pub async fn verify_email_verification_code(
         let rendered = template.render(context! {
             challenge_id => challenge.id,
             email => challenge.email,
-            message => "인증 코드가 만료되었습니다.".to_string(),
+            message => bundle.format_pattern(bundle.get_message("account-change-email-error-token-expired").unwrap().value().unwrap(), None, &mut vec![]),
             success => false,
+            ..create_base_ftl_context(&bundle)
         })?;
 
         return Ok(Html(rendered).into_response());
@@ -143,8 +238,9 @@ pub async fn verify_email_verification_code(
     let rendered = template.render(context! {
         challenge_id => challenge.id,
         email => challenge.email,
-        message => "이메일 주소가 인증되었습니다.".to_string(),
+        message => bundle.format_pattern(bundle.get_message("account-change-email-success").unwrap().value().unwrap(), None, &mut vec![]),
         success => true,
+        ..create_base_ftl_context(&bundle)
     })?;
 
     Ok(Html(rendered).into_response())
@@ -157,9 +253,16 @@ pub struct RequestEmailVerificationCodeForm {
 
 pub async fn request_email_verification_code(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Form(form): Form<RequestEmailVerificationCodeForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let edit_email_template = state.env.get_template("email_edit.html")?;
 
     let current_email = auth_session.user.clone().unwrap().email;
@@ -174,7 +277,16 @@ pub async fn request_email_verification_code(
     {
         return Ok(Html(edit_email_template.render(context! {
             current_user => auth_session.user,
-            message => "이미 인증된 이메일 주소입니다.".to_string(),
+            message => bundle.format_pattern(
+                bundle
+                    .get_message("account-change-email-error-already-verified")
+                    .unwrap()
+                    .value()
+                    .unwrap(),
+                None,
+                &mut vec![],
+            ),
+            ..create_base_ftl_context(&bundle),
         })?)
         .into_response());
     }
@@ -206,11 +318,18 @@ pub async fn request_email_verification_code(
     let email = Message::builder()
         .from(state.config.email_from_address.clone().parse().unwrap())
         .to(form.email.clone().parse().unwrap())
-        .subject("오이카페 이메일 주소 인증 코드")
-        .body(format!(
-            "인증 코드: {}",
-            email_verification_challenge.token.clone()
-        ))
+        .subject(
+            bundle.format_pattern(
+                bundle
+                    .get_message("account-change-email-subject")
+                    .unwrap()
+                    .value()
+                    .unwrap(),
+                None,
+                &mut vec![],
+            ),
+        )
+        .body(format!("{}", email_verification_challenge.token.clone()))
         .unwrap();
 
     let mailer = SmtpTransport::relay(&state.config.smtp_host)
@@ -228,6 +347,7 @@ pub async fn request_email_verification_code(
     let rendered = template.render(context! {
         challenge_id => email_verification_challenge.id,
         email => form.email,
+        ..create_base_ftl_context(&bundle),
     })?;
 
     Ok(Html(rendered).into_response())
@@ -236,22 +356,44 @@ pub async fn request_email_verification_code(
 #[derive(Deserialize)]
 pub struct EditUserForm {
     login_name: String,
-    user_id: String,
     display_name: String,
 }
 
 pub async fn edit_account(
     messages: Messages,
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Form(form): Form<EditUserForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user_id = Uuid::parse_str(&form.user_id)?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    let _ = update_user(&mut tx, user_id, form.login_name, form.display_name).await;
+    let _ = update_user(
+        &mut tx,
+        auth_session.user.unwrap().id,
+        form.login_name,
+        form.display_name,
+    )
+    .await;
     let _ = tx.commit().await;
 
-    messages.success("계정 정보가 수정되었습니다.");
+    messages.success(
+        bundle.format_pattern(
+            bundle
+                .get_message("account-info-edit-success")
+                .unwrap()
+                .value()
+                .unwrap(),
+            None,
+            &mut vec![],
+        ),
+    );
     Ok(Redirect::to("/account").into_response())
 }

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}
-  {{ super() }} | {{ title }}
+  {{ super() }} | {{ ftl_home }}
 {% endblock title %}
 {% block body %}
   <div class="center">
-    <h2>타임라인</h2>
+    <h2>{{ ftl_timeline }}</h2>
     {% if posts|length > 0 %}
       <div class="posts-grid">
         {% for post in posts %}
@@ -19,10 +19,7 @@
         {% endfor %}
       </div>
     {% else %}
-      <p>
-        타임라인이 비어 있습니다. <a href="/communities">커뮤니티</a>에서 다른
-        사람과 동맹을 맺어 보세요!
-      </p>
+      <p>{{ ftl_timeline_empty|safe }}</p>
     {% endif %}
   </div>
 {% endblock body %}

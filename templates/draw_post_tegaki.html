@@ -2,10 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
-    <title>오이카페 | 그리기</title>
-    <meta name="keywords" content="오이카페, 오에카키, 커뮤니티" />
-    <meta name="description"
-          content="옛날에는 오에카키를 오이깎이라고도 불렀습니다. 오이를 깎을 수 있는 카페 오이카페입니다." />
+    <title>{{ ftl_brand }} | {{ ftl_community_drawing_new }}</title>
+    <meta name="keywords" content="오이카페, 오에카키, 커뮤니티, お絵かき" />
+    <meta name="description" content="오이카페는 오에카키 커뮤니티입니다. お絵かできるOEEEカフェです。" />
     <link rel="stylesheet" href="/static/tegaki/css/tegaki.css" />
     <script src="/static/tegaki/js/strings/en.js"></script>
     <script src="/static/tegaki/js/tools/tool.js"></script>
@@ -64,7 +63,7 @@
           })
           .catch((error) => {
             alert(
-              "그림을 게시하는 도중 오류가 발생했습니다. 다시 제출해 보세요."
+              "{{ ftl_community_drawing_post_error }}"
             );
           });
 

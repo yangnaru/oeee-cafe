@@ -2,25 +2,23 @@ use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::about::about;
 use crate::web::handlers::account::{
-    account, edit_account, edit_password, request_email_verification_code,
+    account, edit_account, edit_password, request_email_verification_code, save_language,
     verify_email_verification_code,
 };
 use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::community::{
     communities, community, create_community_form, do_create_community,
 };
-use crate::web::handlers::draw::{
-    banner_draw_finish, do_follow_profile, draw_finish, start_banner_draw, start_draw,
-};
+use crate::web::handlers::draw::{banner_draw_finish, draw_finish, start_banner_draw, start_draw};
 use crate::web::handlers::handler_404;
 use crate::web::handlers::home::home;
 use crate::web::handlers::post::{
     do_create_comment, draft_posts, post_publish, post_publish_form, post_replay_view, post_view,
 };
 use crate::web::handlers::profile::{
-    do_add_link, do_delete_guestbook_entry, do_delete_link, do_move_link_down, do_move_link_up,
-    do_reply_guestbook_entry, do_unfollow_profile, do_write_guestbook_entry, guestbook, profile,
-    profile_settings,
+    do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
+    do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile, do_write_guestbook_entry,
+    guestbook, profile, profile_settings,
 };
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
@@ -87,6 +85,7 @@ impl App {
             .route("/account", get(account))
             .route("/account", post(edit_account))
             .route("/account/password", post(edit_password))
+            .route("/account/language", post(save_language))
             .route(
                 "/account/request-verify-email",
                 post(request_email_verification_code),

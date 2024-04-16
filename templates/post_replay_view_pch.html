@@ -4,9 +4,9 @@
   {% if post.title %}
     {{ post.title }}
   {% else %}
-    무제
+    {{ ftl_post_no_title }}
   {% endif %}
-  (리플레이)
+  ({{ ftl_post_replay }})
 {% endblock title %}
 {% block body %}
   <script>
@@ -33,23 +33,23 @@
   <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
   <script src="/static/neo/dist/neo.js" charset="utf-8"></script>
   <div class="center">
-    <p>그린 시각: {{ post.created_at }}</p>
-    <p>소요 시간: {{ post.paint_duration }}</p>
+    <p>{{ ftl_post_published_at }}: {{ post.published_at }}</p>
+    <p>{{ ftl_post_duration }}: {{ post.paint_duration }}</p>
     <p>
-      커뮤니티:
+      {{ ftl_community }}:
       <a href="/communities/{{ encoded_community_id }}">{{ post.community_name }}</a>
     </p>
     <input type="hidden" id="viewer" />
     <p>
-      제목:
+      {{ ftl_post_title }}:
       <a href="/posts/{{ encoded_post_id }}">
         {% if post.title %}
           {{ post.title }}
         {% else %}
-          무제
+          {{ ftl_post_no_title }}
         {% endif %}
       </a>
     </p>
-    <p>내용: {{ post.content }}</p>
+    <p>{{ ftl_post_description }}: {{ post.content }}</p>
   </div>
 {% endblock body %}

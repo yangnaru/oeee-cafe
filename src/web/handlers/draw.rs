@@ -1,15 +1,14 @@
 use crate::app_error::AppError;
 use crate::models::banner::{create_banner, BannerDraft};
-use crate::models::follow::follow_user;
 use crate::models::post::{create_post, get_draft_post_count, PostDraft};
-use crate::models::user::{find_user_by_login_name, AuthSession};
+use crate::models::user::AuthSession;
+use crate::web::handlers::{create_base_ftl_context, get_bundle};
 use crate::web::state::AppState;
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::operation::put_object::{PutObjectError, PutObjectOutput};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
-use axum::extract::Path;
 use axum::response::IntoResponse;
 use axum::Json;
 use axum::{
@@ -29,6 +28,8 @@ use sqlx::postgres::types::PgInterval;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
+use super::ExtractAcceptLanguage;
+
 #[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 pub struct Input {
@@ -41,6 +42,7 @@ pub struct Input {
 pub async fn start_draw(
     auth_session: AuthSession,
     State(state): State<AppState>,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Form(input): Form<Input>,
 ) -> Result<Html<String>, AppError> {
     let template_filename = match input.tool.as_str() {
@@ -59,14 +61,20 @@ pub async fn start_draw(
     };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
-        title => "그리기",
         tool => input.tool,
         width => input.width.parse::<u32>()?,
         height => input.height.parse::<u32>()?,
         community_id => input.community_id,
         current_user => auth_session.user,
         draft_post_count,
+        ..create_base_ftl_context(&bundle)
     })?;
 
     Ok(Html(rendered))
@@ -380,46 +388,22 @@ pub struct BannerDrawFinishResponse {
 
 pub async fn start_banner_draw(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
     let template: minijinja::Template<'_, '_> = state.env.get_template("draw_banner.html")?;
-
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
-        title => "동맹 배너 그리기",
         width => 200,
         height => 40,
         current_user => auth_session.user,
+        ..create_base_ftl_context(&bundle),
     })?;
 
     Ok(Html(rendered))
-}
-
-pub async fn do_follow_profile(
-    auth_session: AuthSession,
-    State(state): State<AppState>,
-    Path(login_name): Path<String>,
-) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
-    let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
-
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-
-    follow_user(
-        &mut tx,
-        auth_session.user.clone().unwrap().id,
-        user.clone().unwrap().id,
-    )
-    .await?;
-    let _ = tx.commit().await;
-
-    let template: minijinja::Template<'_, '_> = state.env.get_template("unfollow_button.html")?;
-    let rendered = template.render(context! {
-        current_user => auth_session.user,
-        user,
-    })?;
-
-    Ok(Html(rendered).into_response())
 }

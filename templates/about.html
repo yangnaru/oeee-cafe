@@ -1,14 +1,28 @@
 {% extends "base.html" %}
 {% block title %}
-  {{ super() }} | 오이카페?
+  {{ super() }} | {{ ftl_brand }}?
 {% endblock title %}
 {% block body %}
   <div class="center">
-    <h2>오이카페?</h2>
-    <p>옛날에는 오에카키를 오이깎이라고도 불렀습니다.</p>
-    <p>오이를 깎을 수 있는 카페 오이카페입니다.</p>
-    <p>
-      X: <a href="https://x.com/oeee_cafe">@oeee_cafe</a>
-    </p>
+    <h2>{{ ftl_brand }}?</h2>
+    <p>{{ ftl_about }}</p>
+    <h3>한국어 SNS</h3>
+    <ul>
+      <li>
+        X: <a href="https://x.com/oeee_cafe">@oeee_cafe</a>
+      </li>
+      <li>
+        플래닛: <a href="https://planet.moe/@oeee_cafe">@oeee_cafe</a>
+      </li>
+    </ul>
+    <h3>日本語 SNS</h3>
+    <ul>
+      <li>
+        X: <a href="https://x.com/kyuri_cafe">@kyuri_cafe</a>
+      </li>
+      <li>
+        Misskey.io: <a href="https://misskey.io/@oeee_cafe">@oeee_cafe</a>
+      </li>
+    </ul>
   </div>
 {% endblock body %}

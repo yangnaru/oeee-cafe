@@ -1,31 +1,31 @@
 {% extends "base.html" %}
 {% block body %}
   <div class="center">
-    <p>그린 시각: {{ post.created_at }}</p>
-    <p>소요 시간: {{ post.paint_duration }}</p>
+    <p>{{ ftl_post_created_at }}: {{ post.created_at }}</p>
+    <p>{{ ftl_post_duration }}: {{ post.paint_duration }}</p>
     <img width="{{ post.image_width }}"
          height="{{ post.image_height }}"
-         alt="임시 보관된 그림"
+         alt="{{ ftl_draft_post }}"
          src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
     <form action="/posts/publish" method="post">
       <input type="hidden" name="post_id" value="{{ post.id }}" />
       <p>
-        커뮤니티:
+        {{ ftl_community }}:
         <a href="{{ link }}">{{ post.community_name }}</a>
       </p>
       <p>
-        <label for="title">제목:</label>
+        <label for="title">{{ ftl_post_title }}:</label>
         <input type="text" name="title" />
       </p>
       <p>
-        <label for="content">내용:</label>
+        <label for="content">{{ ftl_post_description }}:</label>
         <textarea name="content"></textarea>
       </p>
       <p>
-        <label for="is_sensitive">민감한 내용:</label>
+        <label for="is_sensitive">{{ ftl_sensitive }}:</label>
         <input type="checkbox" name="is_sensitive" />
       </p>
-      <input type="submit" value="게시" />
+      <input type="submit" value="{{ ftl_post_publish }}" />
     </form>
   </div>
 {% endblock body %}

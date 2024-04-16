@@ -5,6 +5,7 @@ use crate::models::post::{
     increment_post_viewer_count, publish_post,
 };
 use crate::models::user::AuthSession;
+use crate::web::handlers::{create_base_ftl_context, get_bundle};
 use crate::web::state::AppState;
 use axum::extract::Path;
 use axum::response::{IntoResponse, Redirect};
@@ -14,9 +15,12 @@ use minijinja::context;
 use serde::Deserialize;
 use uuid::Uuid;
 
+use super::ExtractAcceptLanguage;
+
 pub async fn post_view(
     auth_session: AuthSession,
     State(state): State<AppState>,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
@@ -55,6 +59,12 @@ pub async fn post_view(
 
     let encoded_community_id = BASE64URL_NOPAD.encode(community_id.as_bytes());
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.html").unwrap();
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
@@ -67,6 +77,7 @@ pub async fn post_view(
             draft_post_count,
             base_url => state.config.base_url.clone(),
             comments,
+            ..create_base_ftl_context(&bundle)
         })
         .unwrap();
     Ok(Html(rendered).into_response())
@@ -74,6 +85,7 @@ pub async fn post_view(
 
 pub async fn post_replay_view(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -119,6 +131,12 @@ pub async fn post_replay_view(
     };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename).unwrap();
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
@@ -129,6 +147,7 @@ pub async fn post_replay_view(
             encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
             encoded_community_id,
             draft_post_count,
+            ..create_base_ftl_context(&bundle),
         })
         .unwrap();
     Ok(Html(rendered).into_response())
@@ -136,6 +155,7 @@ pub async fn post_replay_view(
 
 pub async fn post_publish_form(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -172,7 +192,12 @@ pub async fn post_publish_form(
     );
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.html")?;
-
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
         link,
@@ -181,6 +206,7 @@ pub async fn post_publish_form(
             post
         },
         draft_post_count,
+        ..create_base_ftl_context(&bundle)
     })?;
 
     Ok(Html(rendered).into_response())
@@ -241,6 +267,7 @@ pub async fn post_publish(
 
 pub async fn draft_posts(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
     let db = state.config.connect_database().await?;
@@ -255,11 +282,18 @@ pub async fn draft_posts(
         find_draft_posts_by_author_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("draft_posts.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         current_user => auth_session.user,
         posts => posts,
         draft_post_count,
+        ..create_base_ftl_context(&bundle),
     })?;
 
     Ok(Html(rendered))

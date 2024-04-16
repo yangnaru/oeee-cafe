@@ -3,7 +3,7 @@
   {{ super() }} | {{ title }}
 {% endblock title %}
 {% block body %}
-  <h2 class="center">{{ title }}</h2>
+  <h2 class="center">{{ ftl_community_drawing_new }}</h2>
   <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
   <script src="/static/neo/dist/neo.js" charset="utf-8"></script>
   <script>
@@ -48,7 +48,7 @@
         })
         .catch((error) => {
           alert(
-            "그림을 게시하는 도중 오류가 발생했습니다. 다시 제출해 보세요."
+            "{{ ftl_community_drawing_post_error }}"
           );
         });
 

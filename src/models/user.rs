@@ -8,7 +8,7 @@ use axum_login::{AuthUser, AuthnBackend, UserId};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::types::Uuid;
-use sqlx::{query, query_as, PgPool, Postgres, Transaction};
+use sqlx::{query, query_as, PgPool, Postgres, Transaction, Type};
 
 pub struct UserDraft {
     pub login_name: String,
@@ -37,6 +37,14 @@ impl UserDraft {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Type)]
+#[sqlx(type_name = "preferred_language", rename_all = "lowercase")]
+pub enum Language {
+    Ko,
+    Ja,
+    En,
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct User {
     pub id: Uuid,
@@ -49,6 +57,7 @@ pub struct User {
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub banner_id: Option<Uuid>,
+    pub preferred_language: Option<Language>,
 }
 
 impl User {
@@ -60,19 +69,72 @@ impl User {
     }
 }
 
+pub async fn update_user_preferred_language(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    preferred_language: Option<Language>,
+) -> Result<User> {
+    let q = query_as!(
+        User,
+        r#"
+            UPDATE users
+            SET preferred_language = $1, updated_at = now()
+            WHERE id = $2
+            RETURNING
+                id,
+                login_name,
+                password_hash,
+                display_name,
+                email,
+                email_verified_at,
+                created_at,
+                updated_at,
+                banner_id,
+                preferred_language AS "preferred_language: _"
+        "#,
+        preferred_language as _,
+        id,
+    );
+    let result = q.fetch_one(&mut **tx).await?;
+
+    Ok(User {
+        id: result.id,
+        login_name: result.login_name,
+        password_hash: result.password_hash,
+        display_name: result.display_name,
+        email: result.email,
+        email_verified_at: result.email_verified_at,
+        created_at: result.created_at,
+        updated_at: result.updated_at,
+        banner_id: result.banner_id,
+        preferred_language: result.preferred_language,
+    })
+}
+
 pub async fn update_user_email_verified_at(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
     email: String,
     email_verified_at: DateTime<Utc>,
 ) -> Result<User> {
-    let q = query!(
-        "
+    let q = query_as!(
+        User,
+        r#"
             UPDATE users
             SET email = $1, email_verified_at = $2, updated_at = now()
             WHERE id = $3
-            RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at, banner_id
-        ",
+            RETURNING
+                id,
+                login_name,
+                password_hash,
+                display_name,
+                email,
+                email_verified_at,
+                created_at,
+                updated_at,
+                banner_id,
+                preferred_language AS "preferred_language: _"
+        "#,
         email,
         email_verified_at,
         id,
@@ -89,6 +151,7 @@ pub async fn update_user_email_verified_at(
         created_at: result.created_at,
         updated_at: result.updated_at,
         banner_id: result.banner_id,
+        preferred_language: result.preferred_language,
     })
 }
 
@@ -104,13 +167,24 @@ pub async fn update_password(
         .serialize()
         .to_string();
 
-    let q = query!(
-        "
+    let q = query_as!(
+        User,
+        r#"
             UPDATE users
             SET password_hash = $1, updated_at = now()
             WHERE id = $2
-            RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at, banner_id
-        ",
+            RETURNING
+                id,
+                login_name,
+                password_hash,
+                display_name,
+                email,
+                email_verified_at,
+                created_at,
+                updated_at,
+                banner_id,
+                preferred_language AS "preferred_language: _"
+        "#,
         password_hash,
         id,
     );
@@ -126,6 +200,7 @@ pub async fn update_password(
         created_at: result.created_at,
         updated_at: result.updated_at,
         banner_id: result.banner_id,
+        preferred_language: result.preferred_language,
     })
 }
 
@@ -135,13 +210,24 @@ pub async fn update_user(
     login_name: String,
     display_name: String,
 ) -> Result<User> {
-    let q = query!(
-        "
+    let q = query_as!(
+        User,
+        r#"
             UPDATE users
             SET login_name = $1, display_name = $2, updated_at = now()
             WHERE id = $3
-            RETURNING id, login_name, password_hash, display_name, email, email_verified_at, created_at, updated_at, banner_id
-        ",
+            RETURNING
+                id,
+                login_name,
+                password_hash,
+                display_name,
+                email,
+                email_verified_at,
+                created_at,
+                updated_at,
+                banner_id,
+                preferred_language AS "preferred_language: _"
+        "#,
         login_name,
         display_name,
         id,
@@ -158,6 +244,7 @@ pub async fn update_user(
         created_at: result.created_at,
         updated_at: result.updated_at,
         banner_id: result.banner_id,
+        preferred_language: result.preferred_language,
     })
 }
 
@@ -191,11 +278,29 @@ pub async fn create_user(
         created_at: result.created_at,
         updated_at: result.updated_at,
         banner_id: None,
+        preferred_language: None,
     })
 }
 
 pub async fn find_user_by_id(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<Option<User>> {
-    let q = query_as!(User, "SELECT * FROM users WHERE id = $1", id);
+    let q = query_as!(
+        User,
+        r#"
+        SELECT
+            id,
+            login_name,
+            password_hash,
+            display_name,
+            email,
+            email_verified_at,
+            created_at,
+            updated_at,
+            banner_id,
+            preferred_language AS "preferred_language: _"
+        FROM users
+        WHERE id = $1"#,
+        id
+    );
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
@@ -205,7 +310,20 @@ pub async fn find_user_by_login_name(
 ) -> Result<Option<User>> {
     let q = query_as!(
         User,
-        "SELECT * FROM users WHERE login_name = $1",
+        r#"
+        SELECT
+            id,
+            login_name,
+            password_hash,
+            display_name,
+            email,
+            email_verified_at,
+            created_at,
+            updated_at,
+            banner_id,
+            preferred_language AS "preferred_language: _"
+        FROM users
+        WHERE login_name = $1"#,
         login_name
     );
     Ok(q.fetch_optional(&mut **tx).await?)
@@ -247,7 +365,20 @@ impl AuthnBackend for Backend {
     ) -> Result<Option<Self::User>, Self::Error> {
         let q = query_as!(
             User,
-            "SELECT * FROM users WHERE login_name = $1",
+            r#"
+            SELECT
+                id,
+                login_name,
+                password_hash,
+                display_name,
+                email,
+                email_verified_at,
+                created_at,
+                updated_at,
+                banner_id,
+                preferred_language AS "preferred_language: _"
+            FROM users
+            WHERE login_name = $1"#,
             creds.login_name
         );
         let user = q.fetch_optional(&self.db).await?;
@@ -256,7 +387,23 @@ impl AuthnBackend for Backend {
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
-        let q = query_as!(User, "SELECT * FROM users WHERE id = $1", user_id);
+        let q = query_as!(
+            User,
+            r#"SELECT
+                id,
+                login_name,
+                password_hash,
+                display_name,
+                email,
+                email_verified_at,
+                created_at,
+                updated_at,
+                banner_id,
+                preferred_language AS "preferred_language: _"
+            FROM users
+            WHERE id = $1"#,
+            user_id
+        );
         Ok(q.fetch_optional(&self.db).await?)
     }
 }

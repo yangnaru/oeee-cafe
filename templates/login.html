@@ -3,17 +3,17 @@
   <div class="center">
     <form method="post">
       <fieldset>
-        <legend>로그인</legend>
+        <legend>{{ ftl_sign_in }}</legend>
         <p>
-          <label for="login_name">아이디</label>
+          <label for="login_name">{{ ftl_login_name }}</label>
           <input name="login_name" id="login_name" />
         </p>
         <p>
-          <label for="password">비밀번호</label>
+          <label for="password">{{ ftl_password }}</label>
           <input name="password" id="password" type="password" />
         </p>
       </fieldset>
-      <input type="submit" value="로그인" />
+      <input type="submit" value="{{ ftl_sign_in }}" />
       {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
     </form>
   </div>

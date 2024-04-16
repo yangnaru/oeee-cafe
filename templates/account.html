@@ -1,73 +1,87 @@
 {% extends "base.html" %}
 {% block title %}
-  {{ super() }} | 계정
+  {{ super() }} | {{ ftl_account }}
 {% endblock title %}
 {% block body %}
   <div class="center">
-    <h2>계정</h2>
+    <h2>{{ ftl_account }}</h2>
     <form method="post">
       <fieldset>
-        <legend>기본 정보</legend>
-        <input type="hidden" name="user_id" value="{{ current_user.id }}" />
-        <p>가입일: {{ current_user.created_at|dateformat(format="short", tz="Asia/Seoul") }}</p>
+        <legend>{{ ftl_account_info }}</legend>
+        <p>{{ ftl_account_created_at }}: {{ current_user.created_at|dateformat(format="short", tz="Asia/Seoul") }}</p>
         <p>
-          <label for="login_name">아이디:</label>
+          <label for="login_name">{{ ftl_login_name }}:</label>
           <input name="login_name"
                  id="login_name"
                  autocapitalize="none"
                  value="{{ current_user.login_name }}" />
         </p>
         <p>
-          <label for="display_name">닉네임:</label>
+          <label for="display_name">{{ ftl_display_name }}:</label>
           <input name="display_name"
                  id="display_name"
                  value="{{ current_user.display_name }}" />
         </p>
       </fieldset>
-      <input type="submit" value="수정" />
+      <input type="submit" value="{{ ftl_account_info_edit }}" />
     </form>
     <form method="post" action="/account/password">
       <fieldset>
-        <legend>비밀번호 변경</legend>
-        <input type="hidden" name="user_id" value="{{ current_user.id }}" />
+        <legend>{{ ftl_account_change_password }}</legend>
         <p>
-          <label for="current_password">현재 비밀번호:</label>
+          <label for="current_password">{{ ftl_account_change_password_current }}:</label>
           <input name="current_password" id="current_password" type="password" />
         </p>
         <p>
-          <label for="new_password">새 비밀번호:</label>
+          <label for="new_password">{{ ftl_account_change_password_new }}:</label>
           <input name="new_password" id="new_password" type="password" />
         </p>
         <p>
-          <label for="new_password_confirm">새 비밀번호 (한 번 더):</label>
+          <label for="new_password_confirm">{{ ftl_account_change_password_new_repeat }}:</label>
           <input name="new_password_confirm" id="new_password_confirm" type="password" />
         </p>
       </fieldset>
-      <input type="submit" value="수정" />
+      <input type="submit" value="{{ ftl_account_info_edit }}" />
     </form>
     <form hx-post="/account/request-verify-email" hx-swap="outerHTML">
       <fieldset>
-        <legend>이메일 변경</legend>
+        <legend>{{ ftl_account_change_email }}</legend>
         {% if current_user.email_verified_at %}
           <p>
-            이메일 인증: {{ current_user.email_verified_at|dateformat(format="short",
+            {{ ftl_account_change_email_verified_at }}: {{ current_user.email_verified_at|dateformat(format="short",
              tz="Asia/Seoul") }}
           </p>
         {% else %}
-          <p class="dangerous">
-            이메일이 인증되지 않았습니다. 비밀번호를 분실하면 계정을 다시 찾을 수
-            없습니다.
-          </p>
+          <p class="dangerous">{{ ftl_account_email_not_verified_warning }}</p>
         {% endif %}
         <p>
-          <label for="email">이메일:</label>
+          <label for="email">{{ ftl_account_change_email_email }}:</label>
           <input name="email"
                  id="email"
                  type="email"
                  value="{%- if current_user.email -%}{{ current_user.email }}{%- endif -%}" />
         </p>
       </fieldset>
-      <input type="submit" value="이메일 인증 요청" />
+      <input type="submit" value="{{ ftl_account_verify_email_request }}" />
+    </form>
+    <form action="/account/language" method="post">
+      <fieldset>
+        <legend>{{ ftl_account_language_settings }}</legend>
+        <p>
+          <label for="language">{{ ftl_account_language_current }}:</label>
+          <select name="language" id="language">
+            {% for code, name in languages %}
+              <option value="{{ code }}"
+                      {% if code == current_user.preferred_language|lower %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+            <option value="auto"
+                    {% if not current_user.preferred_language %}selected{% endif %}>
+              {{ ftl_account_language_auto }}
+            </option>
+          </select>
+        </p>
+      </fieldset>
+      <input type="submit" value="{{ ftl_account_language_settings_save }}" />
     </form>
   </div>
 {% endblock body %}

@@ -3,28 +3,28 @@
   <div class="center">
     <form method="post">
       <fieldset>
-        <legend>회원가입</legend>
+        <legend>{{ ftl_sign_up }}</legend>
         <p>
-          <label for="login_name">아이디</label>
+          <label for="login_name">{{ ftl_login_name }}</label>
           <input name="login_name" id="login_name" autocapitalize="none" required />
         </p>
         <p>
-          <label for="password">비밀번호</label>
+          <label for="password">{{ ftl_password }}</label>
           <input name="password" id="password" type="password" required />
         </p>
         <p>
-          <label for="password_confirm">비밀번호 (한 번 더)</label>
+          <label for="password_confirm">{{ ftl_password_repeat }}</label>
           <input name="password_confirm"
                  id="password_confirm"
                  type="password"
                  required />
         </p>
         <p>
-          <label for="display_name">닉네임</label>
+          <label for="display_name">{{ ftl_display_name }}</label>
           <input name="display_name" id="display_name" required />
         </p>
       </fieldset>
-      <input type="submit" value="회원가입" />
+      <input type="submit" value="{{ ftl_sign_up }}" />
     </form>
   </div>
 {% endblock body %}

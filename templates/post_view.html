@@ -5,7 +5,7 @@
   {% if post.title %}
     {{ post.title }}
   {% else %}
-    무제
+    {{ ftl_post_no_title }}
   {% endif %}
 {% endblock title %}
 {% block head %}
@@ -21,14 +21,14 @@
   <div class="center">
     <div class="post-sidebar">
       <div class="post-main">
-        <p>그린 시각: {{ post.created_at }}</p>
+        <p>{{ ftl_post_published_at }}: {{ post.published_at }}</p>
         <p>
-          소요 시간: {{ post.paint_duration }}
-          <a href="/posts/{{ encoded_post_id }}/replay">리플레이</a>
+          {{ ftl_post_duration }}: {{ post.paint_duration }}
+          <a href="/posts/{{ encoded_post_id }}/replay">{{ ftl_post_replay }}</a>
         </p>
         <p>HIT: {{ post.viewer_count }}</p>
         <p>
-          커뮤니티:
+          {{ ftl_community }}:
           <a href="/communities/{{ encoded_community_id }}">{{ post.community_name }}</a>
         </p>
         <img class="post-image"
@@ -38,18 +38,18 @@
              src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
         <div class="center">
           <p>
-            그린이: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted">@{{ post.login_name }}</span>
+            {{ ftl_post_author }}: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted">@{{ post.login_name }}</span>
           </p>
           <p>
-            제목:
+            {{ ftl_post_title }}:
             {% if post.title %}
               {{ post.title }}
             {% else %}
-              무제
+              {{ ftl_post_no_title }}
             {% endif %}
           </p>
           <p>
-            내용: <pre>{{ post.content }}</pre>
+            {{ ftl_post_description }}: <pre>{{ post.content }}</pre>
           </p>
           <a href="https://twitter.com/share?ref_src=twsrc%5Etfw"
              class="twitter-share-button"
@@ -60,11 +60,11 @@
         </div>
       </div>
       <div class="post-comments">
-        <h2>댓글</h2>
+        <h2>{{ ftl_post_comments }}</h2>
         <form hx-post="/comments" hx-swap="outerHTML">
           <input type="hidden" name="post_id" value="{{ encoded_post_id }}">
           <textarea name="content"></textarea>
-          <button type="submit">댓글 달기</button>
+          <button type="submit">{{ ftl_post_comment }}</button>
         </form>
         {% if comments %}{{ comments_macro.comments(comments) }}{% endif %}
       </div>

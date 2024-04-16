@@ -5,6 +5,7 @@ use crate::models::community::{
 };
 use crate::models::post::{find_published_posts_by_community_id, get_draft_post_count};
 use crate::models::user::AuthSession;
+use crate::web::handlers::create_base_ftl_context;
 use crate::web::state::AppState;
 use axum::extract::Path;
 use axum::response::{IntoResponse, Redirect};
@@ -16,8 +17,11 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use super::{get_bundle, ExtractAcceptLanguage};
+
 pub async fn community(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -38,6 +42,12 @@ pub async fn community(
         None => 0,
     };
 
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let template: minijinja::Template<'_, '_> = state.env.get_template("community.html")?;
     let rendered = template.render(context! {
         community => community,
@@ -58,6 +68,7 @@ pub async fn community(
             ])
         }).collect::<Vec<_>>(),
         draft_post_count,
+        ..create_base_ftl_context(&bundle),
     })?;
 
     Ok(Html(rendered).into_response())
@@ -65,6 +76,7 @@ pub async fn community(
 
 pub async fn communities(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     messages: Messages,
 ) -> Result<Html<String>, AppError> {
@@ -131,13 +143,19 @@ pub async fn communities(
     };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("communities.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.clone().render(context! {
-        title => "홈",
         current_user => auth_session.user,
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count,
         public_communities,
         own_communities,
+        ..create_base_ftl_context(&bundle)
     })?;
 
     Ok(Html(rendered))
@@ -174,6 +192,7 @@ pub async fn do_create_community(
 
 pub async fn create_community_form(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
     let db: sqlx::Pool<sqlx::Postgres> = state.config.connect_database().await?;
@@ -186,10 +205,16 @@ pub async fn create_community_form(
     };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("create_community.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
-        title => "커뮤니티 생성",
         current_user => auth_session.user,
         draft_post_count,
+        ..create_base_ftl_context(&bundle)
     })?;
 
     Ok(Html(rendered))
