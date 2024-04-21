@@ -190,3 +190,7 @@ nav a:visited {
 .post-comments {
   flex-grow: 1;
 }
+
+.post-content {
+  white-space: pre-wrap;
+}
