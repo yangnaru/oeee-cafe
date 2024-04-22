@@ -15,7 +15,7 @@
   <meta property="og:url"
         content="{{ base_url }}/posts/{{ encoded_post_id }}" />
   <meta property="og:image"
-        content="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+        content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
   <meta property="twitter:site" content="@oeee_cafe">
   <meta property="twitter:domain" content="oeee.cafe">
   <meta name="twitter:card" content="summary_large_image">
@@ -24,7 +24,7 @@
   <meta name="twitter:title" content="{{ post.title }}">
   <meta name="twitter:description" content="{{ post.content }}">
   <meta name="twitter:image"
-        content="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}">
+        content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}">
 {% endblock head %}
 {% block body %}
   <div class="center">
@@ -44,7 +44,7 @@
              width="{{ post.image_width }}"
              height="{{ post.image_height }}"
              alt="{{ post.title }}"
-             src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+             src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
         <div class="center">
           <p>
             {{ ftl_post_author }}: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted">@{{ post.login_name }}</span>
