@@ -23,6 +23,7 @@ nav a:visited {
 #menubar {
   display: flex;
   flex-direction: row;
+  flex-flow: wrap;
   gap: 8px;
 }
 
