@@ -45,10 +45,7 @@ where
         if let Some(accept_language) = parts.headers.get(ACCEPT_LANGUAGE) {
             Ok(ExtractAcceptLanguage(accept_language.clone()))
         } else {
-            Err((
-                StatusCode::BAD_REQUEST,
-                "`Accept-Lanaguage` header is missing",
-            ))
+            Ok(ExtractAcceptLanguage(HeaderValue::from_static("")))
         }
     }
 }
