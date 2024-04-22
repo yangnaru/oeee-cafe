@@ -31,15 +31,15 @@
           <div>
             <a href="/about">{{ ftl_brand }}?</a>
           </div>
+          <div>
+            <a href="/communities">{{ ftl_community }}</a>
+          </div>
           {% if current_user %}
             {% if draft_post_count > 0 %}
               <div>
                 <a href="/posts/drafts">{{ ftl_drafts }} ({{ draft_post_count }})</a>
               </div>
             {% endif %}
-            <div>
-              <a href="/communities">{{ ftl_community }}</a>
-            </div>
             <div>
               <a href="/@{{ current_user.login_name }}">{{ ftl_profile }}</a>
             </div>

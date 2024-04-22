@@ -458,6 +458,54 @@ pub async fn publish_post(
     Ok(())
 }
 
+pub async fn find_public_community_posts(
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<Vec<SerializablePost>> {
+    let q = query!(
+        "
+            SELECT
+                posts.id,
+                posts.title,
+                posts.author_id,
+                images.paint_duration,
+                images.stroke_count,
+                images.image_filename,
+                images.width,
+                images.height,
+                images.replay_filename,
+                posts.viewer_count,
+                posts.published_at,
+                posts.created_at,
+                posts.updated_at
+            FROM posts
+            LEFT JOIN images ON posts.image_id = images.id
+            LEFT JOIN communities ON posts.community_id = communities.id
+            WHERE communities.is_private = FALSE
+            AND posts.published_at IS NOT NULL
+            ORDER BY posts.published_at DESC
+        "
+    );
+    let result = q.fetch_all(&mut **tx).await?;
+    Ok(result
+        .into_iter()
+        .map(|row| SerializablePost {
+            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            title: row.title,
+            author_id: row.author_id,
+            paint_duration: row.paint_duration.microseconds.to_string(),
+            stroke_count: row.stroke_count,
+            image_filename: row.image_filename,
+            image_width: row.width,
+            image_height: row.height,
+            replay_filename: row.replay_filename,
+            viewer_count: row.viewer_count,
+            published_at: row.published_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+        .collect())
+}
+
 pub async fn find_following_posts_by_user_id(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
