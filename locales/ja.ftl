@@ -4,6 +4,10 @@ about = お絵かきの発音はOEEEカフェに似ています。
   お絵かきができるOEEEカフェです。
 
 timeline = タイムライン
+timeline-public = 公開タイムライン
+timeline-my = 私のタイムライン
+timeline-empty = タイムラインが空です。 <a href="/communities">コミュニティ</a>で他の人と同盟を結びましょう！
+
 home = ホーム
 drafts = 一時保管箱
 profile = プロフィール
@@ -24,7 +28,6 @@ display-name = ニックネーム
 
 latest-active-public-community = 最近の活動公開コミュニティ
 recent-drawings = 最近のお絵かき
-timeline-empty = タイムラインが空です。 <a href="/communities">コミュニティ</a>で他の人と同盟を結びましょう！
 
 post-created-at = 絵を描いた時刻
 post-published-at = 発行時刻

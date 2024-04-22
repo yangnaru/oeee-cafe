@@ -61,6 +61,10 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_about => bundle.format_pattern(bundle.get_message("about").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_timeline => bundle.format_pattern(bundle.get_message("timeline").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_timeline_public => bundle.format_pattern(bundle.get_message("timeline-public").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_timeline_my => bundle.format_pattern(bundle.get_message("timeline-my").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_timeline_empty => bundle.format_pattern(bundle.get_message("timeline-empty").unwrap().value().unwrap(), None, &mut vec![]),
+
         ftl_home => bundle.format_pattern(bundle.get_message("home").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_drafts => bundle.format_pattern(bundle.get_message("drafts").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_profile => bundle.format_pattern(bundle.get_message("profile").unwrap().value().unwrap(), None, &mut vec![]),
@@ -79,7 +83,6 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
 
         ftl_latest_active_public_community => bundle.format_pattern(bundle.get_message("latest-active-public-community").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_recent_drawings => bundle.format_pattern(bundle.get_message("recent-drawings").unwrap().value().unwrap(), None, &mut vec![]),
-        ftl_timeline_empty => bundle.format_pattern(bundle.get_message("timeline-empty").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_post_created_at => bundle.format_pattern(bundle.get_message("post-created-at").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_published_at => bundle.format_pattern(bundle.get_message("post-published-at").unwrap().value().unwrap(), None, &mut vec![]),

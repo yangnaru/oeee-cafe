@@ -4,6 +4,10 @@ about = 오에카키는 그림을 그릴 수 있는 게시판입니다.
   오이를 깎을 수 있는 카페 오이카페입니다.
 
 timeline = 타임라인
+timeline-public = 공개 타임라인
+timeline-my = 내 타임라인
+timeline-empty = 타임라인이 비어 있습니다. <a href="/communities">커뮤니티</a>에서 다른 사람과 동맹을 맺어 보세요!
+
 home = 홈
 drafts = 임시 보관함
 profile = 프로필
@@ -24,7 +28,6 @@ display-name = 닉네임
 
 latest-active-public-community = 최근 활동 공개 커뮤니티
 recent-drawings = 최근 그림
-timeline-empty = 타임라인이 비어 있습니다. <a href="/communities">커뮤니티</a>에서 다른 사람과 동맹을 맺어 보세요!
 
 post-created-at = 그린 시각
 post-published-at = 발행 시각

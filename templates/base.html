@@ -35,6 +35,9 @@
             <a href="/communities">{{ ftl_community }}</a>
           </div>
           {% if current_user %}
+            <div>
+              <a href="/home">{{ ftl_timeline }}</a>
+            </div>
             {% if draft_post_count > 0 %}
               <div>
                 <a href="/posts/drafts">{{ ftl_drafts }} ({{ draft_post_count }})</a>

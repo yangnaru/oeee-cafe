@@ -2,6 +2,10 @@ brand = Oeee Cafe
 about = Oeee Cafe is an oekaki board.
 
 timeline = Timeline
+timeline-public = Public timeline
+timeline-my = My timeline
+timeline-empty = Your timeline is empty. Discover and follow other people from <a href="/communities">communities</a>!
+
 home = Home
 drafts = Drafts
 profile = Profile
@@ -22,7 +26,6 @@ display-name = Display name
 
 latest-active-public-community = Recently active public communities
 recent-drawings = Recent posts
-timeline-empty = Your timeline is empty. Discover and follow other people from <a href="/communities">communities</a>!
 
 post-created-at = Created
 post-published-at = Published

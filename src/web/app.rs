@@ -11,7 +11,7 @@ use crate::web::handlers::community::{
 };
 use crate::web::handlers::draw::{banner_draw_finish, draw_finish, start_banner_draw, start_draw};
 use crate::web::handlers::handler_404;
-use crate::web::handlers::home::home;
+use crate::web::handlers::home::{home, my_timeline};
 use crate::web::handlers::post::{
     do_create_comment, draft_posts, post_publish, post_publish_form, post_replay_view, post_view,
 };
@@ -82,6 +82,7 @@ impl App {
             .nest_service("/static", ServeDir::new("static"));
 
         let protected_router = Router::new()
+            .route("/home", get(my_timeline))
             .route("/account", get(account))
             .route("/account", post(edit_account))
             .route("/account/password", post(edit_password))
