@@ -16,6 +16,15 @@
         content="{{ base_url }}/posts/{{ encoded_post_id }}" />
   <meta property="og:image"
         content="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+  <meta property="twitter:site" content="@oeee_cafe">
+  <meta property="twitter:domain" content="oeee.cafe">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta property="twitter:url"
+        content="{{ base_url }}/posts/{{ encoded_post_id }}">
+  <meta name="twitter:title" content="{{ post.title }}">
+  <meta name="twitter:description" content="{{ post.content }}">
+  <meta name="twitter:image"
+        content="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}">
 {% endblock head %}
 {% block body %}
   <div class="center">
