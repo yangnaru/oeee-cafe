@@ -411,11 +411,21 @@ pub async fn find_post_by_id(
         let created_at_human_readable = created_at_seoul.format("%Y-%m-%d %H:%M").to_string();
         map.insert("created_at".to_string(), Some(created_at_human_readable));
 
-        map.insert(
-            "published_at".to_string(),
-            row.published_at
-                .map(|published_at| published_at.format("%Y-%m-%d %H:%M").to_string()),
-        );
+        match row.published_at {
+            None => {
+                map.insert("published_at".to_string(), None);
+            }
+            Some(published_at) => {
+                let published_at_seoul = published_at.with_timezone(&Seoul);
+                let published_at_human_readable =
+                    published_at_seoul.format("%Y-%m-%d %H:%M").to_string();
+                map.insert(
+                    "published_at".to_string(),
+                    Some(published_at_human_readable),
+                );
+            }
+        }
+
         map.insert(
             "updated_at".to_string(),
             Some(row.updated_at.format("%Y-%m-%d %H:%M").to_string()),
