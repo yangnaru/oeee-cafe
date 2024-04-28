@@ -1,5 +1,6 @@
 brand = Oeee Cafe
 about = Oeee Cafe is an oekaki board.
+email-from-address = Oeee Cafe <noreply@oeee.cafe>
 
 timeline = Timeline
 timeline-public = Public timeline

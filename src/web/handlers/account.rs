@@ -316,7 +316,20 @@ pub async fn request_email_verification_code(
     let _ = tx.commit().await;
 
     let email = Message::builder()
-        .from(state.config.email_from_address.clone().parse().unwrap())
+        .from(
+            bundle
+                .format_pattern(
+                    bundle
+                        .get_message("email-from-address")
+                        .unwrap()
+                        .value()
+                        .unwrap(),
+                    None,
+                    &mut vec![],
+                )
+                .parse()
+                .unwrap(),
+        )
         .to(form.email.clone().parse().unwrap())
         .subject(
             bundle.format_pattern(

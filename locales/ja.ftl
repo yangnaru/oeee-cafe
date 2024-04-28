@@ -2,6 +2,7 @@ brand = OEEEカフェ
 about = お絵かきの発音はOEEEカフェに似ています。
   OEEEは韓国語でキュウリという意味です。
   お絵かきができるOEEEカフェです。
+email-from-address = OEEEカフェ <noreply@oeee.cafe>
 
 timeline = タイムライン
 timeline-public = 公開タイムライン

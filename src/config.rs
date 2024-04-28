@@ -27,7 +27,6 @@ pub struct AppConfig {
     pub smtp_port: u16,
     pub smtp_user: String,
     pub smtp_password: String,
-    pub email_from_address: String,
 }
 
 impl AppConfig {
