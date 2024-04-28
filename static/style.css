@@ -196,6 +196,12 @@ nav a:visited {
   white-space: pre-wrap;
 }
 
+.post-menu {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
 .post-share {
   padding: 8px 0;
 }
