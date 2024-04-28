@@ -27,5 +27,10 @@
       </p>
       <input type="submit" value="{{ ftl_post_publish }}" />
     </form>
+    <form hx-delete="/posts/{{ encoded_post_id }}"
+          hx-confirm="{{ ftl_post_delete_confirm }}"
+          hx-target="body">
+      <button type="submit">{{ ftl_post_delete }}</button>
+    </form>
   </div>
 {% endblock body %}

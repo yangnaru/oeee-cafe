@@ -3,6 +3,7 @@ about = お絵かきの発音はOEEEカフェに似ています。
   OEEEは韓国語でキュウリという意味です。
   お絵かきができるOEEEカフェです。
 email-from-address = OEEEカフェ <noreply@oeee.cafe>
+error-404 = ページが見つかりません.
 
 timeline = タイムライン
 timeline-public = 公開タイムライン
@@ -44,6 +45,8 @@ post-publish = 公開
 post-edit = 修正
 post-save = 保存
 post-edit-cancel = キャンセル
+post-delete = 削除
+post-delete-confirm = 本当にこの画像を削除しますか？
 
 sensitive = 敏感な内容
 draft-post = 一時保管された図

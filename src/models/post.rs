@@ -79,6 +79,7 @@ pub async fn find_posts_by_community_id(
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             WHERE community_id = $1
+            AND posts.deleted_at IS NULL
         ",
         community_id
     );
@@ -111,7 +112,11 @@ pub async fn get_draft_post_count(
 ) -> Result<i64> {
     let q = query!(
         "
-            SELECT COUNT(*) FROM posts WHERE author_id = $1 AND published_at IS NULL
+            SELECT COUNT(*)
+            FROM posts
+            WHERE author_id = $1
+            AND published_at IS NULL
+            AND deleted_at IS NULL 
         ",
         author_id
     );
@@ -145,6 +150,7 @@ pub async fn find_published_public_posts_by_author_id(
             WHERE author_id = $1
             AND communities.is_private = FALSE
             AND published_at IS NOT NULL
+            AND posts.deleted_at IS NULL
             ORDER BY published_at DESC
         ",
         author_id
@@ -194,6 +200,7 @@ pub async fn find_draft_posts_by_author_id(
             LEFT JOIN images ON posts.image_id = images.id
             WHERE author_id = $1
             AND published_at IS NULL
+            AND posts.deleted_at IS NULL
         ",
         author_id
     );
@@ -242,6 +249,7 @@ pub async fn find_published_posts_by_community_id(
             LEFT JOIN images ON posts.image_id = images.id
             WHERE community_id = $1
             AND published_at IS NOT NULL
+            AND posts.deleted_at IS NULL
             ORDER BY published_at DESC
         ",
         community_id
@@ -357,6 +365,7 @@ pub async fn find_post_by_id(
                 posts.content,
                 posts.is_sensitive,
                 posts.author_id,
+                images.id AS image_id,
                 images.paint_duration,
                 images.width,
                 images.height,
@@ -375,6 +384,7 @@ pub async fn find_post_by_id(
             LEFT JOIN communities ON posts.community_id = communities.id
             LEFT JOIN users ON posts.author_id = users.id
             WHERE posts.id = $1
+            AND posts.deleted_at IS NULL
         ",
         id
     );
@@ -390,7 +400,8 @@ pub async fn find_post_by_id(
         map.insert("content".to_string(), row.content);
         map.insert(
             "is_sensitive".to_string(),
-            Some(row.is_sensitive.to_string()),
+            row.is_sensitive
+                .map(|is_sensitive| is_sensitive.to_string()),
         );
 
         let paint_duration = Duration::try_seconds(row.paint_duration.microseconds / 1000000)
@@ -403,6 +414,7 @@ pub async fn find_post_by_id(
             Some(paint_duration_human_readable.to_string()),
         );
 
+        map.insert("image_id".to_string(), Some(row.image_id.to_string()));
         map.insert("image_width".to_string(), Some(row.width.to_string()));
         map.insert("image_height".to_string(), Some(row.height.to_string()));
         map.insert("image_filename".to_string(), Some(row.image_filename));
@@ -522,6 +534,7 @@ pub async fn find_public_community_posts(
             LEFT JOIN communities ON posts.community_id = communities.id
             WHERE communities.is_private = FALSE
             AND posts.published_at IS NOT NULL
+            AND posts.deleted_at IS NULL
             ORDER BY posts.published_at DESC
         "
     );
@@ -573,6 +586,7 @@ pub async fn find_following_posts_by_user_id(
             WHERE follows.follower_id = $1
             AND communities.is_private = FALSE
             AND posts.published_at IS NOT NULL
+            AND posts.deleted_at IS NULL
             ORDER BY posts.published_at DESC
         ",
         user_id
@@ -596,4 +610,37 @@ pub async fn find_following_posts_by_user_id(
             updated_at: row.updated_at,
         })
         .collect())
+}
+
+pub async fn delete_post(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<()> {
+    let q = query!(
+        "
+        UPDATE posts
+        SET
+            deleted_at = now(),
+            title = NULL,
+            content = NULL,
+            is_sensitive = NULL
+        WHERE id = $1
+        RETURNING image_id
+    ",
+        id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    println!("image_id: {:?}", q.image_id);
+
+    query!(
+        "
+        UPDATE images
+        SET deleted_at = now()
+        WHERE id = $1
+        ",
+        q.image_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
 }

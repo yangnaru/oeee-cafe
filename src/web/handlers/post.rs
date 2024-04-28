@@ -1,12 +1,17 @@
 use crate::app_error::AppError;
 use crate::models::comment::{create_comment, find_comments_by_post_id, CommentDraft};
+use crate::models::image::find_image_by_id;
 use crate::models::post::{
-    edit_post, find_draft_posts_by_author_id, find_post_by_id, get_draft_post_count,
+    delete_post, edit_post, find_draft_posts_by_author_id, find_post_by_id, get_draft_post_count,
     increment_post_viewer_count, publish_post,
 };
 use crate::models::user::AuthSession;
 use crate::web::handlers::{create_base_ftl_context, get_bundle};
 use crate::web::state::AppState;
+use anyhow::Error;
+use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
+use aws_sdk_s3::types::{Delete, ObjectIdentifier};
+use aws_sdk_s3::Client;
 use axum::extract::Path;
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
@@ -16,7 +21,7 @@ use minijinja::context;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::ExtractAcceptLanguage;
+use super::{handler_404, ExtractAcceptLanguage};
 
 pub async fn post_view(
     auth_session: AuthSession,
@@ -35,7 +40,16 @@ pub async fn post_view(
             increment_post_viewer_count(&mut tx, uuid).await.unwrap();
         }
         None => {
-            return Ok(StatusCode::NOT_FOUND.into_response());
+            return Ok((
+                StatusCode::NOT_FOUND,
+                handler_404(
+                    auth_session,
+                    ExtractAcceptLanguage(accept_language),
+                    State(state),
+                )
+                .await?,
+            )
+                .into_response());
         }
     }
 
@@ -184,6 +198,19 @@ pub async fn post_publish_form(
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
 
+    if post.is_none() {
+        return Ok((
+            StatusCode::NOT_FOUND,
+            handler_404(
+                auth_session,
+                ExtractAcceptLanguage(accept_language),
+                State(state),
+            )
+            .await?,
+        )
+            .into_response());
+    }
+
     if *post
         .clone()
         .unwrap()
@@ -230,6 +257,7 @@ pub async fn post_publish_form(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_post_id => id,
         link,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         post => {
@@ -480,4 +508,101 @@ pub async fn hx_do_edit_post(
         .render_block("post_edit_block")?;
 
     Ok(Html(rendered).into_response())
+}
+
+pub async fn hx_delete_post(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let post_uuid =
+        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let post = find_post_by_id(&mut tx, post_uuid).await?;
+    if post.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if *post
+        .clone()
+        .unwrap()
+        .get("author_id")
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        != auth_session.user.clone().unwrap().id.to_string()
+    {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let image_id = Uuid::parse_str(
+        &post
+            .clone()
+            .unwrap()
+            .get("image_id")
+            .unwrap()
+            .clone()
+            .unwrap(),
+    )
+    .unwrap();
+    let image = find_image_by_id(&mut tx, image_id).await?;
+
+    let keys = [
+        format!(
+            "replay/{}{}/{}",
+            image.replay_filename.chars().next().unwrap(),
+            image.replay_filename.chars().nth(1).unwrap(),
+            image.replay_filename
+        ),
+        format!(
+            "image/{}{}/{}",
+            image.image_filename.chars().next().unwrap(),
+            image.image_filename.chars().nth(1).unwrap(),
+            image.image_filename
+        ),
+    ];
+
+    let credentials: AwsCredentials = AwsCredentials::new(
+        state.config.aws_access_key_id.clone(),
+        state.config.aws_secret_access_key.clone(),
+        None,
+        None,
+        "",
+    );
+    let credentials_provider = SharedCredentialsProvider::new(credentials);
+    let config = aws_sdk_s3::Config::builder()
+        .endpoint_url(state.config.r2_endpoint_url.clone())
+        .region(Region::new(state.config.aws_region.clone()))
+        .credentials_provider(credentials_provider)
+        .behavior_version_latest()
+        .build();
+    let client = Client::from_conf(config);
+    client
+        .delete_objects()
+        .bucket(state.config.aws_s3_bucket)
+        .delete(
+            Delete::builder()
+                .set_objects(Some(
+                    keys.iter()
+                        .map(|key| ObjectIdentifier::builder().key(key).build().unwrap())
+                        .collect::<Vec<_>>(),
+                ))
+                .build()
+                .map_err(Error::from)?,
+        )
+        .send()
+        .await?;
+    delete_post(&mut tx, post_uuid).await?;
+    tx.commit().await?;
+
+    let community_id = post.unwrap().get("community_id").unwrap().clone().unwrap();
+    let encoded_community_id =
+        BASE64URL_NOPAD.encode(Uuid::parse_str(&community_id).as_ref().unwrap().as_bytes());
+    Ok(([(
+        "HX-Redirect",
+        &format!("/communities/{}", encoded_community_id),
+    )],)
+        .into_response())
 }

@@ -63,7 +63,14 @@
                 {{ ftl_post_description }}: <pre class="post-content">{{ post.content }}</pre>
               </p>
               {% if current_user.id == post.author_id %}
-                <button hx-get="/posts/{{ encoded_post_id }}/edit">{{ ftl_post_edit }}</button>
+                <div class="post-menu">
+                  <button hx-get="/posts/{{ encoded_post_id }}/edit">{{ ftl_post_edit }}</button>
+                  <form hx-delete="/posts/{{ encoded_post_id }}"
+                        hx-confirm="{{ ftl_post_delete_confirm }}"
+                        hx-target="body">
+                    <button type="submit">{{ ftl_post_delete }}</button>
+                  </form>
+                </div>
               {% endif %}
             </div>
           {% endblock post_edit_block %}

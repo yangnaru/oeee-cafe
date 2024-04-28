@@ -1,6 +1,7 @@
 brand = Oeee Cafe
 about = Oeee Cafe is an oekaki board.
 email-from-address = Oeee Cafe <noreply@oeee.cafe>
+error-404 = Page not found.
 
 timeline = Timeline
 timeline-public = Public timeline
@@ -42,6 +43,8 @@ post-publish = Publish
 post-edit = Edit
 post-save = Save
 post-edit-cancel = Cancel
+post-delete = Delete
+post-delete-confirm = Are you sure you want to delete this post?
 
 sensitive = Sensitive
 draft-post = Draft post

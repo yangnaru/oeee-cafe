@@ -1,7 +1,11 @@
+use crate::app_error::AppError;
 use crate::locale::LOCALES;
-use crate::models::user::Language;
+use crate::models::post::get_draft_post_count;
+use crate::models::user::{AuthSession, Language};
+use anyhow::Result;
+use axum::extract::State;
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
+use axum::response::{Html, IntoResponse};
 use axum::{
     async_trait,
     extract::FromRequestParts,
@@ -19,6 +23,8 @@ use fluent_langneg::NegotiationStrategy;
 use intl_memoizer::concurrent::IntlLangMemoizer;
 use minijinja::{context, Value};
 
+use super::state::AppState;
+
 pub mod about;
 pub mod account;
 pub mod auth;
@@ -28,8 +34,34 @@ pub mod home;
 pub mod post;
 pub mod profile;
 
-pub async fn handler_404() -> impl IntoResponse {
-    (StatusCode::NOT_FOUND, "nothing to see here")
+pub async fn handler_404(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let db: sqlx::Pool<sqlx::Postgres> = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let template: minijinja::Template<'_, '_> = state.env.get_template("404.html")?;
+    let rendered: String = template.render(context! {
+        current_user => auth_session.user,
+        draft_post_count,
+        ..create_base_ftl_context(&bundle)
+    })?;
+
+    Ok(Html(rendered).into_response())
 }
 
 pub struct ExtractAcceptLanguage(HeaderValue);
@@ -56,6 +88,7 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
 
         ftl_brand => bundle.format_pattern(bundle.get_message("brand").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_about => bundle.format_pattern(bundle.get_message("about").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_error_404 => bundle.format_pattern(bundle.get_message("error-404").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_timeline => bundle.format_pattern(bundle.get_message("timeline").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_timeline_public => bundle.format_pattern(bundle.get_message("timeline-public").unwrap().value().unwrap(), None, &mut vec![]),
@@ -95,6 +128,8 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_post_edit => bundle.format_pattern(bundle.get_message("post-edit").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_save => bundle.format_pattern(bundle.get_message("post-save").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_edit_cancel => bundle.format_pattern(bundle.get_message("post-edit-cancel").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_post_delete => bundle.format_pattern(bundle.get_message("post-delete").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_post_delete_confirm => bundle.format_pattern(bundle.get_message("post-delete-confirm").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_comment_created_at => bundle.format_pattern(bundle.get_message("comment-created-at").unwrap().value().unwrap(), None, &mut vec![]),
 

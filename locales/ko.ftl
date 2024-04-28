@@ -3,6 +3,7 @@ about = 오에카키는 그림을 그릴 수 있는 게시판입니다.
   옛날에는 오에카키를 오이깎이라고도 불렀습니다.
   오이를 깎을 수 있는 카페 오이카페입니다.
 email-from-address = 오이카페 <noreply@oeee.cafe>
+error-404 = 페이지를 찾을 수 없습니다.
 
 timeline = 타임라인
 timeline-public = 공개 타임라인
@@ -44,6 +45,8 @@ post-publish = 게시
 post-edit = 수정
 post-save = 저장
 post-edit-cancel = 취소
+post-delete = 삭제
+post-delete-confirm = 정말 이 그림을 삭제하시겠습니까?
 
 sensitive = 민감한 내용
 draft-post = 임시 보관된 그림
