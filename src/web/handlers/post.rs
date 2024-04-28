@@ -184,6 +184,18 @@ pub async fn post_publish_form(
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
 
+    if *post
+        .clone()
+        .unwrap()
+        .get("author_id")
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        != auth_session.user.clone().unwrap().id.to_string()
+    {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
     let published_at = post.clone().unwrap().get("published_at").unwrap().clone();
     if published_at.is_some() {
         return Ok(Redirect::to(&format!("/posts/{}", id)).into_response());
