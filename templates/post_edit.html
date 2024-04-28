@@ -1,0 +1,20 @@
+<form hx-put="/posts/{{ encoded_post_id }}"
+      hx-target="this"
+      hx-swap="outerHTML">
+    <div>
+        <label>{{ ftl_post_title }}:</label>
+        <input type="text" name="title" value="{{ post.title }}">
+    </div>
+    <div class="form-group">
+        <label>{{ ftl_post_description }}:</label>
+        <textarea name="content">{{ post.content }}</textarea>
+    </div>
+    <div>
+        <label>{{ ftl_sensitive }}:</label>
+        <input type="checkbox"
+               name="is_sensitive"
+               {% if post.is_sensitive == "true" %}checked{% endif %}>
+    </div>
+    <button class="btn">{{ ftl_post_save }}</button>
+    <button class="btn" hx-get="/posts/{{ encoded_post_id }}">{{ ftl_post_edit_cancel }}</button>
+</form>

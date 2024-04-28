@@ -355,6 +355,7 @@ pub async fn find_post_by_id(
                 posts.id,
                 posts.title,
                 posts.content,
+                posts.is_sensitive,
                 posts.author_id,
                 images.paint_duration,
                 images.width,
@@ -387,6 +388,10 @@ pub async fn find_post_by_id(
         map.insert("login_name".to_string(), Some(row.login_name));
         map.insert("title".to_string(), row.title);
         map.insert("content".to_string(), row.content);
+        map.insert(
+            "is_sensitive".to_string(),
+            Some(row.is_sensitive.to_string()),
+        );
 
         let paint_duration = Duration::try_seconds(row.paint_duration.microseconds / 1000000)
             .unwrap()
@@ -454,6 +459,31 @@ pub async fn publish_post(
             UPDATE posts
             SET
                 published_at = now(),
+                title = $1,
+                content = $2,
+                is_sensitive = $3
+            WHERE id = $4
+        ",
+        title,
+        content,
+        is_sensitive,
+        id
+    );
+    q.execute(&mut **tx).await?;
+    Ok(())
+}
+
+pub async fn edit_post(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    title: String,
+    content: String,
+    is_sensitive: bool,
+) -> Result<()> {
+    let q = query!(
+        "
+            UPDATE posts
+            SET
                 title = $1,
                 content = $2,
                 is_sensitive = $3

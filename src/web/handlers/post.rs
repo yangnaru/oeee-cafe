@@ -1,13 +1,14 @@
 use crate::app_error::AppError;
 use crate::models::comment::{create_comment, find_comments_by_post_id, CommentDraft};
 use crate::models::post::{
-    find_draft_posts_by_author_id, find_post_by_id, get_draft_post_count,
+    edit_post, find_draft_posts_by_author_id, find_post_by_id, get_draft_post_count,
     increment_post_viewer_count, publish_post,
 };
 use crate::models::user::AuthSession;
 use crate::web::handlers::{create_base_ftl_context, get_bundle};
 use crate::web::state::AppState;
 use axum::extract::Path;
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
 use data_encoding::BASE64URL_NOPAD;
@@ -19,6 +20,7 @@ use super::ExtractAcceptLanguage;
 
 pub async fn post_view(
     auth_session: AuthSession,
+    headers: HeaderMap,
     State(state): State<AppState>,
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Path(id): Path<String>,
@@ -58,6 +60,7 @@ pub async fn post_view(
     tx.commit().await?;
 
     let encoded_community_id = BASE64URL_NOPAD.encode(community_id.as_bytes());
+
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.html").unwrap();
     let user_preferred_language = auth_session
         .user
@@ -65,22 +68,37 @@ pub async fn post_view(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
-    let rendered = template
-        .render(context! {
-            current_user => auth_session.user,
-            r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-            post => {
-                post.as_ref()
-            },
-            encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
-            encoded_community_id,
-            draft_post_count,
-            base_url => state.config.base_url.clone(),
-            comments,
-            ..create_base_ftl_context(&bundle)
-        })
-        .unwrap();
-    Ok(Html(rendered).into_response())
+
+    if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
+        let rendered = template
+            .eval_to_state(context! {
+                current_user => auth_session.user,
+                post => {
+                    post.as_ref()
+                },
+                encoded_post_id => id,
+                ..create_base_ftl_context(&bundle)
+            })?
+            .render_block("post_edit_block")
+            .unwrap();
+        Ok(Html(rendered).into_response())
+    } else {
+        let rendered = template.render(context! {
+        current_user => auth_session.user,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        post => {
+            post.as_ref()
+        },
+        encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
+        encoded_community_id,
+        draft_post_count,
+        base_url => state.config.base_url.clone(),
+        comments,
+        ..create_base_ftl_context(&bundle)
+    })
+    .unwrap();
+        Ok(Html(rendered).into_response())
+    }
 }
 
 pub async fn post_replay_view(
@@ -335,5 +353,119 @@ pub async fn do_create_comment(
     let rendered = template.render(context! {
         comments => comments,
     })?;
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn hx_edit_post(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let post_uuid =
+        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let post = find_post_by_id(&mut tx, post_uuid).await?;
+
+    if post.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if *post
+        .clone()
+        .unwrap()
+        .get("author_id")
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        != auth_session.user.clone().unwrap().id.to_string()
+    {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_edit.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        post,
+        encoded_post_id => id,
+        ..create_base_ftl_context(&bundle)
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct EditPostForm {
+    pub title: String,
+    pub content: String,
+    pub is_sensitive: Option<String>,
+}
+
+pub async fn hx_do_edit_post(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Form(form): Form<EditPostForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let post_uuid =
+        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let post = find_post_by_id(&mut tx, post_uuid).await?;
+    if post.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if *post
+        .clone()
+        .unwrap()
+        .get("author_id")
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        != auth_session.user.clone().unwrap().id.to_string()
+    {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let _ = edit_post(
+        &mut tx,
+        post_uuid,
+        form.title,
+        form.content,
+        form.is_sensitive == Some("on".to_string()),
+    )
+    .await;
+    let post = find_post_by_id(&mut tx, post_uuid).await?;
+    let _ = tx.commit().await;
+
+    println!("{:?}", post);
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template
+        .eval_to_state(context! {
+            current_user => auth_session.user,
+            post,
+            encoded_post_id => id,
+            ..create_base_ftl_context(&bundle)
+        })?
+        .render_block("post_edit_block")?;
+
     Ok(Html(rendered).into_response())
 }

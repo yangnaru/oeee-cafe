@@ -38,6 +38,9 @@ post-description = Description
 post-comments = Comments
 post-comment = Post comment
 post-publish = Publish
+post-edit = Edit
+post-save = Save
+post-edit-cancel = Cancel
 
 sensitive = Sensitive
 draft-post = Draft post

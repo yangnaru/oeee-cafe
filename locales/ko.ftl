@@ -40,6 +40,9 @@ post-description = 내용
 post-comments = 댓글
 post-comment = 댓글 달기
 post-publish = 게시
+post-edit = 수정
+post-save = 저장
+post-edit-cancel = 취소
 
 sensitive = 민감한 내용
 draft-post = 임시 보관된 그림

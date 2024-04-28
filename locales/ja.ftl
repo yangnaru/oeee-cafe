@@ -40,6 +40,9 @@ post-description = 内容
 post-comments = コメント
 post-comment = コメント
 post-publish = 公開
+post-edit = 修正
+post-save = 保存
+post-edit-cancel = キャンセル
 
 sensitive = 敏感な内容
 draft-post = 一時保管された図
