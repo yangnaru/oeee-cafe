@@ -1,0 +1,10 @@
+ALTER TABLE banners DROP CONSTRAINT banners_author_id_fkey, ADD CONSTRAINT banners_author_id_fkey FOREIGN KEY (author_id) REFERENCES users(id);
+ALTER TABLE comments DROP CONSTRAINT comments_user_id_fkey, ADD CONSTRAINT comments_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+ALTER TABLE comments DROP CONSTRAINT comments_post_id_fkey, ADD CONSTRAINT comments_post_id_fkey FOREIGN KEY (post_id) REFERENCES posts(id);
+ALTER TABLE email_verification_challenges DROP CONSTRAINT email_verification_challenges_user_id_fkey, ADD CONSTRAINT email_verification_challenges_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+ALTER TABLE follows DROP CONSTRAINT follows_follower_id_fkey, ADD CONSTRAINT follows_follower_id_fkey FOREIGN KEY (follower_id) REFERENCES users(id);
+ALTER TABLE follows DROP CONSTRAINT follows_following_id_fkey, ADD CONSTRAINT follows_following_id_fkey FOREIGN KEY (following_id) REFERENCES users(id);
+ALTER TABLE guestbook_entries DROP CONSTRAINT guestbook_entries_author_id_fkey, ADD CONSTRAINT guestbook_entries_author_id_fkey FOREIGN KEY (author_id) REFERENCES users(id);
+ALTER TABLE guestbook_entries DROP CONSTRAINT guestbook_entries_recipient_id_fkey, ADD CONSTRAINT guestbook_entries_recipient_id_fkey FOREIGN KEY (recipient_id) REFERENCES users(id);
+ALTER TABLE links DROP CONSTRAINT links_user_id_fkey, ADD CONSTRAINT links_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id);
+ALTER TABLE posts DROP CONSTRAINT posts_author_id_fkey, ADD CONSTRAINT posts_author_id_fkey FOREIGN KEY (author_id) REFERENCES users(id);
