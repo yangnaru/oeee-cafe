@@ -1,5 +1,6 @@
 use crate::app_error::AppError;
 use crate::models::banner::{create_banner, BannerDraft};
+use crate::models::community::find_community_by_id;
 use crate::models::post::{create_post, get_draft_post_count, PostDraft};
 use crate::models::user::AuthSession;
 use crate::web::handlers::{create_base_ftl_context, get_bundle};
@@ -60,6 +61,10 @@ pub async fn start_draw(
         None => 0,
     };
 
+    let community_id =
+        Uuid::from_slice(&BASE64URL_NOPAD.decode(input.community_id.as_ref()).unwrap()).unwrap();
+    let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
+
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
     let user_preferred_language = auth_session
         .user
@@ -68,6 +73,7 @@ pub async fn start_draw(
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
+        community_name => community.name,
         tool => input.tool,
         width => input.width.parse::<u32>()?,
         height => input.height.parse::<u32>()?,
