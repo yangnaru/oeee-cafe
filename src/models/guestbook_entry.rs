@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 
-use serde::{Serialize};
+use serde::Serialize;
 use sqlx::{query, Postgres, Transaction};
 use uuid::Uuid;
 
