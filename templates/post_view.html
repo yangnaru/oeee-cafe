@@ -77,6 +77,7 @@
           <div class="post-share">
             <a href="https://twitter.com/share?ref_src=twsrc%5Etfw"
                class="twitter-share-button"
+               data-text="{%- if post.title -%}{{ post.title }}{%- else -%}{{ ftl_post_no_title }}{%- endif -%}"
                data-hashtags="oeee_cafe"
                data-related="oeee_cafe"
                data-show-count="false">Tweet</a><script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
