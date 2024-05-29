@@ -1,12 +1,12 @@
 {% import "comments_macro.html" as comments_macro %}
 {% extends "base.html" %}
 {% block title %}
+  {{ super() }} |
   {% if post.title %}
     {{ post.title }}
   {% else %}
     {{ ftl_post_no_title }}
   {% endif %}
-  | {{ super() }}
 {% endblock title %}
 {% block head %}
   <meta property="og:title" content="{{ post.title }}" />
