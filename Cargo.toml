@@ -3,6 +3,10 @@ name = "oeee-cafe"
 version = "0.1.0"
 edition = "2021"
 publish = false
+default-run = "oeee-cafe"
+
+[[bin]]
+name = "cli"
 
 [profile.release]
 debug = true
@@ -18,6 +22,7 @@ axum-login = "0.14.0"
 axum-messages = "0.5.0"
 chrono = { version = "0.4.35", features = ["serde"] }
 chrono-tz = "0.8.6"
+clap = { version = "4.5.4", features = ["derive"] }
 config = "0.14.0"
 data-encoding = "2.5.0"
 data-url = "0.3.1"
@@ -32,6 +37,7 @@ lettre = "0.11.6"
 minijinja = { version = "1.0.12", features = ["loader"] }
 minijinja-contrib = { version = "1.0.12", features = ["datetime", "timezone"] }
 rand = "0.8.5"
+rpassword = "7.3.1"
 sentry = { version = "0.32.2", features = ["anyhow"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_with = "3.7.0"

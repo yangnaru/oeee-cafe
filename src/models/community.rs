@@ -1,5 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use data_encoding::BASE64URL_NOPAD;
 use serde::{Deserialize, Serialize};
 use sqlx::query;
 use sqlx::query_as;
@@ -18,6 +19,15 @@ pub struct Community {
     pub created_at: DateTime<Utc>,
 }
 
+impl Community {
+    pub fn get_url(&self) -> String {
+        format!(
+            "/communities/{}",
+            BASE64URL_NOPAD.encode(self.id.as_bytes())
+        )
+    }
+}
+
 pub struct CommunityDraft {
     pub name: String,
     pub description: String,
@@ -34,6 +44,11 @@ pub async fn get_own_communities(
         owner_id
     );
 
+    Ok(q.fetch_all(&mut **tx).await?)
+}
+
+pub async fn get_communities(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<Community>> {
+    let q = query_as!(Community, "SELECT * FROM communities");
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
