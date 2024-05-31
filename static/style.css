@@ -1,3 +1,8 @@
+:root {
+  --main-bg-color: #c4ee62;
+  --main-border-color: #3c6712;
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -9,15 +14,21 @@ body {
 
 nav {
   padding: 8px;
-  background-color: greenyellow;
+  background-color: var(--main-bg-color);
   border-width: 1px;
-  border-color: green;
+  border-color: var(--main-border-color);
   border-style: solid;
+  color: var(--main-border-color);
 }
 
 h1 > a:visited,
 nav a:visited {
   color: blue;
+}
+
+.logo {
+  margin: 0px;
+  padding: 0px;
 }
 
 #menubar {
@@ -95,7 +106,7 @@ nav a:visited {
 }
 
 .button-follow {
-  background-color: green;
+  background-color: var(--main-bg-color);
   color: white;
   padding: 8px;
   border: solid 1px black;
@@ -104,7 +115,7 @@ nav a:visited {
 }
 
 .button-follow:hover {
-  background-color: darkgreen;
+  background-color: var(--main-border-color);
 }
 
 .button-unfollow {
