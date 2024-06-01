@@ -10,7 +10,7 @@ use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::operation::put_object::{PutObjectError, PutObjectOutput};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Redirect};
 use axum::Json;
 use axum::{
     extract::{Multipart, State},
@@ -38,6 +38,10 @@ pub struct Input {
     height: String,
     tool: String,
     community_id: String,
+}
+
+pub async fn start_draw_get() -> Redirect {
+    Redirect::to("/")
 }
 
 pub async fn start_draw(

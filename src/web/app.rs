@@ -9,7 +9,9 @@ use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::community::{
     communities, community, create_community_form, do_create_community,
 };
-use crate::web::handlers::draw::{banner_draw_finish, draw_finish, start_banner_draw, start_draw};
+use crate::web::handlers::draw::{
+    banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
+};
 use crate::web::handlers::handler_404;
 use crate::web::handlers::home::{home, my_timeline};
 use crate::web::handlers::post::{
@@ -99,6 +101,7 @@ impl App {
             .route("/comments", post(do_create_comment))
             .route("/communities/new", get(create_community_form))
             .route("/logout", post(do_logout))
+            .route("/draw", get(start_draw_get))
             .route("/draw", post(start_draw))
             .route(
                 "/draw/finish",
