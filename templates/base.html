@@ -22,11 +22,12 @@
   <body>
     <header class="center">
       <h1 class="logo">
-        {# <a href="/">{{ ftl_brand }} 🥒</a> #}
-        <img src="/static/logo/{{ ftl_lang }}.svg"
-             alt="{{ ftl_brand }}"
-             height="75px"
-             width="{%- if ftl_lang == "ja" -%} 345px {%- else -%} 270px {%- endif -%}" />
+        <a href="/">
+          <img src="/static/logo/{{ ftl_lang }}.svg"
+               alt="{{ ftl_brand }}"
+               height="75px"
+               width="{%- if ftl_lang == "ja" -%} 345px {%- else -%} 270px {%- endif -%}" />
+        </a>
       </h1>
       <nav>
         <div id="menubar">
