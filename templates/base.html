@@ -74,9 +74,6 @@
                 <span class="dangerous">({{ ftl_email_not_verified }})</span>
               {% endif %}
             </div>
-            <form action="/logout" method="post">
-              <button type="submit">{{ ftl_sign_out }}</button>
-            </form>
           {% else %}
             <a href="/login">{{ ftl_sign_in }}</a>
             <a href="/signup">{{ ftl_sign_up }}</a>

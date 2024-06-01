@@ -83,5 +83,8 @@
       </fieldset>
       <input type="submit" value="{{ ftl_account_language_settings_save }}" />
     </form>
+    <form action="/logout" method="post">
+      <button type="submit">{{ ftl_sign_out }}</button>
+    </form>
   </div>
 {% endblock body %}
