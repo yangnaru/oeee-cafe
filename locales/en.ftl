@@ -1,7 +1,9 @@
 brand = Oeee Cafe
-about = Oeee Cafe is an oekaki board.
 email-from-address = Oeee Cafe <noreply@oeee.cafe>
 error-404 = Page not found.
+
+about = Oeee Cafe is an oekaki board.
+user-contributors = Users who made Oeee Cafe together
 
 timeline = Timeline
 timeline-public = Public timeline

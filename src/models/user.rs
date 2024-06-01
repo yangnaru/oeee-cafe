@@ -329,6 +329,37 @@ pub async fn find_user_by_login_name(
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct UserWithPublicPostAndBanner {
+    pub login_name: String,
+    pub display_name: String,
+    pub banner_image_filename: String,
+}
+
+pub async fn find_users_with_public_posts_and_banner(
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<Vec<UserWithPublicPostAndBanner>> {
+    let q = query_as!(
+        UserWithPublicPostAndBanner,
+        r#"
+        SELECT
+            u.login_name,
+            u.display_name,
+            i.image_filename AS banner_image_filename
+        FROM users u
+        JOIN posts p ON u.id = p.author_id
+        JOIN communities c ON p.community_id = c.id
+        JOIN banners b ON u.banner_id = b.id
+        JOIN images i ON b.image_id = i.id
+        WHERE p.published_at IS NOT NULL
+        AND c.is_private = false
+        GROUP BY u.id, banner_image_filename
+        ORDER BY count(p.id) DESC
+        "#,
+    );
+    Ok(q.fetch_all(&mut **tx).await?)
+}
+
 impl AuthUser for User {
     type Id = Uuid;
 

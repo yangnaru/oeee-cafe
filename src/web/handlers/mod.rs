@@ -90,8 +90,10 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_lang => bundle.locales.get(0).unwrap().to_string(),
 
         ftl_brand => bundle.format_pattern(bundle.get_message("brand").unwrap().value().unwrap(), None, &mut vec![]),
-        ftl_about => bundle.format_pattern(bundle.get_message("about").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_error_404 => bundle.format_pattern(bundle.get_message("error-404").unwrap().value().unwrap(), None, &mut vec![]),
+
+        ftl_about => bundle.format_pattern(bundle.get_message("about").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_user_contributors => bundle.format_pattern(bundle.get_message("user-contributors").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_timeline => bundle.format_pattern(bundle.get_message("timeline").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_timeline_public => bundle.format_pattern(bundle.get_message("timeline-public").unwrap().value().unwrap(), None, &mut vec![]),

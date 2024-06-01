@@ -24,5 +24,22 @@
         Misskey.io: <a href="https://misskey.io/@oeee_cafe">@oeee_cafe</a>
       </li>
     </ul>
+    {% if users_with_public_posts_and_banner|length > 0 %}
+      <h3>{{ ftl_user_contributors }}</h3>
+      <div class="banners-grid">
+        {% for user in users_with_public_posts_and_banner %}
+          <div class="banners-grid-item">
+            <a href="/@{{ user.login_name }}"
+               alt="{{ user.display_name }} (@{{ user.login_name }})">
+              <img width="{{ user.banner_image_width }}"
+                   height="{{ user.banner_image_height }}"
+                   alt="{{ user.display_name }} (@{{ user.login_name }}) 동맹 배너"
+                   class="banner"
+                   src="{{ r2_public_endpoint_url }}/image/{{ user.banner_image_filename[:2] }}/{{ user.banner_image_filename }}" />
+            </a>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
   </div>
 {% endblock body %}

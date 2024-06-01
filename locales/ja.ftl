@@ -1,9 +1,11 @@
 brand = OEEEカフェ
+email-from-address = OEEEカフェ <noreply@oeee.cafe>
+error-404 = ページが見つかりません.
+
 about = お絵かきの発音はOEEEカフェに似ています。
   OEEEは韓国語でキュウリという意味です。
   お絵かきができるOEEEカフェです。
-email-from-address = OEEEカフェ <noreply@oeee.cafe>
-error-404 = ページが見つかりません.
+user-contributors = OEEEカフェを一緒に作った人たち
 
 timeline = タイムライン
 timeline-public = 公開タイムライン
