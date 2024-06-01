@@ -57,7 +57,7 @@ comment-created-at = 時刻
 
 my-communities = 私のコミュニティ
 my-communities-nil = 私が作成したコミュニティはありません。
-active_communities_nil = アクティブなパブリックコミュニティはありません。
+active-communities-nil = アクティブなパブリックコミュニティはありません。
 create-community = コミュニティの作成
 new-community = 新しいコミュニティ
 community-name = コミュニティ名
