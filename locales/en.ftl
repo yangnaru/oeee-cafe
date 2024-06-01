@@ -55,6 +55,8 @@ comment-created-at = Commented at
 
 my-communities = My communities
 my-communities-nil = There are no communities created by you.
+official-communities = Official communities
+official-communities-nil = There are no official communities.
 active-communities-nil = There are no active communities.
 create-community = Create community
 new-community = New community

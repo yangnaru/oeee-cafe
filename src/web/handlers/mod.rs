@@ -136,6 +136,8 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_draft_post => bundle.format_pattern(bundle.get_message("draft-post").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_sensitive => bundle.format_pattern(bundle.get_message("sensitive").unwrap().value().unwrap(), None, &mut vec![]),
 
+        ftl_official_communities => bundle.format_pattern(bundle.get_message("official-communities").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_official_communities_nil => bundle.format_pattern(bundle.get_message("official-communities-nil").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_active_communities_nil => bundle.format_pattern(bundle.get_message("active-communities-nil").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_my_communities => bundle.format_pattern(bundle.get_message("my-communities").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_my_communities_nil => bundle.format_pattern(bundle.get_message("my-communities-nil").unwrap().value().unwrap(), None, &mut vec![]),

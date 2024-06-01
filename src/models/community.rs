@@ -19,6 +19,18 @@ pub struct Community {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct PublicCommunity {
+    pub id: Uuid,
+    pub owner_id: Uuid,
+    pub owner_login_name: String,
+    pub name: String,
+    pub description: String,
+    pub is_private: bool,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+
 impl Community {
     pub fn get_url(&self) -> String {
         format!(
@@ -52,16 +64,19 @@ pub async fn get_communities(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<C
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
-pub async fn get_public_communities(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<Community>> {
+pub async fn get_public_communities(
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<Vec<PublicCommunity>> {
     // Select communities ordered by latest published post
     let q = query_as!(
-        Community,
+        PublicCommunity,
         "
-            SELECT communities.*
+            SELECT communities.*, users.login_name AS owner_login_name
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id
-            WHERE communities.is_private = false
-            GROUP BY communities.id
+            LEFT JOIN users ON communities.owner_id = users.id
+            AND communities.is_private = false
+            GROUP BY communities.id, users.login_name
             HAVING MAX(posts.published_at) IS NOT NULL
             ORDER BY MAX(posts.published_at) DESC
         "

@@ -4,6 +4,18 @@
 {% endblock title %}
 {% block body %}
   <div class="center">
+    <h2>{{ ftl_official_communities }}</h2>
+    {% if official_communities %}
+      <ul>
+        {% for community in official_communities %}
+          <li>
+            <a href="{{ community.link }}">{{ community.name }}</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>{{ ftl_official_communities_nil }}</p>
+    {% endif %}
     <h2>{{ ftl_latest_active_public_community }}</h2>
     {% if public_communities %}
       <ul>

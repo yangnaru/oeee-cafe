@@ -126,6 +126,10 @@ pub async fn communities(
             );
             HashMap::<String, String>::from_iter(vec![
                 ("name".to_string(), name),
+                (
+                    "owner_login_name".to_string(),
+                    community.owner_login_name.clone(),
+                ),
                 ("description".to_string(), description),
                 ("is_private".to_string(), is_private.to_string()),
                 ("updated_at".to_string(), updated_at),
@@ -133,6 +137,18 @@ pub async fn communities(
                 ("link".to_string(), link),
             ])
         })
+        .collect::<Vec<_>>();
+
+    let official_communities = public_communities
+        .iter()
+        .filter(|c| c["owner_login_name"] == state.config.official_account_login_name)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    let unofficial_communities = public_communities
+        .iter()
+        .filter(|c| c["owner_login_name"] != state.config.official_account_login_name)
+        .cloned()
         .collect::<Vec<_>>();
 
     let draft_post_count = match auth_session.user.clone() {
@@ -153,7 +169,8 @@ pub async fn communities(
         current_user => auth_session.user,
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count,
-        public_communities,
+        official_communities,
+        public_communities => unofficial_communities,
         own_communities,
         ..create_base_ftl_context(&bundle)
     })?;

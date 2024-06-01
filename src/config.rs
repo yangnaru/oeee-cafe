@@ -16,6 +16,8 @@ pub struct AppConfig {
     #[serde_as(as = "DurationSeconds<u64>")]
     pub db_acquire_timeout: Duration,
 
+    pub official_account_login_name: String,
+
     pub aws_access_key_id: String,
     pub aws_secret_access_key: String,
     pub aws_region: String,

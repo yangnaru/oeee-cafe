@@ -57,6 +57,8 @@ comment-created-at = 작성 시간
 
 my-communities = 내 커뮤니티
 my-communities-nil = 내가 만든 커뮤니티가 없습니다.
+official-communities = 공식 커뮤니티
+official-communities-nil = 공식 커뮤니티가 없습니다.
 active-communities-nil = 활동 중인 공개 커뮤니티가 없습니다.
 create-community = 커뮤니티 만들기
 new-community = 새 커뮤니티
