@@ -11,6 +11,7 @@ timeline-my = 私のタイムライン
 timeline-empty = タイムラインが空です。 <a href="/communities">コミュニティ</a>で他の人と同盟を結びましょう！
 
 home = ホーム
+draw = 描きましょう！
 drafts = 一時保管箱
 profile = プロフィール
 community = コミュニティ

@@ -15,6 +15,7 @@ use crate::web::state::AppState;
 use axum::extract::Path;
 use axum::response::IntoResponse;
 use axum::{extract::State, http::StatusCode, response::Html, Form};
+use data_encoding::BASE64URL_NOPAD;
 use minijinja::context;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -52,6 +53,7 @@ pub async fn do_follow_profile(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         user,
         ..create_base_ftl_context(&bundle),
     })?;
@@ -90,6 +92,7 @@ pub async fn do_unfollow_profile(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         user,
         ..create_base_ftl_context(&bundle),
     })?;
@@ -154,11 +157,12 @@ pub async fn profile(
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
+        current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         links,
         banner,
         is_following => is_current_user_following,
         followings,
-        current_user => auth_session.user,
         user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         posts,
@@ -407,6 +411,7 @@ pub async fn profile_settings(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         draft_post_count,
         links,
         user,
@@ -470,6 +475,7 @@ pub async fn do_reply_guestbook_entry(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         user => author,
         entry => guestbook_entry,
         ..create_base_ftl_context(&bundle),
@@ -554,6 +560,7 @@ pub async fn do_write_guestbook_entry(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         user => recipient_user.unwrap(),
         entry => guestbook_entry.unwrap(),
         ..create_base_ftl_context(&bundle),
@@ -606,8 +613,9 @@ pub async fn guestbook(
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
-        banner,
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        banner,
         user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         draft_post_count,

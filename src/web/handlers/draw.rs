@@ -77,12 +77,13 @@ pub async fn start_draw(
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
+        current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         community_name => community.name,
         tool => input.tool,
         width => input.width.parse::<u32>()?,
         height => input.height.parse::<u32>()?,
         community_id => input.community_id,
-        current_user => auth_session.user,
         draft_post_count,
         ..create_base_ftl_context(&bundle)
     })?;

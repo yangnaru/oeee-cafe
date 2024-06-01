@@ -11,6 +11,7 @@ timeline-my = 내 타임라인
 timeline-empty = 타임라인이 비어 있습니다. <a href="/communities">커뮤니티</a>에서 다른 사람과 동맹을 맺어 보세요!
 
 home = 홈
+draw = 그리기!
 drafts = 임시 보관함
 profile = 프로필
 community = 커뮤니티

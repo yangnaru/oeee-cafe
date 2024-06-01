@@ -9,6 +9,7 @@ timeline-my = My timeline
 timeline-empty = Your timeline is empty. Discover and follow other people from <a href="/communities">communities</a>!
 
 home = Home
+draw = Draw!
 drafts = Drafts
 profile = Profile
 community = Community

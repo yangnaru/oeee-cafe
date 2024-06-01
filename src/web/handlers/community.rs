@@ -50,9 +50,10 @@ pub async fn community(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let template: minijinja::Template<'_, '_> = state.env.get_template("community.html")?;
     let rendered = template.render(context! {
+        current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         community => community,
         encoded_community_id => BASE64URL_NOPAD.encode(uuid.as_bytes()),
-        current_user => auth_session.user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         posts => posts.iter().map(|post| {
             HashMap::<String, String>::from_iter(vec![
@@ -167,6 +168,7 @@ pub async fn communities(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.clone().render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count,
         official_communities,
@@ -230,6 +232,7 @@ pub async fn create_community_form(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         draft_post_count,
         ..create_base_ftl_context(&bundle)
     })?;

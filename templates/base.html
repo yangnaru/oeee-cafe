@@ -37,6 +37,21 @@
           <div>
             <a href="/about">{{ ftl_brand }}?</a>
           </div>
+          {% if current_user %}
+            <form action="/draw" method="post">
+              <input type="hidden"
+                     name="community_id"
+                     value="{{ encoded_default_community_id }}" />
+              <input type="hidden" name="tool" value="neo" />
+              <input type="hidden" name="width" value="300" />
+              <input type="hidden" name="height" value="300" />
+              <input type="submit" id="nav-draw-button" value="{{ ftl_draw }}" />
+            </form>
+          {% else %}
+            <div>
+              <a href="/login">{{ ftl_draw }}</a>
+            </div>
+          {% endif %}
           <div>
             <a href="/communities">{{ ftl_community }}</a>
           </div>

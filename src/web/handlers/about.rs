@@ -4,7 +4,9 @@ use crate::web::handlers::get_bundle;
 use crate::web::state::AppState;
 use crate::{app_error::AppError, web::handlers::create_base_ftl_context};
 use axum::{extract::State, response::Html};
+use data_encoding::BASE64URL_NOPAD;
 use minijinja::context;
+use uuid::Uuid;
 
 use super::ExtractAcceptLanguage;
 
@@ -31,6 +33,7 @@ pub async fn about(
     let template: minijinja::Template<'_, '_> = state.env.get_template("about.html")?;
     let rendered: String = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         draft_post_count,
         ..create_base_ftl_context(&bundle)
     })?;

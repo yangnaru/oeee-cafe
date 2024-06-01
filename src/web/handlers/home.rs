@@ -9,7 +9,9 @@ use crate::web::state::AppState;
 use axum::response::IntoResponse;
 use axum::{extract::State, response::Html};
 use axum_messages::Messages;
+use data_encoding::BASE64URL_NOPAD;
 use minijinja::context;
+use uuid::Uuid;
 
 pub async fn home(
     auth_session: AuthSession,
@@ -38,6 +40,7 @@ pub async fn home(
     let template: minijinja::Template<'_, '_> = state.env.get_template("home.html")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         messages => messages.into_iter().collect::<Vec<_>>(),
         posts,
         draft_post_count,
@@ -73,6 +76,7 @@ pub async fn my_timeline(
     let template: minijinja::Template<'_, '_> = state.env.get_template("timeline.html")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         messages => messages.into_iter().collect::<Vec<_>>(),
         posts,
         draft_post_count,

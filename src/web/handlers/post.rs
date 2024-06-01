@@ -99,6 +99,7 @@ pub async fn post_view(
     } else {
         let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         post => {
             post.as_ref()
@@ -172,6 +173,7 @@ pub async fn post_replay_view(
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
+            encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
             r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
             post => {
                 post.as_ref()
@@ -257,6 +259,7 @@ pub async fn post_publish_form(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         encoded_post_id => id,
         link,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
@@ -349,6 +352,7 @@ pub async fn draft_posts(
     let rendered = template.render(context! {
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         posts => posts,
         draft_post_count,
         ..create_base_ftl_context(&bundle),
@@ -434,6 +438,7 @@ pub async fn hx_edit_post(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         post,
         encoded_post_id => id,
         ..create_base_ftl_context(&bundle)
@@ -501,6 +506,7 @@ pub async fn hx_do_edit_post(
     let rendered = template
         .eval_to_state(context! {
             current_user => auth_session.user,
+            encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
             post,
             encoded_post_id => id,
             ..create_base_ftl_context(&bundle)
