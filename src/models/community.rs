@@ -75,7 +75,7 @@ pub async fn get_public_communities(
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id
             LEFT JOIN users ON communities.owner_id = users.id
-            AND communities.is_private = false
+            WHERE communities.is_private = false
             GROUP BY communities.id, users.login_name
             HAVING MAX(posts.published_at) IS NOT NULL
             ORDER BY MAX(posts.published_at) DESC
