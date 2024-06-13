@@ -229,3 +229,7 @@ nav a:visited {
 .post-share {
   padding: 8px 0;
 }
+
+.sensitive {
+  filter: blur(1rem);
+}

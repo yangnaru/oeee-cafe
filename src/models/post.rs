@@ -39,6 +39,25 @@ pub struct SerializablePost {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Serialize)]
+
+pub struct SerializablePostForHome {
+    pub id: String,
+    pub title: Option<String>,
+    pub author_id: Uuid,
+    pub paint_duration: String,
+    pub stroke_count: i32,
+    pub viewer_count: i32,
+    pub image_filename: String,
+    pub image_width: i32,
+    pub image_height: i32,
+    pub replay_filename: String,
+    pub is_sensitive: bool,
+    pub published_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+
 impl Post {
     pub fn path(&self) -> String {
         format!("/posts/{}", self.id)
@@ -512,7 +531,7 @@ pub async fn edit_post(
 
 pub async fn find_public_community_posts(
     tx: &mut Transaction<'_, Postgres>,
-) -> Result<Vec<SerializablePost>> {
+) -> Result<Vec<SerializablePostForHome>> {
     let q = query!(
         "
             SELECT
@@ -526,6 +545,7 @@ pub async fn find_public_community_posts(
                 images.height,
                 images.replay_filename,
                 posts.viewer_count,
+                posts.is_sensitive,
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at
@@ -541,7 +561,7 @@ pub async fn find_public_community_posts(
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result
         .into_iter()
-        .map(|row| SerializablePost {
+        .map(|row| SerializablePostForHome {
             id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
             title: row.title,
             author_id: row.author_id,
@@ -551,6 +571,7 @@ pub async fn find_public_community_posts(
             image_width: row.width,
             image_height: row.height,
             replay_filename: row.replay_filename,
+            is_sensitive: row.is_sensitive.unwrap_or_else(|| false),
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,
