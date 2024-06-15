@@ -68,6 +68,10 @@ nav a:visited {
   gap: 4px;
 }
 
+.posts-grid-item {
+  overflow: hidden;
+}
+
 .posts-grid-item img {
   cursor: pointer;
   object-fit: cover;
