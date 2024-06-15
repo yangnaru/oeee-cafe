@@ -1,0 +1,29 @@
+{% extends "base_iframe.html" %}
+{% block title %}
+  {{ super() }} | {{ user.display_name }} (@{{ user.login_name }})
+{% endblock title %}
+{% block body %}
+  <div class="center">
+    {% if followings|length > 0 %}
+      {% if
+        followings|selectattr("banner_image_filename")|length > 0 %}
+        <h3>{{ ftl_profile_banner }}</h3>
+        <div class="banners-grid">
+          {% for following in followings|selectattr("banner_image_filename") %}
+            <div class="banners-grid-item">
+              <a href="/@{{ following.login_name }}"
+                 alt="{{ following.display_name }} (@{{ following.login_name }})"
+                 target="_blank">
+                <img width="{{ following.banner_image_width }}"
+                     height="{{ following.banner_image_height }}"
+                     alt="{{ following.display_name }} (@{{ following.login_name }}) 동맹 배너"
+                     class="banner"
+                     src="{{ r2_public_endpoint_url }}/image/{{ following.banner_image_filename[:2] }}/{{ following.banner_image_filename }}" />
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+{% endblock body %}

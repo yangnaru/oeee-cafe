@@ -75,6 +75,53 @@ pub async fn community(
     Ok(Html(rendered).into_response())
 }
 
+pub async fn community_iframe(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice())?;
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let community = find_community_by_id(&mut tx, uuid).await?;
+
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let posts = find_published_posts_by_community_id(&mut tx, uuid).await?;
+
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community_iframe.html")?;
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        community => community,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        posts => posts.iter().map(|post| {
+            HashMap::<String, String>::from_iter(vec![
+                ("id".to_string(), post.id.to_string()),
+                ("title".to_string(), post.title.clone().unwrap_or_default().to_string()),
+                ("author_id".to_string(), post.author_id.to_string()),
+                ("image_filename".to_string(), post.image_filename.to_string()),
+                ("image_width".to_string(), post.image_width.to_string()),
+                ("image_height".to_string(), post.image_height.to_string()),
+                ("replay_filename".to_string(), post.replay_filename.to_string()),
+                ("created_at".to_string(), post.created_at.to_string()),
+                ("updated_at".to_string(), post.updated_at.to_string()),
+            ])
+        }).collect::<Vec<_>>(),
+        ..create_base_ftl_context(&bundle),
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
 pub async fn communities(
     auth_session: AuthSession,
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,

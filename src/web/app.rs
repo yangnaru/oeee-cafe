@@ -7,7 +7,7 @@ use crate::web::handlers::account::{
 };
 use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::community::{
-    communities, community, create_community_form, do_create_community,
+    communities, community, community_iframe, create_community_form, do_create_community,
 };
 use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
@@ -21,7 +21,7 @@ use crate::web::handlers::post::{
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
     do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile, do_write_guestbook_entry,
-    guestbook, profile, profile_settings,
+    guestbook, profile, profile_banners_iframe, profile_iframe, profile_settings,
 };
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
@@ -134,7 +134,10 @@ impl App {
             .route("/communities", get(communities))
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))
+            .route("/communities/:id/embed", get(community_iframe))
             .route("/@:login_name", get(profile))
+            .route("/@:login_name/embed", get(profile_iframe))
+            .route("/@:login_name/banners/embed", get(profile_banners_iframe))
             .route("/@:login_name/settings/links", post(do_add_link))
             .route("/@:login_name/settings/links/:id", delete(do_delete_link))
             .route("/@:login_name/settings/links/:id/up", post(do_move_link_up))

@@ -173,6 +173,76 @@ pub async fn profile(
     Ok(Html(rendered).into_response())
 }
 
+pub async fn profile_iframe(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let posts = find_published_public_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_iframe.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        user,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        posts,
+        ..create_base_ftl_context(&bundle),
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn profile_banners_iframe(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id).await?;
+
+    let template: minijinja::Template<'_, '_> =
+        state.env.get_template("profile_banners_iframe.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        followings,
+        user,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        ..create_base_ftl_context(&bundle),
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
 pub async fn do_move_link_down(
     auth_session: AuthSession,
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
