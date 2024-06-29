@@ -33,6 +33,7 @@ pub mod auth;
 pub mod community;
 pub mod draw;
 pub mod home;
+pub mod notifications;
 pub mod post;
 pub mod profile;
 
@@ -105,6 +106,7 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_drafts => bundle.format_pattern(bundle.get_message("drafts").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_profile => bundle.format_pattern(bundle.get_message("profile").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_community => bundle.format_pattern(bundle.get_message("community").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_notifications => bundle.format_pattern(bundle.get_message("notifications").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_sign_up => bundle.format_pattern(bundle.get_message("sign-up").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_sign_in => bundle.format_pattern(bundle.get_message("sign-in").unwrap().value().unwrap(), None, &mut vec![]),

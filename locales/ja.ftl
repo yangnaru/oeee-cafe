@@ -17,6 +17,7 @@ draw = 描きましょう！
 drafts = 一時保管箱
 profile = プロフィール
 community = コミュニティ
+notifications = お知らせ
 
 sign-in = ログイン
 sign-up = 会員登録

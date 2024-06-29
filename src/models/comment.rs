@@ -32,6 +32,22 @@ pub struct SerializableComment {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Serialize)]
+pub struct NotificationComment {
+    pub id: Uuid,
+    pub post_id: Uuid,
+    pub user_id: Uuid,
+    pub content: String,
+    pub user_display_name: String,
+    pub user_login_name: String,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub post_title: Option<String>,
+    pub post_image_filename: Option<String>,
+    pub post_image_width: Option<i32>,
+    pub post_image_height: Option<i32>,
+}
+
 pub async fn find_comments_by_post_id(
     tx: &mut Transaction<'_, Postgres>,
     post_id: Uuid,
@@ -70,6 +86,42 @@ pub async fn find_comments_by_post_id(
             created_at: comment.created_at,
         })
         .collect())
+}
+
+pub async fn find_comments_to_posts_by_author(
+    tx: &mut Transaction<'_, Postgres>,
+    author_id: Uuid,
+) -> Result<Vec<NotificationComment>> {
+    let comments = sqlx::query_as!(
+        NotificationComment,
+        r#"
+        SELECT
+            comments.id,
+            comments.post_id,
+            comments.user_id,
+            comments.updated_at,
+            comments.created_at,
+            comments.content,
+            users.display_name AS user_display_name,
+            users.login_name AS user_login_name,
+            posts.title AS post_title,
+            images.image_filename AS post_image_filename,
+            images.width AS post_image_width,
+            images.height AS post_image_height
+        FROM comments
+        LEFT JOIN users ON comments.user_id = users.id
+        LEFT JOIN posts ON comments.post_id = posts.id
+        LEFT JOIN images ON posts.image_id = images.id
+        WHERE posts.author_id = $1
+        AND posts.deleted_at IS NULL
+        ORDER BY created_at DESC
+        "#,
+        author_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(comments)
 }
 
 pub async fn create_comment(

@@ -14,6 +14,7 @@ use crate::web::handlers::draw::{
 };
 use crate::web::handlers::handler_404;
 use crate::web::handlers::home::{home, my_timeline};
+use crate::web::handlers::notifications::list_notifications;
 use crate::web::handlers::post::{
     do_create_comment, do_post_edit_community, draft_posts, hx_delete_post, hx_do_edit_post,
     hx_edit_post, post_edit_community, post_publish, post_publish_form, post_replay_view,
@@ -87,6 +88,7 @@ impl App {
 
         let protected_router = Router::new()
             .route("/home", get(my_timeline))
+            .route("/notifications", get(list_notifications))
             .route("/account", get(account))
             .route("/account", post(edit_account))
             .route("/account/password", post(edit_password))

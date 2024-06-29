@@ -15,6 +15,7 @@ draw = Draw!
 drafts = Drafts
 profile = Profile
 community = Community
+notifications = Notifications
 
 sign-in = Sign in
 sign-up = Sign up

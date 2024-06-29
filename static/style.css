@@ -118,6 +118,17 @@ nav a:visited {
   padding: 1em;
 }
 
+.notification-comment {
+  display: flex;
+  flex-direction: row;
+  gap: 1em;
+}
+
+.notification-post-image {
+  max-width: 100px;
+  max-height: 100px;
+}
+
 .muted {
   color: gray;
 }

@@ -17,6 +17,7 @@ draw = 그리기!
 drafts = 임시 보관함
 profile = 프로필
 community = 커뮤니티
+notifications = 알림
 
 sign-in = 로그인
 sign-up = 회원가입
