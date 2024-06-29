@@ -40,7 +40,24 @@ pub struct SerializablePost {
 }
 
 #[derive(Serialize)]
+pub struct SerializableProfilePost {
+    pub id: String,
+    pub title: Option<String>,
+    pub author_id: Uuid,
+    pub paint_duration: String,
+    pub stroke_count: i32,
+    pub viewer_count: i32,
+    pub image_filename: String,
+    pub image_width: i32,
+    pub image_height: i32,
+    pub replay_filename: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub community_is_private: bool,
+}
 
+#[derive(Serialize)]
 pub struct SerializablePostForHome {
     pub id: String,
     pub title: Option<String>,
@@ -146,7 +163,7 @@ pub async fn get_draft_post_count(
 pub async fn find_published_public_posts_by_author_id(
     tx: &mut Transaction<'_, Postgres>,
     author_id: Uuid,
-) -> Result<Vec<SerializablePost>> {
+) -> Result<Vec<SerializableProfilePost>> {
     let q = query!(
         "
             SELECT
@@ -162,7 +179,8 @@ pub async fn find_published_public_posts_by_author_id(
                 images.replay_filename,
                 posts.published_at,
                 posts.created_at,
-                posts.updated_at
+                posts.updated_at,
+                communities.is_private
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
@@ -177,7 +195,7 @@ pub async fn find_published_public_posts_by_author_id(
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result
         .into_iter()
-        .map(|row| SerializablePost {
+        .map(|row| SerializableProfilePost {
             id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
             title: row.title,
             viewer_count: row.viewer_count,
@@ -191,6 +209,60 @@ pub async fn find_published_public_posts_by_author_id(
             published_at: row.published_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            community_is_private: row.is_private,
+        })
+        .collect())
+}
+
+pub async fn find_published_posts_by_author_id(
+    tx: &mut Transaction<'_, Postgres>,
+    author_id: Uuid,
+) -> Result<Vec<SerializableProfilePost>> {
+    let q = query!(
+        "
+            SELECT
+                posts.id,
+                posts.author_id,
+                posts.title,
+                posts.viewer_count,
+                images.paint_duration,
+                images.stroke_count,
+                images.image_filename,
+                images.width,
+                images.height,
+                images.replay_filename,
+                posts.published_at,
+                posts.created_at,
+                posts.updated_at,
+                communities.is_private
+            FROM posts
+            LEFT JOIN images ON posts.image_id = images.id
+            LEFT JOIN communities ON posts.community_id = communities.id
+            WHERE author_id = $1
+            AND published_at IS NOT NULL
+            AND posts.deleted_at IS NULL
+            ORDER BY published_at DESC
+        ",
+        author_id
+    );
+    let result = q.fetch_all(&mut **tx).await?;
+    Ok(result
+        .into_iter()
+        .map(|row| SerializableProfilePost {
+            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            title: row.title,
+            viewer_count: row.viewer_count,
+            author_id: row.author_id,
+            paint_duration: row.paint_duration.microseconds.to_string(),
+            stroke_count: row.stroke_count,
+            image_filename: row.image_filename,
+            image_width: row.width,
+            image_height: row.height,
+            replay_filename: row.replay_filename,
+            published_at: row.published_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            community_is_private: row.is_private,
         })
         .collect())
 }

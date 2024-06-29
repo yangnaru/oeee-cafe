@@ -8,7 +8,10 @@ use crate::models::guestbook_entry::{
 use crate::models::link::{
     create_link, delete_link, find_links_by_user_id, update_link_order, LinkDraft,
 };
-use crate::models::post::{find_published_public_posts_by_author_id, get_draft_post_count};
+use crate::models::post::{
+    find_published_posts_by_author_id, find_published_public_posts_by_author_id,
+    get_draft_post_count,
+};
 use crate::models::user::{find_user_by_id, find_user_by_login_name, AuthSession};
 use crate::web::handlers::{create_base_ftl_context, get_bundle};
 use crate::web::state::AppState;
@@ -114,7 +117,16 @@ pub async fn profile(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let posts = find_published_public_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
+    let published_posts =
+        find_published_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
+    let public_community_posts = published_posts
+        .iter()
+        .filter(|post| post.community_is_private == false)
+        .collect::<Vec<_>>();
+    let private_community_posts = published_posts
+        .iter()
+        .filter(|post| post.community_is_private == true)
+        .collect::<Vec<_>>();
 
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
@@ -165,7 +177,8 @@ pub async fn profile(
         followings,
         user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        posts,
+        public_community_posts,
+        private_community_posts,
         draft_post_count,
         ..create_base_ftl_context(&bundle),
     })?;

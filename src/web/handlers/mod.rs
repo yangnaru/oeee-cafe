@@ -171,6 +171,8 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_profile_following => bundle.format_pattern(bundle.get_message("profile-following").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_profile_public_community_posts => bundle.format_pattern(bundle.get_message("profile-public-community-posts").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_profile_public_community_posts_nil => bundle.format_pattern(bundle.get_message("profile-public-community-posts-nil").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_profile_private_community_posts => bundle.format_pattern(bundle.get_message("profile-private-community-posts").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_profile_private_community_posts_nil => bundle.format_pattern(bundle.get_message("profile-private-community-posts-nil").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_profile_settings => bundle.format_pattern(bundle.get_message("profile-settings").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_profile_link_management => bundle.format_pattern(bundle.get_message("profile-link-management").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_profile_link_requires_verified_email => bundle.format_pattern(bundle.get_message("profile-link-requires-verified-email").unwrap().value().unwrap(), None, &mut vec![]),
