@@ -123,6 +123,31 @@ pub async fn get_known_communities(
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
+pub async fn get_participating_communities(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<Vec<Community>> {
+    // Select communities that the user is owner of, or has posted in, ordered by latest published post
+    let q = query_as!(
+        Community,
+        "
+            SELECT communities.*
+            FROM communities
+            LEFT JOIN posts ON communities.id = posts.community_id
+            WHERE communities.id IN (
+                SELECT DISTINCT community_id
+                FROM posts
+                WHERE author_id = $1
+            ) OR communities.owner_id = $1
+            GROUP BY communities.id
+            ORDER BY MAX(posts.published_at) DESC
+        ",
+        user_id
+    );
+
+    Ok(q.fetch_all(&mut **tx).await?)
+}
+
 pub async fn find_community_by_id(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
