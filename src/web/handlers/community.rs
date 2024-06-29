@@ -259,6 +259,10 @@ pub async fn do_create_community(
     State(state): State<AppState>,
     Form(form): Form<CreateCommunityForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    if form.name.is_empty() {
+        return Ok(StatusCode::BAD_REQUEST.into_response());
+    }
+
     let db: sqlx::Pool<sqlx::Postgres> = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let _ = create_community(
