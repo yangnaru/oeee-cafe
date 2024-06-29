@@ -16,10 +16,22 @@
     {% else %}
       <p>{{ ftl_official_communities_nil }}</p>
     {% endif %}
-    <h2>{{ ftl_latest_active_public_community }}</h2>
     {% if participating_communities %}
+      <h2>{{ ftl_participating_community }}</h2>
       <ul>
         {% for community in participating_communities %}
+          <li>
+            <a href="{{ community.link }}">{{ community.name }}</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>{{ ftl_active_communities_nil }}</p>
+    {% endif %}
+    {% if public_communities %}
+      <h2>{{ ftl_latest_active_public_community }}</h2>
+      <ul>
+        {% for community in public_communities %}
           <li>
             <a href="{{ community.link }}">{{ community.name }}</a>
           </li>

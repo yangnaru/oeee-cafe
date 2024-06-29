@@ -31,6 +31,7 @@ password = 비밀번호
 password-repeat = 비밀번호 (한 번 더)
 display-name = 닉네임
 
+participating-community = 참여 중인 커뮤니티
 latest-active-public-community = 최근 활동 공개 커뮤니티
 recent-drawings = 최근 그림
 

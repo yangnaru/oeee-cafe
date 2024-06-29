@@ -238,6 +238,7 @@ pub async fn communities(
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count,
         official_communities,
+        public_communities,
         participating_communities,
         own_communities,
         ..create_base_ftl_context(&bundle)

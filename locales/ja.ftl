@@ -31,6 +31,7 @@ password = PW
 password-repeat = PW (もう一度)
 display-name = ニックネーム
 
+participating-community = 参加中のコミュニティ
 latest-active-public-community = 最近の活動公開コミュニティ
 recent-drawings = 最近のお絵かき
 

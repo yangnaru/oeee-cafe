@@ -117,6 +117,7 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_password_repeat => bundle.format_pattern(bundle.get_message("password-repeat").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_display_name => bundle.format_pattern(bundle.get_message("display-name").unwrap().value().unwrap(), None, &mut vec![]),
 
+        ftl_participating_community => bundle.format_pattern(bundle.get_message("participating-community").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_latest_active_public_community => bundle.format_pattern(bundle.get_message("latest-active-public-community").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_recent_drawings => bundle.format_pattern(bundle.get_message("recent-drawings").unwrap().value().unwrap(), None, &mut vec![]),
 

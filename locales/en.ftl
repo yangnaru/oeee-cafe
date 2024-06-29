@@ -29,6 +29,7 @@ password = Password
 password-repeat = Password (again)
 display-name = Display name
 
+participating-community = Participating communities
 latest-active-public-community = Recently active public communities
 recent-drawings = Recent posts
 
