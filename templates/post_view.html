@@ -39,6 +39,9 @@
         <p>
           {{ ftl_community }}:
           <a href="/communities/{{ encoded_community_id }}">{{ post.community_name }}</a>
+          {% if current_user.id == post.author_id -%}
+            (<a href="/posts/{{ encoded_post_id }}/edit/community">{{ ftl_post_edit }}</a>)
+          {%- endif %}
         </p>
         <img class="post-image"
              width="{{ post.image_width }}"

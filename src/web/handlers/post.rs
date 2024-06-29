@@ -1,9 +1,10 @@
 use crate::app_error::AppError;
 use crate::models::comment::{create_comment, find_comments_by_post_id, CommentDraft};
+use crate::models::community::get_known_communities;
 use crate::models::image::find_image_by_id;
 use crate::models::post::{
-    delete_post, edit_post, find_draft_posts_by_author_id, find_post_by_id, get_draft_post_count,
-    increment_post_viewer_count, publish_post,
+    delete_post, edit_post, edit_post_community, find_draft_posts_by_author_id, find_post_by_id,
+    get_draft_post_count, increment_post_viewer_count, publish_post,
 };
 use crate::models::user::AuthSession;
 use crate::web::handlers::{create_base_ftl_context, get_bundle};
@@ -398,6 +399,118 @@ pub async fn do_create_comment(
         comments => comments,
     })?;
     Ok(Html(rendered).into_response())
+}
+
+pub async fn post_edit_community(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let post_uuid =
+        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let post = find_post_by_id(&mut tx, post_uuid).await?;
+    if post.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if *post
+        .clone()
+        .unwrap()
+        .get("author_id")
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        != auth_session.user.clone().unwrap().id.to_string()
+    {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let known_communities =
+        get_known_communities(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let filtered_known_communities = known_communities
+        .iter()
+        .filter(|c| {
+            c.id != Uuid::parse_str(
+                post.clone()
+                    .unwrap()
+                    .get("community_id")
+                    .unwrap()
+                    .as_ref()
+                    .unwrap(),
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let known_communities_with_encoded_community_id = filtered_known_communities
+        .iter()
+        .map(|c| {
+            let encoded_community_id = BASE64URL_NOPAD.encode(c.id.as_bytes());
+            (c, encoded_community_id)
+        })
+        .collect::<Vec<_>>();
+
+    let template: minijinja::Template<'_, '_> =
+        state.env.get_template("post_edit_community.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        post,
+        encoded_post_id => id,
+        known_communities_with_encoded_community_id,
+        ..create_base_ftl_context(&bundle)
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct EditPostCommunityForm {
+    pub community_id: Uuid,
+}
+
+pub async fn do_post_edit_community(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Form(form): Form<EditPostCommunityForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let post_uuid =
+        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let post = find_post_by_id(&mut tx, post_uuid).await?;
+    if post.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if *post
+        .clone()
+        .unwrap()
+        .get("author_id")
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        != auth_session.user.clone().unwrap().id.to_string()
+    {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let _ = edit_post_community(&mut tx, post_uuid, form.community_id).await;
+    let _ = tx.commit().await;
+
+    Ok(Redirect::to(&format!("/posts/{}", id)).into_response())
 }
 
 pub async fn hx_edit_post(

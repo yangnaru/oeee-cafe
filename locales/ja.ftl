@@ -50,6 +50,7 @@ post-publish = 公開
 post-edit = 修正
 post-save = 保存
 post-edit-cancel = キャンセル
+post-move-community = このコミュニティに移動する
 post-delete = 削除
 post-delete-confirm = 本当にこの画像を削除しますか？
 

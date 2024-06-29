@@ -136,6 +136,7 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_post_edit => bundle.format_pattern(bundle.get_message("post-edit").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_save => bundle.format_pattern(bundle.get_message("post-save").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_edit_cancel => bundle.format_pattern(bundle.get_message("post-edit-cancel").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_post_move_community => bundle.format_pattern(bundle.get_message("post-move-community").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_delete => bundle.format_pattern(bundle.get_message("post-delete").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_delete_confirm => bundle.format_pattern(bundle.get_message("post-delete-confirm").unwrap().value().unwrap(), None, &mut vec![]),
 

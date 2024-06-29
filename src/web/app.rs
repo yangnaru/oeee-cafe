@@ -15,8 +15,9 @@ use crate::web::handlers::draw::{
 use crate::web::handlers::handler_404;
 use crate::web::handlers::home::{home, my_timeline};
 use crate::web::handlers::post::{
-    do_create_comment, draft_posts, hx_delete_post, hx_do_edit_post, hx_edit_post, post_publish,
-    post_publish_form, post_replay_view, post_view,
+    do_create_comment, do_post_edit_community, draft_posts, hx_delete_post, hx_do_edit_post,
+    hx_edit_post, post_edit_community, post_publish, post_publish_form, post_replay_view,
+    post_view,
 };
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
@@ -112,6 +113,8 @@ impl App {
             .route("/posts/:id/edit", get(hx_edit_post))
             .route("/posts/:id", put(hx_do_edit_post))
             .route("/posts/:id", delete(hx_delete_post))
+            .route("/posts/:id/edit/community", get(post_edit_community))
+            .route("/posts/:id/edit/community", post(do_post_edit_community))
             .route("/banners/draw", get(start_banner_draw))
             .route("/banners/draw/finish", post(banner_draw_finish))
             .route("/posts/:id/publish", get(post_publish_form))

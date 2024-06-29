@@ -1,0 +1,68 @@
+{% import "comments_macro.html" as comments_macro %}
+{% extends "base.html" %}
+{% block title %}
+  {{ super() }} |
+  {% if post.title %}
+    {{ post.title }}
+  {% else %}
+    {{ ftl_post_no_title }}
+  {% endif %}
+{% endblock title %}
+{% block head %}
+  <meta property="og:title" content="{{ post.title }}" />
+  <meta property="og:description" content="{{ post.content }}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url"
+        content="{{ base_url|safe }}/posts/{{ encoded_post_id }}" />
+  <meta property="og:image"
+        content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+  <meta property="twitter:site" content="@oeee_cafe">
+  <meta property="twitter:domain" content="oeee.cafe">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta property="twitter:url"
+        content="{{ base_url|safe }}/posts/{{ encoded_post_id }}">
+  <meta name="twitter:title" content="{{ post.title }}">
+  <meta name="twitter:description" content="{{ post.content }}">
+  <meta name="twitter:image"
+        content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}">
+{% endblock head %}
+{% block body %}
+  <div class="center">
+    <div class="post-sidebar">
+      <div class="post-main">
+        <p>
+          {{ ftl_community }}:
+          <a href="/communities/{{ encoded_community_id }}">{{ post.community_name }}</a>
+        </p>
+        <img class="post-image"
+             width="{{ post.image_width }}"
+             height="{{ post.image_height }}"
+             alt="{{ post.title }}"
+             src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Community</th>
+            <th>Move</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for (community, encoded_community_id ) in known_communities_with_encoded_community_id %}
+            <tr>
+              <td>
+                <a href="/communities/{{ encoded_community_id }}">{{ community.name }}</a>
+              </td>
+              <td>
+                <form method="post" action="/posts/{{ encoded_post_id }}/edit/community">
+                  <input type="hidden" name="community_id" value="{{ community.id }}" />
+                  <input type="submit" value="{{ ftl_post_move_community }}" />
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock body %}

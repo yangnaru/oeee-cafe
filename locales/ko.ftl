@@ -50,6 +50,7 @@ post-publish = 게시
 post-edit = 수정
 post-save = 저장
 post-edit-cancel = 취소
+post-move-community = 이 커뮤니티로 이동
 post-delete = 삭제
 post-delete-confirm = 정말 이 그림을 삭제하시겠습니까?
 

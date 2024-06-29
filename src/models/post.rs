@@ -529,6 +529,24 @@ pub async fn edit_post(
     Ok(())
 }
 
+pub async fn edit_post_community(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    new_community_id: Uuid,
+) -> Result<()> {
+    let q = query!(
+        "
+            UPDATE posts
+            SET community_id = $1
+            WHERE id = $2
+        ",
+        new_community_id,
+        id
+    );
+    q.execute(&mut **tx).await?;
+    Ok(())
+}
+
 pub async fn find_public_community_posts(
     tx: &mut Transaction<'_, Postgres>,
 ) -> Result<Vec<SerializablePostForHome>> {

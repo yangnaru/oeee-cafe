@@ -85,6 +85,44 @@ pub async fn get_public_communities(
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct KnownCommunity {
+    pub id: Uuid,
+    pub owner_id: Uuid,
+    pub owner_login_name: String,
+    pub name: String,
+    pub description: String,
+    pub is_private: bool,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+
+pub async fn get_known_communities(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<Vec<KnownCommunity>> {
+    // Select public communities and private communities that the user is owner of, and private communities that the user has posted in, ordered by latest published post
+    let q = query_as!(
+        KnownCommunity,
+        "
+            SELECT communities.*, users.login_name AS owner_login_name
+            FROM communities
+            LEFT JOIN posts ON communities.id = posts.community_id
+            LEFT JOIN users ON communities.owner_id = users.id
+            WHERE communities.is_private = false OR communities.id IN (
+                SELECT DISTINCT community_id
+                FROM posts
+                WHERE author_id = $1
+            ) OR communities.owner_id = $1
+            GROUP BY communities.id, users.login_name
+            ORDER BY MAX(posts.published_at) DESC
+        ",
+        user_id
+    );
+
+    Ok(q.fetch_all(&mut **tx).await?)
+}
+
 pub async fn find_community_by_id(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,

@@ -48,6 +48,7 @@ post-publish = Publish
 post-edit = Edit
 post-save = Save
 post-edit-cancel = Cancel
+post-move-community = Move to this community
 post-delete = Delete
 post-delete-confirm = Are you sure you want to delete this post?
 
