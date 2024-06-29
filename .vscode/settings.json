@@ -1,6 +1,6 @@
 {
   "rust-analyzer.server.extraEnv": {
-    "DATABASE_URL": "postgres://localhost/oeee"
+    "DATABASE_URL": "postgres://localhost/oeee_cafe"
   },
   "editor.formatOnSave": true,
   "files.associations": {
