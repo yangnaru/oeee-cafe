@@ -113,6 +113,7 @@ pub async fn find_comments_to_posts_by_author(
         LEFT JOIN posts ON comments.post_id = posts.id
         LEFT JOIN images ON posts.image_id = images.id
         WHERE posts.author_id = $1
+        AND comments.user_id != $1
         AND posts.deleted_at IS NULL
         ORDER BY created_at DESC
         "#,
