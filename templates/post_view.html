@@ -86,11 +86,13 @@
       </div>
       <div class="post-comments">
         <h2>{{ ftl_post_comments }}</h2>
-        <form hx-post="/comments" hx-swap="outerHTML">
-          <input type="hidden" name="post_id" value="{{ encoded_post_id }}">
-          <textarea name="content"></textarea>
-          <button type="submit">{{ ftl_post_comment }}</button>
-        </form>
+        {% if current_user %}
+          <form hx-post="/comments" hx-swap="outerHTML">
+            <input type="hidden" name="post_id" value="{{ encoded_post_id }}">
+            <textarea name="content"></textarea>
+            <button type="submit">{{ ftl_post_comment }}</button>
+          </form>
+        {% endif %}
         {% if comments %}{{ comments_macro.comments(comments) }}{% endif %}
       </div>
     </div>
