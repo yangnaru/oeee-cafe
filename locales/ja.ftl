@@ -19,6 +19,8 @@ profile = プロフィール
 community = コミュニティ
 notifications = お知らせ
 
+no-notifications = まだ通知がありません。
+
 sign-in = ログイン
 sign-up = 会員登録
 sign-out = ログアウト

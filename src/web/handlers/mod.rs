@@ -108,6 +108,8 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_community => bundle.format_pattern(bundle.get_message("community").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_notifications => bundle.format_pattern(bundle.get_message("notifications").unwrap().value().unwrap(), None, &mut vec![]),
 
+        ftl_no_notifications => bundle.format_pattern(bundle.get_message("no-notifications").unwrap().value().unwrap(), None, &mut vec![]),
+
         ftl_sign_up => bundle.format_pattern(bundle.get_message("sign-up").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_sign_in => bundle.format_pattern(bundle.get_message("sign-in").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_sign_out => bundle.format_pattern(bundle.get_message("sign-out").unwrap().value().unwrap(), None, &mut vec![]),

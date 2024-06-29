@@ -19,6 +19,8 @@ profile = 프로필
 community = 커뮤니티
 notifications = 알림
 
+no-notifications = 아직 알림이 없습니다.
+
 sign-in = 로그인
 sign-up = 회원가입
 sign-out = 로그아웃

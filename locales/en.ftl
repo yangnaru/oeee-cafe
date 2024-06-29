@@ -17,6 +17,8 @@ profile = Profile
 community = Community
 notifications = Notifications
 
+no-notifications = No notifications, yet.
+
 sign-in = Sign in
 sign-up = Sign up
 sign-out = Sign out
