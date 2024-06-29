@@ -101,22 +101,24 @@
 {% else %}
   <p>{{ ftl_profile_public_community_posts_nil }}</p>
 {% endif %}
-<h3>{{ ftl_profile_private_community_posts }}</h3>
-{% if private_community_posts %}
-  <div class="posts-grid">
-    {% for post in private_community_posts %}
-      <div class="posts-grid-item">
-        <a href="/posts/{{ post.id }}">
-          <img width="{{ post.image_width }}"
-               height="{{ post.image_height }}"
-               alt="{{ post.title }}"
-               src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
-        </a>
-      </div>
-    {% endfor %}
-  </div>
-{% else %}
-  <p>{{ ftl_profile_private_community_posts_nil }}</p>
+{% if user.id == current_user.id %}
+  <h3>{{ ftl_profile_private_community_posts }}</h3>
+  {% if private_community_posts %}
+    <div class="posts-grid">
+      {% for post in private_community_posts %}
+        <div class="posts-grid-item">
+          <a href="/posts/{{ post.id }}">
+            <img width="{{ post.image_width }}"
+                 height="{{ post.image_height }}"
+                 alt="{{ post.title }}"
+                 src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>{{ ftl_profile_private_community_posts_nil }}</p>
+  {% endif %}
 {% endif %}
 </div>
 {% endblock body %}
