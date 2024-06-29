@@ -370,9 +370,17 @@ pub struct CreateCommentForm {
 
 pub async fn do_create_comment(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Form(form): Form<CreateCommentForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let user_id = auth_session.user.unwrap().id;
@@ -397,6 +405,7 @@ pub async fn do_create_comment(
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_comments.html")?;
     let rendered = template.render(context! {
         comments => comments,
+        ..create_base_ftl_context(&bundle)
     })?;
     Ok(Html(rendered).into_response())
 }
