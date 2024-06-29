@@ -93,7 +93,14 @@
             <button type="submit">{{ ftl_post_comment }}</button>
           </form>
         {% endif %}
-        {% if comments %}{{ comments_macro.comments(comments) }}{% endif %}
+        {% if comments %}
+          {{ comments_macro.comments(comments) }}
+        {% else %}
+          <p>
+            {{ ftl_post_no_comments }}
+            {% if not current_user %}{{ ftl_post_no_comments_signin }}{% endif %}
+          </p>
+        {% endif %}
       </div>
     </div>
   </div>

@@ -129,6 +129,8 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_post_no_title => bundle.format_pattern(bundle.get_message("post-no-title").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_description => bundle.format_pattern(bundle.get_message("post-description").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_comments => bundle.format_pattern(bundle.get_message("post-comments").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_post_no_comments => bundle.format_pattern(bundle.get_message("post-no-comments").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_post_no_comments_signin => bundle.format_pattern(bundle.get_message("post-no-comments-signin").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_comment => bundle.format_pattern(bundle.get_message("post-comment").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_publish => bundle.format_pattern(bundle.get_message("post-publish").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_edit => bundle.format_pattern(bundle.get_message("post-edit").unwrap().value().unwrap(), None, &mut vec![]),
