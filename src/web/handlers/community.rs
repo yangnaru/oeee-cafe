@@ -1,13 +1,14 @@
 use crate::app_error::AppError;
 use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, get_participating_communities,
-    get_public_communities, CommunityDraft,
+    get_public_communities, update_community, CommunityDraft,
 };
 use crate::models::post::{find_published_posts_by_community_id, get_draft_post_count};
 use crate::models::user::AuthSession;
 use crate::web::handlers::create_base_ftl_context;
 use crate::web::state::AppState;
 use axum::extract::Path;
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
 use axum_messages::Messages;
@@ -21,6 +22,7 @@ use super::{get_bundle, ExtractAcceptLanguage};
 
 pub async fn community(
     auth_session: AuthSession,
+    headers: HeaderMap,
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -42,14 +44,29 @@ pub async fn community(
         None => 0,
     };
 
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community.html").unwrap();
     let user_preferred_language = auth_session
         .user
         .clone()
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
-    let template: minijinja::Template<'_, '_> = state.env.get_template("community.html")?;
-    let rendered = template.render(context! {
+
+    if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
+        let rendered = template
+            .eval_to_state(context! {
+                current_user => auth_session.user,
+                community => {
+                    community.as_ref()
+                },
+                encoded_community_id => id,
+                ..create_base_ftl_context(&bundle)
+            })?
+            .render_block("community_edit_block")
+            .unwrap();
+        Ok(Html(rendered).into_response())
+    } else {
+        let rendered = template.render(context! {
         current_user => auth_session.user,
         encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         community => community,
@@ -71,8 +88,8 @@ pub async fn community(
         draft_post_count,
         ..create_base_ftl_context(&bundle),
     })?;
-
-    Ok(Html(rendered).into_response())
+        Ok(Html(rendered).into_response())
+    }
 }
 
 pub async fn community_iframe(
@@ -309,4 +326,89 @@ pub async fn create_community_form(
     })?;
 
     Ok(Html(rendered))
+}
+
+pub async fn hx_edit_community(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let community_uuid =
+        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let community = find_community_by_id(&mut tx, community_uuid).await?;
+
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    if community.clone().unwrap().owner_id != auth_session.user.clone().unwrap().id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community_edit.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        community,
+        encoded_community_id => id,
+        ..create_base_ftl_context(&bundle)
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn hx_do_edit_community(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Form(form): Form<CreateCommunityForm>,
+) -> Result<impl IntoResponse, AppError> {
+    if form.name.is_empty() {
+        return Ok(StatusCode::BAD_REQUEST.into_response());
+    }
+
+    let community_uuid =
+        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let updated_community = update_community(
+        &mut tx,
+        community_uuid,
+        CommunityDraft {
+            name: form.name,
+            description: form.description,
+            is_private: form.is_private == Some("on".to_string()),
+        },
+    )
+    .await?;
+    let _ = tx.commit().await;
+
+    let template = state.env.get_template("community.html")?;
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template
+        .eval_to_state(context! {
+            current_user => auth_session.user,
+            community => updated_community,
+            encoded_community_id => id,
+            ..create_base_ftl_context(&bundle)
+        })?
+        .render_block("community_edit_block")?;
+
+    Ok(Html(rendered).into_response())
 }

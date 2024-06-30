@@ -30,7 +30,7 @@
     <form hx-delete="/posts/{{ encoded_post_id }}"
           hx-confirm="{{ ftl_post_delete_confirm }}"
           hx-target="body">
-      <button type="submit">{{ ftl_post_delete }}</button>
+      <button type="submit">{{ ftl_delete }}</button>
     </form>
   </div>
 {% endblock body %}

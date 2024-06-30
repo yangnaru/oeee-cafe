@@ -189,3 +189,33 @@ pub async fn create_community(
         updated_at: result.updated_at,
     })
 }
+
+pub async fn update_community(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    community_draft: CommunityDraft,
+) -> Result<Community> {
+    let q = query!(
+        "
+            UPDATE communities
+            SET name = $2, description = $3, is_private = $4, updated_at = now()
+            WHERE id = $1
+            RETURNING owner_id, created_at
+        ",
+        id,
+        community_draft.name,
+        community_draft.description,
+        community_draft.is_private,
+    );
+    let result = q.fetch_one(&mut **tx).await?;
+
+    Ok(Community {
+        id,
+        owner_id: result.owner_id,
+        name: community_draft.name,
+        description: community_draft.description,
+        is_private: community_draft.is_private,
+        created_at: result.created_at,
+        updated_at: Utc::now(),
+    })
+}

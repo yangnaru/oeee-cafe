@@ -36,6 +36,11 @@ participating-community = Participating communities
 latest-active-public-community = Recently active public communities
 recent-drawings = Recent posts
 
+edit = Edit
+save = Save
+cancel = Cancel
+delete = Delete
+
 post-created-at = Created
 post-published-at = Published
 post-duration = Duration
@@ -49,11 +54,7 @@ post-no-comments = There are no comments.
 post-no-comments-signin = Sign in to add a new comment.
 post-comment = Post comment
 post-publish = Publish
-post-edit = Edit
-post-save = Save
-post-edit-cancel = Cancel
 post-move-community = Move to this community
-post-delete = Delete
 post-delete-confirm = Are you sure you want to delete this post?
 
 sensitive = Sensitive

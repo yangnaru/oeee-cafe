@@ -125,6 +125,11 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_latest_active_public_community => bundle.format_pattern(bundle.get_message("latest-active-public-community").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_recent_drawings => bundle.format_pattern(bundle.get_message("recent-drawings").unwrap().value().unwrap(), None, &mut vec![]),
 
+        ftl_edit => bundle.format_pattern(bundle.get_message("edit").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_save => bundle.format_pattern(bundle.get_message("save").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_cancel => bundle.format_pattern(bundle.get_message("cancel").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_delete => bundle.format_pattern(bundle.get_message("delete").unwrap().value().unwrap(), None, &mut vec![]),
+
         ftl_post_created_at => bundle.format_pattern(bundle.get_message("post-created-at").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_published_at => bundle.format_pattern(bundle.get_message("post-published-at").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_duration => bundle.format_pattern(bundle.get_message("post-duration").unwrap().value().unwrap(), None, &mut vec![]),
@@ -138,11 +143,7 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_post_no_comments_signin => bundle.format_pattern(bundle.get_message("post-no-comments-signin").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_comment => bundle.format_pattern(bundle.get_message("post-comment").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_publish => bundle.format_pattern(bundle.get_message("post-publish").unwrap().value().unwrap(), None, &mut vec![]),
-        ftl_post_edit => bundle.format_pattern(bundle.get_message("post-edit").unwrap().value().unwrap(), None, &mut vec![]),
-        ftl_post_save => bundle.format_pattern(bundle.get_message("post-save").unwrap().value().unwrap(), None, &mut vec![]),
-        ftl_post_edit_cancel => bundle.format_pattern(bundle.get_message("post-edit-cancel").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_move_community => bundle.format_pattern(bundle.get_message("post-move-community").unwrap().value().unwrap(), None, &mut vec![]),
-        ftl_post_delete => bundle.format_pattern(bundle.get_message("post-delete").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_delete_confirm => bundle.format_pattern(bundle.get_message("post-delete-confirm").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_comment_created_at => bundle.format_pattern(bundle.get_message("comment-created-at").unwrap().value().unwrap(), None, &mut vec![]),

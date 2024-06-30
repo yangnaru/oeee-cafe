@@ -4,8 +4,17 @@
 {% endblock title %}
 {% block body %}
   <div class="center">
-    <h2>{{ community.name }}</h2>
-    <p>{{ community.description }}</p>
+    {% block community_edit_block %}
+      <div hx-target="this" hx-swap="outerHTML">
+        <h2>{{ community.name }}</h2>
+        <p>{{ community.description }}</p>
+        {% if current_user.id == community.owner_id %}
+          <div class="community-menu">
+            <button hx-get="/communities/{{ encoded_community_id }}/edit">{{ ftl_edit }}</button>
+          </div>
+        {% endif %}
+      </div>
+    {% endblock community_edit_block %}
     {% if current_user %}
       <form action="/draw" method="post">
         <input type="hidden" name="community_id" value="{{ encoded_community_id }}" />

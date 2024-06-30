@@ -40,7 +40,7 @@
           {{ ftl_community }}:
           <a href="/communities/{{ encoded_community_id }}">{{ post.community_name }}</a>
           {% if current_user.id == post.author_id -%}
-            (<a href="/posts/{{ encoded_post_id }}/edit/community">{{ ftl_post_edit }}</a>)
+            (<a href="/posts/{{ encoded_post_id }}/edit/community">{{ ftl_edit }}</a>)
           {%- endif %}
         </p>
         <img class="post-image"
@@ -67,11 +67,11 @@
               </p>
               {% if current_user.id == post.author_id %}
                 <div class="post-menu">
-                  <button hx-get="/posts/{{ encoded_post_id }}/edit">{{ ftl_post_edit }}</button>
+                  <button hx-get="/posts/{{ encoded_post_id }}/edit">{{ ftl_edit }}</button>
                   <form hx-delete="/posts/{{ encoded_post_id }}"
                         hx-confirm="{{ ftl_post_delete_confirm }}"
                         hx-target="body">
-                    <button type="submit">{{ ftl_post_delete }}</button>
+                    <button type="submit">{{ ftl_delete }}</button>
                   </form>
                 </div>
               {% endif %}

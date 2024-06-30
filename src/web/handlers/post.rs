@@ -616,8 +616,6 @@ pub async fn hx_do_edit_post(
     let post = find_post_by_id(&mut tx, post_uuid).await?;
     let _ = tx.commit().await;
 
-    println!("{:?}", post);
-
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.html")?;
     let user_preferred_language = auth_session
         .user

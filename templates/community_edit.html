@@ -1,0 +1,22 @@
+<form hx-put="/communities/{{ encoded_community_id }}"
+      hx-target="this"
+      hx-swap="outerHTML">
+    <div>
+        <label>{{ ftl_community_name }}:</label>
+        <input type="text" name="name" value="{{ community.name }}">
+    </div>
+    <div class="form-group">
+        <label>{{ ftl_community_description }}:</label>
+        <textarea name="description">{{ community.description }}</textarea>
+    </div>
+    <div>
+        <label>{{ ftl_private_community }}:</label>
+        <input type="checkbox"
+               name="is_private"
+               {% if community.is_private == true %}checked{% endif %}>
+    </div>
+    <div class="post-menu">
+        <button class="btn" hx-get="/communities/{{ encoded_community_id }}">{{ ftl_cancel }}</button>
+        <button class="btn">{{ ftl_save }}</button>
+    </div>
+</form>

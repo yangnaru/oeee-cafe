@@ -38,6 +38,11 @@ participating-community = 참여 중인 커뮤니티
 latest-active-public-community = 최근 활동 공개 커뮤니티
 recent-drawings = 최근 그림
 
+edit = 수정
+save = 저장
+cancel = 취소
+delete = 삭제
+
 post-created-at = 그린 시각
 post-published-at = 발행 시각
 post-duration = 소요 시간
@@ -51,11 +56,7 @@ post-no-comments = 댓글이 없습니다.
 post-no-comments-signin = 로그인하고 댓글을 달아 보세요.
 post-comment = 댓글 달기
 post-publish = 게시
-post-edit = 수정
-post-save = 저장
-post-edit-cancel = 취소
 post-move-community = 이 커뮤니티로 이동
-post-delete = 삭제
 post-delete-confirm = 정말 이 그림을 삭제하시겠습니까?
 
 sensitive = 민감한 내용

@@ -38,6 +38,11 @@ participating-community = 参加中のコミュニティ
 latest-active-public-community = 最近の活動公開コミュニティ
 recent-drawings = 最近のお絵かき
 
+edit = 修正
+save = 保存
+cancel = キャンセル
+delete = 削除
+
 post-created-at = 絵を描いた時刻
 post-published-at = 発行時刻
 post-duration = 所要時間
@@ -51,11 +56,7 @@ post-no-comments = コメントはありません。
 post-no-comments-signin = ログインしてコメントを書いてみてください。
 post-comment = コメント
 post-publish = 公開
-post-edit = 修正
-post-save = 保存
-post-edit-cancel = キャンセル
 post-move-community = このコミュニティに移動する
-post-delete = 削除
 post-delete-confirm = 本当にこの画像を削除しますか？
 
 sensitive = 敏感な内容
