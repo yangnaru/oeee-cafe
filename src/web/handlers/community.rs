@@ -210,8 +210,8 @@ pub async fn communities(
         .cloned()
         .collect::<Vec<_>>();
 
-    let participating_communities =
-        get_participating_communities(&mut tx, auth_session.user.clone().unwrap().id)
+    let participating_communities = match auth_session.user.clone() {
+        Some(user) => get_participating_communities(&mut tx, user.id)
             .await?
             .iter()
             .map(|community| {
@@ -233,7 +233,9 @@ pub async fn communities(
                     ("link".to_string(), link),
                 ])
             })
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>(),
+        None => vec![],
+    };
 
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
