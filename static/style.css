@@ -1,6 +1,7 @@
 :root {
   --main-bg-color: #c4ee62;
   --main-border-color: #3c6712;
+  --main-highlight-color: #ef842d;
 }
 
 body {
@@ -22,6 +23,7 @@ nav {
 }
 
 h1 > a:visited,
+h2 > a:visited,
 nav a:visited {
   color: blue;
 }
@@ -247,4 +249,13 @@ nav a:visited {
 
 .sensitive {
   filter: blur(1rem);
+}
+
+.home-section-title {
+  padding: 8px;
+  background-color: var(--main-bg-color);
+  border-width: 1px;
+  border-color: var(--main-border-color);
+  border-style: solid;
+  color: var(--main-border-color);
 }

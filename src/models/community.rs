@@ -8,6 +8,8 @@ use sqlx::Postgres;
 use sqlx::Transaction;
 use uuid::Uuid;
 
+use super::post::SerializablePost;
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Community {
     pub id: Uuid,
@@ -29,6 +31,20 @@ pub struct PublicCommunity {
     pub is_private: bool,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct PublicCommunityWithPosts {
+    pub id: Uuid,
+    pub encoded_id: String,
+    pub owner_id: Uuid,
+    pub owner_login_name: String,
+    pub name: String,
+    pub description: String,
+    pub is_private: bool,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub posts: Vec<SerializablePost>,
 }
 
 impl Community {
@@ -83,6 +99,96 @@ pub async fn get_public_communities(
     );
 
     Ok(q.fetch_all(&mut **tx).await?)
+}
+
+pub async fn get_user_communities_with_latest_9_posts(
+    tx: &mut Transaction<'_, Postgres>,
+    community_owner_id: Uuid,
+) -> Result<Vec<PublicCommunityWithPosts>> {
+    // Select communities ordered by latest published post
+    let communities = query_as!(
+        PublicCommunity,
+        "
+            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.description, communities.is_private, communities.updated_at, communities.created_at
+            FROM communities
+            LEFT JOIN users ON communities.owner_id = users.id
+            LEFT JOIN posts ON communities.id = posts.community_id
+            WHERE communities.owner_id = $1
+            GROUP BY communities.id, users.login_name
+            ORDER BY MAX(posts.published_at) DESC
+            LIMIT 9
+        ",
+        community_owner_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    let mut result = Vec::new();
+
+    for community in communities {
+        let q = query!(
+            "
+                SELECT
+                    posts.id,
+                    posts.title,
+                    posts.author_id,
+                    images.paint_duration AS paint_duration,
+                    images.stroke_count AS stroke_count,
+                    images.image_filename AS image_filename,
+                    images.width AS width,
+                    images.height AS height,
+                    images.replay_filename AS replay_filename,
+                    posts.viewer_count,
+                    posts.published_at,
+                    posts.created_at,
+                    posts.updated_at
+                FROM posts
+                LEFT JOIN images ON posts.image_id = images.id
+                WHERE community_id = $1
+                AND posts.deleted_at IS NULL
+                AND posts.published_at IS NOT NULL
+                ORDER BY posts.published_at DESC
+                LIMIT 9
+            ",
+            community.id
+        );
+        let r = q.fetch_all(&mut **tx).await?;
+        let posts = r
+            .into_iter()
+            .map(|row| {
+                return SerializablePost {
+                    id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+                    title: row.title,
+                    author_id: row.author_id,
+                    paint_duration: row.paint_duration.microseconds.to_string(),
+                    stroke_count: row.stroke_count,
+                    image_filename: row.image_filename,
+                    image_width: row.width,
+                    image_height: row.height,
+                    replay_filename: row.replay_filename,
+                    viewer_count: row.viewer_count,
+                    published_at: row.published_at,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                };
+            })
+            .collect();
+
+        result.push(PublicCommunityWithPosts {
+            id: community.id,
+            encoded_id: BASE64URL_NOPAD.encode(community.id.as_bytes()),
+            owner_id: community.owner_id,
+            owner_login_name: community.owner_login_name,
+            name: community.name,
+            description: community.description,
+            is_private: community.is_private,
+            updated_at: community.updated_at,
+            created_at: community.created_at,
+            posts,
+        });
+    }
+
+    Ok(result)
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

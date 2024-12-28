@@ -3,7 +3,7 @@ use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Asia::Seoul;
 use data_encoding::BASE64URL_NOPAD;
 use humantime::format_duration;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{postgres::types::PgInterval, query, Postgres, Transaction};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -21,7 +21,7 @@ pub struct Post {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 
 pub struct SerializablePost {
     pub id: String,

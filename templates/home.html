@@ -4,21 +4,26 @@
 {% endblock title %}
 {% block body %}
   <div class="center">
-    <h2>{{ ftl_timeline_public }}</h2>
-    {% if posts|length > 0 %}
-      <div class="posts-grid">
-        {% for post in posts %}
-          <div class="posts-grid-item">
-            <a href="/posts/{{ post.id }}">
-              <img width="{{ post.image_width }}"
-                   height="{{ post.image_height }}"
-                   alt="{{ post.title }}"
-                   src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                   class="{% if post.is_sensitive %}sensitive{% endif %}" />
-            </a>
-          </div>
-        {% endfor %}
-      </div>
+    {% if official_communities_with_latest_posts|length > 0 %}
+      {% for community in
+        official_communities_with_latest_posts %}
+        <h2 class="home-section-title">
+          <a href="/communities/{{ community.encoded_id }}">{{ community.name }}</a>
+        </h2>
+        <div class="posts-grid">
+          {% for post in community.posts %}
+            <div class="posts-grid-item">
+              <a href="/posts/{{ post.id }}">
+                <img width="{{ post.image_width }}"
+                     height="{{ post.image_height }}"
+                     alt="{{ post.title }}"
+                     src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+                     class="{% if post.is_sensitive %}sensitive{% endif %}" />
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+      {% endfor %}
     {% else %}
       <p>{{ ftl_timeline_empty|safe }}</p>
     {% endif %}
