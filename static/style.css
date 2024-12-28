@@ -24,7 +24,8 @@ nav {
 
 h1 > a:visited,
 h2 > a:visited,
-nav a:visited {
+nav a:visited,
+.community-badge a:visited {
   color: blue;
 }
 
@@ -258,4 +259,16 @@ nav a:visited {
   border-color: var(--main-border-color);
   border-style: solid;
   color: var(--main-border-color);
+}
+
+.community-badges {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.community-badge {
+  background-color: var(--main-highlight-color);
+  padding: 8px;
+  border: solid 1px black;
 }

@@ -20,6 +20,14 @@
         {% endfor %}
       </div>
     {% endif %}
+    <h2 class="home-section-title">{{ ftl_latest_active_communities }}</h2>
+    <div class="community-badges">
+      {% for (community, encoded_id) in active_public_communities[:10] %}
+        <div class="community-badge">
+          <a href="/communities/{{ encoded_id }}">{{ community.name }} ({{ community.posts_count }})</a>
+        </div>
+      {% endfor %}
+    </div>
     {% if official_communities_with_latest_posts|length > 0 %}
       {% for community in
         official_communities_with_latest_posts %}

@@ -31,6 +31,7 @@ pub struct PublicCommunity {
     pub is_private: bool,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+    pub posts_count: Option<i64>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -87,7 +88,7 @@ pub async fn get_public_communities(
     let q = query_as!(
         PublicCommunity,
         "
-            SELECT communities.*, users.login_name AS owner_login_name
+            SELECT communities.*, users.login_name AS owner_login_name, COALESCE(COUNT(posts.id), 0) AS posts_count
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id
             LEFT JOIN users ON communities.owner_id = users.id
@@ -101,6 +102,28 @@ pub async fn get_public_communities(
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
+pub async fn get_active_public_communities_excluding_owner(
+    tx: &mut Transaction<'_, Postgres>,
+    community_owner_id: Uuid,
+) -> Result<Vec<PublicCommunity>> {
+    let q = query_as!(
+        PublicCommunity,
+        "
+            SELECT communities.*, users.login_name AS owner_login_name, COUNT(posts.id) AS posts_count
+            FROM communities
+            LEFT JOIN posts ON communities.id = posts.community_id
+            LEFT JOIN users ON communities.owner_id = users.id
+            WHERE communities.is_private = false AND communities.owner_id != $1
+            GROUP BY communities.id, users.login_name
+            HAVING MAX(posts.published_at) IS NOT NULL
+            ORDER BY COUNT(posts.id) DESC
+        ",
+        community_owner_id
+    );
+
+    Ok(q.fetch_all(&mut **tx).await?)
+}
+
 pub async fn get_user_communities_with_latest_9_posts(
     tx: &mut Transaction<'_, Postgres>,
     community_owner_id: Uuid,
@@ -109,7 +132,7 @@ pub async fn get_user_communities_with_latest_9_posts(
     let communities = query_as!(
         PublicCommunity,
         "
-            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.description, communities.is_private, communities.updated_at, communities.created_at
+            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.description, communities.is_private, communities.updated_at, communities.created_at, COUNT(posts.id) AS posts_count
             FROM communities
             LEFT JOIN users ON communities.owner_id = users.id
             LEFT JOIN posts ON communities.id = posts.community_id
