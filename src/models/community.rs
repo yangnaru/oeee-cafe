@@ -116,7 +116,7 @@ pub async fn get_active_public_communities_excluding_owner(
             WHERE communities.is_private = false AND communities.owner_id != $1
             GROUP BY communities.id, users.login_name
             HAVING MAX(posts.published_at) IS NOT NULL
-            ORDER BY COUNT(posts.id) DESC
+            ORDER BY MAX(posts.published_at) DESC
         ",
         community_owner_id
     );
