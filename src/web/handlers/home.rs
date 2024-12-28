@@ -1,7 +1,10 @@
 use super::ExtractAcceptLanguage;
 use crate::app_error::AppError;
 use crate::models::community::get_user_communities_with_latest_9_posts;
-use crate::models::post::{find_following_posts_by_user_id, get_draft_post_count};
+use crate::models::post::{
+    find_following_posts_by_user_id, find_public_community_posts_excluding_from_community_owner,
+    get_draft_post_count,
+};
 use crate::models::user::{find_user_by_login_name, AuthSession};
 use crate::web::handlers::{create_base_ftl_context, get_bundle};
 use crate::web::state::AppState;
@@ -37,7 +40,10 @@ pub async fn home(
 
     let user = find_user_by_login_name(&mut tx, &state.config.official_account_login_name).await?;
     let official_communities_with_latest_posts =
-        get_user_communities_with_latest_9_posts(&mut tx, user.unwrap().id).await?;
+        get_user_communities_with_latest_9_posts(&mut tx, user.clone().unwrap().id).await?;
+    let non_official_public_community_posts =
+        find_public_community_posts_excluding_from_community_owner(&mut tx, user.unwrap().id)
+            .await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("home.html")?;
     let rendered = template.render(context! {
@@ -45,6 +51,7 @@ pub async fn home(
         encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
         messages => messages.into_iter().collect::<Vec<_>>(),
         official_communities_with_latest_posts,
+        non_official_public_community_posts,
         draft_post_count,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ..create_base_ftl_context(&bundle)

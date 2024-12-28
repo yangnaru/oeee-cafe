@@ -4,6 +4,22 @@
 {% endblock title %}
 {% block body %}
   <div class="center">
+    {% if non_official_public_community_posts| length > 0 %}
+      <h2 class="home-section-title">{{ ftl_posts_from_public_communities }}</h2>
+      <div class="posts-grid">
+        {% for post in non_official_public_community_posts %}
+          <div class="posts-grid-item">
+            <a href="/posts/{{ post.id }}">
+              <img width="{{ post.image_width }}"
+                   height="{{ post.image_height }}"
+                   alt="{{ post.title }}"
+                   src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+                   class="{% if post.is_sensitive %}sensitive{% endif %}" />
+            </a>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
     {% if official_communities_with_latest_posts|length > 0 %}
       {% for community in
         official_communities_with_latest_posts %}
