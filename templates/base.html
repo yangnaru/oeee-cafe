@@ -2,11 +2,7 @@
 <html lang="{{ ftl_lang }}">
   <head>
     <meta charset="utf-8" />
-    <title>
-      {%- block title -%}
-        {{ ftl_brand }}
-      {%- endblock title -%}
-    </title>
+    <title>{%- block title -%} {{ ftl_brand }} {%- endblock title -%}</title>
     <link rel="stylesheet" href="/static/style.css" type="text/css" />
     <script src="https://unpkg.com/htmx.org@2.0.0"
             integrity="sha384-wS5l5IKJBvK6sPTKa2WZ1js3d947pvWXbPJ1OmWfEuxLgeHcEbjUUA5i9V5ZkpCw"
@@ -15,7 +11,7 @@
           content="width=device-width,initial-scale=1.0,minimum-scale=1.0" />
     <meta name="keywords" content="오이카페, 오에카키, 커뮤니티, お絵かき" />
     <meta name="description" content="오이카페는 오에카키 커뮤니티입니다. お絵かできるOEEEカフェです。" />
-    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="icon" type="image/png" href="/static/favicon.png" />
     {% block head %}
     {% endblock head %}
   </head>
@@ -31,9 +27,6 @@
       </h1>
       <nav>
         <div id="menubar">
-          <div>
-            <a href="/">{{ ftl_home }}</a>
-          </div>
           <div>
             <a href="/about">{{ ftl_brand }}?</a>
           </div>
@@ -72,10 +65,7 @@
             </div>
             <div>
               <a href="/account">{{ ftl_account }}</a>
-              {% if not current_user.email_verified_at
-                %}
-                <span class="dangerous">({{ ftl_email_not_verified }})</span>
-              {% endif %}
+              {% if not current_user.email_verified_at %}<span class="dangerous">({{ ftl_email_not_verified }})</span>{% endif %}
             </div>
           {% else %}
             <a href="/login">{{ ftl_sign_in }}</a>
