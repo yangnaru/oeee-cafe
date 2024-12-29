@@ -88,7 +88,7 @@ where
 
 fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoizer>) -> Value {
     context! {
-        ftl_lang => bundle.locales.get(0).unwrap().to_string(),
+        ftl_lang => bundle.locales.first().unwrap().to_string(),
 
         ftl_brand => bundle.format_pattern(bundle.get_message("brand").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_error_404 => bundle.format_pattern(bundle.get_message("error-404").unwrap().value().unwrap(), None, &mut vec![]),
@@ -242,11 +242,11 @@ fn get_bundle(
             let mut bundle = FluentBundle::new_concurrent(vec![language.parse().unwrap()]);
             bundle.add_resource(ftl).expect("Failed to add a resource.");
 
-            return bundle;
+            bundle
         }
         None => {
             let requested = parse_accepted_languages(accept_language.to_str().unwrap());
-            let available = convert_vec_str_to_langids_lossy(&["ko", "ja", "en"]);
+            let available = convert_vec_str_to_langids_lossy(["ko", "ja", "en"]);
             let default = "ko".parse().expect("Failed to parse a langid.");
 
             let supported = negotiate_languages(
@@ -257,11 +257,10 @@ fn get_bundle(
             );
 
             let ftl = LOCALES
-                .get(supported.get(0).unwrap().language.as_str())
+                .get(supported.first().unwrap().language.as_str())
                 .unwrap_or_else(|| LOCALES.get("ko").unwrap());
 
-            let mut bundle = FluentBundle::new_concurrent(vec![supported
-                .get(0)
+            let mut bundle = FluentBundle::new_concurrent(vec![supported.first()
                 .unwrap()
                 .language
                 .as_str()

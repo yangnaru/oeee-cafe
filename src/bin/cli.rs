@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
                 println!("Description: {}", community.description);
                 println!("Private: {}", community.is_private);
                 println!("URL: {}{}", cfg.base_url, community.get_url());
-                println!("");
+                println!();
             }
         }
         Commands::GetUser { login_name } => {
@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
             match user {
                 Ok(Some(user)) => {
                     print_user_info(user);
-                    println!("");
+                    println!();
                     let password = rpassword::prompt_password("New password: ").unwrap();
                     let password2 = rpassword::prompt_password("New password (again): ").unwrap();
 

@@ -121,11 +121,11 @@ pub async fn profile(
         find_published_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
     let public_community_posts = published_posts
         .iter()
-        .filter(|post| post.community_is_private == false)
+        .filter(|post| !post.community_is_private)
         .collect::<Vec<_>>();
     let private_community_posts = published_posts
         .iter()
-        .filter(|post| post.community_is_private == true)
+        .filter(|post| post.community_is_private)
         .collect::<Vec<_>>();
 
     let draft_post_count = match auth_session.user.clone() {

@@ -345,7 +345,7 @@ pub async fn request_email_verification_code(
                 &mut vec![],
             ),
         )
-        .body(format!("{}", email_verification_challenge.token.clone()))
+        .body(email_verification_challenge.token.clone().to_string())
         .unwrap();
 
     let mailer = SmtpTransport::relay(&state.config.smtp_host)

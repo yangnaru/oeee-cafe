@@ -123,7 +123,7 @@ pub async fn find_posts_by_community_id(
     Ok(result
         .into_iter()
         .map(|row| {
-            return SerializablePost {
+            SerializablePost {
                 id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
                 title: row.title,
                 author_id: row.author_id,
@@ -137,7 +137,7 @@ pub async fn find_posts_by_community_id(
                 published_at: row.published_at,
                 created_at: row.created_at,
                 updated_at: row.updated_at,
-            };
+            }
         })
         .collect())
 }
@@ -661,7 +661,7 @@ pub async fn find_public_community_posts(
             image_width: row.width,
             image_height: row.height,
             replay_filename: row.replay_filename,
-            is_sensitive: row.is_sensitive.unwrap_or_else(|| false),
+            is_sensitive: row.is_sensitive.unwrap_or(false),
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,
@@ -716,7 +716,7 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
             image_width: row.width,
             image_height: row.height,
             replay_filename: row.replay_filename,
-            is_sensitive: row.is_sensitive.unwrap_or_else(|| false),
+            is_sensitive: row.is_sensitive.unwrap_or(false),
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,

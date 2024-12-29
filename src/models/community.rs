@@ -179,7 +179,7 @@ pub async fn get_user_communities_with_latest_9_posts(
         let posts = r
             .into_iter()
             .map(|row| {
-                return SerializablePost {
+                SerializablePost {
                     id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
                     title: row.title,
                     author_id: row.author_id,
@@ -193,7 +193,7 @@ pub async fn get_user_communities_with_latest_9_posts(
                     published_at: row.published_at,
                     created_at: row.created_at,
                     updated_at: row.updated_at,
-                };
+                }
             })
             .collect();
 
