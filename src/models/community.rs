@@ -90,7 +90,7 @@ pub async fn get_public_communities(
         "
             SELECT communities.*, users.login_name AS owner_login_name, COALESCE(COUNT(posts.id), 0) AS posts_count
             FROM communities
-            LEFT JOIN posts ON communities.id = posts.community_id
+            LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             LEFT JOIN users ON communities.owner_id = users.id
             WHERE communities.is_private = false
             GROUP BY communities.id, users.login_name
@@ -111,7 +111,7 @@ pub async fn get_active_public_communities_excluding_owner(
         "
             SELECT communities.*, users.login_name AS owner_login_name, COUNT(posts.id) AS posts_count
             FROM communities
-            LEFT JOIN posts ON communities.id = posts.community_id
+            LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             LEFT JOIN users ON communities.owner_id = users.id
             WHERE communities.is_private = false AND communities.owner_id != $1
             GROUP BY communities.id, users.login_name
@@ -135,7 +135,7 @@ pub async fn get_user_communities_with_latest_9_posts(
             SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.description, communities.is_private, communities.updated_at, communities.created_at, COUNT(posts.id) AS posts_count
             FROM communities
             LEFT JOIN users ON communities.owner_id = users.id
-            LEFT JOIN posts ON communities.id = posts.community_id
+            LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             WHERE communities.owner_id = $1
             GROUP BY communities.id, users.login_name
             ORDER BY MAX(posts.published_at) DESC
