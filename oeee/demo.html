@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="This is a demo website">
+        <meta name="keywords" content="HTML, CSS, JavaScript">
+        <title>Demo</title>
+        <script type="importmap">
+            {
+              "imports": {
+                "lz-string": "https://esm.sh/lz-string@1.5.0"
+              }
+            }
+          </script>
+          <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <div class="container">
+            <div id="oeee"></div>
+            <div class="controls-container">
+                <div class="color-scheme-container">
+                    <select id="color-scheme">
+                        <option value="aka">Aka</option>
+                        <option value="ao">Ao</option>
+                    </select>
+                </div>
+                <div class="pen-size-container">
+                    <input type="range" id="size" min="1" max="30" value="2">
+                    <span id="pen-size-value">2</span>
+                </div>
+                <div class="color-picker-container">
+                    <div class="color-picker-option">
+                        <div id="color-picker-option-1-preview"></div>
+                        <input type="radio" id="color-picker-option-1" name="color-picker" value="color-picker" checked>
+                    </div>
+                    <div class="color-picker-option">
+                        <div id="color-picker-option-2-preview"></div>
+                        <input type="radio" id="color-picker-option-2" name="color-picker" value="color-picker">
+                    </div>
+                </div>
+                <input type="button" id="save" value="save">
+                <input type="button" id="undo" value="undo">
+                <input type="button" id="redo" value="redo">
+                <input type="button" id="download-image" value="download image">
+                <input type="button" id="download-replay" value="download replay">
+            </div>
+        </div>
+        <script src="script.js" type="module"></script>
+        <link rel="stylesheet" href="style.css">
+    </body>
+</html>
