@@ -1,8 +1,8 @@
 import { compressToUint8Array } from "lz-string";
 
 const LINETYPE_PEN = 1;
-const DEFAULT_CANVAS_WIDTH = 200;
-const DEFAULT_CANVAS_HEIGHT = 200;
+const DEFAULT_CANVAS_WIDTH = 640;
+const DEFAULT_CANVAS_HEIGHT = 480;
 const ALPHATYPE_PEN = 1;
 
 const COLOR_SCHEMES = {
@@ -84,16 +84,29 @@ export class Oeee {
 		}
 		// Create a copy of items and remove the last empty array
 		const itemsToExport = [...this.items];
-		if (itemsToExport.length > 0 && Array.isArray(itemsToExport[itemsToExport.length - 1]) 
+		if (itemsToExport.length > 0 && Array.isArray(itemsToExport[itemsToExport.length - 1])
 			&& itemsToExport[itemsToExport.length - 1].length === 0) {
 			itemsToExport.pop();
 		}
-		const data = JSON.stringify(itemsToExport);
-		const compressedData = compressToUint8Array(data);
 
 		const magic = "NEO ";
 		const w = this.canvas.width;
 		const h = this.canvas.height;
+
+		const emptyCanvas = document.createElement("canvas");
+		emptyCanvas.width = w;
+		emptyCanvas.height = h;
+
+		const restoreData = [
+			"restore",
+			this.canvas.toDataURL("image/png"),
+			emptyCanvas.toDataURL("image/png"),
+		];
+
+		itemsToExport.push(restoreData);
+
+		const data = JSON.stringify(itemsToExport);
+		const compressedData = compressToUint8Array(data);
 
 		return new Blob([
 			magic,
@@ -122,9 +135,9 @@ export class Oeee {
 
 	// Add the shared hexToInt method
 	private hexToInt(hex: string): number {
-		const r = parseInt(hex.slice(1,3), 16);
-		const g = parseInt(hex.slice(3,5), 16);
-		const b = parseInt(hex.slice(5,7), 16);
+		const r = parseInt(hex.slice(1, 3), 16);
+		const g = parseInt(hex.slice(3, 5), 16);
+		const b = parseInt(hex.slice(5, 7), 16);
 		// Use alpha = 255 (fully opaque)
 		return (255 << 24) | (b << 16) | (g << 8) | r;  // ABGR format
 	}
@@ -142,7 +155,7 @@ export class Oeee {
 
 		// Initialize with a flood fill
 		const fillColorHex = COLOR_SCHEMES[this.colorScheme].fill;
-		
+
 		// Flood canvas with the color scheme's fill color
 		const ctx = this.canvas.getContext("2d");
 		if (ctx) {
@@ -152,7 +165,7 @@ export class Oeee {
 
 		this.items = [
 			[
-				"floodFill", 
+				"floodFill",
 				0, // layer
 				0, // x
 				0, // y
@@ -231,7 +244,7 @@ export class Oeee {
 
 		handleColorPickerClick(
 			colorPickerOption2,
-			'fill', 
+			'fill',
 			'input[id="color-picker-option-2"][value="color-picker"]',
 		);
 
@@ -252,7 +265,7 @@ export class Oeee {
 		this.canvas.addEventListener("pointermove", this.handleMove.bind(this));
 		this.canvas.addEventListener("pointerup", this.handleEnd.bind(this));
 		this.canvas.addEventListener("pointercancel", this.handleEnd.bind(this));
-		this.canvas.addEventListener("pointerleave", this.handleEnd.bind(this));
+		// Remove pointerleave handler
 
 		// Touch events
 		this.canvas.addEventListener("touchstart", this.handleStart.bind(this));
@@ -264,7 +277,11 @@ export class Oeee {
 		this.canvas.addEventListener("mousedown", this.handleStart.bind(this));
 		this.canvas.addEventListener("mousemove", this.handleMove.bind(this));
 		this.canvas.addEventListener("mouseup", this.handleEnd.bind(this));
-		this.canvas.addEventListener("mouseleave", this.handleEnd.bind(this));
+		// Remove mouseleave handler
+
+		// Add window-level event listeners to handle pointer/mouse up anywhere
+		window.addEventListener("pointerup", this.handleEnd.bind(this));
+		window.addEventListener("mouseup", this.handleEnd.bind(this));
 
 		// Undo/Redo keyboard shortcuts
 		document.addEventListener("keydown", (e) => {
@@ -314,7 +331,6 @@ export class Oeee {
 		if (colorSchemeSelect) {
 			colorSchemeSelect.addEventListener("change", () => {
 				const newScheme = colorSchemeSelect.value as keyof typeof COLOR_SCHEMES;
-				console.log(newScheme);
 				this.setColorScheme(newScheme);
 			});
 		}
@@ -611,7 +627,7 @@ export class Oeee {
 
 	private handleStart(event: MouseEvent | TouchEvent | PointerEvent) {
 		event.preventDefault();
-		
+
 		// Only start drawing on primary button (left click) or touch
 		if ((event as MouseEvent).button === 0 || event.type === 'touchstart') {
 			this.isDrawing = true;
@@ -671,7 +687,6 @@ export class Oeee {
 			this.lastX = x;
 			this.lastY = y;
 
-			console.log({ x, y });
 			this.items[this.head].push(x, y);
 		}
 
@@ -698,26 +713,26 @@ export class Oeee {
 		this.colorScheme = scheme;
 		this.penColor = COLOR_SCHEMES[this.colorScheme].pen;
 		const fillColorHex = COLOR_SCHEMES[this.colorScheme].fill;
-				
+
 		// Update the color picker previews and select pen color by default
 		const preview1 = document.getElementById("color-picker-option-1-preview");
 		const preview2 = document.getElementById("color-picker-option-2-preview");
 		const penRadio = document.querySelector('input[id="color-picker-option-1"][value="color-picker"]') as HTMLInputElement;
-		
+
 		if (preview1) preview1.style.backgroundColor = this.penColor;
 		if (preview2) preview2.style.backgroundColor = fillColorHex;
 		if (penRadio) penRadio.checked = true;
-		
+
 		// Store current state for undo
 		this._pushUndo();
-		
+
 		// Flood fill with new background color
 		const ctx = this.canvas.getContext("2d");
 		if (ctx) {
 			ctx.fillStyle = fillColorHex;
 			ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 		}
-		
+
 		this.head = 0;
 		this.items = [[]];
 		this.items[this.head] = [
