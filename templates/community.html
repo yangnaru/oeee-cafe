@@ -16,45 +16,55 @@
       </div>
     {% endblock community_edit_block %}
     {% if current_user %}
-      <form action="/draw" method="post">
-        <input type="hidden" name="community_id" value="{{ encoded_community_id }}" />
-        <select name="tool" title="{{ ftl_community_drawing_tool }}">
-          <option value="neo" selected>PaintBBS NEO</option>
-          <option value="tegaki">Tegaki</option>
-        </select>
-        <select name="width" title="{{ ftl_community_drawing_width }}">
-          <option value="300" selected>300</option>
-          <option value="350">350</option>
-          <option value="400">400</option>
-          <option value="450">450</option>
-          <option value="500">500</option>
-          <option value="550">550</option>
-          <option value="600">600</option>
-          <option value="650">650</option>
-          <option value="700">700</option>
-          <option value="750">750</option>
-          <option value="800">800</option>
-          <option value="850">850</option>
-          <option value="900">900</option>
-          <option value="950">950</option>
-          <option value="1000">1000</option>
-        </select>
-        X
-        <select name="height" title="{{ ftl_community_drawing_height }}">
-          <option value="300" selected>300</option>
-          <option value="350">350</option>
-          <option value="400">400</option>
-          <option value="450">450</option>
-          <option value="500">500</option>
-          <option value="550">550</option>
-          <option value="600">600</option>
-          <option value="650">650</option>
-          <option value="700">700</option>
-          <option value="750">750</option>
-          <option value="800">800</option>
-        </select>
-        <input type="submit" value="{{ ftl_community_drawing_new }}" />
-      </form>
+      {% if community.background_color %}
+        <form action="/draw" method="post">
+          <input type="hidden" name="community_id" value="{{ encoded_community_id }}" />
+          <input type="hidden" name="tool" value="cucumber" />
+          <input type="hidden" name="width" value="640" />
+          <input type="hidden" name="height" value="480" />
+          <input type="submit" value="{{ ftl_community_drawing_new }}" />
+        </form>
+      {% else %}
+        <form action="/draw" method="post">
+          <input type="hidden" name="community_id" value="{{ encoded_community_id }}" />
+          <select name="tool" title="{{ ftl_community_drawing_tool }}">
+            <option value="neo" selected>PaintBBS NEO</option>
+            <option value="tegaki">Tegaki</option>
+          </select>
+          <select name="width" title="{{ ftl_community_drawing_width }}">
+            <option value="300" selected>300</option>
+            <option value="350">350</option>
+            <option value="400">400</option>
+            <option value="450">450</option>
+            <option value="500">500</option>
+            <option value="550">550</option>
+            <option value="600">600</option>
+            <option value="650">650</option>
+            <option value="700">700</option>
+            <option value="750">750</option>
+            <option value="800">800</option>
+            <option value="850">850</option>
+            <option value="900">900</option>
+            <option value="950">950</option>
+            <option value="1000">1000</option>
+          </select>
+          X
+          <select name="height" title="{{ ftl_community_drawing_height }}">
+            <option value="300" selected>300</option>
+            <option value="350">350</option>
+            <option value="400">400</option>
+            <option value="450">450</option>
+            <option value="500">500</option>
+            <option value="550">550</option>
+            <option value="600">600</option>
+            <option value="650">650</option>
+            <option value="700">700</option>
+            <option value="750">750</option>
+            <option value="800">800</option>
+          </select>
+          <input type="submit" value="{{ ftl_community_drawing_new }}" />
+        </form>
+      {% endif %}
     {% endif %}
     {% if comments %}
       <h3>{{ ftl_recent_comments }}</h3>
@@ -65,7 +75,8 @@
               {% if comment.post_title %}
                 {{ comment.post_title }}
               {% else %}
-                {{ ftl_post_no_title }}
+                {{
+                ftl_post_no_title }}
               {% endif %}
             </a>: {{ comment.content }}
           </div>

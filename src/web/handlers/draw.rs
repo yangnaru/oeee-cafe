@@ -53,6 +53,7 @@ pub async fn start_draw(
     let template_filename = match input.tool.as_str() {
         "neo" => "draw_post_neo.html",
         "tegaki" => "draw_post_tegaki.html",
+        "cucumber" => "draw_post_cucumber.html",
         _ => "draw_post_neo.html",
     };
 
@@ -83,6 +84,8 @@ pub async fn start_draw(
         tool => input.tool,
         width => input.width.parse::<u32>()?,
         height => input.height.parse::<u32>()?,
+        background_color => community.background_color,
+        foreground_color => community.foreground_color,
         community_id => input.community_id,
         draft_post_count,
         ..create_base_ftl_context(&bundle)
@@ -208,7 +211,7 @@ pub async fn draw_finish(
         .expect("Time went backwards");
     let duration_ms = since_the_epoch.as_millis() - security_timer;
 
-    if tool == "neo" {
+    if tool == "neo" || tool == "cucumber" {
         upload_object(
             &client,
             &state.config.aws_s3_bucket,
@@ -236,9 +239,11 @@ pub async fn draw_finish(
             &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
         )
         .await?;
+    } else {
+        return Ok(StatusCode::BAD_REQUEST.into_response());
     }
 
-    let replay_filename = if tool == "neo" {
+    let replay_filename = if tool == "neo" || tool == "cucumber" {
         format!("{}.pch", replay_sha256)
     } else if tool == "tegaki" {
         format!("{}.tgkr", replay_sha256)

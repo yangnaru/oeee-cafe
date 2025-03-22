@@ -286,3 +286,35 @@ nav a:visited,
   padding: 8px;
   border: solid 1px black;
 }
+
+/* Cucumber */
+
+#cucumber-container {
+  display: flex;
+  justify-content: center;
+  flex-direction: row;
+  gap: 10px;
+}
+
+#cucumber-canvas {
+  border: 1px solid black;
+}
+
+#cucumber-canvas-safe {
+  padding: 50px;
+}
+
+#cucumber-controls-container {
+  padding-top: 50px;
+  padding-right: 50px;
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#cucumber-color-picker-container {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}

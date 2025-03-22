@@ -81,6 +81,7 @@ impl App {
         let auth_layer = AuthManagerLayerBuilder::new(authn_backend, session_layer).build();
 
         let static_router = Router::new()
+            .nest_service("/static/cucumber", ServeDir::new("cucumber"))
             .nest_service("/static/neo/dist", ServeDir::new("neo/dist"))
             .nest_service("/static/tegaki/css", ServeDir::new("tegaki/css"))
             .nest_service("/static/tegaki/js", ServeDir::new("tegaki/js"))

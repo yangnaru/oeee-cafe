@@ -19,6 +19,8 @@ pub struct Community {
     pub is_private: bool,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+    pub background_color: Option<String>,
+    pub foreground_color: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -32,6 +34,8 @@ pub struct PublicCommunity {
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub posts_count: Option<i64>,
+    pub background_color: Option<String>,
+    pub foreground_color: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -69,7 +73,7 @@ pub async fn get_own_communities(
 ) -> Result<Vec<Community>> {
     let q = query_as!(
         Community,
-        "SELECT * FROM communities WHERE owner_id = $1",
+        "SELECT id, owner_id, name, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE owner_id = $1",
         owner_id
     );
 
@@ -77,7 +81,7 @@ pub async fn get_own_communities(
 }
 
 pub async fn get_communities(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<Community>> {
-    let q = query_as!(Community, "SELECT * FROM communities");
+    let q = query_as!(Community, "SELECT id, owner_id, name, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities");
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
@@ -132,7 +136,18 @@ pub async fn get_user_communities_with_latest_9_posts(
     let communities = query_as!(
         PublicCommunity,
         "
-            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.description, communities.is_private, communities.updated_at, communities.created_at, COUNT(posts.id) AS posts_count
+            SELECT
+                communities.id,
+                communities.owner_id,
+                users.login_name AS owner_login_name,
+                communities.name,
+                communities.description,
+                communities.is_private,
+                communities.updated_at,
+                communities.created_at,
+                communities.foreground_color,
+                communities.background_color,
+                COUNT(posts.id) AS posts_count
             FROM communities
             LEFT JOIN users ON communities.owner_id = users.id
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
@@ -223,6 +238,8 @@ pub struct KnownCommunity {
     pub is_private: bool,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+    pub background_color: Option<String>,
+    pub foreground_color: Option<String>,
 }
 
 pub async fn get_known_communities(
@@ -280,7 +297,7 @@ pub async fn find_community_by_id(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
 ) -> Result<Option<Community>> {
-    let q = query_as!(Community, "SELECT * FROM communities WHERE id = $1", id);
+    let q = query_as!(Community, "SELECT id, owner_id, name, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE id = $1", id);
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
@@ -315,6 +332,8 @@ pub async fn create_community(
         is_private: community_draft.is_private,
         created_at: result.created_at,
         updated_at: result.updated_at,
+        background_color: None,
+        foreground_color: None,
     })
 }
 
@@ -345,5 +364,7 @@ pub async fn update_community(
         is_private: community_draft.is_private,
         created_at: result.created_at,
         updated_at: Utc::now(),
+        background_color: None,
+        foreground_color: None,
     })
 }

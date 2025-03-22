@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "lz-string": "^1.5.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/lz-string": "^1.3.34",
+    "typescript": "^5.8.2"
+  }
+}
