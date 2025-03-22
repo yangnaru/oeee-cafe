@@ -165,11 +165,11 @@ impl App {
             .merge(protected_router)
             .layer(MessagesManagerLayer)
             .layer(auth_layer)
-            .with_state(self.state)
+            .with_state(self.state.clone())
             .merge(static_router);
 
-        // run our app with hyper, listening globally on port 3000
-        let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+        // run our app with hyper, listening globally
+        let addr = SocketAddr::from(([0, 0, 0, 0], self.state.config.port));
         let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
         tracing::info!("listening on {}", addr);
 
