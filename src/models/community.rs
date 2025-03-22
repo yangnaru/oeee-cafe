@@ -137,6 +137,7 @@ pub async fn get_user_communities_with_latest_9_posts(
             LEFT JOIN users ON communities.owner_id = users.id
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             WHERE communities.owner_id = $1
+            AND communities.is_private = false
             GROUP BY communities.id, users.login_name
             ORDER BY MAX(posts.published_at) DESC
             LIMIT 9
@@ -178,22 +179,20 @@ pub async fn get_user_communities_with_latest_9_posts(
         let r = q.fetch_all(&mut **tx).await?;
         let posts = r
             .into_iter()
-            .map(|row| {
-                SerializablePost {
-                    id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
-                    title: row.title,
-                    author_id: row.author_id,
-                    paint_duration: row.paint_duration.microseconds.to_string(),
-                    stroke_count: row.stroke_count,
-                    image_filename: row.image_filename,
-                    image_width: row.width,
-                    image_height: row.height,
-                    replay_filename: row.replay_filename,
-                    viewer_count: row.viewer_count,
-                    published_at: row.published_at,
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
-                }
+            .map(|row| SerializablePost {
+                id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+                title: row.title,
+                author_id: row.author_id,
+                paint_duration: row.paint_duration.microseconds.to_string(),
+                stroke_count: row.stroke_count,
+                image_filename: row.image_filename,
+                image_width: row.width,
+                image_height: row.height,
+                replay_filename: row.replay_filename,
+                viewer_count: row.viewer_count,
+                published_at: row.published_at,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
             })
             .collect();
 
