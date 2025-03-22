@@ -522,6 +522,8 @@ export default class Cucumber {
 	private handleStart(event: MouseEvent | TouchEvent | PointerEvent) {
 		event.preventDefault();
 
+		if (this.isDrawing) return;
+
 		// Only start drawing on primary button (left click) or touch
 		if ((event as MouseEvent).button === 0 || event.type === "touchstart") {
 			this.isDrawing = true;
