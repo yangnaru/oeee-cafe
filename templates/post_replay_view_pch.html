@@ -9,27 +9,6 @@
   ({{ ftl_post_replay }})
 {% endblock title %}
 {% block body %}
-  <script>
-  document.write(`
-      <applet-dummy name="pch" width="{{ post.image_width }}" height="{{ post.image_height }}">
-      </applet-dummy>
-    `);
-
-  const url =
-    "{{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}";
-
-  fetch(url)
-    .then((response) => response.arrayBuffer())
-    .then((result) => {
-      const pch = Neo.decodePCH(result);
-
-      Neo.createViewer(document.querySelector("#viewer"));
-      Neo.config.width = pch.width;
-      Neo.config.height = pch.height;
-      Neo.initViewer(pch);
-      Neo.startViewer();
-    });
-  </script>
   <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
   <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}"
           charset="utf-8"></script>
@@ -53,4 +32,25 @@
     </p>
     <p>{{ ftl_post_description }}: {{ post.content }}</p>
   </div>
+  <script>
+  document.write(`
+      <applet-dummy name="pch" width="{{ post.image_width }}" height="{{ post.image_height }}">
+      </applet-dummy>
+    `);
+
+  const url =
+    "{{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}";
+
+  fetch(url)
+    .then((response) => response.arrayBuffer())
+    .then((result) => {
+      const pch = Neo.decodePCH(result);
+
+      Neo.createViewer(document.querySelector("#viewer"));
+      Neo.config.width = pch.width;
+      Neo.config.height = pch.height;
+      Neo.initViewer(pch);
+      Neo.startViewer();
+    });
+  </script>
 {% endblock body %}
