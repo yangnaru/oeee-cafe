@@ -4,8 +4,11 @@
 {% endblock title %}
 {% block body %}
   <h2 class="center">{{ ftl_community_drawing_new }} @ {{ community_name }}</h2>
-  <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
-  <script src="/static/neo/dist/neo.js" charset="utf-8"></script>
+  <link rel="stylesheet"
+        href="{{ '/static/neo/dist/neo.css' | cachebuster | safe }}"
+        type="text/css" />
+  <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}"
+          charset="utf-8"></script>
   <script>
   document.write(`
   <div id="appstage">

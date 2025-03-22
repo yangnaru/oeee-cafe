@@ -62,7 +62,7 @@
   </script>
   <script type="module">
     document.addEventListener("DOMContentLoaded", (event) => {
-      import("/static/cucumber/cucumber.js").then((module) => {
+      import("{{ '/static/cucumber/cucumber.js' | cachebuster | safe }}").then((module) => {
         // Set up cucumber
         const canvasContainer = document.getElementById("cucumber-canvas-safe");
         const cucumber = new module.default(canvasContainer, {

@@ -31,7 +31,8 @@
     });
   </script>
   <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
-  <script src="/static/neo/dist/neo.js" charset="utf-8"></script>
+  <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}"
+          charset="utf-8"></script>
   <div class="center">
     <p>{{ ftl_post_published_at }}: {{ post.published_at }}</p>
     <p>{{ ftl_post_duration }}: {{ post.paint_duration }}</p>

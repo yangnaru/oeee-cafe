@@ -5,6 +5,7 @@ use oeee_cafe::AppConfig;
 use std::env::args;
 use std::path::PathBuf;
 use std::process::exit;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::Level;
 
 fn main() {
@@ -41,6 +42,15 @@ fn main() {
             let template_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates");
             let mut env = Environment::new();
             minijinja_contrib::add_to_environment(&mut env);
+
+            fn cachebuster(value: String) -> String {
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                format!("{}?{}", value, timestamp)
+            }
+            env.add_filter("cachebuster", cachebuster);
             env.set_loader(path_loader(&template_path));
 
             let state = AppState {
