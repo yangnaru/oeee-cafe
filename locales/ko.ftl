@@ -37,6 +37,7 @@ display-name = 닉네임
 participating-community = 참여 중인 커뮤니티
 latest-active-public-community = 최근 활동 공개 커뮤니티
 recent-drawings = 최근 그림
+recent-comments = 최근 댓글
 
 edit = 수정
 save = 저장

@@ -56,6 +56,16 @@
         <input type="submit" value="{{ ftl_community_drawing_new }}" />
       </form>
     {% endif %}
+    {% if comments %}
+      <h3>{{ ftl_recent_comments }}</h3>
+      <div class="comment-list">
+        {% for comment in comments %}
+          <div class="comment-list-item">
+            <a href="/@{comment.user_login_name}">{{ comment.user_display_name }}</a>@<a href="/posts/{{ comment.post_id }}">{{ comment.post_title }}</a>: {{ comment.content }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
     <h3>{{ ftl_recent_drawings }}</h3>
     {% if posts %}
       <div class="posts-grid">

@@ -37,6 +37,7 @@ display-name = ニックネーム
 participating-community = 参加中のコミュニティ
 latest-active-public-community = 最近の活動公開コミュニティ
 recent-drawings = 最近のお絵かき
+recent-comments = 最近のコメント
 
 edit = 修正
 save = 保存

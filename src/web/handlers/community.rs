@@ -1,4 +1,5 @@
 use crate::app_error::AppError;
+use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, get_participating_communities,
     get_public_communities, update_community, CommunityDraft,
@@ -37,6 +38,7 @@ pub async fn community(
     }
 
     let posts = find_published_posts_by_community_id(&mut tx, uuid).await?;
+    let comments = find_latest_comments_in_community(&mut tx, uuid, 5).await?;
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
             .await
@@ -72,6 +74,19 @@ pub async fn community(
         community => community,
         encoded_community_id => BASE64URL_NOPAD.encode(uuid.as_bytes()),
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        comments => comments.iter().map(
+            |comment| {
+                HashMap::<String, String>::from_iter(vec![
+                    ("id".to_string(), BASE64URL_NOPAD.encode(comment.id.as_bytes()).to_string()),
+                    ("user_login_name".to_string(), comment.user_login_name.clone().to_string()),
+                    ("user_display_name".to_string(), comment.user_display_name.clone().to_string()),
+                    ("post_title".to_string(), comment.post_title.clone().unwrap_or_default().to_string()),
+                    ("post_id".to_string(), BASE64URL_NOPAD.encode(comment.post_id.as_bytes()).to_string()),
+                    ("created_at".to_string(), comment.created_at.to_string()),
+                    ("content".to_string(), comment.content.clone().to_string()),
+                ])
+            }
+        ).collect::<Vec<_>>(),
         posts => posts.iter().map(|post| {
             HashMap::<String, String>::from_iter(vec![
                 ("id".to_string(), post.id.to_string()),
@@ -83,10 +98,10 @@ pub async fn community(
                 ("replay_filename".to_string(), post.replay_filename.to_string()),
                 ("created_at".to_string(), post.created_at.to_string()),
                 ("updated_at".to_string(), post.updated_at.to_string()),
-            ])
-        }).collect::<Vec<_>>(),
-        draft_post_count,
-        ..create_base_ftl_context(&bundle),
+                ])
+            }).collect::<Vec<_>>(),
+            draft_post_count,
+            ..create_base_ftl_context(&bundle),
     })?;
         Ok(Html(rendered).into_response())
     }

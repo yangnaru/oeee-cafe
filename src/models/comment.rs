@@ -125,6 +125,47 @@ pub async fn find_comments_to_posts_by_author(
     Ok(comments)
 }
 
+pub async fn find_latest_comments_in_community(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+    limit: i64,
+) -> Result<Vec<NotificationComment>> {
+    let comments = sqlx::query_as!(
+        NotificationComment,
+        r#"
+        SELECT
+            comments.id,
+            comments.post_id,
+            comments.user_id,
+            comments.updated_at,
+            comments.created_at,
+            comments.content,
+            users.display_name AS user_display_name,
+            users.login_name AS user_login_name,
+            posts.title AS post_title,
+            images.image_filename AS post_image_filename,
+            images.width AS post_image_width,
+            images.height AS post_image_height
+        FROM comments
+        LEFT JOIN users ON comments.user_id = users.id
+        LEFT JOIN posts ON comments.post_id = posts.id
+        LEFT JOIN images ON posts.image_id = images.id
+        WHERE posts.community_id = $1
+        AND posts.published_at IS NOT NULL
+        AND comments.user_id != posts.author_id
+        AND posts.deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT $2
+        "#,
+        community_id,
+        limit
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(comments)
+}
+
 pub async fn create_comment(
     tx: &mut Transaction<'_, Postgres>,
     draft: CommentDraft,

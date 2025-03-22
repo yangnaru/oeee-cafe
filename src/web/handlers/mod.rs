@@ -124,6 +124,7 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_participating_community => bundle.format_pattern(bundle.get_message("participating-community").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_latest_active_public_community => bundle.format_pattern(bundle.get_message("latest-active-public-community").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_recent_drawings => bundle.format_pattern(bundle.get_message("recent-drawings").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_recent_comments => bundle.format_pattern(bundle.get_message("recent-comments").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_edit => bundle.format_pattern(bundle.get_message("edit").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_save => bundle.format_pattern(bundle.get_message("save").unwrap().value().unwrap(), None, &mut vec![]),
@@ -260,7 +261,8 @@ fn get_bundle(
                 .get(supported.first().unwrap().language.as_str())
                 .unwrap_or_else(|| LOCALES.get("ko").unwrap());
 
-            let mut bundle = FluentBundle::new_concurrent(vec![supported.first()
+            let mut bundle = FluentBundle::new_concurrent(vec![supported
+                .first()
                 .unwrap()
                 .language
                 .as_str()

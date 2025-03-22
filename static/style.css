@@ -121,6 +121,20 @@ nav a:visited,
   padding: 1em;
 }
 
+.comment-list {
+  padding-left: 0;
+  gap: 0.5em;
+  display: flex;
+  flex-direction: column;
+}
+
+.comment-list-item {
+  border: 1px solid black;
+  padding: 0.3em;
+  display: flex;
+  flex-direction: row;
+}
+
 .notification-comment {
   display: flex;
   flex-direction: row;
