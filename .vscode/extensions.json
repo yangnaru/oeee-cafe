@@ -4,5 +4,6 @@
     "samuelcolvin.jinjahtml",
     "esbenp.prettier-vscode",
     "monosans.djlint",
+    "tamasfe.even-better-toml",
   ]
 }
