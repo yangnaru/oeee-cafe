@@ -180,8 +180,6 @@ export default class Cucumber {
 
 	private _updateMousePosition(e: MouseEvent | TouchEvent | PointerEvent) {
 		const rect = this.canvas.getBoundingClientRect();
-		//  var x = (e.clientX !== undefined) ? e.clientX : e.touches[0].clientX;
-		//  var y = (e.clientY !== undefined) ? e.clientY : e.touches[0].clientY;
 		const pos = this.getCoordinates(e);
 		const x = pos.x;
 		const y = pos.y;
