@@ -432,8 +432,17 @@ export default class Cucumber {
 		y: number;
 	} {
 		const rect = this.canvas.getBoundingClientRect();
-		const clientX = (event as MouseEvent | PointerEvent).clientX;
-		const clientY = (event as MouseEvent | PointerEvent).clientY;
+
+		let clientX: number;
+		let clientY: number;
+
+		if (typeof TouchEvent !== "undefined" && event instanceof TouchEvent) {
+			clientX = event.touches[0].clientX;
+			clientY = event.touches[0].clientY;
+		} else {
+			clientX = (event as MouseEvent | PointerEvent).clientX;
+			clientY = (event as MouseEvent | PointerEvent).clientY;
+		}
 
 		return {
 			x: clientX - rect.left,
