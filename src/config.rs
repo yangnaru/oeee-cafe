@@ -10,6 +10,7 @@ use serde_with::{serde_as, DurationSeconds};
 pub struct AppConfig {
     pub env: String,
     pub base_url: String,
+    pub port: u16,
 
     pub db_url: String,
     pub db_max_connections: u32,
