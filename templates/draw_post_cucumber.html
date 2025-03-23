@@ -27,30 +27,36 @@
   <div id="cucumber-container">
     <div id="cucumber-canvas-safe"></div>
     <div id="cucumber-controls-container">
-      <div id="cucumber-pen-size-container">
-        <input type="range" id="cucumber-pen-size-slider" min="1" max="30" value="2" />
-        <span id="cucumber-pen-size-value">2</span>
-      </div>
-      <div id="cucumber-color-picker-container">
-        <div id="cucumber-color-picker-option">
-          <div id="cucumber-color-picker-foreground-preview"></div>
-          <input type="radio"
-                 id="cucumber-color-picker-foreground"
-                 name="color-picker"
-                 value="{{ foreground_color }}"
-                 checked />
+      <div id="cucumber-controls-drawing">
+        <div id="cucumber-pen-size-container">
+          <input type="range" id="cucumber-pen-size-slider" min="1" max="30" value="2" />
+          <span id="cucumber-pen-size-value">2</span>
         </div>
-        <div id="cucumber-color-picker-option">
-          <div id="cucumber-color-picker-background-preview"></div>
-          <input type="radio"
-                 id="cucumber-color-picker-background"
-                 name="color-picker"
-                 value="{{ background_color }}" />
+        <div id="cucumber-color-picker-container">
+          <div id="cucumber-color-picker-option">
+            <div id="cucumber-color-picker-foreground-preview"></div>
+            <input type="radio"
+                   id="cucumber-color-picker-foreground"
+                   name="color-picker"
+                   value="{{ foreground_color }}"
+                   checked />
+          </div>
+          <div id="cucumber-color-picker-option">
+            <div id="cucumber-color-picker-background-preview"></div>
+            <input type="radio"
+                   id="cucumber-color-picker-background"
+                   name="color-picker"
+                   value="{{ background_color }}" />
+          </div>
+        </div>
+        <div id="cucumber-undo-redo-container">
+          <input type="button" id="cucumber-undo" value="{{ ftl_cucumber_undo }}" />
+          <input type="button" id="cucumber-redo" value="{{ ftl_cucumber_redo }}" />
         </div>
       </div>
-      <input type="button" id="cucumber-save" value="save" />
-      <input type="button" id="cucumber-undo" value="undo" />
-      <input type="button" id="cucumber-redo" value="redo" />
+      <div>
+        <input type="button" id="cucumber-save" value="{{ ftl_cucumber_save }}" />
+      </div>
     </div>
   </div>
   <script type="importmap">

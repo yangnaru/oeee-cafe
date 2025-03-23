@@ -148,3 +148,7 @@ account-language-settings = Language settings
 account-language-auto = Auto
 account-language-current = Current language
 account-language-settings-save = Save language
+
+cucumber-save = Save
+cucumber-undo = Undo
+cucumber-redo = Redo

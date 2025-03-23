@@ -150,3 +150,7 @@ account-language-settings = 언어 설정
 account-language-auto = 자동
 account-language-current = 현재 언어
 account-language-settings-save = 언어 설정 저장
+
+cucumber-save = 저장
+cucumber-undo = 실행 취소
+cucumber-redo = 다시 실행

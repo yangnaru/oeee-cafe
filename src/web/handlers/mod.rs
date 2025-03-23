@@ -222,6 +222,10 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_account_language_settings_save => bundle.format_pattern(bundle.get_message("account-language-settings-save").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_account_language_current => bundle.format_pattern(bundle.get_message("account-language-current").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_account_language_auto => bundle.format_pattern(bundle.get_message("account-language-auto").unwrap().value().unwrap(), None, &mut vec![]),
+
+        ftl_cucumber_save => bundle.format_pattern(bundle.get_message("cucumber-save").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_cucumber_undo => bundle.format_pattern(bundle.get_message("cucumber-undo").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_cucumber_redo => bundle.format_pattern(bundle.get_message("cucumber-redo").unwrap().value().unwrap(), None, &mut vec![]),
     }
 }
 

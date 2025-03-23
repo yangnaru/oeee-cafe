@@ -307,7 +307,14 @@ nav a:visited,
 #cucumber-controls-container {
   padding-top: 50px;
   padding-right: 50px;
+  padding-bottom: 50px;
   width: 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+#cucumber-controls-drawing {
   display: flex;
   flex-direction: column;
   gap: 10px;
