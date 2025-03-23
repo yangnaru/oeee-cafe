@@ -205,10 +205,24 @@ export default class Cucumber {
 
 	setPenColor(color: string) {
 		this.penColor = color;
+
+		if (this.isDrawing) {
+			this.isDrawing = false;
+
+			this.head++;
+			this.items.push([]);
+		}
 	}
 
 	setPenSize(size: number) {
 		this.penSize = size;
+
+		if (this.isDrawing) {
+			this.isDrawing = false;
+
+			this.head++;
+			this.items.push([]);
+		}
 	}
 
 	private drawLine(fromX: number, fromY: number, toX: number, toY: number) {
