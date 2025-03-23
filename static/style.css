@@ -301,7 +301,6 @@ nav a:visited,
 }
 
 .community-badge {
-  background-color: var(--main-highlight-color);
   padding: 8px;
   border: solid 1px var(--main-border-color);
 }
