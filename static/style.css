@@ -1,10 +1,28 @@
-:root {
-  --main-bg-color: #c4ee62;
-  --main-border-color: #3c6712;
-  --main-highlight-color: #ef842d;
+@media (prefers-color-scheme: light) {
+  :root {
+    --main-bg-color: white;
+    --main-text-color: black;
+    --main-nav-bg-color: #c4ee62;
+    --main-border-color: #3c6712;
+    --main-highlight-color: #ef842d;
+    --main-anchor-color: black;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --main-bg-color: #2c2c2c;
+    --main-text-color: #e0e0e0;
+    --main-nav-bg-color: #2c2c2c;
+    --main-border-color: #5a5a5a;
+    --main-highlight-color: #ff8c00;
+    --main-anchor-color: #e0e0e0;
+  }
 }
 
 body {
+  background-color: var(--main-bg-color);
+  color: var(--main-text-color);
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -15,18 +33,20 @@ body {
 
 nav {
   padding: 8px;
-  background-color: var(--main-bg-color);
+  background-color: var(--main-nav-bg-color);
   border-width: 1px;
   border-color: var(--main-border-color);
   border-style: solid;
-  color: var(--main-border-color);
+  color: var(--main-text-color);
 }
 
+a,
+a:visited,
 h1 > a:visited,
 h2 > a:visited,
 nav a:visited,
 .community-badge a:visited {
-  color: blue;
+  color: var(--main-text-color);
 }
 
 #nav-draw-button {
@@ -38,7 +58,7 @@ nav a:visited,
   cursor: pointer;
   outline: inherit;
 
-  color: blue;
+  color: var(--main-text-color);
   text-decoration: underline;
 }
 
@@ -93,7 +113,7 @@ nav a:visited,
 }
 
 .banner {
-  border: 1px solid black;
+  border: 1px solid var(--main-border-color);
   width: 200px;
   height: 40px;
 }
@@ -116,7 +136,7 @@ nav a:visited,
 }
 
 .comment {
-  border: 1px solid black;
+  border: 1px solid var(--main-border-color);
   margin: 1em 0;
   padding: 1em;
 }
@@ -129,7 +149,7 @@ nav a:visited,
 }
 
 .comment-list-item {
-  border: 1px solid black;
+  border: 1px solid var(--main-border-color);
   padding: 0.3em;
   display: flex;
   flex-direction: row;
@@ -151,10 +171,10 @@ nav a:visited,
 }
 
 .button-follow {
-  background-color: var(--main-bg-color);
+  background-color: var(--main-nav-bg-color);
   color: white;
   padding: 8px;
-  border: solid 1px black;
+  border: solid 1px var(--main-border-color);
   cursor: pointer;
   height: 42px;
 }
@@ -167,7 +187,7 @@ nav a:visited,
   background-color: red;
   color: white;
   padding: 8px;
-  border: solid 1px black;
+  border: solid 1px var(--main-border-color);
   cursor: pointer;
   height: 42px;
 }
@@ -192,7 +212,7 @@ nav a:visited,
 
 .followings-list li {
   break-inside: avoid-column;
-  border: 1px solid black;
+  border: 1px solid var(--main-border-color);
   padding: 8px;
   margin: 4px 0;
 }
@@ -210,13 +230,13 @@ nav a:visited,
 }
 
 .guestbook-entry {
-  border: 1px solid black;
+  border: 1px solid var(--main-border-color);
   padding: 8px;
   margin: 8px 0;
 }
 
 .guestbook-reply {
-  border: 1px solid black;
+  border: 1px solid var(--main-border-color);
   padding: 8px;
   margin: 8px 0;
 }
@@ -268,11 +288,10 @@ nav a:visited,
 
 .home-section-title {
   padding: 8px;
-  background-color: var(--main-bg-color);
+  background-color: var(--main-nav-bg-color);
   border-width: 1px;
   border-color: var(--main-border-color);
   border-style: solid;
-  color: var(--main-border-color);
 }
 
 .community-badges {
@@ -284,7 +303,7 @@ nav a:visited,
 .community-badge {
   background-color: var(--main-highlight-color);
   padding: 8px;
-  border: solid 1px black;
+  border: solid 1px var(--main-border-color);
 }
 
 /* Cucumber */
@@ -297,7 +316,7 @@ nav a:visited,
 }
 
 #cucumber-canvas {
-  border: 1px solid black;
+  border: 1px solid var(--main-border-color);
 }
 
 #cucumber-canvas-safe {
