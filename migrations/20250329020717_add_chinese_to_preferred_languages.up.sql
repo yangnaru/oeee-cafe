@@ -1,0 +1,1 @@
+ALTER TYPE preferred_language ADD VALUE 'zh';

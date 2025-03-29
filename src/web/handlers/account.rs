@@ -51,7 +51,12 @@ pub async fn account(
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
-    let languages = vec![("ko", "한국어"), ("ja", "日本語"), ("en", "English")];
+    let languages = vec![
+        ("ko", "한국어"),
+        ("ja", "日本語"),
+        ("en", "English"),
+        ("zh", "中文"),
+    ];
     let template: minijinja::Template<'_, '_> = state.env.get_template("account.html")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -81,6 +86,7 @@ pub async fn save_language(
         Some("ko") => Some(Language::Ko),
         Some("ja") => Some(Language::Ja),
         Some("en") => Some(Language::En),
+        Some("zh") => Some(Language::Zh),
         _ => None,
     };
     let _ = update_user_preferred_language(&mut tx, auth_session.user.unwrap().id, language).await;

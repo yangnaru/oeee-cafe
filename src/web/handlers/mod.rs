@@ -239,6 +239,7 @@ fn get_bundle(
                 Language::Ko => "ko",
                 Language::Ja => "ja",
                 Language::En => "en",
+                Language::Zh => "zh",
             };
             let ftl = LOCALES
                 .get(language)

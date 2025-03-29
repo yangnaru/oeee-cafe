@@ -18,6 +18,10 @@ lazy_static! {
             "en".to_string(),
             FluentResource::try_new(include_str!("../locales/en.ftl").to_string()).unwrap(),
         );
+        locales.insert(
+            "zh".to_string(),
+            FluentResource::try_new(include_str!("../locales/zh.ftl").to_string()).unwrap(),
+        );
         locales
     };
 }

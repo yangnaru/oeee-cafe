@@ -43,6 +43,7 @@ pub enum Language {
     Ko,
     Ja,
     En,
+    Zh,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

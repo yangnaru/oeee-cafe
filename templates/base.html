@@ -21,7 +21,7 @@
     <header class="center">
       <h1 class="logo">
         <a href="/">
-          <img src="/static/logo/{{ ftl_lang }}.svg"
+          <img src="{%- if ftl_lang == "zh" -%}/static/logo/en.svg{%- else -%}/static/logo/{{ ftl_lang }}.svg{%- endif -%}"
                alt="{{ ftl_brand }}"
                height="75px"
                width="{%- if ftl_lang == "ja" -%} 345px {%- else -%} 270px {%- endif -%}" />
