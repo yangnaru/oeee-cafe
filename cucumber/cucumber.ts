@@ -1,7 +1,55 @@
 import { compressToUint8Array } from "lz-string";
 
-const LINETYPE_PEN = 1;
 const ALPHATYPE_PEN = 1;
+
+const REPLAY_LINETYPE_PEN = 1;
+
+const REPLAY_PEN_TYPE_FLOODFILL = "floodFill" as const;
+const REPLAY_PEN_TYPE_FREEHAND = "freeHand" as const;
+const REPLAY_PEN_TYPE_RESTORE = "restore" as const;
+
+type PenType = "floodFill" | "freeHand" | "restore";
+
+type EmptyArray = [];
+
+type FloodFillElements = [
+	PenType, // REPLAY_PEN_TYPE_FLOODFILL,
+	number, // layer
+	number, // x
+	number, // y
+	number, // color
+]
+
+type FreeHandCoordinates = [
+	number, // x
+	number, // y
+]
+
+type FreeHandElements = [
+	PenType, // REPLAY_PEN_TYPE_FREEHAND,
+	number, // layer
+	number, // red
+	number, // green
+	number, // blue
+	number, // alpha
+	number, // 0
+	number, // 0
+	number, // 0
+	number, // pen size
+	number, // 0
+	number, // REPLAY_LINETYPE_PEN
+
+	// Any number or FreeHandCoordinates
+	...FreeHandCoordinates[]
+]
+
+type RestoreElements = [
+	PenType, // REPLAY_PEN_TYPE_RESTORE,
+	string, // layer 0 (image data)
+	string, // layer 1 (empty canvas data, for now)
+]
+
+type Replay = (EmptyArray | FloodFillElements | FreeHandElements | RestoreElements)[]
 
 export default class Cucumber {
 	private initializedAt: number;
@@ -13,8 +61,6 @@ export default class Cucumber {
 	private isDrawing = false;
 	private lastX = 0;
 	private lastY = 0;
-	private lastState: ImageData | null = null; // Store only last state
-	private redoState: ImageData | null = null; // Store only one redo state
 	private _roundData: Uint8Array[] = [];
 	private prevLine: number[][] | null = null;
 	private aerr = 0;
@@ -28,12 +74,10 @@ export default class Cucumber {
 	private zoomX = 0;
 	private zoomY = 0;
 
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	private items: any[] = [];
+	private items: Replay = [];
 	private head = 0;
 
-	private lastItems: (string | number)[][] | null = null; // Add this to class properties
-	private redoItems: (string | number)[][] | null = null; // Add this to class properties
+	private lastState: ImageData | null = null; // Store only last state
 
 	constructor(
 		container: HTMLElement,
@@ -67,26 +111,28 @@ export default class Cucumber {
 
 		this.items = [
 			[
-				"floodFill",
+				REPLAY_PEN_TYPE_FLOODFILL,
 				0, // layer
 				0, // x
 				0, // y
 				this.hexToInt(options.backgroundColor), // Using shared method
-			],
+			] as FloodFillElements,
 		];
 		this.head++;
 		this.items.push([]);
 
 		container.addEventListener("pointerdown", this.handleStart.bind(this));
+		container.addEventListener("touchstart", this.handleStart.bind(this));
+		container.addEventListener("mousedown", this.handleStart.bind(this));
+
 		container.addEventListener("pointermove", this.handleMove.bind(this));
+		container.addEventListener("touchmove", this.handleMove.bind(this));
+		container.addEventListener("mousemove", this.handleMove.bind(this));
+
 		container.addEventListener("pointerup", this.handleEnd.bind(this));
 		container.addEventListener("pointercancel", this.handleEnd.bind(this));
-		container.addEventListener("touchstart", this.handleStart.bind(this));
-		container.addEventListener("touchmove", this.handleMove.bind(this));
 		container.addEventListener("touchend", this.handleEnd.bind(this));
 		container.addEventListener("touchcancel", this.handleEnd.bind(this));
-		container.addEventListener("mousedown", this.handleStart.bind(this));
-		container.addEventListener("mousemove", this.handleMove.bind(this));
 		container.addEventListener("mouseup", this.handleEnd.bind(this));
 	}
 
@@ -149,12 +195,11 @@ export default class Cucumber {
 		emptyCanvas.width = w;
 		emptyCanvas.height = h;
 
-		const restoreData = [
-			"restore",
+		const restoreData: RestoreElements = [
+			REPLAY_PEN_TYPE_RESTORE,
 			this.canvas.toDataURL("image/png"),
 			emptyCanvas.toDataURL("image/png"),
 		];
-
 		itemsToExport.push(restoreData);
 
 		const data = JSON.stringify(itemsToExport);
@@ -222,6 +267,21 @@ export default class Cucumber {
 
 			this.head++;
 			this.items.push([]);
+		}
+	}
+
+	undo() {
+		if (this.head > 1) { // Floodfill is first item, not undoable
+			this.head--;
+			this.items.pop();
+			this.items[this.head] = [];
+		}
+
+		if (this.lastState) {
+			const ctx = this.canvas.getContext("2d");
+			if (ctx) {
+				ctx.putImageData(this.lastState, 0, 0);
+			}
 		}
 	}
 
@@ -464,89 +524,51 @@ export default class Cucumber {
 		};
 	}
 
-	private _pushUndo() {
-		const ctx = this.canvas.getContext("2d");
-		if (ctx) {
-			// Store current state as last state
-			this.lastState = ctx.getImageData(
-				0,
-				0,
-				this.canvas.width,
-				this.canvas.height
-			);
-			// Clear redo state when new action is performed
-			this.redoState = null;
+	// Event types that are allowed to draw on canvas:
+	// - MouseEvent (draw with mouse)
+	// - PointerEvent (draw with pen, not touch)
+	private shouldIgnoreTouchEvent(
+		event: MouseEvent | TouchEvent | PointerEvent
+	): boolean {
+		// Ignore touch events
+		if (typeof TouchEvent !== "undefined" && event instanceof TouchEvent) {
+			return true
 		}
+
+		// Ignore pointer events with pointerType "touch"
+		if (event instanceof PointerEvent && event.pointerType === "touch") {
+			return true;
+		}
+
+		return false
 	}
 
-	undo() {
-		if (this.lastState) {
+	private handleStart(event: MouseEvent | TouchEvent | PointerEvent) {
+		event.preventDefault();
+
+		// Ignore if already drawing
+		if (this.isDrawing) return;
+
+		// Check if this is a touch event that should be ignored
+		if (this.shouldIgnoreTouchEvent(event)) return;
+
+		// Only start drawing on primary button (left click)
+		if ((event as MouseEvent).button === 0) {
+			// Store undo state first
 			const ctx = this.canvas.getContext("2d");
 			if (ctx) {
-				// Save current state and items as redo state
-				this.redoState = ctx.getImageData(
-					0,
-					0,
-					this.canvas.width,
-					this.canvas.height
-				);
-				this.redoItems = [...this.items];
-
-				// Restore last state and items
-				ctx.putImageData(this.lastState, 0, 0);
-				if (this.lastItems) {
-					this.items = [...this.lastItems];
-					this.head = this.items.length - 1;
-				}
-
-				// Clear last state
-				this.lastState = null;
-				this.lastItems = null;
-			}
-		}
-	}
-
-	redo() {
-		if (this.redoState) {
-			const ctx = this.canvas.getContext("2d");
-			if (ctx) {
-				// Save current state and items as last state
 				this.lastState = ctx.getImageData(
 					0,
 					0,
 					this.canvas.width,
 					this.canvas.height
 				);
-				this.lastItems = [...this.items];
-
-				// Restore redo state and items
-				ctx.putImageData(this.redoState, 0, 0);
-				if (this.redoItems) {
-					this.items = [...this.redoItems];
-					this.head = this.items.length - 1;
-				}
-
-				// Clear redo state
-				this.redoState = null;
-				this.redoItems = null;
 			}
-		}
-	}
 
-	private handleStart(event: MouseEvent | TouchEvent | PointerEvent) {
-		event.preventDefault();
-
-		if (this.isDrawing) return;
-
-		// Only start drawing on primary button (left click) or touch
-		if ((event as MouseEvent).button === 0 || event.type === "touchstart") {
 			this.isDrawing = true;
 			this._updateMousePosition(event);
 			this.prevMouseX = this.mouseX;
 			this.prevMouseY = this.mouseY;
-
-			// Push undo state first
-			this._pushUndo();
 
 			const coords = this.getCoordinates(event);
 			const x = Math.floor(coords.x);
@@ -563,27 +585,39 @@ export default class Cucumber {
 			this.drawLine(x, y, x, y);
 
 			// Record the stroke start in items array
-			this.items[this.head].push(
-				"freeHand",
-				0,
-				red,
-				green,
-				blue,
-				alpha,
-				0,
-				0,
-				0,
-				this.penSize,
-				0,
-				LINETYPE_PEN
-			);
-
-			this.items[this.head].push(x, y, x, y);
+			const currentItem = this.items[this.head];
+			if (!currentItem.length) {
+				// Type assertion to ensure currentItem is initially empty
+				if ((currentItem as EmptyArray).length !== 0) {
+					throw new Error("Expected empty array");
+				}
+				(currentItem as FreeHandElements).push(
+					REPLAY_PEN_TYPE_FREEHAND,
+					0,
+					red,
+					green,
+					blue,
+					alpha,
+					0,
+					0,
+					0,
+					this.penSize,
+					0,
+					REPLAY_LINETYPE_PEN,
+					x,
+					y,
+					x,
+					y
+				);
+			}
 		}
 	}
 
 	private handleMove(event: MouseEvent | TouchEvent | PointerEvent) {
 		event.preventDefault();
+
+		// Check if this is a touch event that should be ignored
+		if (this.shouldIgnoreTouchEvent(event)) return;
 
 		this._updateMousePosition(event);
 		if (this.isDrawing) {
@@ -597,7 +631,10 @@ export default class Cucumber {
 			this.lastX = x;
 			this.lastY = y;
 
-			this.items[this.head].push(x, y);
+			const currentItem = this.items[this.head];
+			if (currentItem[0] === REPLAY_PEN_TYPE_FREEHAND) {
+				(currentItem as FreeHandElements).push(x, y);
+			}
 		}
 
 		this.prevMouseX = this.mouseX;
@@ -606,6 +643,10 @@ export default class Cucumber {
 
 	private handleEnd(event: MouseEvent | TouchEvent | PointerEvent) {
 		event.preventDefault();
+
+		// Check if this is a touch event that should be ignored
+		if (this.shouldIgnoreTouchEvent(event)) return;
+
 		if (this.isDrawing) {
 			this.isDrawing = false;
 
