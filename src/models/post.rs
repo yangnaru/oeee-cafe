@@ -455,6 +455,7 @@ pub async fn find_post_by_id(
                 posts.is_sensitive,
                 posts.author_id,
                 images.id AS image_id,
+                images.tool::text AS image_tool,
                 images.paint_duration,
                 images.width,
                 images.height,
@@ -505,6 +506,7 @@ pub async fn find_post_by_id(
         );
 
         map.insert("image_id".to_string(), Some(row.image_id.to_string()));
+        map.insert("image_tool".to_string(), Some(row.image_tool.unwrap()));
         map.insert("image_width".to_string(), Some(row.width.to_string()));
         map.insert("image_height".to_string(), Some(row.height.to_string()));
         map.insert("image_filename".to_string(), Some(row.image_filename));

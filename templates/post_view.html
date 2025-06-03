@@ -43,7 +43,7 @@
             (<a href="/posts/{{ encoded_post_id }}/edit/community">{{ ftl_edit }}</a>)
           {%- endif %}
         </p>
-        {% if ".pch" in post.replay_filename and post.allow_relay == "true" %}
+        {% if post.image_tool == "neo" and post.allow_relay == "true" %}
           <a href="/posts/{{ encoded_post_id }}/relay">
             <img class="post-image"
                  width="{{ post.image_width }}"
