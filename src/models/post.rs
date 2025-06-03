@@ -83,7 +83,7 @@ impl Post {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Type)]
-#[sqlx(type_name = "preferred_language", rename_all = "lowercase")]
+#[sqlx(type_name = "tool", rename_all = "lowercase")]
 pub enum Tool {
     Neo,
     Tegaki,
