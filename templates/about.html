@@ -35,7 +35,8 @@
                    height="{{ user.banner_image_height }}"
                    alt="{{ user.display_name }} (@{{ user.login_name }}) 동맹 배너"
                    class="banner"
-                   src="{{ r2_public_endpoint_url }}/image/{{ user.banner_image_filename[:2] }}/{{ user.banner_image_filename }}" />
+                   src="{{ r2_public_endpoint_url }}/image/{{ user.banner_image_filename[:2] }}/{{ user.banner_image_filename }}"
+                   crossorigin="anonymous" />
             </a>
           </div>
         {% endfor %}

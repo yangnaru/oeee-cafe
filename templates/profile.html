@@ -24,14 +24,16 @@
                height="{{ banner.height }}"
                alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
                class="banner"
-               src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
+               src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
+               crossorigin="anonymous" />
         </a>
       {% else %}
         <img width="{{ banner.width }}"
              height="{{ banner.height }}"
              alt="{{ user.display_name }} (@{{ user.login_name }}) 동맹 배너"
              class="banner"
-             src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
+             src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
+             crossorigin="anonymous" />
       {% endif %}
     {% else %}
       {% if user.id == current_user.id %}<a href="/banners/draw" class="button">{{ ftl_profile_draw_banner }}</a>{% endif %}
@@ -65,7 +67,8 @@
                  height="{{ following.banner_image_height }}"
                  alt="{{ following.display_name }} (@{{ following.login_name }}) 동맹 배너"
                  class="banner"
-                 src="{{ r2_public_endpoint_url }}/image/{{ following.banner_image_filename[:2] }}/{{ following.banner_image_filename }}" />
+                 src="{{ r2_public_endpoint_url }}/image/{{ following.banner_image_filename[:2] }}/{{ following.banner_image_filename }}"
+                 crossorigin="anonymous" />
           </a>
         </div>
       {% endfor %}
@@ -93,7 +96,8 @@
           <img width="{{ post.image_width }}"
                height="{{ post.image_height }}"
                alt="{{ post.title }}"
-               src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+               src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+               crossorigin="anonymous" />
         </a>
       </div>
     {% endfor %}
@@ -111,7 +115,8 @@
             <img width="{{ post.image_width }}"
                  height="{{ post.image_height }}"
                  alt="{{ post.title }}"
-                 src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+                 src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+                 crossorigin="anonymous" />
           </a>
         </div>
       {% endfor %}

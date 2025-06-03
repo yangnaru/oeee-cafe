@@ -25,14 +25,16 @@
                height="{{ banner.height }}"
                alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
                class="banner"
-               src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
+               src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
+               crossorigin="anonymous" />
         </a>
       {% else %}
         <img width="{{ banner.width }}"
              height="{{ banner.height }}"
              alt="{{ current_user.display_name }} (@{{ current_user.login_name }}) 동맹 배너"
              class="banner"
-             src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
+             src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}"
+             crossorigin="anonymous" />
       {% endif %}
     {% else %}
       {% if user.id == current_user.id %}<a href="/banners/draw" class="button">{{ ftl_profile_draw_banner }}</a>{% endif %}
