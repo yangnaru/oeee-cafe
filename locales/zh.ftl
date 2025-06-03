@@ -59,7 +59,9 @@ post-comment = 发表评论
 post-publish = 发布
 post-move-community = 移动到此社区
 post-delete-confirm = 确定要删除这幅画吗？
+post-relay-enabled-notice = 这幅画可以接续创作。点击画作试试看！
 
+allow-relay = 允许接续创作
 sensitive = 敏感内容
 draft-post = 草稿作品
 

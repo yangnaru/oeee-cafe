@@ -1,6 +1,6 @@
 use crate::app_error::AppError;
 use crate::models::comment::{create_comment, find_comments_by_post_id, CommentDraft};
-use crate::models::community::get_known_communities;
+use crate::models::community::{find_community_by_id, get_known_communities};
 use crate::models::image::find_image_by_id;
 use crate::models::post::{
     delete_post, edit_post, edit_post_community, find_draft_posts_by_author_id, find_post_by_id,
@@ -23,6 +23,75 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use super::{handler_404, ExtractAcceptLanguage};
+
+pub async fn post_relay_view(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+    let db = state.config.connect_database().await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
+    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+
+    if post.is_none() {
+        return Ok((
+            StatusCode::NOT_FOUND,
+            handler_404(
+                auth_session,
+                ExtractAcceptLanguage(accept_language),
+                State(state),
+            )
+            .await?,
+        )
+            .into_response());
+    }
+
+    let template: minijinja::Template<'_, '_> =
+        state.env.get_template("draw_post_neo.html").unwrap();
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+
+    let community_id = Uuid::parse_str(
+        post.clone()
+            .unwrap()
+            .get("community_id")
+            .unwrap()
+            .as_ref()
+            .unwrap(),
+    )
+    .unwrap();
+    let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template.render(context! {
+        parent_post => post.clone().unwrap(),
+        current_user => auth_session.user,
+        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        community_name => community.name,
+        width => post.clone().unwrap().get("image_width").unwrap().as_ref().unwrap().parse::<u32>()?,
+        height => post.unwrap().get("image_height").unwrap().as_ref().unwrap().parse::<u32>()?,
+        background_color => community.background_color,
+        foreground_color => community.foreground_color,
+        community_id =>  BASE64URL_NOPAD.encode(community_id.as_bytes()),
+        draft_post_count,
+        ..create_base_ftl_context(&bundle)
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
 
 pub async fn post_view(
     auth_session: AuthSession,
@@ -280,6 +349,7 @@ pub struct PostPublishForm {
     title: String,
     content: String,
     is_sensitive: Option<String>,
+    allow_relay: Option<String>,
 }
 
 pub async fn post_publish(
@@ -311,7 +381,16 @@ pub async fn post_publish(
     }
 
     let is_sensitive = form.is_sensitive == Some("on".to_string());
-    let _ = publish_post(&mut tx, post_id, form.title, form.content, is_sensitive).await;
+    let allow_relay = form.allow_relay == Some("on".to_string());
+    let _ = publish_post(
+        &mut tx,
+        post_id,
+        form.title,
+        form.content,
+        is_sensitive,
+        allow_relay,
+    )
+    .await;
     let _ = tx.commit().await;
 
     let community_id = Uuid::parse_str(
@@ -574,6 +653,7 @@ pub struct EditPostForm {
     pub title: String,
     pub content: String,
     pub is_sensitive: Option<String>,
+    pub allow_relay: Option<String>,
 }
 
 pub async fn hx_do_edit_post(
@@ -611,6 +691,7 @@ pub async fn hx_do_edit_post(
         form.title,
         form.content,
         form.is_sensitive == Some("on".to_string()),
+        form.allow_relay == Some("on".to_string()),
     )
     .await;
     let post = find_post_by_id(&mut tx, post_uuid).await?;

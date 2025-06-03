@@ -59,7 +59,9 @@ post-comment = 댓글 달기
 post-publish = 게시
 post-move-community = 이 커뮤니티로 이동
 post-delete-confirm = 정말 이 그림을 삭제하시겠습니까?
+post-relay-enabled-notice = 이 그림은 이어 그릴수 있습니다. 그림을 눌러 보세요!
 
+allow-relay = 릴레이 그림 허용
 sensitive = 민감한 내용
 draft-post = 임시 보관된 그림
 

@@ -43,11 +43,24 @@
             (<a href="/posts/{{ encoded_post_id }}/edit/community">{{ ftl_edit }}</a>)
           {%- endif %}
         </p>
-        <img class="post-image"
-             width="{{ post.image_width }}"
-             height="{{ post.image_height }}"
-             alt="{{ post.title }}"
-             src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+        {% if ".pch" in post.replay_filename and post.allow_relay == "true" %}
+          <a href="/posts/{{ encoded_post_id }}/relay">
+            <img class="post-image"
+                 width="{{ post.image_width }}"
+                 height="{{ post.image_height }}"
+                 alt="{{ post.title }}"
+                 src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+          </a>
+          <p>
+            <i>{{ ftl_post_relay_enabled_notice }}</i>
+          </p>
+        {% else %}
+          <img class="post-image"
+               width="{{ post.image_width }}"
+               height="{{ post.image_height }}"
+               alt="{{ post.title }}"
+               src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+        {% endif %}
         <div class="center">
           <p>
             {{ ftl_post_author }}: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted">@{{ post.login_name }}</span>

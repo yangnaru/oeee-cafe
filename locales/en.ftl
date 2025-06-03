@@ -57,7 +57,9 @@ post-comment = Post comment
 post-publish = Publish
 post-move-community = Move to this community
 post-delete-confirm = Are you sure you want to delete this post?
+post-relay-enabled-notice = You can continue drawing on this canvas. Click on the image!
 
+allow-relay = Allow relay posts
 sensitive = Sensitive
 draft-post = Draft post
 

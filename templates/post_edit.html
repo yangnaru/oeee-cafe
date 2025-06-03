@@ -15,6 +15,12 @@
                name="is_sensitive"
                {% if post.is_sensitive == "true" %}checked{% endif %}>
     </div>
+    <div>
+        <label>{{ ftl_allow_relay }}:</label>
+        <input type="checkbox"
+               name="allow_relay"
+               {% if post.allow_relay == "true" %}checked{% endif %}>
+    </div>
     <div class="post-menu">
         <button class="btn" hx-get="/posts/{{ encoded_post_id }}">{{ ftl_cancel }}</button>
         <button class="btn">{{ ftl_save }}</button>

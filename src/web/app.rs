@@ -18,8 +18,8 @@ use crate::web::handlers::home::{home, my_timeline};
 use crate::web::handlers::notifications::list_notifications;
 use crate::web::handlers::post::{
     do_create_comment, do_post_edit_community, draft_posts, hx_delete_post, hx_do_edit_post,
-    hx_edit_post, post_edit_community, post_publish, post_publish_form, post_replay_view,
-    post_view,
+    hx_edit_post, post_edit_community, post_publish, post_publish_form, post_relay_view,
+    post_replay_view, post_view,
 };
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
@@ -115,6 +115,7 @@ impl App {
             .route("/posts/drafts", get(draft_posts))
             .route("/posts/publish", post(post_publish))
             .route("/posts/:id/edit", get(hx_edit_post))
+            .route("/posts/:id/relay", get(post_relay_view))
             .route("/posts/:id", put(hx_do_edit_post))
             .route("/posts/:id", delete(hx_delete_post))
             .route("/posts/:id/edit/community", get(post_edit_community))

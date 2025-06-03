@@ -122,22 +122,20 @@ pub async fn find_posts_by_community_id(
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result
         .into_iter()
-        .map(|row| {
-            SerializablePost {
-                id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
-                title: row.title,
-                author_id: row.author_id,
-                paint_duration: row.paint_duration.microseconds.to_string(),
-                stroke_count: row.stroke_count,
-                image_filename: row.image_filename,
-                image_width: row.width,
-                image_height: row.height,
-                replay_filename: row.replay_filename,
-                viewer_count: row.viewer_count,
-                published_at: row.published_at,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-            }
+        .map(|row| SerializablePost {
+            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            title: row.title,
+            author_id: row.author_id,
+            paint_duration: row.paint_duration.microseconds.to_string(),
+            stroke_count: row.stroke_count,
+            image_filename: row.image_filename,
+            image_width: row.width,
+            image_height: row.height,
+            replay_filename: row.replay_filename,
+            viewer_count: row.viewer_count,
+            published_at: row.published_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
         })
         .collect())
 }
@@ -466,6 +464,7 @@ pub async fn find_post_by_id(
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at,
+                posts.allow_relay,
                 users.display_name AS display_name,
                 users.login_name AS login_name,
                 communities.id AS community_id,
@@ -514,6 +513,7 @@ pub async fn find_post_by_id(
             "viewer_count".to_string(),
             Some(row.viewer_count.to_string()),
         );
+        map.insert("allow_relay".to_string(), Some(row.allow_relay.to_string()));
 
         let created_at_seoul = row.created_at.with_timezone(&Seoul);
         let created_at_human_readable = created_at_seoul.format("%Y-%m-%d %H:%M").to_string();
@@ -556,6 +556,7 @@ pub async fn publish_post(
     title: String,
     content: String,
     is_sensitive: bool,
+    allow_relay: bool,
 ) -> Result<()> {
     let q = query!(
         "
@@ -564,12 +565,14 @@ pub async fn publish_post(
                 published_at = now(),
                 title = $1,
                 content = $2,
-                is_sensitive = $3
-            WHERE id = $4
+                is_sensitive = $3,
+                allow_relay = $4
+            WHERE id = $5
         ",
         title,
         content,
         is_sensitive,
+        allow_relay,
         id
     );
     q.execute(&mut **tx).await?;
@@ -582,6 +585,7 @@ pub async fn edit_post(
     title: String,
     content: String,
     is_sensitive: bool,
+    allow_relay: bool,
 ) -> Result<()> {
     let q = query!(
         "
@@ -589,12 +593,14 @@ pub async fn edit_post(
             SET
                 title = $1,
                 content = $2,
-                is_sensitive = $3
-            WHERE id = $4
+                is_sensitive = $3,
+                allow_relay = $4
+            WHERE id = $5
         ",
         title,
         content,
         is_sensitive,
+        allow_relay,
         id
     );
     q.execute(&mut **tx).await?;

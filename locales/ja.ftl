@@ -59,7 +59,9 @@ post-comment = コメント
 post-publish = 公開
 post-move-community = このコミュニティに移動する
 post-delete-confirm = 本当にこの画像を削除しますか？
+post-relay-enabled-notice = この画像は継続して描くことができます。画像をクリックしてみてください！
 
+allow-relay = リレー描画を許可
 sensitive = 敏感な内容
 draft-post = 一時保管された図
 

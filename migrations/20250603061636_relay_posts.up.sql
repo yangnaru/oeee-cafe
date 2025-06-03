@@ -1,0 +1,3 @@
+ALTER TABLE posts
+ADD COLUMN parent_post_id uuid DEFAULT NULL REFERENCES posts(id),
+ADD COLUMN allow_relay BOOLEAN NOT NULL DEFAULT false;

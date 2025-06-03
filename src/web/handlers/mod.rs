@@ -146,11 +146,13 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_post_publish => bundle.format_pattern(bundle.get_message("post-publish").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_move_community => bundle.format_pattern(bundle.get_message("post-move-community").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_delete_confirm => bundle.format_pattern(bundle.get_message("post-delete-confirm").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_post_relay_enabled_notice => bundle.format_pattern(bundle.get_message("post-relay-enabled-notice").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_comment_created_at => bundle.format_pattern(bundle.get_message("comment-created-at").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_draft_post => bundle.format_pattern(bundle.get_message("draft-post").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_sensitive => bundle.format_pattern(bundle.get_message("sensitive").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_allow_relay => bundle.format_pattern(bundle.get_message("allow-relay").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_latest_active_communities => bundle.format_pattern(bundle.get_message("latest-active-communities").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_posts_from_public_communities => bundle.format_pattern(bundle.get_message("posts-from-public-communities").unwrap().value().unwrap(), None, &mut vec![]),
