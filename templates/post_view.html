@@ -74,6 +74,7 @@
                 {% else %}
                   {{ ftl_post_no_title }}
                 {% endif %}
+                {% if encoded_parent_post_id %}<a href="/posts/{{ encoded_parent_post_id }}">↵</a>{% endif %}
               </p>
               <p>
                 {{ ftl_post_description }}: <pre class="post-content">{{ post.content }}</pre>

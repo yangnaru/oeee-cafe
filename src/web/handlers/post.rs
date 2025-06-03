@@ -174,6 +174,11 @@ pub async fn post_view(
         post => {
             post.as_ref()
         },
+        encoded_parent_post_id => post.clone().unwrap().get("parent_post_id")
+            .and_then(|id| id.as_ref())
+            .and_then(|id| Uuid::parse_str(id).ok())
+            .map(|uuid| BASE64URL_NOPAD.encode(uuid.as_bytes()))
+            .unwrap_or_default(),
         encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
         encoded_community_id,
         draft_post_count,

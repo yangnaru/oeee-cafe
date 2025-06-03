@@ -481,6 +481,7 @@ pub async fn find_post_by_id(
                 posts.created_at,
                 posts.updated_at,
                 posts.allow_relay,
+                posts.parent_post_id,
                 users.display_name AS display_name,
                 users.login_name AS login_name,
                 communities.id AS community_id,
@@ -562,6 +563,10 @@ pub async fn find_post_by_id(
         map.insert(
             "community_name".to_string(),
             Some(row.community_name.to_string()),
+        );
+        map.insert(
+            "parent_post_id".to_string(),
+            row.parent_post_id.map(|id| id.to_string()),
         );
         map
     }))
