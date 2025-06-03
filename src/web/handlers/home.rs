@@ -41,16 +41,21 @@ pub async fn home(
     };
 
     let user = find_user_by_login_name(&mut tx, &state.config.official_account_login_name).await?;
-    let official_communities_with_latest_posts =
-        get_user_communities_with_latest_9_posts(&mut tx, user.clone().unwrap().id).await?;
-    let non_official_public_community_posts =
-        find_public_community_posts_excluding_from_community_owner(
-            &mut tx,
-            user.clone().unwrap().id,
-        )
-        .await?;
-    let active_public_communities =
-        get_active_public_communities_excluding_owner(&mut tx, user.unwrap().id).await?;
+    let official_communities_with_latest_posts = match user.clone() {
+        Some(user) => get_user_communities_with_latest_9_posts(&mut tx, user.id).await?,
+        None => Vec::new(),
+    };
+    let non_official_public_community_posts = match user.clone() {
+        Some(user) => {
+            find_public_community_posts_excluding_from_community_owner(&mut tx, user.id).await?
+        }
+        None => Vec::new(),
+    };
+    let active_public_communities = match user {
+        Some(user) => get_active_public_communities_excluding_owner(&mut tx, user.id).await?,
+        None => Vec::new(),
+    };
+
     let active_public_communities: Vec<_> = active_public_communities
         .into_iter()
         .map(|community| {
