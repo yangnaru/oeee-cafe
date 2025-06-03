@@ -148,6 +148,7 @@ pub async fn draw_finish(
     let mut security_timer = 0;
     let mut security_count = 0;
     let mut tool = String::new();
+    let mut parent_post_id = None;
 
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
@@ -203,6 +204,13 @@ pub async fn draw_finish(
                 .unwrap();
         } else if name == "tool" {
             tool = std::str::from_utf8(data.as_ref()).unwrap().to_string();
+        } else if name == "parent_post_id" {
+            if !data.is_empty() {
+                parent_post_id = Some(
+                    Uuid::from_slice(BASE64URL_NOPAD.decode(data.as_ref()).unwrap().as_slice())
+                        .unwrap(),
+                );
+            }
         }
     }
     let start = SystemTime::now();
@@ -270,6 +278,7 @@ pub async fn draw_finish(
         image_filename: format!("{}.png", image_sha256),
         replay_filename,
         tool: tool_enum,
+        parent_post_id,
     };
 
     let db = state.config.connect_database().await?;

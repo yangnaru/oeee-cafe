@@ -100,6 +100,7 @@ pub struct PostDraft {
     pub image_filename: String,
     pub replay_filename: String,
     pub tool: Tool,
+    pub parent_post_id: Option<Uuid>,
 }
 
 pub async fn find_posts_by_community_id(
@@ -408,15 +409,17 @@ pub async fn create_post(
                 author_id,
                 image_id,
                 community_id,
-                is_sensitive
+                is_sensitive,
+                parent_post_id
             )
-            VALUES ($1, $2, $3, $4)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id, created_at, updated_at
         ",
         post_draft.author_id,
         image.id,
         post_draft.community_id,
-        false
+        false,
+        post_draft.parent_post_id
     )
     .fetch_one(&mut **tx)
     .await?;
