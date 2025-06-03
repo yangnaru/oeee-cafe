@@ -206,10 +206,9 @@ pub async fn draw_finish(
             tool = std::str::from_utf8(data.as_ref()).unwrap().to_string();
         } else if name == "parent_post_id" {
             if !data.is_empty() {
-                parent_post_id = Some(
-                    Uuid::from_slice(BASE64URL_NOPAD.decode(data.as_ref()).unwrap().as_slice())
-                        .unwrap(),
-                );
+                parent_post_id = Some(Uuid::parse_str(
+                    &std::str::from_utf8(data.as_ref()).unwrap().to_string(),
+                ));
             }
         }
     }
