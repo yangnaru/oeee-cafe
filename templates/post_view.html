@@ -49,8 +49,7 @@
                  width="{{ post.image_width }}"
                  height="{{ post.image_height }}"
                  alt="{{ post.title }}"
-                 src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                 crossorigin="anonymous" />
+                 src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
           </a>
           <p>
             <i>{{ ftl_post_relay_enabled_notice }}</i>
@@ -60,8 +59,7 @@
                width="{{ post.image_width }}"
                height="{{ post.image_height }}"
                alt="{{ post.title }}"
-               src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-               crossorigin="anonymous" />
+               src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
         {% endif %}
         <div class="center">
           <p>

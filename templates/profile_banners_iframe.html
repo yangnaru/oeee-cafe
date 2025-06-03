@@ -18,8 +18,7 @@
                      height="{{ following.banner_image_height }}"
                      alt="{{ following.display_name }} (@{{ following.login_name }}) 동맹 배너"
                      class="banner"
-                     src="{{ r2_public_endpoint_url }}/image/{{ following.banner_image_filename[:2] }}/{{ following.banner_image_filename }}"
-                     crossorigin="anonymous" />
+                     src="{{ r2_public_endpoint_url }}/image/{{ following.banner_image_filename[:2] }}/{{ following.banner_image_filename }}" />
               </a>
             </div>
           {% endfor %}

@@ -14,8 +14,7 @@
                    height="{{ post.image_height }}"
                    alt="{{ post.title }}"
                    src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                   class="{% if post.is_sensitive %}sensitive{% endif %}"
-                   crossorigin="anonymous" />
+                   class="{% if post.is_sensitive %}sensitive{% endif %}" />
             </a>
           </div>
         {% endfor %}
@@ -43,8 +42,7 @@
                      height="{{ post.image_height }}"
                      alt="{{ post.title }}"
                      src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                     class="{% if post.is_sensitive %}sensitive{% endif %}"
-                     crossorigin="anonymous" />
+                     class="{% if post.is_sensitive %}sensitive{% endif %}" />
               </a>
             </div>
           {% endfor %}
