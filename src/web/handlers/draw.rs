@@ -263,6 +263,7 @@ pub async fn draw_finish(
         height,
         image_filename: format!("{}.png", image_sha256),
         replay_filename,
+        tool,
     };
 
     let db = state.config.connect_database().await?;

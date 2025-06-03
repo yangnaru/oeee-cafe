@@ -50,8 +50,9 @@ pub async fn create_banner(
                 width,
                 height,
                 image_filename,
-                replay_filename
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+                replay_filename,
+                tool
+            ) VALUES ($1, $2, $3, $4, $5, $6, 'neo')
             RETURNING id
         ",
         banner_draft.paint_duration,

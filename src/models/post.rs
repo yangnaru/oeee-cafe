@@ -4,6 +4,7 @@ use chrono_tz::Asia::Seoul;
 use data_encoding::BASE64URL_NOPAD;
 use humantime::format_duration;
 use serde::{Deserialize, Serialize};
+use sqlx::Type;
 use sqlx::{postgres::types::PgInterval, query, Postgres, Transaction};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -81,6 +82,14 @@ impl Post {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Type)]
+#[sqlx(type_name = "preferred_language", rename_all = "lowercase")]
+pub enum Tool {
+    Neo,
+    Tegaki,
+    Cucumber,
+}
+
 pub struct PostDraft {
     pub author_id: Uuid,
     pub community_id: Uuid,
@@ -90,6 +99,7 @@ pub struct PostDraft {
     pub height: i32,
     pub image_filename: String,
     pub replay_filename: String,
+    pub tool: String,
 }
 
 pub async fn find_posts_by_community_id(
@@ -369,23 +379,25 @@ pub async fn create_post(
     post_draft: PostDraft,
 ) -> Result<SerializablePost> {
     let image = query!(
-        "
+        r#"
             INSERT INTO images (
                 paint_duration,
                 stroke_count,
                 width,
                 height,
                 image_filename,
-                replay_filename
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+                replay_filename,
+                tool
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
-        ",
+        "#,
         post_draft.paint_duration,
         post_draft.stroke_count,
         post_draft.width,
         post_draft.height,
         post_draft.image_filename,
-        post_draft.replay_filename
+        post_draft.replay_filename,
+        post_draft.tool as _
     )
     .fetch_one(&mut **tx)
     .await?;
