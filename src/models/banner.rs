@@ -1,3 +1,4 @@
+use crate::models::post::Tool;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use data_encoding::BASE64URL_NOPAD;
@@ -52,7 +53,7 @@ pub async fn create_banner(
                 image_filename,
                 replay_filename,
                 tool
-            ) VALUES ($1, $2, $3, $4, $5, $6, 'neo')
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
         ",
         banner_draft.paint_duration,
@@ -60,7 +61,8 @@ pub async fn create_banner(
         banner_draft.width,
         banner_draft.height,
         banner_draft.image_filename,
-        banner_draft.replay_filename
+        banner_draft.replay_filename,
+        Tool::Neo as _
     )
     .fetch_one(&mut **tx)
     .await?;

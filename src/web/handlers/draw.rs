@@ -1,7 +1,7 @@
 use crate::app_error::AppError;
 use crate::models::banner::{create_banner, BannerDraft};
 use crate::models::community::find_community_by_id;
-use crate::models::post::{create_post, get_draft_post_count, PostDraft};
+use crate::models::post::{create_post, get_draft_post_count, PostDraft, Tool};
 use crate::models::user::AuthSession;
 use crate::web::handlers::{create_base_ftl_context, get_bundle};
 use crate::web::state::AppState;
@@ -251,6 +251,12 @@ pub async fn draw_finish(
         return Ok(StatusCode::BAD_REQUEST.into_response());
     };
 
+    let tool_enum: Tool = match tool.as_str() {
+        "neo" => Tool::Neo,
+        "tegaki" => Tool::Tegaki,
+        "cucumber" => Tool::Cucumber,
+        _ => return Ok(StatusCode::BAD_REQUEST.into_response()),
+    };
     let post_draft = PostDraft {
         author_id: auth_session.user.unwrap().id,
         community_id,
@@ -263,7 +269,7 @@ pub async fn draw_finish(
         height,
         image_filename: format!("{}.png", image_sha256),
         replay_filename,
-        tool,
+        tool: tool_enum,
     };
 
     let db = state.config.connect_database().await?;

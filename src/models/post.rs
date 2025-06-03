@@ -99,7 +99,7 @@ pub struct PostDraft {
     pub height: i32,
     pub image_filename: String,
     pub replay_filename: String,
-    pub tool: String,
+    pub tool: Tool,
 }
 
 pub async fn find_posts_by_community_id(
