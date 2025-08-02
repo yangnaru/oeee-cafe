@@ -51,10 +51,10 @@ pub async fn start_draw(
     Form(input): Form<Input>,
 ) -> Result<Html<String>, AppError> {
     let template_filename = match input.tool.as_str() {
-        "neo" => "draw_post_neo.html",
-        "tegaki" => "draw_post_tegaki.html",
-        "cucumber" => "draw_post_cucumber.html",
-        _ => "draw_post_neo.html",
+        "neo" => "draw_post_neo.jinja",
+        "tegaki" => "draw_post_tegaki.jinja",
+        "cucumber" => "draw_post_cucumber.jinja",
+        _ => "draw_post_neo.jinja",
     };
 
     let db = state.config.connect_database().await?;
@@ -423,7 +423,7 @@ pub async fn start_banner_draw(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
-    let template: minijinja::Template<'_, '_> = state.env.get_template("draw_banner.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("draw_banner.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()

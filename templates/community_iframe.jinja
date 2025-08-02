@@ -1,25 +1,24 @@
-{% extends "base.html" %}
+{% extends "base_iframe.jinja" %}
 {% block title %}
-  {{ super() }} | {{ ftl_timeline }}
+  {{ super() }} | {{ community.name }}
 {% endblock title %}
 {% block body %}
   <div class="center">
-    <h2>{{ ftl_timeline_my }}</h2>
-    {% if posts|length > 0 %}
+    {% if posts %}
       <div class="posts-grid">
         {% for post in posts %}
           <div class="posts-grid-item">
-            <a href="/posts/{{ post.id }}">
-              <img width="{{ post.image_width }}"
+            <a href="/posts/{{ post.id }}" target="_blank">
+              <img alt="{{ post.title }}"
+                   width="{{ post.image_width }}"
                    height="{{ post.image_height }}"
-                   alt="{{ post.title }}"
                    src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
             </a>
           </div>
         {% endfor %}
       </div>
     {% else %}
-      <p>{{ ftl_timeline_empty|safe }}</p>
+      <p>{{ ftl_community_no_posts }}</p>
     {% endif %}
   </div>
 {% endblock body %}

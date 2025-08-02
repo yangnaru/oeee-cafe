@@ -1,6 +1,6 @@
-{% from "guestbook_macro.html" import guestbook_entry %}
-{% from "follow_macro.html" import follow_button, unfollow_button %}
-{% extends "base.html" %}
+{% from "guestbook_macro.jinja" import guestbook_entry %}
+{% from "follow_macro.jinja" import follow_button, unfollow_button %}
+{% extends "base.jinja" %}
 {% block title %}
   {{ super() }} | {{ user.display_name }} (@{{ user.login_name }})
 {% endblock title %}

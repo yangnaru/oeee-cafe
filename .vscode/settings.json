@@ -3,9 +3,6 @@
     "DATABASE_URL": "postgres://localhost/oeee_cafe"
   },
   "editor.formatOnSave": true,
-  "files.associations": {
-    "templates/**/*.html": "jinja-html"
-  },
   "[html]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",
   },

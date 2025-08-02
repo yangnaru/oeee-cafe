@@ -40,7 +40,7 @@ pub async fn list_notifications(
         })
         .collect::<Vec<_>>();
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("notifications.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("notifications.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),

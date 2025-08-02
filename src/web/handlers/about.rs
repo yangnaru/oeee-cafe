@@ -34,7 +34,7 @@ pub async fn about(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
-    let template: minijinja::Template<'_, '_> = state.env.get_template("about.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("about.jinja")?;
     let rendered: String = template.render(context! {
         current_user => auth_session.user,
         encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),

@@ -1,5 +1,5 @@
-{% import "comments_macro.html" as comments_macro %}
-{% extends "base.html" %}
+{% import "comments_macro.jinja" as comments_macro %}
+{% extends "base.jinja" %}
 {% block title %}
   {{ super() }} |
   {% if post.title %}

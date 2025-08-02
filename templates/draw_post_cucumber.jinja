@@ -1,5 +1,9 @@
-{% extends "base.html" %} {% block title %} {{ super() }} | {{
-ftl_community_drawing_new }} @ {{ community_name }} {% endblock title %} {%
+{% extends "base.jinja" %}
+{% block title %}
+  {{ super() }} | {{
+  ftl_community_drawing_new }} @ {{ community_name }}
+{% endblock title %}
+{%
 block head %} {{ super() }}
 <style>
   #cucumber-color-picker-foreground-preview {
@@ -16,66 +20,53 @@ block head %} {{ super() }}
     border: 1px solid black;
   }
 </style>
-{% endblock head %} {% block body %}
-<div class="center">
-  <h2>{{ ftl_community_drawing_new }} @ {{ community_name }}</h2>
-</div>
-<div id="cucumber-container">
-  <div id="cucumber-canvas-safe"></div>
-  <div id="cucumber-controls-container">
-    <div id="cucumber-controls-drawing">
-      <div id="cucumber-pen-size-container">
-        <input
-          type="range"
-          id="cucumber-pen-size-slider"
-          min="1"
-          max="30"
-          value="2"
-        />
-        <span id="cucumber-pen-size-value">2</span>
-      </div>
-      <div id="cucumber-color-picker-container">
-        <div id="cucumber-color-picker-option">
-          <div id="cucumber-color-picker-foreground-preview"></div>
-          <input
-            type="radio"
-            id="cucumber-color-picker-foreground"
-            name="color-picker"
-            value="{{ foreground_color }}"
-            checked
-          />
+{% endblock head %}
+{% block body %}
+  <div class="center">
+    <h2>{{ ftl_community_drawing_new }} @ {{ community_name }}</h2>
+  </div>
+  <div id="cucumber-container">
+    <div id="cucumber-canvas-safe"></div>
+    <div id="cucumber-controls-container">
+      <div id="cucumber-controls-drawing">
+        <div id="cucumber-pen-size-container">
+          <input type="range" id="cucumber-pen-size-slider" min="1" max="30" value="2" />
+          <span id="cucumber-pen-size-value">2</span>
         </div>
-        <div id="cucumber-color-picker-option">
-          <div id="cucumber-color-picker-background-preview"></div>
-          <input
-            type="radio"
-            id="cucumber-color-picker-background"
-            name="color-picker"
-            value="{{ background_color }}"
-          />
+        <div id="cucumber-color-picker-container">
+          <div id="cucumber-color-picker-option">
+            <div id="cucumber-color-picker-foreground-preview"></div>
+            <input type="radio"
+                   id="cucumber-color-picker-foreground"
+                   name="color-picker"
+                   value="{{ foreground_color }}"
+                   checked />
+          </div>
+          <div id="cucumber-color-picker-option">
+            <div id="cucumber-color-picker-background-preview"></div>
+            <input type="radio"
+                   id="cucumber-color-picker-background"
+                   name="color-picker"
+                   value="{{ background_color }}" />
+          </div>
+        </div>
+        <div id="cucumber-undo-redo-container">
+          <input type="button" id="cucumber-undo" value="{{ ftl_cucumber_undo }}" />
         </div>
       </div>
-      <div id="cucumber-undo-redo-container">
-        <input
-          type="button"
-          id="cucumber-undo"
-          value="{{ ftl_cucumber_undo }}"
-        />
+      <div>
+        <input type="button" id="cucumber-save" value="{{ ftl_cucumber_save }}" />
       </div>
-    </div>
-    <div>
-      <input type="button" id="cucumber-save" value="{{ ftl_cucumber_save }}" />
     </div>
   </div>
-</div>
-<script type="importmap">
+  <script type="importmap">
   {
     "imports": {
       "lz-string": "https://esm.sh/lz-string@1.5.0"
     }
   }
-</script>
-<script type="module">
+  </script>
+  <script type="module">
   document.addEventListener("DOMContentLoaded", (event) => {
     import("{{ '/static/cucumber/cucumber.js' | cachebuster | safe }}").then((module) => {
       // Set up cucumber
@@ -167,5 +158,5 @@ block head %} {{ super() }}
       });
     });
   });
-</script>
+  </script>
 {% endblock body %}

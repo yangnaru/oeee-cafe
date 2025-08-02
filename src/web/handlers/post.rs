@@ -49,7 +49,7 @@ pub async fn post_relay_view(
     }
 
     let template: minijinja::Template<'_, '_> =
-        state.env.get_template("draw_post_neo.html").unwrap();
+        state.env.get_template("draw_post_neo.jinja").unwrap();
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let draft_post_count = match auth_session.user.clone() {
@@ -145,7 +145,7 @@ pub async fn post_view(
 
     let encoded_community_id = BASE64URL_NOPAD.encode(community_id.as_bytes());
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.html").unwrap();
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja").unwrap();
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -228,14 +228,14 @@ pub async fn post_replay_view(
         Some(replay_filename) => {
             let replay_filename = replay_filename.as_ref().unwrap();
             if replay_filename.ends_with(".pch") {
-                "post_replay_view_pch.html"
+                "post_replay_view_pch.jinja"
             } else if replay_filename.ends_with(".tgkr") {
-                "post_replay_view_tgkr.html"
+                "post_replay_view_tgkr.jinja"
             } else {
-                "post_replay_view_pch.html"
+                "post_replay_view_pch.jinja"
             }
         }
-        None => "post_replay_view_pch.html",
+        None => "post_replay_view_pch.jinja",
     };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename).unwrap();
@@ -325,7 +325,7 @@ pub async fn post_publish_form(
         BASE64URL_NOPAD.encode(community_id.as_bytes())
     );
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -427,7 +427,7 @@ pub async fn draft_posts(
     let posts =
         find_draft_posts_by_author_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("draft_posts.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("draft_posts.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -486,7 +486,7 @@ pub async fn do_create_comment(
     let comments = find_comments_by_post_id(&mut tx, post_id).await?;
     let _ = tx.commit().await;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("post_comments.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_comments.jinja")?;
     let rendered = template.render(context! {
         comments => comments,
         ..create_base_ftl_context(&bundle)
@@ -547,7 +547,7 @@ pub async fn post_edit_community(
         .collect::<Vec<_>>();
 
     let template: minijinja::Template<'_, '_> =
-        state.env.get_template("post_edit_community.html")?;
+        state.env.get_template("post_edit_community.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -635,7 +635,7 @@ pub async fn hx_edit_post(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("post_edit.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_edit.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -702,7 +702,7 @@ pub async fn hx_do_edit_post(
     let post = find_post_by_id(&mut tx, post_uuid).await?;
     let _ = tx.commit().await;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()

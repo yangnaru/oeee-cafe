@@ -47,7 +47,7 @@ pub async fn do_follow_profile(
     .await?;
     let _ = tx.commit().await;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("unfollow_button.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("unfollow_button.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -86,7 +86,7 @@ pub async fn do_unfollow_profile(
     .await;
     let _ = tx.commit().await;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("follow_button.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("follow_button.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -161,7 +161,7 @@ pub async fn profile(
         })
         .collect::<Vec<_>>();
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("profile.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -202,7 +202,7 @@ pub async fn profile_iframe(
 
     let posts = find_published_public_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_iframe.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_iframe.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -237,7 +237,7 @@ pub async fn profile_banners_iframe(
     let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id).await?;
 
     let template: minijinja::Template<'_, '_> =
-        state.env.get_template("profile_banners_iframe.html")?;
+        state.env.get_template("profile_banners_iframe.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -288,7 +288,7 @@ pub async fn do_move_link_down(
     let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
     let _ = tx.commit().await;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -337,7 +337,7 @@ pub async fn do_move_link_up(
     let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
     let _ = tx.commit().await;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -390,7 +390,7 @@ pub async fn do_delete_link(
     let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
     let _ = tx.commit().await;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -442,7 +442,7 @@ pub async fn do_add_link(
     let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
     let _ = tx.commit().await;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -485,7 +485,7 @@ pub async fn profile_settings(
 
     let links = find_links_by_user_id(&mut tx, user.clone().unwrap().id).await?;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -549,7 +549,7 @@ pub async fn do_reply_guestbook_entry(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> =
-        state.env.get_template("guestbook_entry_reply.html")?;
+        state.env.get_template("guestbook_entry_reply.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -634,7 +634,7 @@ pub async fn do_write_guestbook_entry(
     .await;
     let _ = tx.commit().await;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook_entry.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook_entry.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -688,7 +688,7 @@ pub async fn guestbook(
             is_following(&mut tx, current_user.id, user.clone().unwrap().id).await?;
     }
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()

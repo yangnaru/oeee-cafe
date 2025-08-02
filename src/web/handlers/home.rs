@@ -64,7 +64,7 @@ pub async fn home(
         })
         .collect();
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("home.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("home.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
@@ -102,7 +102,7 @@ pub async fn my_timeline(
         .await
         .unwrap_or_default();
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("timeline.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("timeline.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),

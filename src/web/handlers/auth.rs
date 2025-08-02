@@ -25,7 +25,7 @@ pub async fn signup(
     Query(NextUrl { next }): Query<NextUrl>,
     State(state): State<crate::web::state::AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let template: minijinja::Template<'_, '_> = state.env.get_template("signup.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("signup.jinja")?;
 
     let bundle = get_bundle(&accept_language, None);
     let rendered: String = template.render(context! {
@@ -104,7 +104,7 @@ pub async fn login(
     Query(NextUrl { next }): Query<NextUrl>,
     State(state): State<crate::web::state::AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let template: minijinja::Template<'_, '_> = state.env.get_template("login.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("login.jinja")?;
 
     let collected_messages: Vec<axum_messages::Message> = messages.into_iter().collect();
 

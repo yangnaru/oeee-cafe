@@ -57,7 +57,7 @@ pub async fn account(
         ("en", "English"),
         ("zh", "中文"),
     ];
-    let template: minijinja::Template<'_, '_> = state.env.get_template("account.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("account.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
@@ -202,7 +202,7 @@ pub async fn verify_email_verification_code(
     let challenge = challenge.unwrap();
     let now = Utc::now();
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("email_verify.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("email_verify.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -271,7 +271,7 @@ pub async fn request_email_verification_code(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
-    let edit_email_template = state.env.get_template("email_edit.html")?;
+    let edit_email_template = state.env.get_template("email_edit.jinja")?;
 
     let current_email = auth_session.user.clone().unwrap().email;
     if current_email.is_some()
@@ -364,7 +364,7 @@ pub async fn request_email_verification_code(
 
     let _ = mailer.send(&email).unwrap();
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("email_verify.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("email_verify.jinja")?;
 
     let rendered = template.render(context! {
         challenge_id => email_verification_challenge.id,

@@ -1,10 +1,11 @@
-{% extends "base_iframe.html" %}
+{% extends "base.jinja" %}
 {% block title %}
-  {{ super() }} | {{ user.display_name }} (@{{ user.login_name }})
+  {{ super() }} | {{ ftl_timeline }}
 {% endblock title %}
 {% block body %}
   <div class="center">
-    {% if posts %}
+    <h2>{{ ftl_timeline_my }}</h2>
+    {% if posts|length > 0 %}
       <div class="posts-grid">
         {% for post in posts %}
           <div class="posts-grid-item">
@@ -18,7 +19,7 @@
         {% endfor %}
       </div>
     {% else %}
-      <p>{{ ftl_profile_public_community_posts_nil }}</p>
+      <p>{{ ftl_timeline_empty|safe }}</p>
     {% endif %}
   </div>
 {% endblock body %}

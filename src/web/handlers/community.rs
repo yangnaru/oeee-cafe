@@ -46,7 +46,7 @@ pub async fn community(
         None => 0,
     };
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("community.html").unwrap();
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community.jinja").unwrap();
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -130,7 +130,7 @@ pub async fn community_iframe(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
-    let template: minijinja::Template<'_, '_> = state.env.get_template("community_iframe.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community_iframe.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         community => community,
@@ -259,7 +259,7 @@ pub async fn communities(
         None => 0,
     };
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("communities.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("communities.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -328,7 +328,7 @@ pub async fn create_community_form(
         None => 0,
     };
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("create_community.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("create_community.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -366,7 +366,7 @@ pub async fn hx_edit_community(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("community_edit.html")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community_edit.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -411,7 +411,7 @@ pub async fn hx_do_edit_community(
     .await?;
     let _ = tx.commit().await;
 
-    let template = state.env.get_template("community.html")?;
+    let template = state.env.get_template("community.jinja")?;
     let user_preferred_language = auth_session
         .user
         .clone()

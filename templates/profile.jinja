@@ -1,5 +1,4 @@
-{% from "follow_macro.html" import follow_button, unfollow_button %} {% extends
-"base.html" %}
+{% from "follow_macro.jinja" import follow_button, unfollow_button %} {% extends "base.jinja" %}
 {% block title %}
   {{ super() }} | {{ user.display_name }} (@{{ user.login_name }})
 {% endblock title %}
