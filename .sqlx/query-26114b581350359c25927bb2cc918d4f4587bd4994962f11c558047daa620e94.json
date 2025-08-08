@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            follows.following_id AS user_id,\n            users.login_name,\n            users.display_name,\n            images.image_filename AS \"banner_image_filename?\",\n            images.width AS \"banner_image_width?\",\n            images.height AS \"banner_image_height?\"\n        FROM follows\n        LEFT JOIN users ON follows.following_id = users.id\n        LEFT JOIN banners ON users.banner_id = banners.id\n        LEFT JOIN images ON banners.image_id = images.id\n        WHERE follower_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "login_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "display_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "banner_image_filename?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "banner_image_width?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "banner_image_height?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "26114b581350359c25927bb2cc918d4f4587bd4994962f11c558047daa620e94"
+}

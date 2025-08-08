@@ -14,6 +14,7 @@ timeline-empty = タイムラインが空です。 <a href="/communities">コミ
 
 home = ホーム
 draw = 描きましょう！
+collaborate = コラボ
 drafts = 一時保管箱
 profile = プロフィール
 community = コミュニティ
@@ -156,3 +157,67 @@ account-language-settings-save = 言語設定の保存
 cucumber-save = 保存
 cucumber-undo = 元に戻す
 cucumber-redo = 再実行
+
+collaborative-drawing = コラボレーティブドローイング
+collaborative-drawing-description = 他の人とリアルタイムで一緒に描画しましょう。
+collaborative-create-private-room = プライベートルームを作成
+collaborative-create-public-room = パブリックルームを作成
+collaborative-canvas-size = キャンバスサイズ
+collaborative-canvas-small = 小 (400×300)
+collaborative-canvas-medium = 中 (800×600)
+collaborative-canvas-large = 大 (1200×900)
+collaborative-canvas-wide = ワイド (1600×900)
+collaborative-canvas-square = 正方形 (800×800)
+collaborative-active-public-rooms = アクティブなパブリックルーム
+collaborative-user-singular = 人
+collaborative-user-plural = 人
+collaborative-last-updated = 最終更新:
+collaborative-no-active-rooms = 現在アクティブなパブリックルームはありません。
+collaborative-auth-message = ログインしてプライベートルームを作成し、既存のルームに参加してください。
+collaborative-public-room-title = パブリック描画ルーム
+
+# Canvas UI strings
+collaborative-welcome-message = コラボレーティブ描画ルームへようこそ！
+collaborative-connected = 描画ルームに接続しました
+collaborative-disconnected = 描画ルームから切断しました
+collaborative-connection-error = 接続エラーが発生しました
+collaborative-system = システム
+collaborative-picked-color = 選択された色: {$color}
+collaborative-chat-placeholder = メッセージを入力してください...
+
+# Canvas tools
+collaborative-tools = ツール
+collaborative-brush = ブラシ
+collaborative-eraser = 消しゴム
+collaborative-color-picker = カラーピッカー
+collaborative-pan = パン
+collaborative-precision-tools = 精密ツール
+collaborative-pixel = ピクセル
+collaborative-halftone = ハーフトーン
+collaborative-show-grid = グリッド表示
+collaborative-size = サイズ
+collaborative-opacity = 不透明度
+collaborative-colors = 色
+collaborative-layers = レイヤー
+collaborative-background = 背景
+collaborative-toggle-visibility = 表示切り替え
+collaborative-add-layer = レイヤー追加
+collaborative-delete-layer = レイヤー削除
+collaborative-merge-down = 下に統合
+collaborative-advanced = 上級
+collaborative-blend-mode = ブレンドモード
+collaborative-normal = 通常
+collaborative-multiply = 乗算
+collaborative-screen = スクリーン
+collaborative-overlay = オーバーレイ
+collaborative-soft-light = ソフトライト
+collaborative-hard-light = ハードライト
+collaborative-color-dodge = カラー覆い焼き
+collaborative-color-burn = カラー焼き込み
+collaborative-actions = アクション
+collaborative-clear-canvas = キャンバスをクリア
+collaborative-save-image = 画像保存
+collaborative-undo = 元に戻す
+collaborative-redo = やり直し
+collaborative-fit-to-screen = 画面に合わせる
+collaborative-users = ユーザー

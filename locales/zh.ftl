@@ -14,6 +14,7 @@ timeline-empty = 时间线是空的。在<a href="/communities">社区</a>中与
 
 home = 首页
 draw = 画画！
+collaborate = 协作
 drafts = 草稿箱
 profile = 个人资料
 community = 社区
@@ -156,3 +157,67 @@ account-language-settings-save = 保存语言设置
 cucumber-save = 保存
 cucumber-undo = 撤销
 cucumber-redo = 重做
+
+collaborative-drawing = 协作绘画
+collaborative-drawing-description = 与他人实时协作绘画。
+collaborative-create-private-room = 创建私人房间
+collaborative-create-public-room = 创建公共房间
+collaborative-canvas-size = 画布尺寸
+collaborative-canvas-small = 小 (400×300)
+collaborative-canvas-medium = 中 (800×600)
+collaborative-canvas-large = 大 (1200×900)
+collaborative-canvas-wide = 宽屏 (1600×900)
+collaborative-canvas-square = 正方形 (800×800)
+collaborative-active-public-rooms = 活跃的公共房间
+collaborative-user-singular = 用户
+collaborative-user-plural = 用户
+collaborative-last-updated = 最后更新:
+collaborative-no-active-rooms = 目前没有活跃的公共房间。
+collaborative-auth-message = 登录以创建私人房间并加入现有房间。
+collaborative-public-room-title = 公共绘画房间
+
+# Canvas UI strings
+collaborative-welcome-message = 欢迎来到协作绘画房间！
+collaborative-connected = 已连接到绘画房间
+collaborative-disconnected = 已断开绘画房间连接
+collaborative-connection-error = 发生连接错误
+collaborative-system = 系统
+collaborative-picked-color = 选择的颜色：{$color}
+collaborative-chat-placeholder = 输入消息...
+
+# Canvas tools
+collaborative-tools = 工具
+collaborative-brush = 画笔
+collaborative-eraser = 橡皮擦
+collaborative-color-picker = 颜色选择器
+collaborative-pan = 平移
+collaborative-precision-tools = 精密工具
+collaborative-pixel = 像素
+collaborative-halftone = 半色调
+collaborative-show-grid = 显示网格
+collaborative-size = 大小
+collaborative-opacity = 不透明度
+collaborative-colors = 颜色
+collaborative-layers = 图层
+collaborative-background = 背景
+collaborative-toggle-visibility = 切换可见性
+collaborative-add-layer = 添加图层
+collaborative-delete-layer = 删除图层
+collaborative-merge-down = 向下合并
+collaborative-advanced = 高级
+collaborative-blend-mode = 混合模式
+collaborative-normal = 正常
+collaborative-multiply = 正片叠底
+collaborative-screen = 滤色
+collaborative-overlay = 叠加
+collaborative-soft-light = 柔光
+collaborative-hard-light = 强光
+collaborative-color-dodge = 颜色减淡
+collaborative-color-burn = 颜色加深
+collaborative-actions = 操作
+collaborative-clear-canvas = 清空画布
+collaborative-save-image = 保存图像
+collaborative-undo = 撤销
+collaborative-redo = 重做
+collaborative-fit-to-screen = 适合屏幕
+collaborative-users = 用户

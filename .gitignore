@@ -1,2 +1,6 @@
 /target
 /config/*.toml
+
+# TypeScript build output
+/static/canvas/dist
+Drawpile/

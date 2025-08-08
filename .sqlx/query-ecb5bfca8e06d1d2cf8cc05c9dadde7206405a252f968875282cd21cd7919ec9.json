@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE collaborative_session_users SET last_activity = NOW() WHERE session_id = $1 AND protocol_user_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ecb5bfca8e06d1d2cf8cc05c9dadde7206405a252f968875282cd21cd7919ec9"
+}

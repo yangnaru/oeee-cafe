@@ -1,4 +1,5 @@
 pub mod banner;
+pub mod canvas_session;
 pub mod comment;
 pub mod community;
 pub mod email_verification_challenge;

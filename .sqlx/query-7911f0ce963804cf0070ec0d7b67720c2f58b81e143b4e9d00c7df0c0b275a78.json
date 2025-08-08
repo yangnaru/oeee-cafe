@@ -1,0 +1,67 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO collaborative_session_users (session_id, protocol_user_id, user_name, user_id)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (session_id, protocol_user_id) DO UPDATE SET\n                user_name = EXCLUDED.user_name,\n                user_id = EXCLUDED.user_id,\n                is_connected = TRUE,\n                last_activity = NOW()\n            RETURNING *\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "protocol_user_id",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "joined_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_activity",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_connected",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2",
+        "Varchar",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7911f0ce963804cf0070ec0d7b67720c2f58b81e143b4e9d00c7df0c0b275a78"
+}

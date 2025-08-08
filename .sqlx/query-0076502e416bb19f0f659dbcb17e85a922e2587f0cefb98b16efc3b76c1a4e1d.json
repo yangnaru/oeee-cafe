@@ -1,0 +1,80 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT communities.*, users.login_name AS owner_login_name, COALESCE(COUNT(posts.id), 0) AS posts_count\n            FROM communities\n            LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL\n            LEFT JOIN users ON communities.owner_id = users.id\n            WHERE communities.is_private = false\n            GROUP BY communities.id, users.login_name\n            HAVING MAX(posts.published_at) IS NOT NULL\n            ORDER BY MAX(posts.published_at) DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_private",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "foreground_color",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "background_color",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "owner_login_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "posts_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "0076502e416bb19f0f659dbcb17e85a922e2587f0cefb98b16efc3b76c1a4e1d"
+}

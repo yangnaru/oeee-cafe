@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO collaborative_messages (session_id, sequence_number, message_type, user_id, user_name, message_data)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            RETURNING *\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sequence_number",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_type",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 5,
+        "name": "user_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "message_data",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 7,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int2",
+        "Int2",
+        "Varchar",
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "15d1cbc18b89153eb562ff5950bf74837a518e5760766423ee355a2a89b3796c"
+}

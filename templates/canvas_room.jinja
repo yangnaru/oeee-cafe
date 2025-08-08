@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="{{ ftl_lang }}">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{{ ftl_brand }} - Collaborative Drawing</title>
+        <link rel="stylesheet" href="/static/style.css">
+        <link rel="stylesheet" href="/static/canvas/canvas-client.css">
+        <link rel="icon" type="image/png" href="/static/favicon.png">
+    </head>
+    <body>
+        <!-- The canvas client will replace the body content -->
+        <div class="loading-screen"
+             style="display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100vh;
+                    background: var(--main-bg-color);
+                    font-family: Arial, Helvetica, sans-serif;
+                    color: var(--main-text-color)">
+            <div style="text-align: center;">
+                <div style="width: 40px;
+                            height: 40px;
+                            border: 4px solid var(--main-border-color);
+                            border-top: 4px solid var(--main-highlight-color);
+                            border-radius: 50%;
+                            animation: spin 1s linear infinite;
+                            margin: 0 auto 1rem"></div>
+                <h2 style="color: var(--main-text-color); margin: 0;">Loading Drawing Room...</h2>
+                <p style="color: var(--main-text-color); margin: 0.5rem 0 0;">Connecting to collaborative canvas</p>
+            </div>
+        </div>
+        <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        </style>
+        <script>
+        // Pass server data to client
+        window.CANVAS_CONFIG = {
+            roomId: '{{ room_id | default("default") }}',
+            userName: '{{ current_user.display_name if current_user else "" }}',
+            userId: '{{ current_user.id if current_user else "" }}',
+            canvasWidth: {{ canvas_width | default(800) }},
+            canvasHeight: {{ canvas_height | default(600) }},
+            isAuthenticated: {{ 'true' if current_user else 'false' }},
+            
+            // Localized strings
+            strings: {
+                // UI messages
+                welcomeMessage: '{{ ftl_collaborative_welcome_message }}',
+                connected: '{{ ftl_collaborative_connected }}',
+                disconnected: '{{ ftl_collaborative_disconnected }}',
+                connectionError: '{{ ftl_collaborative_connection_error }}',
+                system: '{{ ftl_collaborative_system }}',
+                pickedColor: '{{ ftl_collaborative_picked_color }}',
+                chatPlaceholder: '{{ ftl_collaborative_chat_placeholder }}',
+                
+                // Tools
+                tools: '{{ ftl_collaborative_tools }}',
+                brush: '{{ ftl_collaborative_brush }}',
+                eraser: '{{ ftl_collaborative_eraser }}',
+                colorPicker: '{{ ftl_collaborative_color_picker }}',
+                pan: '{{ ftl_collaborative_pan }}',
+                precisionTools: '{{ ftl_collaborative_precision_tools }}',
+                pixel: '{{ ftl_collaborative_pixel }}',
+                halftone: '{{ ftl_collaborative_halftone }}',
+                showGrid: '{{ ftl_collaborative_show_grid }}',
+                size: '{{ ftl_collaborative_size }}',
+                opacity: '{{ ftl_collaborative_opacity }}',
+                colors: '{{ ftl_collaborative_colors }}',
+                layers: '{{ ftl_collaborative_layers }}',
+                background: '{{ ftl_collaborative_background }}',
+                toggleVisibility: '{{ ftl_collaborative_toggle_visibility }}',
+                addLayer: '{{ ftl_collaborative_add_layer }}',
+                deleteLayer: '{{ ftl_collaborative_delete_layer }}',
+                mergeDown: '{{ ftl_collaborative_merge_down }}',
+                advanced: '{{ ftl_collaborative_advanced }}',
+                blendMode: '{{ ftl_collaborative_blend_mode }}',
+                normal: '{{ ftl_collaborative_normal }}',
+                multiply: '{{ ftl_collaborative_multiply }}',
+                screen: '{{ ftl_collaborative_screen }}',
+                overlay: '{{ ftl_collaborative_overlay }}',
+                softLight: '{{ ftl_collaborative_soft_light }}',
+                hardLight: '{{ ftl_collaborative_hard_light }}',
+                colorDodge: '{{ ftl_collaborative_color_dodge }}',
+                colorBurn: '{{ ftl_collaborative_color_burn }}',
+                actions: '{{ ftl_collaborative_actions }}',
+                clearCanvas: '{{ ftl_collaborative_clear_canvas }}',
+                saveImage: '{{ ftl_collaborative_save_image }}',
+                undo: '{{ ftl_collaborative_undo }}',
+                redo: '{{ ftl_collaborative_redo }}',
+                fitToScreen: '{{ ftl_collaborative_fit_to_screen }}',
+                users: '{{ ftl_collaborative_users }}'
+            }
+        };
+        </script>
+        <script type="module"
+                src="{{ '/static/canvas/dist/canvas-client.js'|cachebuster }}"></script>
+    </body>
+</html>

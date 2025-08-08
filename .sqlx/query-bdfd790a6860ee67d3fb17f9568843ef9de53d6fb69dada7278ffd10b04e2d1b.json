@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE collaborative_session_users SET is_connected = FALSE WHERE session_id = $1 AND protocol_user_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bdfd790a6860ee67d3fb17f9568843ef9de53d6fb69dada7278ffd10b04e2d1b"
+}

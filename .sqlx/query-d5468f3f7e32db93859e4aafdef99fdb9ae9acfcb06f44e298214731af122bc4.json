@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    posts.id,\n                    posts.title,\n                    posts.author_id,\n                    images.paint_duration AS paint_duration,\n                    images.stroke_count AS stroke_count,\n                    images.image_filename AS image_filename,\n                    images.width AS width,\n                    images.height AS height,\n                    images.replay_filename AS replay_filename,\n                    posts.viewer_count,\n                    posts.published_at,\n                    posts.created_at,\n                    posts.updated_at\n                FROM posts\n                LEFT JOIN images ON posts.image_id = images.id\n                WHERE community_id = $1\n                AND posts.deleted_at IS NULL\n                AND posts.published_at IS NOT NULL\n                ORDER BY posts.published_at DESC\n                LIMIT 9\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "author_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "paint_duration",
+        "type_info": "Interval"
+      },
+      {
+        "ordinal": 4,
+        "name": "stroke_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "image_filename",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "width",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "height",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "replay_filename",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "viewer_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "published_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d5468f3f7e32db93859e4aafdef99fdb9ae9acfcb06f44e298214731af122bc4"
+}

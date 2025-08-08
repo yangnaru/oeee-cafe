@@ -17,7 +17,7 @@ debug = true
 anyhow = "1.0.81"
 argon2 = { version = "0.5.3", features = ["password-hash", "std"] }
 aws-sdk-s3 = "1.19.1"
-axum = { version = "0.7.4", features = ["macros", "multipart"] }
+axum = { version = "0.7.4", features = ["macros", "multipart", "ws"] }
 axum-login = "0.14.0"
 axum-messages = "0.5.0"
 chrono = { version = "0.4.35", features = ["serde"] }
@@ -27,6 +27,7 @@ config = "0.14.0"
 data-encoding = "2.5.0"
 data-url = "0.3.1"
 fluent = "0.16.0"
+futures-util = "0.3.30"
 fluent-langneg = "0.14.0"
 hex = "0.4.3"
 humantime = "2.1.0"
@@ -40,6 +41,7 @@ rand = "0.8.5"
 rpassword = "7.3.1"
 sentry = { version = "0.32.2", features = ["anyhow"] }
 serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
 serde_with = "3.7.0"
 sha256 = "1.5.0"
 time = "0.3.34"
@@ -51,7 +53,7 @@ tower-sessions-sqlx-store = { version = "0.11.0", features = ["postgres"] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 unic-langid = "0.9.4"
-uuid = { version = "1.7.0", features = ["serde"] }
+uuid = { version = "1.7.0", features = ["serde", "v4"] }
 
 [dependencies.sqlx]
 version = "0.7.4"

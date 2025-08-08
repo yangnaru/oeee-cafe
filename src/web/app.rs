@@ -6,6 +6,11 @@ use crate::web::handlers::account::{
     verify_email_verification_code,
 };
 use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
+use crate::web::handlers::canvas::{canvas_ws_handler, trigger_global_shutdown};
+use crate::web::handlers::canvas_room::{
+    canvas_index, canvas_room, create_public_room, create_public_room_form, create_room,
+    create_room_form,
+};
 use crate::web::handlers::community::{
     communities, community, community_iframe, create_community_form, do_create_community,
     hx_do_edit_community, hx_edit_community,
@@ -26,9 +31,10 @@ use crate::web::handlers::profile::{
     do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile, do_write_guestbook_entry,
     guestbook, profile, profile_banners_iframe, profile_iframe, profile_settings,
 };
+use crate::web::handlers::ws::ws_handler;
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
-use axum::routing::{delete, get, post, put};
+use axum::routing::{any, delete, get, post, put};
 use axum::Router;
 use axum_login::{login_required, AuthManagerLayerBuilder};
 use axum_messages::MessagesManagerLayer;
@@ -135,6 +141,13 @@ impl App {
                 "/@:login_name/guestbook/:entry_id/reply",
                 post(do_reply_guestbook_entry),
             )
+            .route("/collaborate/ws", any(canvas_ws_handler))
+            .route("/collaborate/new", get(create_room_form).post(create_room))
+            .route(
+                "/collaborate/public",
+                get(create_public_room_form).post(create_public_room),
+            )
+            .route("/collaborate/:room_id", get(canvas_room))
             .route_layer(login_required!(Backend, login_url = "/login"));
 
         let app = Router::new()
@@ -163,6 +176,8 @@ impl App {
             .route("/signup", post(do_signup))
             .route("/login", get(login))
             .route("/login", post(do_login))
+            .route("/ws", any(ws_handler))
+            .route("/collaborate", get(canvas_index))
             .fallback(handler_404)
             .merge(protected_router)
             .layer(MessagesManagerLayer)
@@ -180,7 +195,14 @@ impl App {
             .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle()))
             .await?;
 
-        deletion_task.await??;
+        // Handle the deletion task - it may be cancelled during shutdown
+        match deletion_task.await {
+            Ok(_) => {}, // Task completed normally
+            Err(e) if e.is_cancelled() => {
+                tracing::info!("Session deletion task was cancelled during shutdown");
+            },
+            Err(e) => return Err(e.into()), // Other join errors should still be propagated
+        }
 
         Ok(())
     }
@@ -205,7 +227,13 @@ async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => { deletion_task_abort_handle.abort() },
-        _ = terminate => { deletion_task_abort_handle.abort() },
+        _ = ctrl_c => {
+            deletion_task_abort_handle.abort();
+            trigger_global_shutdown().await;
+        },
+        _ = terminate => {
+            deletion_task_abort_handle.abort();
+            trigger_global_shutdown().await;
+        },
     }
 }

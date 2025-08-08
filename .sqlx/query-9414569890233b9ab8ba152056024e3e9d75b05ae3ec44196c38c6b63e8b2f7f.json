@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.*, COUNT(u.id) as user_count FROM collaborative_sessions s\n            LEFT JOIN collaborative_session_users u ON s.id = u.session_id AND u.is_connected = TRUE\n            WHERE s.is_active = TRUE \n              AND s.is_public = TRUE\n            GROUP BY s.id, s.room_id, s.title, s.max_users, s.canvas_width, s.canvas_height, \n                     s.created_at, s.updated_at, s.owner_user_id, s.is_active, s.is_public\n            ORDER BY COUNT(u.id) DESC, s.updated_at DESC\n            LIMIT $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "room_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "max_users",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "canvas_width",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "canvas_height",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "owner_user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_public",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "user_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "9414569890233b9ab8ba152056024e3e9d75b05ae3ec44196c38c6b63e8b2f7f"
+}

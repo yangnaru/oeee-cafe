@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT communities.*\n            FROM communities\n            LEFT JOIN posts ON communities.id = posts.community_id\n            WHERE communities.id IN (\n                SELECT DISTINCT community_id\n                FROM posts\n                WHERE author_id = $1\n            ) OR communities.owner_id = $1\n            GROUP BY communities.id\n            ORDER BY MAX(posts.published_at) DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_private",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "foreground_color",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "background_color",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "d488bd8f9a4ffee9193aabd25b4ff71e2fecdb32746cf7ee93006be04470ae78"
+}

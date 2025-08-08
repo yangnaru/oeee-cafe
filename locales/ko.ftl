@@ -14,6 +14,7 @@ timeline-empty = 타임라인이 비어 있습니다. <a href="/communities">커
 
 home = 홈
 draw = 그리기!
+collaborate = 같이 그리기
 drafts = 임시 보관함
 profile = 프로필
 community = 커뮤니티
@@ -156,3 +157,67 @@ account-language-settings-save = 언어 설정 저장
 cucumber-save = 저장
 cucumber-undo = 실행 취소
 cucumber-redo = 다시 실행
+
+collaborative-drawing = 같이 그리기
+collaborative-drawing-description = 다른 사람들과 실시간으로 함께 그려보세요.
+collaborative-create-private-room = 개인 방 만들기
+collaborative-create-public-room = 공개 방 만들기
+collaborative-canvas-size = 캔버스 크기
+collaborative-canvas-small = 작음 (400×300)
+collaborative-canvas-medium = 보통 (800×600)
+collaborative-canvas-large = 큼 (1200×900)
+collaborative-canvas-wide = 와이드 (1600×900)
+collaborative-canvas-square = 정사각형 (800×800)
+collaborative-active-public-rooms = 활성 공개 방
+collaborative-user-singular = 명
+collaborative-user-plural = 명
+collaborative-last-updated = 마지막 업데이트:
+collaborative-no-active-rooms = 현재 활성 공개 방이 없습니다.
+collaborative-auth-message = 로그인하여 개인 방을 만들고 기존 방에 참여하세요.
+collaborative-public-room-title = 공개 그림 방
+
+# Canvas UI strings
+collaborative-welcome-message = 협업 드로잉 룸에 오신 것을 환영합니다!
+collaborative-connected = 드로잉 룸에 연결됨
+collaborative-disconnected = 드로잉 룸 연결 해제됨
+collaborative-connection-error = 연결 오류가 발생했습니다
+collaborative-system = 시스템
+collaborative-picked-color = 선택된 색상: {$color}
+collaborative-chat-placeholder = 메시지를 입력하세요...
+
+# Canvas tools
+collaborative-tools = 도구
+collaborative-brush = 브러시
+collaborative-eraser = 지우개
+collaborative-color-picker = 색상 선택기
+collaborative-pan = 이동
+collaborative-precision-tools = 정밀 도구
+collaborative-pixel = 픽셀
+collaborative-halftone = 하프톤
+collaborative-show-grid = 격자 표시
+collaborative-size = 크기
+collaborative-opacity = 투명도
+collaborative-colors = 색상
+collaborative-layers = 레이어
+collaborative-background = 배경
+collaborative-toggle-visibility = 표시/숨김 전환
+collaborative-add-layer = 레이어 추가
+collaborative-delete-layer = 레이어 삭제
+collaborative-merge-down = 아래로 병합
+collaborative-advanced = 고급
+collaborative-blend-mode = 블렌드 모드
+collaborative-normal = 일반
+collaborative-multiply = 곱하기
+collaborative-screen = 스크린
+collaborative-overlay = 오버레이
+collaborative-soft-light = 부드러운 조명
+collaborative-hard-light = 강한 조명
+collaborative-color-dodge = 컬러 닷지
+collaborative-color-burn = 컬러 번
+collaborative-actions = 작업
+collaborative-clear-canvas = 캔버스 지우기
+collaborative-save-image = 이미지 저장
+collaborative-undo = 실행 취소
+collaborative-redo = 다시 실행
+collaborative-fit-to-screen = 화면에 맞추기
+collaborative-users = 사용자

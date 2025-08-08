@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE posts\n            SET\n                title = $1,\n                content = $2,\n                is_sensitive = $3,\n                allow_relay = $4\n            WHERE id = $5\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Bool",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "385065e6c99e2f8202d3d61a951666ad140e78c8a23355d7ebe1a8d39b23a295"
+}

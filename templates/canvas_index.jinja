@@ -1,0 +1,58 @@
+{% extends "base.jinja" %}
+
+{% block title %}{{ ftl_collaborative_drawing }} - {{ ftl_brand }}{% endblock %}
+
+{% block body %}
+<div class="center">
+    <h2 class="home-section-title">{{ ftl_collaborative_drawing }}</h2>
+    
+    <p>{{ ftl_collaborative_drawing_description }}</p>
+    
+    {% if current_user %}
+    <div style="margin: 1rem 0; display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="/collaborate/new" 
+           style="padding: 8px 16px; background-color: var(--main-highlight-color); color: white; border: 1px solid var(--main-border-color); text-decoration: none;">
+            {{ ftl_collaborative_create_private_room }}
+        </a>
+        <a href="/collaborate/public" 
+           style="padding: 8px 16px; background-color: var(--main-nav-bg-color); color: var(--main-text-color); border: 1px solid var(--main-border-color); text-decoration: none;">
+            {{ ftl_collaborative_create_public_room }}
+        </a>
+    </div>
+    {% endif %}
+
+    {% if public_sessions_with_counts|length > 0 %}
+    <h3>{{ ftl_collaborative_active_public_rooms }}</h3>
+    <ul style="list-style: none; padding: 0;">
+        {% for session, user_count in public_sessions_with_counts %}
+        <li style="margin: 0.5rem 0;">
+            {% if current_user %}
+            <a href="/collaborate/{{ session.room_id }}" 
+               style="display: block; padding: 8px; background-color: var(--main-nav-bg-color); border: 1px solid var(--main-border-color); text-decoration: none;">
+            {% else %}
+            <a href="/login?next=/collaborate/{{ session.room_id }}" 
+               style="display: block; padding: 8px; background-color: var(--main-nav-bg-color); border: 1px solid var(--main-border-color); text-decoration: none;">
+            {% endif %}
+                <strong>{{ session.room_id }}</strong>
+                {% if session.title %} - {{ session.title }}{% endif %}
+                <span style="float: right;">{{ user_count }} {% if user_count == 1 %}{{ ftl_collaborative_user_singular }}{% else %}{{ ftl_collaborative_user_plural }}{% endif %}</span>
+                <br>
+                <small>{{ session.canvas_width }}×{{ session.canvas_height }} • {{ ftl_collaborative_last_updated }} {{ session.updated_at|datetimeformat(format="short", tz="Asia/Seoul") }}</small>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p style="padding: 8px; background-color: var(--main-nav-bg-color); border: 1px solid var(--main-border-color);">
+        {{ ftl_collaborative_no_active_rooms }}
+    </p>
+    {% endif %}
+
+    {% if not current_user %}
+    <p style="margin-top: 2rem; padding: 8px; background-color: var(--main-nav-bg-color); border: 1px solid var(--main-border-color);">
+        <a href="/signup">{{ ftl_sign_up }}</a> or <a href="/login">{{ ftl_collaborative_auth_message }}</a>
+    </p>
+    {% endif %}
+
+</div>
+{% endblock %}

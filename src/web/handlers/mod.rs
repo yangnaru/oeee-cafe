@@ -30,12 +30,15 @@ use super::state::AppState;
 pub mod about;
 pub mod account;
 pub mod auth;
+pub mod canvas;
+pub mod canvas_room;
 pub mod community;
 pub mod draw;
 pub mod home;
 pub mod notifications;
 pub mod post;
 pub mod profile;
+pub mod ws;
 
 pub async fn handler_404(
     auth_session: AuthSession,
@@ -103,6 +106,7 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
 
         ftl_home => bundle.format_pattern(bundle.get_message("home").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_draw => bundle.format_pattern(bundle.get_message("draw").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate => bundle.format_pattern(bundle.get_message("collaborate").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_drafts => bundle.format_pattern(bundle.get_message("drafts").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_profile => bundle.format_pattern(bundle.get_message("profile").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_community => bundle.format_pattern(bundle.get_message("community").unwrap().value().unwrap(), None, &mut vec![]),
@@ -228,6 +232,70 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_cucumber_save => bundle.format_pattern(bundle.get_message("cucumber-save").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_cucumber_undo => bundle.format_pattern(bundle.get_message("cucumber-undo").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_cucumber_redo => bundle.format_pattern(bundle.get_message("cucumber-redo").unwrap().value().unwrap(), None, &mut vec![]),
+
+        ftl_collaborative_drawing => bundle.format_pattern(bundle.get_message("collaborative-drawing").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_drawing_description => bundle.format_pattern(bundle.get_message("collaborative-drawing-description").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_create_private_room => bundle.format_pattern(bundle.get_message("collaborative-create-private-room").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_create_public_room => bundle.format_pattern(bundle.get_message("collaborative-create-public-room").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_canvas_size => bundle.format_pattern(bundle.get_message("collaborative-canvas-size").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_canvas_small => bundle.format_pattern(bundle.get_message("collaborative-canvas-small").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_canvas_medium => bundle.format_pattern(bundle.get_message("collaborative-canvas-medium").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_canvas_large => bundle.format_pattern(bundle.get_message("collaborative-canvas-large").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_canvas_wide => bundle.format_pattern(bundle.get_message("collaborative-canvas-wide").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_canvas_square => bundle.format_pattern(bundle.get_message("collaborative-canvas-square").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_active_public_rooms => bundle.format_pattern(bundle.get_message("collaborative-active-public-rooms").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_user_singular => bundle.format_pattern(bundle.get_message("collaborative-user-singular").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_user_plural => bundle.format_pattern(bundle.get_message("collaborative-user-plural").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_last_updated => bundle.format_pattern(bundle.get_message("collaborative-last-updated").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_no_active_rooms => bundle.format_pattern(bundle.get_message("collaborative-no-active-rooms").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_auth_message => bundle.format_pattern(bundle.get_message("collaborative-auth-message").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_public_room_title => bundle.format_pattern(bundle.get_message("collaborative-public-room-title").unwrap().value().unwrap(), None, &mut vec![]),
+
+        // Canvas UI strings
+        ftl_collaborative_welcome_message => bundle.format_pattern(bundle.get_message("collaborative-welcome-message").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_connected => bundle.format_pattern(bundle.get_message("collaborative-connected").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_disconnected => bundle.format_pattern(bundle.get_message("collaborative-disconnected").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_connection_error => bundle.format_pattern(bundle.get_message("collaborative-connection-error").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_system => bundle.format_pattern(bundle.get_message("collaborative-system").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_picked_color => bundle.format_pattern(bundle.get_message("collaborative-picked-color").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_chat_placeholder => bundle.format_pattern(bundle.get_message("collaborative-chat-placeholder").unwrap().value().unwrap(), None, &mut vec![]),
+
+        // Canvas tools
+        ftl_collaborative_tools => bundle.format_pattern(bundle.get_message("collaborative-tools").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_brush => bundle.format_pattern(bundle.get_message("collaborative-brush").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_eraser => bundle.format_pattern(bundle.get_message("collaborative-eraser").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_color_picker => bundle.format_pattern(bundle.get_message("collaborative-color-picker").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_pan => bundle.format_pattern(bundle.get_message("collaborative-pan").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_precision_tools => bundle.format_pattern(bundle.get_message("collaborative-precision-tools").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_pixel => bundle.format_pattern(bundle.get_message("collaborative-pixel").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_halftone => bundle.format_pattern(bundle.get_message("collaborative-halftone").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_show_grid => bundle.format_pattern(bundle.get_message("collaborative-show-grid").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_size => bundle.format_pattern(bundle.get_message("collaborative-size").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_opacity => bundle.format_pattern(bundle.get_message("collaborative-opacity").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_colors => bundle.format_pattern(bundle.get_message("collaborative-colors").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_layers => bundle.format_pattern(bundle.get_message("collaborative-layers").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_background => bundle.format_pattern(bundle.get_message("collaborative-background").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_toggle_visibility => bundle.format_pattern(bundle.get_message("collaborative-toggle-visibility").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_add_layer => bundle.format_pattern(bundle.get_message("collaborative-add-layer").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_delete_layer => bundle.format_pattern(bundle.get_message("collaborative-delete-layer").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_merge_down => bundle.format_pattern(bundle.get_message("collaborative-merge-down").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_advanced => bundle.format_pattern(bundle.get_message("collaborative-advanced").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_blend_mode => bundle.format_pattern(bundle.get_message("collaborative-blend-mode").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_normal => bundle.format_pattern(bundle.get_message("collaborative-normal").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_multiply => bundle.format_pattern(bundle.get_message("collaborative-multiply").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_screen => bundle.format_pattern(bundle.get_message("collaborative-screen").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_overlay => bundle.format_pattern(bundle.get_message("collaborative-overlay").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_soft_light => bundle.format_pattern(bundle.get_message("collaborative-soft-light").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_hard_light => bundle.format_pattern(bundle.get_message("collaborative-hard-light").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_color_dodge => bundle.format_pattern(bundle.get_message("collaborative-color-dodge").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_color_burn => bundle.format_pattern(bundle.get_message("collaborative-color-burn").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_actions => bundle.format_pattern(bundle.get_message("collaborative-actions").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_clear_canvas => bundle.format_pattern(bundle.get_message("collaborative-clear-canvas").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_save_image => bundle.format_pattern(bundle.get_message("collaborative-save-image").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_undo => bundle.format_pattern(bundle.get_message("collaborative-undo").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_redo => bundle.format_pattern(bundle.get_message("collaborative-redo").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_fit_to_screen => bundle.format_pattern(bundle.get_message("collaborative-fit-to-screen").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborative_users => bundle.format_pattern(bundle.get_message("collaborative-users").unwrap().value().unwrap(), None, &mut vec![]),
     }
 }
 

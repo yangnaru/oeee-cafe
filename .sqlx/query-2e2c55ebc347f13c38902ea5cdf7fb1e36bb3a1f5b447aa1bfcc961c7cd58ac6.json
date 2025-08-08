@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE collaborative_sessions SET is_active = FALSE, updated_at = NOW() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e2c55ebc347f13c38902ea5cdf7fb1e36bb3a1f5b447aa1bfcc961c7cd58ac6"
+}

@@ -1,0 +1,47 @@
+{
+  "name": "oeee-cafe",
+  "version": "1.0.0",
+  "description": "A collaborative drawing and social platform",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:canvas",
+    "watch": "npm run watch:canvas",
+    "dev": "npm run watch:canvas",
+    "build:canvas": "cd static/canvas && tsc",
+    "watch:canvas": "cd static/canvas && tsc --watch",
+    "clean": "rm -rf static/canvas/dist",
+    "type-check": "cd static/canvas && tsc --noEmit",
+    "lint": "npm run lint:canvas",
+    "lint:canvas": "cd static/canvas && npx eslint *.ts",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/limeburst/oeee-cafe.git"
+  },
+  "keywords": [
+    "collaborative",
+    "drawing",
+    "canvas",
+    "social",
+    "rust",
+    "typescript"
+  ],
+  "author": "limeburst",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "workspaces": [
+    "cucumber",
+    "neo"
+  ]
+}

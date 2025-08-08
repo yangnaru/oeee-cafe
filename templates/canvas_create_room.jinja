@@ -1,0 +1,46 @@
+{% extends "base.jinja" %}
+
+{% block title %}{% if room_type == "public" %}{{ ftl_collaborative_create_public_room }}{% else %}{{ ftl_collaborative_create_private_room }}{% endif %} - {{ ftl_brand }}{% endblock %}
+
+{% block body %}
+<div class="center">
+    <h2 class="home-section-title">
+        {% if room_type == "public" %}
+            {{ ftl_collaborative_create_public_room }}
+        {% else %}
+            {{ ftl_collaborative_create_private_room }}
+        {% endif %}
+    </h2>
+    
+    <form method="post" action="{% if room_type == 'public' %}/collaborate/public{% else %}/collaborate/new{% endif %}" style="max-width: 400px; margin: 2rem auto;">
+        <div style="margin-bottom: 1.5rem;">
+            <label for="canvas_size" style="display: block; margin-bottom: 0.5rem; font-weight: 600;">
+                {{ ftl_collaborative_canvas_size }}
+            </label>
+            <select name="canvas_size" id="canvas_size" 
+                    style="width: 100%; padding: 8px; border: 1px solid var(--main-border-color); background: var(--main-bg-color); color: var(--main-text-color);">
+                <option value="small">{{ ftl_collaborative_canvas_small }}</option>
+                <option value="medium" selected>{{ ftl_collaborative_canvas_medium }}</option>
+                <option value="large">{{ ftl_collaborative_canvas_large }}</option>
+                <option value="wide">{{ ftl_collaborative_canvas_wide }}</option>
+                <option value="square">{{ ftl_collaborative_canvas_square }}</option>
+            </select>
+        </div>
+        
+        <div style="display: flex; gap: 1rem; justify-content: center;">
+            <button type="submit" 
+                    style="padding: 10px 20px; background-color: var(--main-highlight-color); color: white; border: 1px solid var(--main-border-color); cursor: pointer;">
+                {% if room_type == "public" %}
+                    {{ ftl_collaborative_create_public_room }}
+                {% else %}
+                    {{ ftl_collaborative_create_private_room }}
+                {% endif %}
+            </button>
+            <a href="/collaborate" 
+               style="padding: 10px 20px; background-color: var(--main-nav-bg-color); color: var(--main-text-color); border: 1px solid var(--main-border-color); text-decoration: none; display: inline-block;">
+                {{ ftl_cancel }}
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

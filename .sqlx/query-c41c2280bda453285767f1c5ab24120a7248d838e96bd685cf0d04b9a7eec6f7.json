@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT * FROM collaborative_messages \n            WHERE session_id = $1 AND message_type >= 64 AND message_type <= 127\n            ORDER BY sequence_number ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "sequence_number",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_type",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 5,
+        "name": "user_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "message_data",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 7,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c41c2280bda453285767f1c5ab24120a7248d838e96bd685cf0d04b9a7eec6f7"
+}
