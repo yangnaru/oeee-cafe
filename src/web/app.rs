@@ -19,7 +19,7 @@ use crate::web::handlers::notifications::list_notifications;
 use crate::web::handlers::post::{
     do_create_comment, do_post_edit_community, draft_posts, hx_delete_post, hx_do_edit_post,
     hx_edit_post, post_edit_community, post_publish, post_publish_form, post_relay_view,
-    post_replay_view, post_view,
+    post_replay_view, post_view_by_login_name, redirect_post_to_login_name,
 };
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
@@ -157,7 +157,8 @@ impl App {
             )
             .route("/@:login_name/settings", get(profile_settings))
             .route("/@:login_name/guestbook", get(guestbook))
-            .route("/posts/:id", get(post_view))
+            .route("/@:login_name/:post_id", get(post_view_by_login_name))
+            .route("/posts/:id", get(redirect_post_to_login_name))
             .route("/about", get(about))
             .route("/signup", get(signup))
             .route("/signup", post(do_signup))

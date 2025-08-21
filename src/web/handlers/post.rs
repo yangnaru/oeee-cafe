@@ -818,3 +818,136 @@ pub async fn hx_delete_post(
     )],)
         .into_response())
 }
+
+pub async fn post_view_by_login_name(
+    auth_session: AuthSession,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    Path((login_name, post_id)): Path<(String, String)>,
+) -> Result<impl IntoResponse, AppError> {
+    let uuid = match parse_id_with_legacy_support(&post_id, &format!("/@{}", login_name), &state)? {
+        ParsedId::Uuid(uuid) => uuid,
+        ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+        ParsedId::InvalidId(error_response) => return Ok(error_response),
+    };
+    
+    let db = state.config.connect_database().await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
+    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+
+    match post {
+        Some(post_data) => {
+            let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
+            if post_login_name != &login_name {
+                return Ok(StatusCode::NOT_FOUND.into_response());
+            }
+            increment_post_viewer_count(&mut tx, uuid).await.unwrap();
+        }
+        None => {
+            return Ok((
+                StatusCode::NOT_FOUND,
+                handler_404(
+                    auth_session,
+                    ExtractAcceptLanguage(accept_language),
+                    State(state),
+                )
+                .await?,
+            )
+                .into_response());
+        }
+    }
+
+    let comments = find_comments_by_post_id(&mut tx, uuid).await.unwrap();
+    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+
+    let community_id = Uuid::parse_str(
+        post.clone()
+            .as_ref()
+            .unwrap()
+            .get("community_id")
+            .unwrap()
+            .as_ref()
+            .unwrap(),
+    )
+    .unwrap();
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+    tx.commit().await?;
+
+    let community_id = community_id.to_string();
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja").unwrap();
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
+    if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
+        let rendered = template
+            .eval_to_state(context! {
+                current_user => auth_session.user,
+                post => {
+                    post.as_ref()
+                },
+                post_id => post_id,
+                ..create_base_ftl_context(&bundle)
+            })?
+            .render_block("post_edit_block")
+            .unwrap();
+        Ok(Html(rendered).into_response())
+    } else {
+        let rendered = template.render(context! {
+        current_user => auth_session.user,
+        default_community_id => state.config.default_community_id.clone(),
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        post => {
+            post.as_ref()
+        },
+        parent_post_id => post.clone().unwrap().get("parent_post_id")
+            .and_then(|id| id.as_ref())
+            .and_then(|id| Uuid::parse_str(id).ok())
+            .map(|uuid| uuid.to_string())
+            .unwrap_or_default(),
+        post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
+        community_id,
+        draft_post_count,
+        base_url => state.config.base_url.clone(),
+        comments,
+        ..create_base_ftl_context(&bundle)
+    })
+    .unwrap();
+        Ok(Html(rendered).into_response())
+    }
+}
+
+pub async fn redirect_post_to_login_name(
+    State(state): State<AppState>,
+    Path(post_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let uuid = match parse_id_with_legacy_support(&post_id, "/posts", &state)? {
+        ParsedId::Uuid(uuid) => uuid,
+        ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+        ParsedId::InvalidId(error_response) => return Ok(error_response),
+    };
+    
+    let db = state.config.connect_database().await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
+    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    tx.commit().await?;
+
+    match post {
+        Some(post_data) => {
+            let login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
+            let post_uuid_str = post_data.get("id").unwrap().as_ref().unwrap();
+            Ok(Redirect::permanent(&format!("/@{}/{}", login_name, post_uuid_str)).into_response())
+        }
+        None => Ok(StatusCode::NOT_FOUND.into_response()),
+    }
+}
