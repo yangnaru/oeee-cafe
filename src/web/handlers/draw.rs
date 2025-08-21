@@ -19,7 +19,7 @@ use axum::{
     Form,
 };
 use chrono::Duration;
-use base64::{Engine as _, engine::general_purpose};
+use data_encoding::BASE64;
 use data_url::DataUrl;
 use hex::decode;
 use minijinja::context;
@@ -66,8 +66,7 @@ pub async fn start_draw(
         None => 0,
     };
 
-    let community_id =
-        Uuid::parse_str(&input.community_id).unwrap();
+    let community_id = Uuid::parse_str(&input.community_id).unwrap();
     let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
@@ -172,16 +171,14 @@ pub async fn draw_finish(
                     image_sha256.chars().nth(1).unwrap(),
                     image_sha256
                 ),
-                &general_purpose::STANDARD.encode(&decode(image_sha256.clone()).unwrap()),
+                &BASE64.encode(&decode(image_sha256.clone()).unwrap()),
             )
             .await?;
         } else if name == "animation" {
             replay_sha256 = digest(&*data);
             replay_data = data.to_vec();
         } else if name == "community_id" {
-            community_id =
-                Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap())
-                    .unwrap();
+            community_id = Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap()).unwrap();
         } else if name == "security_timer" {
             security_timer = std::str::from_utf8(data.as_ref())
                 .unwrap()
@@ -230,7 +227,7 @@ pub async fn draw_finish(
                 replay_sha256.chars().nth(1).unwrap(),
                 replay_sha256
             ),
-            &general_purpose::STANDARD.encode(&decode(replay_sha256.clone()).unwrap()),
+            &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
         )
         .await?;
     } else if tool == "tegaki" {
@@ -244,7 +241,7 @@ pub async fn draw_finish(
                 replay_sha256.chars().nth(1).unwrap(),
                 replay_sha256
             ),
-            &general_purpose::STANDARD.encode(&decode(replay_sha256.clone()).unwrap()),
+            &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
         )
         .await?;
     } else {
@@ -343,7 +340,7 @@ pub async fn banner_draw_finish(
                     image_sha256.chars().nth(1).unwrap(),
                     image_sha256
                 ),
-                &general_purpose::STANDARD.encode(&decode(image_sha256.clone()).unwrap()),
+                &BASE64.encode(&decode(image_sha256.clone()).unwrap()),
             )
             .await?;
         } else if name == "animation" {
@@ -359,7 +356,7 @@ pub async fn banner_draw_finish(
                     replay_sha256.chars().nth(1).unwrap(),
                     replay_sha256
                 ),
-                &general_purpose::STANDARD.encode(&decode(replay_sha256.clone()).unwrap()),
+                &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
             )
             .await?;
         } else if name == "security_timer" {

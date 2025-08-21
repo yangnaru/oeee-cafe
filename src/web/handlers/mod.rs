@@ -14,7 +14,7 @@ use axum::{
         request::Parts,
     },
 };
-use base64::{Engine as _, engine::general_purpose};
+use data_encoding::BASE64URL_NOPAD;
 use uuid::Uuid;
 use anyhow;
 
@@ -299,7 +299,7 @@ pub fn parse_id_with_legacy_support(id_str: &str, base_path: &str, state: &crate
     }
     
     // If that fails, try to decode as base64 and then parse as UUID
-    match general_purpose::URL_SAFE_NO_PAD.decode(id_str) {
+    match BASE64URL_NOPAD.decode(id_str.as_bytes()) {
         Ok(decoded_bytes) => {
             // Convert bytes to string and try to parse as UUID
             if let Ok(decoded_str) = String::from_utf8(decoded_bytes) {
