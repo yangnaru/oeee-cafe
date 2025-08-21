@@ -14,6 +14,9 @@ use axum::{
         request::Parts,
     },
 };
+use base64::{Engine as _, engine::general_purpose};
+use uuid::Uuid;
+use anyhow;
 
 use fluent::bundle::FluentBundle;
 use fluent::FluentResource;
@@ -279,4 +282,38 @@ fn get_bundle(
             bundle
         }
     }
+}
+
+/// Parse ID from URL path, supporting both UUID format and legacy base64 format.
+/// Returns either the parsed UUID or a redirect response for legacy URLs.
+pub enum ParsedId {
+    Uuid(Uuid),
+    Redirect(axum::response::Redirect),
+}
+
+pub fn parse_id_with_legacy_support(id_str: &str, base_path: &str) -> Result<ParsedId, AppError> {
+    // First try to parse as UUID directly
+    if let Ok(uuid) = Uuid::parse_str(id_str) {
+        return Ok(ParsedId::Uuid(uuid));
+    }
+    
+    // If that fails, try to decode as base64 and then parse as UUID
+    match general_purpose::URL_SAFE_NO_PAD.decode(id_str) {
+        Ok(decoded_bytes) => {
+            // Convert bytes to string and try to parse as UUID
+            if let Ok(decoded_str) = String::from_utf8(decoded_bytes) {
+                if let Ok(uuid) = Uuid::parse_str(&decoded_str) {
+                    // Create redirect to UUID version
+                    let redirect_url = format!("{}/{}", base_path, uuid);
+                    return Ok(ParsedId::Redirect(axum::response::Redirect::permanent(&redirect_url)));
+                }
+            }
+        }
+        Err(_) => {
+            // Not valid base64, return error
+        }
+    }
+    
+    // If neither UUID nor base64 decoding worked, return error
+    Err(AppError::from(anyhow::anyhow!("Invalid ID format")))
 }

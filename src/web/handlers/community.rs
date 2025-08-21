@@ -6,7 +6,7 @@ use crate::models::community::{
 };
 use crate::models::post::{find_published_posts_by_community_id, get_draft_post_count};
 use crate::models::user::AuthSession;
-use crate::web::handlers::create_base_ftl_context;
+use crate::web::handlers::{create_base_ftl_context, parse_id_with_legacy_support, ParsedId};
 use crate::web::state::AppState;
 use axum::extract::Path;
 use axum::http::{HeaderMap, HeaderValue};
@@ -27,7 +27,10 @@ pub async fn community(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::parse_str(&id)?;
+    let uuid = match parse_id_with_legacy_support(&id, "/communities")? {
+        ParsedId::Uuid(uuid) => uuid,
+        ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+    };
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let community = find_community_by_id(&mut tx, uuid).await?;
@@ -112,7 +115,10 @@ pub async fn community_iframe(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::parse_str(&id)?;
+    let uuid = match parse_id_with_legacy_support(&id, "/communities")? {
+        ParsedId::Uuid(uuid) => uuid,
+        ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+    };
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let community = find_community_by_id(&mut tx, uuid).await?;
@@ -175,10 +181,7 @@ pub async fn communities(
             let is_private = community.is_private;
             let updated_at = community.updated_at.to_string();
             let created_at = community.created_at.to_string();
-            let link = format!(
-                "/communities/{}",
-                community.id.to_string()
-            );
+            let link = format!("/communities/{}", community.id.to_string());
             HashMap::<String, String>::from_iter(vec![
                 ("name".to_string(), name),
                 ("description".to_string(), description),
@@ -199,10 +202,7 @@ pub async fn communities(
             let is_private = community.is_private;
             let updated_at = community.updated_at.to_string();
             let created_at = community.created_at.to_string();
-            let link = format!(
-                "/communities/{}",
-                community.id.to_string()
-            );
+            let link = format!("/communities/{}", community.id.to_string());
             HashMap::<String, String>::from_iter(vec![
                 ("name".to_string(), name),
                 (
@@ -234,10 +234,7 @@ pub async fn communities(
                 let is_private = community.is_private;
                 let updated_at = community.updated_at.to_string();
                 let created_at = community.created_at.to_string();
-                let link = format!(
-                    "/communities/{}",
-                    community.id.to_string()
-                );
+                let link = format!("/communities/{}", community.id.to_string());
                 HashMap::<String, String>::from_iter(vec![
                     ("name".to_string(), name),
                     ("description".to_string(), description),
@@ -350,8 +347,7 @@ pub async fn hx_edit_community(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let community_uuid =
-        Uuid::parse_str(&id).unwrap();
+    let community_uuid = Uuid::parse_str(&id)?;
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -393,8 +389,7 @@ pub async fn hx_do_edit_community(
         return Ok(StatusCode::BAD_REQUEST.into_response());
     }
 
-    let community_uuid =
-        Uuid::parse_str(&id).unwrap();
+    let community_uuid = Uuid::parse_str(&id)?;
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;

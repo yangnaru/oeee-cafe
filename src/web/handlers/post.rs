@@ -7,7 +7,7 @@ use crate::models::post::{
     get_draft_post_count, increment_post_viewer_count, publish_post,
 };
 use crate::models::user::AuthSession;
-use crate::web::handlers::{create_base_ftl_context, get_bundle};
+use crate::web::handlers::{create_base_ftl_context, get_bundle, parse_id_with_legacy_support, ParsedId};
 use crate::web::state::AppState;
 use anyhow::Error;
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
@@ -29,7 +29,10 @@ pub async fn post_relay_view(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::parse_str(&id).unwrap();
+    let uuid = match parse_id_with_legacy_support(&id, "/posts")? {
+        ParsedId::Uuid(uuid) => uuid,
+        ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+    };
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
@@ -99,7 +102,10 @@ pub async fn post_view(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::parse_str(&id).unwrap();
+    let uuid = match parse_id_with_legacy_support(&id, "/posts")? {
+        ParsedId::Uuid(uuid) => uuid,
+        ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+    };
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
@@ -196,7 +202,10 @@ pub async fn post_replay_view(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::parse_str(&id).unwrap();
+    let uuid = match parse_id_with_legacy_support(&id, "/posts")? {
+        ParsedId::Uuid(uuid) => uuid,
+        ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+    };
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
@@ -267,8 +276,7 @@ pub async fn post_publish_form(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let post_uuid =
-        Uuid::parse_str(&id).unwrap();
+    let post_uuid = Uuid::parse_str(&id)?;
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -494,8 +502,7 @@ pub async fn post_edit_community(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let post_uuid =
-        Uuid::parse_str(&id).unwrap();
+    let post_uuid = Uuid::parse_str(&id)?;
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -572,8 +579,7 @@ pub async fn do_post_edit_community(
     Path(id): Path<String>,
     Form(form): Form<EditPostCommunityForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let post_uuid =
-        Uuid::parse_str(&id).unwrap();
+    let post_uuid = Uuid::parse_str(&id)?;
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -606,8 +612,7 @@ pub async fn hx_edit_post(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let post_uuid =
-        Uuid::parse_str(&id).unwrap();
+    let post_uuid = Uuid::parse_str(&id)?;
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -662,8 +667,7 @@ pub async fn hx_do_edit_post(
     Path(id): Path<String>,
     Form(form): Form<EditPostForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let post_uuid =
-        Uuid::parse_str(&id).unwrap();
+    let post_uuid = Uuid::parse_str(&id)?;
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -721,8 +725,7 @@ pub async fn hx_delete_post(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let post_uuid =
-        Uuid::parse_str(&id).unwrap();
+    let post_uuid = Uuid::parse_str(&id)?;
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
