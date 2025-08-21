@@ -285,13 +285,14 @@ fn get_bundle(
 }
 
 /// Parse ID from URL path, supporting both UUID format and legacy base64 format.
-/// Returns either the parsed UUID or a redirect response for legacy URLs.
+/// Returns either the parsed UUID, a redirect response for legacy URLs, or an error response.
 pub enum ParsedId {
     Uuid(Uuid),
     Redirect(axum::response::Redirect),
+    InvalidId(axum::response::Response),
 }
 
-pub fn parse_id_with_legacy_support(id_str: &str, base_path: &str) -> Result<ParsedId, AppError> {
+pub fn parse_id_with_legacy_support(id_str: &str, base_path: &str, state: &crate::web::state::AppState) -> Result<ParsedId, AppError> {
     // First try to parse as UUID directly
     if let Ok(uuid) = Uuid::parse_str(id_str) {
         return Ok(ParsedId::Uuid(uuid));
@@ -310,10 +311,28 @@ pub fn parse_id_with_legacy_support(id_str: &str, base_path: &str) -> Result<Par
             }
         }
         Err(_) => {
-            // Not valid base64, return error
+            // Not valid base64, continue to error handling
         }
     }
     
-    // If neither UUID nor base64 decoding worked, return error
+    // If neither UUID nor base64 decoding worked, render custom error page
+    match state.env.get_template("invalid_id_error.jinja") {
+        Ok(template) => {
+            match template.render(context! {}) {
+                Ok(rendered) => {
+                    let response = axum::response::Html(rendered).into_response();
+                    return Ok(ParsedId::InvalidId(response));
+                }
+                Err(_) => {
+                    // If template rendering fails, fall back to generic error
+                }
+            }
+        }
+        Err(_) => {
+            // If template not found, fall back to generic error
+        }
+    }
+    
+    // Fallback to generic error if template rendering fails
     Err(AppError::from(anyhow::anyhow!("Invalid ID format")))
 }

@@ -1,0 +1,44 @@
+{% extends "base.jinja" %}
+{% block title %}
+  Invalid ID - {{ super() }}
+{% endblock title %}
+{% block head %}
+  {{ super() }}
+  <style>
+    .error-emoji {
+      font-size: 4rem;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    .error-title {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .error-message {
+      text-align: center;
+      font-size: 1.2rem;
+    }
+    .error-home-link {
+      text-align: center;
+      margin-top: 2rem;
+    }
+    .error-home-link a {
+      color: #007bff;
+      text-decoration: none;
+    }
+  </style>
+{% endblock head %}
+{% block body %}
+  <div class="center">
+    <div class="error-emoji">
+      🔥🥒🔥
+    </div>
+    <h1 class="error-title">Invalid ID</h1>
+    <p class="error-message">
+      The URL you're looking for contains an invalid ID format.
+    </p>
+    <p class="error-home-link">
+      <a href="/">← Go back to home</a>
+    </p>
+  </div>
+{% endblock body %}

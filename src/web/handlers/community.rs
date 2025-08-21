@@ -27,9 +27,10 @@ pub async fn community(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = match parse_id_with_legacy_support(&id, "/communities")? {
+    let uuid = match parse_id_with_legacy_support(&id, "/communities", &state)? {
         ParsedId::Uuid(uuid) => uuid,
         ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+        ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -115,9 +116,10 @@ pub async fn community_iframe(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = match parse_id_with_legacy_support(&id, "/communities")? {
+    let uuid = match parse_id_with_legacy_support(&id, "/communities", &state)? {
         ParsedId::Uuid(uuid) => uuid,
         ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+        ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;

@@ -29,9 +29,10 @@ pub async fn post_relay_view(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = match parse_id_with_legacy_support(&id, "/posts")? {
+    let uuid = match parse_id_with_legacy_support(&id, "/posts", &state)? {
         ParsedId::Uuid(uuid) => uuid,
         ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+        ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
@@ -102,9 +103,10 @@ pub async fn post_view(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = match parse_id_with_legacy_support(&id, "/posts")? {
+    let uuid = match parse_id_with_legacy_support(&id, "/posts", &state)? {
         ParsedId::Uuid(uuid) => uuid,
         ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+        ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
@@ -202,9 +204,10 @@ pub async fn post_replay_view(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = match parse_id_with_legacy_support(&id, "/posts")? {
+    let uuid = match parse_id_with_legacy_support(&id, "/posts", &state)? {
         ParsedId::Uuid(uuid) => uuid,
         ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+        ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
