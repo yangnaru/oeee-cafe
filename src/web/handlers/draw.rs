@@ -19,7 +19,7 @@ use axum::{
     Form,
 };
 use chrono::Duration;
-use data_encoding::{BASE64, BASE64URL_NOPAD};
+use base64::{Engine as _, engine::general_purpose};
 use data_url::DataUrl;
 use hex::decode;
 use minijinja::context;
@@ -67,7 +67,7 @@ pub async fn start_draw(
     };
 
     let community_id =
-        Uuid::from_slice(&BASE64URL_NOPAD.decode(input.community_id.as_ref()).unwrap()).unwrap();
+        Uuid::parse_str(&input.community_id).unwrap();
     let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
@@ -79,7 +79,7 @@ pub async fn start_draw(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         community_name => community.name,
         tool => input.tool,
         width => input.width.parse::<u32>()?,
@@ -172,7 +172,7 @@ pub async fn draw_finish(
                     image_sha256.chars().nth(1).unwrap(),
                     image_sha256
                 ),
-                &BASE64.encode(&decode(image_sha256.clone()).unwrap()),
+                &general_purpose::STANDARD.encode(&decode(image_sha256.clone()).unwrap()),
             )
             .await?;
         } else if name == "animation" {
@@ -180,7 +180,7 @@ pub async fn draw_finish(
             replay_data = data.to_vec();
         } else if name == "community_id" {
             community_id =
-                Uuid::from_slice(BASE64URL_NOPAD.decode(data.as_ref()).unwrap().as_slice())
+                Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap())
                     .unwrap();
         } else if name == "security_timer" {
             security_timer = std::str::from_utf8(data.as_ref())
@@ -230,7 +230,7 @@ pub async fn draw_finish(
                 replay_sha256.chars().nth(1).unwrap(),
                 replay_sha256
             ),
-            &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
+            &general_purpose::STANDARD.encode(&decode(replay_sha256.clone()).unwrap()),
         )
         .await?;
     } else if tool == "tegaki" {
@@ -244,7 +244,7 @@ pub async fn draw_finish(
                 replay_sha256.chars().nth(1).unwrap(),
                 replay_sha256
             ),
-            &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
+            &general_purpose::STANDARD.encode(&decode(replay_sha256.clone()).unwrap()),
         )
         .await?;
     } else {
@@ -287,7 +287,7 @@ pub async fn draw_finish(
     let _ = tx.commit().await;
 
     Ok(Json(DrawFinishResponse {
-        community_id: BASE64URL_NOPAD.encode(community_id.as_ref()),
+        community_id: community_id.to_string(),
         post_id: post.id,
     })
     .into_response())
@@ -343,7 +343,7 @@ pub async fn banner_draw_finish(
                     image_sha256.chars().nth(1).unwrap(),
                     image_sha256
                 ),
-                &BASE64.encode(&decode(image_sha256.clone()).unwrap()),
+                &general_purpose::STANDARD.encode(&decode(image_sha256.clone()).unwrap()),
             )
             .await?;
         } else if name == "animation" {
@@ -359,7 +359,7 @@ pub async fn banner_draw_finish(
                     replay_sha256.chars().nth(1).unwrap(),
                     replay_sha256
                 ),
-                &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
+                &general_purpose::STANDARD.encode(&decode(replay_sha256.clone()).unwrap()),
             )
             .await?;
         } else if name == "security_timer" {

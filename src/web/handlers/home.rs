@@ -13,9 +13,8 @@ use crate::web::state::AppState;
 use axum::response::IntoResponse;
 use axum::{extract::State, response::Html};
 use axum_messages::Messages;
-use data_encoding::BASE64URL_NOPAD;
+
 use minijinja::context;
-use uuid::Uuid;
 
 pub async fn home(
     auth_session: AuthSession,
@@ -59,15 +58,15 @@ pub async fn home(
     let active_public_communities: Vec<_> = active_public_communities
         .into_iter()
         .map(|community| {
-            let encoded_id = BASE64URL_NOPAD.encode(community.id.as_bytes());
-            (community, encoded_id)
+            let id = community.id.to_string();
+            (community, id)
         })
         .collect();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("home.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         active_public_communities,
         official_communities_with_latest_posts,
@@ -105,7 +104,7 @@ pub async fn my_timeline(
     let template: minijinja::Template<'_, '_> = state.env.get_template("timeline.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         posts,
         draft_post_count,

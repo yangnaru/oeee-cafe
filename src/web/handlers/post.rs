@@ -17,7 +17,6 @@ use axum::extract::Path;
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
-use data_encoding::BASE64URL_NOPAD;
 use minijinja::context;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -30,7 +29,7 @@ pub async fn post_relay_view(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+    let uuid = Uuid::parse_str(&id).unwrap();
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
@@ -78,14 +77,14 @@ pub async fn post_relay_view(
     let rendered = template.render(context! {
         parent_post => post.clone().unwrap(),
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         community_name => community.name,
         width => post.clone().unwrap().get("image_width").unwrap().as_ref().unwrap().parse::<u32>()?,
         height => post.unwrap().get("image_height").unwrap().as_ref().unwrap().parse::<u32>()?,
         background_color => community.background_color,
         foreground_color => community.foreground_color,
-        community_id =>  BASE64URL_NOPAD.encode(community_id.as_bytes()),
+        community_id => community_id.to_string(),
         draft_post_count,
         ..create_base_ftl_context(&bundle)
     })?;
@@ -100,7 +99,7 @@ pub async fn post_view(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+    let uuid = Uuid::parse_str(&id).unwrap();
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
@@ -143,7 +142,7 @@ pub async fn post_view(
     };
     tx.commit().await?;
 
-    let encoded_community_id = BASE64URL_NOPAD.encode(community_id.as_bytes());
+    let community_id = community_id.to_string();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja").unwrap();
     let user_preferred_language = auth_session
@@ -160,7 +159,7 @@ pub async fn post_view(
                 post => {
                     post.as_ref()
                 },
-                encoded_post_id => id,
+                post_id => id,
                 ..create_base_ftl_context(&bundle)
             })?
             .render_block("post_edit_block")
@@ -169,18 +168,18 @@ pub async fn post_view(
     } else {
         let rendered = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         post => {
             post.as_ref()
         },
-        encoded_parent_post_id => post.clone().unwrap().get("parent_post_id")
+        parent_post_id => post.clone().unwrap().get("parent_post_id")
             .and_then(|id| id.as_ref())
             .and_then(|id| Uuid::parse_str(id).ok())
-            .map(|uuid| BASE64URL_NOPAD.encode(uuid.as_bytes()))
+            .map(|uuid| uuid.to_string())
             .unwrap_or_default(),
-        encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
-        encoded_community_id,
+        post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
+        community_id,
         draft_post_count,
         base_url => state.config.base_url.clone(),
         comments,
@@ -197,7 +196,7 @@ pub async fn post_replay_view(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+    let uuid = Uuid::parse_str(&id).unwrap();
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
@@ -222,7 +221,7 @@ pub async fn post_replay_view(
             .unwrap_or_default(),
         None => 0,
     };
-    let encoded_community_id = BASE64URL_NOPAD.encode(community_id.as_bytes());
+    let community_id = community_id.to_string();
 
     let template_filename = match post.clone().unwrap().get("replay_filename") {
         Some(replay_filename) => {
@@ -248,13 +247,13 @@ pub async fn post_replay_view(
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
-            encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+            default_community_id => state.config.default_community_id.clone(),
             r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
             post => {
                 post.as_ref()
             },
-            encoded_post_id => BASE64URL_NOPAD.encode(Uuid::parse_str(post.unwrap().get("id").unwrap().as_ref().unwrap()).as_ref().unwrap().as_bytes()),
-            encoded_community_id,
+            post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
+            community_id,
             draft_post_count,
             ..create_base_ftl_context(&bundle),
         })
@@ -269,7 +268,7 @@ pub async fn post_publish_form(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid =
-        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+        Uuid::parse_str(&id).unwrap();
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -322,7 +321,7 @@ pub async fn post_publish_form(
     )?;
     let link = format!(
         "/communities/{}",
-        BASE64URL_NOPAD.encode(community_id.as_bytes())
+        community_id.to_string()
     );
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.jinja")?;
@@ -334,8 +333,8 @@ pub async fn post_publish_form(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
-        encoded_post_id => id,
+        default_community_id => state.config.default_community_id.clone(),
+        post_id => id,
         link,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         post => {
@@ -407,8 +406,8 @@ pub async fn post_publish(
             .clone()
             .unwrap(),
     )?;
-    let encoded_community_id = { BASE64URL_NOPAD.encode(community_id.as_bytes()) };
-    Ok(Redirect::to(&format!("/communities/{}", encoded_community_id)).into_response())
+    let community_id = community_id.to_string();
+    Ok(Redirect::to(&format!("/communities/{}", community_id)).into_response())
 }
 
 pub async fn draft_posts(
@@ -437,7 +436,7 @@ pub async fn draft_posts(
     let rendered = template.render(context! {
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         posts => posts,
         draft_post_count,
         ..create_base_ftl_context(&bundle),
@@ -468,12 +467,7 @@ pub async fn do_create_comment(
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let user_id = auth_session.user.unwrap().id;
-    let post_id = Uuid::from_slice(
-        BASE64URL_NOPAD
-            .decode(form.post_id.as_bytes())
-            .unwrap()
-            .as_slice(),
-    )?;
+    let post_id = Uuid::parse_str(&form.post_id).unwrap();
     let _ = create_comment(
         &mut tx,
         CommentDraft {
@@ -501,7 +495,7 @@ pub async fn post_edit_community(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid =
-        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+        Uuid::parse_str(&id).unwrap();
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -538,11 +532,11 @@ pub async fn post_edit_community(
             .unwrap()
         })
         .collect::<Vec<_>>();
-    let known_communities_with_encoded_community_id = filtered_known_communities
+    let known_communities_with_community_id = filtered_known_communities
         .iter()
         .map(|c| {
-            let encoded_community_id = BASE64URL_NOPAD.encode(c.id.as_bytes());
-            (c, encoded_community_id)
+            let community_id = c.id.to_string();
+            (c, community_id)
         })
         .collect::<Vec<_>>();
 
@@ -556,11 +550,11 @@ pub async fn post_edit_community(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         post,
-        encoded_post_id => id,
-        known_communities_with_encoded_community_id,
+        post_id => id,
+        known_communities_with_community_id,
         ..create_base_ftl_context(&bundle)
     })?;
 
@@ -579,7 +573,7 @@ pub async fn do_post_edit_community(
     Form(form): Form<EditPostCommunityForm>,
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid =
-        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+        Uuid::parse_str(&id).unwrap();
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -613,7 +607,7 @@ pub async fn hx_edit_post(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid =
-        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+        Uuid::parse_str(&id).unwrap();
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -644,9 +638,9 @@ pub async fn hx_edit_post(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         post,
-        encoded_post_id => id,
+        post_id => id,
         ..create_base_ftl_context(&bundle)
     })?;
 
@@ -669,7 +663,7 @@ pub async fn hx_do_edit_post(
     Form(form): Form<EditPostForm>,
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid =
-        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+        Uuid::parse_str(&id).unwrap();
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -712,9 +706,9 @@ pub async fn hx_do_edit_post(
     let rendered = template
         .eval_to_state(context! {
             current_user => auth_session.user,
-            encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+            default_community_id => state.config.default_community_id.clone(),
             post,
-            encoded_post_id => id,
+            post_id => id,
             ..create_base_ftl_context(&bundle)
         })?
         .render_block("post_edit_block")?;
@@ -728,7 +722,7 @@ pub async fn hx_delete_post(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid =
-        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+        Uuid::parse_str(&id).unwrap();
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -810,11 +804,11 @@ pub async fn hx_delete_post(
     tx.commit().await?;
 
     let community_id = post.unwrap().get("community_id").unwrap().clone().unwrap();
-    let encoded_community_id =
-        BASE64URL_NOPAD.encode(Uuid::parse_str(&community_id).as_ref().unwrap().as_bytes());
+    let community_id =
+        community_id.clone();
     Ok(([(
         "HX-Redirect",
-        &format!("/communities/{}", encoded_community_id),
+        &format!("/communities/{}", community_id),
     )],)
         .into_response())
 }

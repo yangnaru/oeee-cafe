@@ -1,6 +1,5 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use data_encoding::BASE64URL_NOPAD;
 use serde::{Deserialize, Serialize};
 use sqlx::query;
 use sqlx::query_as;
@@ -40,8 +39,7 @@ pub struct PublicCommunity {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PublicCommunityWithPosts {
-    pub id: Uuid,
-    pub encoded_id: String,
+    pub id: String,
     pub owner_id: Uuid,
     pub owner_login_name: String,
     pub name: String,
@@ -56,7 +54,7 @@ impl Community {
     pub fn get_url(&self) -> String {
         format!(
             "/communities/{}",
-            BASE64URL_NOPAD.encode(self.id.as_bytes())
+            self.id.to_string()
         )
     }
 }
@@ -195,7 +193,7 @@ pub async fn get_user_communities_with_latest_9_posts(
         let posts = r
             .into_iter()
             .map(|row| SerializablePost {
-                id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+                id: row.id.to_string(),
                 title: row.title,
                 author_id: row.author_id,
                 paint_duration: row.paint_duration.microseconds.to_string(),
@@ -212,8 +210,7 @@ pub async fn get_user_communities_with_latest_9_posts(
             .collect();
 
         result.push(PublicCommunityWithPosts {
-            id: community.id,
-            encoded_id: BASE64URL_NOPAD.encode(community.id.as_bytes()),
+            id: community.id.to_string(),
             owner_id: community.owner_id,
             owner_login_name: community.owner_login_name,
             name: community.name,

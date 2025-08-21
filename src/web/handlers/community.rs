@@ -13,7 +13,6 @@ use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
 use axum_messages::Messages;
-use data_encoding::BASE64URL_NOPAD;
 use minijinja::context;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -28,7 +27,7 @@ pub async fn community(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice())?;
+    let uuid = Uuid::parse_str(&id)?;
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let community = find_community_by_id(&mut tx, uuid).await?;
@@ -61,7 +60,7 @@ pub async fn community(
                 community => {
                     community.as_ref()
                 },
-                encoded_community_id => id,
+                community_id => id,
                 ..create_base_ftl_context(&bundle)
             })?
             .render_block("community_edit_block")
@@ -70,18 +69,18 @@ pub async fn community(
     } else {
         let rendered = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         community => community,
-        encoded_community_id => BASE64URL_NOPAD.encode(uuid.as_bytes()),
+        community_id => uuid.to_string(),
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         comments => comments.iter().map(
             |comment| {
                 HashMap::<String, String>::from_iter(vec![
-                    ("id".to_string(), BASE64URL_NOPAD.encode(comment.id.as_bytes()).to_string()),
+                    ("id".to_string(), comment.id.to_string().to_string()),
                     ("user_login_name".to_string(), comment.user_login_name.clone().to_string()),
                     ("user_display_name".to_string(), comment.user_display_name.clone().to_string()),
                     ("post_title".to_string(), comment.post_title.clone().unwrap_or_default().to_string()),
-                    ("post_id".to_string(), BASE64URL_NOPAD.encode(comment.post_id.as_bytes()).to_string()),
+                    ("post_id".to_string(), comment.post_id.to_string().to_string()),
                     ("created_at".to_string(), comment.created_at.to_string()),
                     ("content".to_string(), comment.content.clone().to_string()),
                 ])
@@ -113,7 +112,7 @@ pub async fn community_iframe(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let uuid = Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice())?;
+    let uuid = Uuid::parse_str(&id)?;
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
     let community = find_community_by_id(&mut tx, uuid).await?;
@@ -178,7 +177,7 @@ pub async fn communities(
             let created_at = community.created_at.to_string();
             let link = format!(
                 "/communities/{}",
-                BASE64URL_NOPAD.encode(community.id.as_bytes())
+                community.id.to_string()
             );
             HashMap::<String, String>::from_iter(vec![
                 ("name".to_string(), name),
@@ -202,7 +201,7 @@ pub async fn communities(
             let created_at = community.created_at.to_string();
             let link = format!(
                 "/communities/{}",
-                BASE64URL_NOPAD.encode(community.id.as_bytes())
+                community.id.to_string()
             );
             HashMap::<String, String>::from_iter(vec![
                 ("name".to_string(), name),
@@ -237,7 +236,7 @@ pub async fn communities(
                 let created_at = community.created_at.to_string();
                 let link = format!(
                     "/communities/{}",
-                    BASE64URL_NOPAD.encode(community.id.as_bytes())
+                    community.id.to_string()
                 );
                 HashMap::<String, String>::from_iter(vec![
                     ("name".to_string(), name),
@@ -268,7 +267,7 @@ pub async fn communities(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.clone().render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count,
         official_communities,
@@ -337,7 +336,7 @@ pub async fn create_community_form(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         draft_post_count,
         ..create_base_ftl_context(&bundle)
     })?;
@@ -352,7 +351,7 @@ pub async fn hx_edit_community(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let community_uuid =
-        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+        Uuid::parse_str(&id).unwrap();
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -376,7 +375,7 @@ pub async fn hx_edit_community(
     let rendered = template.render(context! {
         current_user => auth_session.user,
         community,
-        encoded_community_id => id,
+        community_id => id,
         ..create_base_ftl_context(&bundle)
     })?;
 
@@ -395,7 +394,7 @@ pub async fn hx_do_edit_community(
     }
 
     let community_uuid =
-        Uuid::from_slice(BASE64URL_NOPAD.decode(id.as_bytes()).unwrap().as_slice()).unwrap();
+        Uuid::parse_str(&id).unwrap();
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -422,7 +421,7 @@ pub async fn hx_do_edit_community(
         .eval_to_state(context! {
             current_user => auth_session.user,
             community => updated_community,
-            encoded_community_id => id,
+            community_id => id,
             ..create_base_ftl_context(&bundle)
         })?
         .render_block("community_edit_block")?;

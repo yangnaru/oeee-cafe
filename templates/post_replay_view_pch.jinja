@@ -17,12 +17,12 @@
     <p>{{ ftl_post_duration }}: {{ post.paint_duration }}</p>
     <p>
       {{ ftl_community }}:
-      <a href="/communities/{{ encoded_community_id }}">{{ post.community_name }}</a>
+      <a href="/communities/{{ community_id }}">{{ post.community_name }}</a>
     </p>
     <input type="hidden" id="viewer" />
     <p>
       {{ ftl_post_title }}:
-      <a href="/posts/{{ encoded_post_id }}">
+      <a href="/posts/{{ post_id }}">
         {% if post.title %}
           {{ post.title }}
         {% else %}

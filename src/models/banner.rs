@@ -1,7 +1,6 @@
 use crate::models::post::Tool;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use data_encoding::BASE64URL_NOPAD;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::types::PgInterval, query, Postgres, Transaction};
 use uuid::Uuid;
@@ -95,7 +94,7 @@ pub async fn create_banner(
     .await?;
 
     Ok(SerializableBanner {
-        id: BASE64URL_NOPAD.encode(post.id.as_bytes()),
+        id: post.id.to_string(),
         author_id: banner_draft.author_id,
         paint_duration: banner_draft.paint_duration.microseconds.to_string(),
         stroke_count: banner_draft.stroke_count,
@@ -135,7 +134,7 @@ pub async fn find_banner_by_id(
     .await?;
 
     Ok(SerializableBanner {
-        id: BASE64URL_NOPAD.encode(banner.id.as_bytes()),
+        id: banner.id.to_string(),
         author_id: banner.author_id,
         paint_duration: banner.paint_duration.microseconds.to_string(),
         stroke_count: banner.stroke_count,

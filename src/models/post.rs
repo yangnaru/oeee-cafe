@@ -1,7 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Asia::Seoul;
-use data_encoding::BASE64URL_NOPAD;
 use humantime::format_duration;
 use serde::{Deserialize, Serialize};
 use sqlx::Type;
@@ -134,7 +133,7 @@ pub async fn find_posts_by_community_id(
     Ok(result
         .into_iter()
         .map(|row| SerializablePost {
-            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            id: row.id.to_string(),
             title: row.title,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),
@@ -205,7 +204,7 @@ pub async fn find_published_public_posts_by_author_id(
     Ok(result
         .into_iter()
         .map(|row| SerializableProfilePost {
-            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            id: row.id.to_string(),
             title: row.title,
             viewer_count: row.viewer_count,
             author_id: row.author_id,
@@ -258,7 +257,7 @@ pub async fn find_published_posts_by_author_id(
     Ok(result
         .into_iter()
         .map(|row| SerializableProfilePost {
-            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            id: row.id.to_string(),
             title: row.title,
             viewer_count: row.viewer_count,
             author_id: row.author_id,
@@ -308,7 +307,7 @@ pub async fn find_draft_posts_by_author_id(
     Ok(result
         .into_iter()
         .map(|row| SerializablePost {
-            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            id: row.id.to_string(),
             title: row.title,
             viewer_count: row.viewer_count,
             author_id: row.author_id,
@@ -358,7 +357,7 @@ pub async fn find_published_posts_by_community_id(
     Ok(result
         .into_iter()
         .map(|row| SerializablePost {
-            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            id: row.id.to_string(),
             title: row.title,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),
@@ -425,7 +424,7 @@ pub async fn create_post(
     .await?;
 
     Ok(SerializablePost {
-        id: BASE64URL_NOPAD.encode(post.id.as_bytes()),
+        id: post.id.to_string(),
         title: None,
         author_id: post_draft.author_id,
         paint_duration: post_draft.paint_duration.microseconds.to_string(),
@@ -680,7 +679,7 @@ pub async fn find_public_community_posts(
     Ok(result
         .into_iter()
         .map(|row| SerializablePostForHome {
-            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            id: row.id.to_string(),
             title: row.title,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),
@@ -735,7 +734,7 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
     Ok(result
         .into_iter()
         .map(|row| SerializablePostForHome {
-            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            id: row.id.to_string(),
             title: row.title,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),
@@ -789,7 +788,7 @@ pub async fn find_following_posts_by_user_id(
     Ok(result
         .into_iter()
         .map(|row| SerializablePost {
-            id: BASE64URL_NOPAD.encode(row.id.as_bytes()),
+            id: row.id.to_string(),
             title: row.title,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),

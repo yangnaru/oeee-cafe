@@ -14,7 +14,7 @@ use axum::{
         request::Parts,
     },
 };
-use data_encoding::BASE64URL_NOPAD;
+
 use fluent::bundle::FluentBundle;
 use fluent::FluentResource;
 use fluent_langneg::convert_vec_str_to_langids_lossy;
@@ -23,7 +23,6 @@ use fluent_langneg::parse_accepted_languages;
 use fluent_langneg::NegotiationStrategy;
 use intl_memoizer::concurrent::IntlLangMemoizer;
 use minijinja::{context, Value};
-use uuid::Uuid;
 
 use super::state::AppState;
 
@@ -60,7 +59,7 @@ pub async fn handler_404(
     let template: minijinja::Template<'_, '_> = state.env.get_template("404.jinja")?;
     let rendered: String = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         draft_post_count,
         ..create_base_ftl_context(&bundle)
     })?;

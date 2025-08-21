@@ -13,14 +13,14 @@
   <meta property="og:description" content="{{ post.content }}" />
   <meta property="og:type" content="website" />
   <meta property="og:url"
-        content="{{ base_url|safe }}/posts/{{ encoded_post_id }}" />
+        content="{{ base_url|safe }}/posts/{{ post_id }}" />
   <meta property="og:image"
         content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
   <meta property="twitter:site" content="@oeee_cafe">
   <meta property="twitter:domain" content="oeee.cafe">
   <meta name="twitter:card" content="summary_large_image">
   <meta property="twitter:url"
-        content="{{ base_url|safe }}/posts/{{ encoded_post_id }}">
+        content="{{ base_url|safe }}/posts/{{ post_id }}">
   <meta name="twitter:title" content="{{ post.title }}">
   <meta name="twitter:description" content="{{ post.content }}">
   <meta name="twitter:image"
@@ -33,18 +33,18 @@
         <p>{{ ftl_post_published_at }}: {{ post.published_at }}</p>
         <p>
           {{ ftl_post_duration }}: {{ post.paint_duration }}
-          <a href="/posts/{{ encoded_post_id }}/replay">{{ ftl_post_replay }}</a>
+          <a href="/posts/{{ post_id }}/replay">{{ ftl_post_replay }}</a>
         </p>
         <p>HIT: {{ post.viewer_count }}</p>
         <p>
           {{ ftl_community }}:
-          <a href="/communities/{{ encoded_community_id }}">{{ post.community_name }}</a>
+          <a href="/communities/{{ community_id }}">{{ post.community_name }}</a>
           {% if current_user.id == post.author_id -%}
-            (<a href="/posts/{{ encoded_post_id }}/edit/community">{{ ftl_edit }}</a>)
+            (<a href="/posts/{{ post_id }}/edit/community">{{ ftl_edit }}</a>)
           {%- endif %}
         </p>
         {% if post.image_tool == "neo" and post.allow_relay == "true" %}
-          <a href="/posts/{{ encoded_post_id }}/relay">
+          <a href="/posts/{{ post_id }}/relay">
             <img class="post-image"
                  width="{{ post.image_width }}"
                  height="{{ post.image_height }}"
@@ -74,15 +74,15 @@
                 {% else %}
                   {{ ftl_post_no_title }}
                 {% endif %}
-                {% if encoded_parent_post_id %}<a href="/posts/{{ encoded_parent_post_id }}">↵</a>{% endif %}
+                {% if parent_post_id %}<a href="/posts/{{ parent_post_id }}">↵</a>{% endif %}
               </p>
               <p>
                 {{ ftl_post_description }}: <pre class="post-content">{{ post.content }}</pre>
               </p>
               {% if current_user.id == post.author_id %}
                 <div class="post-menu">
-                  <button hx-get="/posts/{{ encoded_post_id }}/edit">{{ ftl_edit }}</button>
-                  <form hx-delete="/posts/{{ encoded_post_id }}"
+                  <button hx-get="/posts/{{ post_id }}/edit">{{ ftl_edit }}</button>
+                  <form hx-delete="/posts/{{ post_id }}"
                         hx-confirm="{{ ftl_post_delete_confirm }}"
                         hx-target="body">
                     <button type="submit">{{ ftl_delete }}</button>
@@ -106,7 +106,7 @@
         <div id="comments">
           {% if current_user %}
             <form hx-post="/comments" hx-swap="outerHTML" hx-target="#comments">
-              <input type="hidden" name="post_id" value="{{ encoded_post_id }}">
+              <input type="hidden" name="post_id" value="{{ post_id }}">
               <textarea name="content"></textarea>
               <button type="submit">{{ ftl_post_comment }}</button>
             </form>

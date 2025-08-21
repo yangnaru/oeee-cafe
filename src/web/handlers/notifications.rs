@@ -8,9 +8,7 @@ use axum::{
     response::{Html, IntoResponse},
 };
 use axum_messages::Messages;
-use data_encoding::BASE64URL_NOPAD;
 use minijinja::context;
-use uuid::Uuid;
 
 use crate::{models::user::AuthSession, web::state::AppState};
 
@@ -32,20 +30,20 @@ pub async fn list_notifications(
 
     let comments =
         find_comments_to_posts_by_author(&mut tx, auth_session.user.clone().unwrap().id).await?;
-    let comments_with_encoded_post_id = comments
+    let comments_with_post_id = comments
         .into_iter()
         .map(|comment| {
-            let encoded_post_id = BASE64URL_NOPAD.encode(comment.post_id.as_bytes());
-            (comment, encoded_post_id)
+            let post_id = comment.post_id.to_string();
+            (comment, post_id)
         })
         .collect::<Vec<_>>();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("notifications.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        encoded_default_community_id => BASE64URL_NOPAD.encode(Uuid::parse_str(&state.config.default_community_id).unwrap().as_bytes()),
+        default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
-        comments => comments_with_encoded_post_id,
+        comments => comments_with_post_id,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ..create_base_ftl_context(&bundle)
     })?;

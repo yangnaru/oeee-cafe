@@ -13,14 +13,14 @@
   <meta property="og:description" content="{{ post.content }}" />
   <meta property="og:type" content="website" />
   <meta property="og:url"
-        content="{{ base_url|safe }}/posts/{{ encoded_post_id }}" />
+        content="{{ base_url|safe }}/posts/{{ post_id }}" />
   <meta property="og:image"
         content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
   <meta property="twitter:site" content="@oeee_cafe">
   <meta property="twitter:domain" content="oeee.cafe">
   <meta name="twitter:card" content="summary_large_image">
   <meta property="twitter:url"
-        content="{{ base_url|safe }}/posts/{{ encoded_post_id }}">
+        content="{{ base_url|safe }}/posts/{{ post_id }}">
   <meta name="twitter:title" content="{{ post.title }}">
   <meta name="twitter:description" content="{{ post.content }}">
   <meta name="twitter:image"
@@ -32,7 +32,7 @@
       <div class="post-main">
         <p>
           {{ ftl_community }}:
-          <a href="/communities/{{ encoded_community_id }}">{{ post.community_name }}</a>
+          <a href="/communities/{{ community_id }}">{{ post.community_name }}</a>
         </p>
         <img class="post-image"
              width="{{ post.image_width }}"
@@ -48,13 +48,13 @@
           </tr>
         </thead>
         <tbody>
-          {% for (community, encoded_community_id ) in known_communities_with_encoded_community_id %}
+          {% for (community, community_id ) in known_communities_with_community_id %}
             <tr>
               <td>
-                <a href="/communities/{{ encoded_community_id }}">{{ community.name }}</a>
+                <a href="/communities/{{ community_id }}">{{ community.name }}</a>
               </td>
               <td>
-                <form method="post" action="/posts/{{ encoded_post_id }}/edit/community">
+                <form method="post" action="/posts/{{ post_id }}/edit/community">
                   <input type="hidden" name="community_id" value="{{ community.id }}" />
                   <input type="submit" value="{{ ftl_post_move_community }}" />
                 </form>
