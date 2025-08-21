@@ -301,9 +301,9 @@ pub fn parse_id_with_legacy_support(id_str: &str, base_path: &str, state: &crate
     // If that fails, try to decode as base64 and then parse as UUID
     match BASE64URL_NOPAD.decode(id_str.as_bytes()) {
         Ok(decoded_bytes) => {
-            // Convert bytes to string and try to parse as UUID
-            if let Ok(decoded_str) = String::from_utf8(decoded_bytes) {
-                if let Ok(uuid) = Uuid::parse_str(&decoded_str) {
+            // Try to parse bytes directly as UUID (16 bytes expected)
+            if decoded_bytes.len() == 16 {
+                if let Ok(uuid) = Uuid::from_slice(&decoded_bytes) {
                     // Create redirect to UUID version
                     let redirect_url = format!("{}/{}", base_path, uuid);
                     return Ok(ParsedId::Redirect(axum::response::Redirect::permanent(&redirect_url)));
