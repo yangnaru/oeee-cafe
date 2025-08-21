@@ -288,7 +288,7 @@ pub async fn draw_finish(
 
     Ok(Json(DrawFinishResponse {
         community_id: community_id.to_string(),
-        post_id: post.id,
+        post_id: post.id.to_string(),
     })
     .into_response())
 }
@@ -409,7 +409,7 @@ pub async fn banner_draw_finish(
     let _ = tx.commit().await;
 
     Ok(Json(BannerDrawFinishResponse {
-        banner_id: banner.id,
+        banner_id: banner.id.to_string(),
     }))
 }
 

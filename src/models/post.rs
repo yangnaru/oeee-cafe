@@ -24,7 +24,7 @@ pub struct Post {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 
 pub struct SerializablePost {
-    pub id: String,
+    pub id: Uuid,
     pub title: Option<String>,
     pub author_id: Uuid,
     pub paint_duration: String,
@@ -41,7 +41,7 @@ pub struct SerializablePost {
 
 #[derive(Serialize)]
 pub struct SerializableProfilePost {
-    pub id: String,
+    pub id: Uuid,
     pub title: Option<String>,
     pub author_id: Uuid,
     pub paint_duration: String,
@@ -59,7 +59,7 @@ pub struct SerializableProfilePost {
 
 #[derive(Serialize)]
 pub struct SerializablePostForHome {
-    pub id: String,
+    pub id: Uuid,
     pub title: Option<String>,
     pub author_id: Uuid,
     pub paint_duration: String,
@@ -133,7 +133,7 @@ pub async fn find_posts_by_community_id(
     Ok(result
         .into_iter()
         .map(|row| SerializablePost {
-            id: row.id.to_string(),
+            id: row.id,
             title: row.title,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),
@@ -204,7 +204,7 @@ pub async fn find_published_public_posts_by_author_id(
     Ok(result
         .into_iter()
         .map(|row| SerializableProfilePost {
-            id: row.id.to_string(),
+            id: row.id,
             title: row.title,
             viewer_count: row.viewer_count,
             author_id: row.author_id,
@@ -257,7 +257,7 @@ pub async fn find_published_posts_by_author_id(
     Ok(result
         .into_iter()
         .map(|row| SerializableProfilePost {
-            id: row.id.to_string(),
+            id: row.id,
             title: row.title,
             viewer_count: row.viewer_count,
             author_id: row.author_id,
@@ -307,7 +307,7 @@ pub async fn find_draft_posts_by_author_id(
     Ok(result
         .into_iter()
         .map(|row| SerializablePost {
-            id: row.id.to_string(),
+            id: row.id,
             title: row.title,
             viewer_count: row.viewer_count,
             author_id: row.author_id,
@@ -357,7 +357,7 @@ pub async fn find_published_posts_by_community_id(
     Ok(result
         .into_iter()
         .map(|row| SerializablePost {
-            id: row.id.to_string(),
+            id: row.id,
             title: row.title,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),
@@ -424,7 +424,7 @@ pub async fn create_post(
     .await?;
 
     Ok(SerializablePost {
-        id: post.id.to_string(),
+        id: post.id,
         title: None,
         author_id: post_draft.author_id,
         paint_duration: post_draft.paint_duration.microseconds.to_string(),
@@ -679,7 +679,7 @@ pub async fn find_public_community_posts(
     Ok(result
         .into_iter()
         .map(|row| SerializablePostForHome {
-            id: row.id.to_string(),
+            id: row.id,
             title: row.title,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),
@@ -734,7 +734,7 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
     Ok(result
         .into_iter()
         .map(|row| SerializablePostForHome {
-            id: row.id.to_string(),
+            id: row.id,
             title: row.title,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),
@@ -788,7 +788,7 @@ pub async fn find_following_posts_by_user_id(
     Ok(result
         .into_iter()
         .map(|row| SerializablePost {
-            id: row.id.to_string(),
+            id: row.id,
             title: row.title,
             author_id: row.author_id,
             paint_duration: row.paint_duration.microseconds.to_string(),

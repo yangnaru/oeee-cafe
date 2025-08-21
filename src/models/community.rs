@@ -39,7 +39,7 @@ pub struct PublicCommunity {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PublicCommunityWithPosts {
-    pub id: String,
+    pub id: Uuid,
     pub owner_id: Uuid,
     pub owner_login_name: String,
     pub name: String,
@@ -193,7 +193,7 @@ pub async fn get_user_communities_with_latest_9_posts(
         let posts = r
             .into_iter()
             .map(|row| SerializablePost {
-                id: row.id.to_string(),
+                id: row.id,
                 title: row.title,
                 author_id: row.author_id,
                 paint_duration: row.paint_duration.microseconds.to_string(),
@@ -210,7 +210,7 @@ pub async fn get_user_communities_with_latest_9_posts(
             .collect();
 
         result.push(PublicCommunityWithPosts {
-            id: community.id.to_string(),
+            id: community.id,
             owner_id: community.owner_id,
             owner_login_name: community.owner_login_name,
             name: community.name,

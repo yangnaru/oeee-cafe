@@ -25,7 +25,7 @@ pub struct BannerDraft {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SerializableBanner {
-    pub id: String,
+    pub id: Uuid,
     pub author_id: Uuid,
     pub paint_duration: String,
     pub stroke_count: i32,
@@ -94,7 +94,7 @@ pub async fn create_banner(
     .await?;
 
     Ok(SerializableBanner {
-        id: post.id.to_string(),
+        id: post.id,
         author_id: banner_draft.author_id,
         paint_duration: banner_draft.paint_duration.microseconds.to_string(),
         stroke_count: banner_draft.stroke_count,
@@ -134,7 +134,7 @@ pub async fn find_banner_by_id(
     .await?;
 
     Ok(SerializableBanner {
-        id: banner.id.to_string(),
+        id: banner.id,
         author_id: banner.author_id,
         paint_duration: banner.paint_duration.microseconds.to_string(),
         stroke_count: banner.stroke_count,
