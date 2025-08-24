@@ -1,12 +1,17 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{query, query_as, Postgres, Transaction, Type};
+use sqlx::{query_as, Postgres, Transaction, Type};
 use uuid::Uuid;
 
 use crate::models::instance::find_or_create_local_instance;
 use crate::models::user::{find_user_by_id, User};
 use crate::AppConfig;
+
+#[derive(Debug)]
+struct UserIdRow {
+    id: Option<Uuid>,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
 #[sqlx(type_name = "actor_type", rename_all = "PascalCase")]
@@ -137,7 +142,7 @@ pub async fn backfill_actors_for_existing_users(
     config: &AppConfig,
 ) -> Result<usize> {
     // Get user IDs who don't have actors
-    let user_ids = query!(
+    let user_ids = query_as!(UserIdRow,
         r#"
         SELECT u.id
         FROM users u
