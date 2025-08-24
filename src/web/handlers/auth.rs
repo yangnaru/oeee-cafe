@@ -78,7 +78,7 @@ pub async fn do_signup(
     let user_draft = UserDraft::new(form.login_name, form.password, form.display_name)?;
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    let user = create_user(&mut tx, user_draft).await?;
+    let user = create_user(&mut tx, user_draft, &state.config).await?;
     tx.commit().await?;
 
     if auth_session.login(&user).await.is_err() {
