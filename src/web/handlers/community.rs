@@ -341,7 +341,7 @@ pub async fn do_create_community(
                             &mut vec![],
                         );
                         messages.error(&error_message.to_string());
-                        return Ok(Redirect::to("/communities/create").into_response());
+                        return Ok(Redirect::to("/communities/new").into_response());
                     }
                 }
             }
@@ -355,6 +355,7 @@ pub async fn create_community_form(
     auth_session: AuthSession,
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
+    messages: Messages,
 ) -> Result<Html<String>, AppError> {
     let db: sqlx::Pool<sqlx::Postgres> = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -375,6 +376,7 @@ pub async fn create_community_form(
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
+        messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count,
         ..create_base_ftl_context(&bundle)
     })?;
