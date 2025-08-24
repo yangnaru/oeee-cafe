@@ -55,7 +55,7 @@ pub struct PublicCommunityWithPosts {
 
 impl Community {
     pub fn get_url(&self) -> String {
-        format!("/communities/{}", self.id)
+        format!("/communities/@{}", self.slug)
     }
 }
 
@@ -299,6 +299,14 @@ pub async fn find_community_by_id(
     id: Uuid,
 ) -> Result<Option<Community>> {
     let q = query_as!(Community, "SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE id = $1", id);
+    Ok(q.fetch_optional(&mut **tx).await?)
+}
+
+pub async fn find_community_by_slug(
+    tx: &mut Transaction<'_, Postgres>,
+    slug: String,
+) -> Result<Option<Community>> {
+    let q = query_as!(Community, "SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE slug = $1", slug);
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 

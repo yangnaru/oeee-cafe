@@ -24,7 +24,7 @@
     <div class="community-badges">
       {% for (community, id) in active_public_communities[:10] %}
         <div class="community-badge">
-          <a href="/communities/{{ id }}">{{ community.name }} ({{ community.posts_count }})</a>
+          <a href="/communities/@{{ community.slug }}">{{ community.name }} ({{ community.posts_count }})</a>
         </div>
       {% endfor %}
     </div>
@@ -32,7 +32,7 @@
       {% for community in
         official_communities_with_latest_posts %}
         <h2 class="home-section-title">
-          <a href="/communities/{{ community.id }}">{{ community.name }}</a>
+          <a href="/communities/@{{ community.slug }}">{{ community.name }}</a>
         </h2>
         <div class="posts-grid">
           {% for post in community.posts %}
