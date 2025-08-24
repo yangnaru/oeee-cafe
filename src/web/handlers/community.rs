@@ -298,7 +298,7 @@ pub async fn do_create_community(
 
     let db: sqlx::Pool<sqlx::Postgres> = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    let _ = create_community(
+    let community = create_community(
         &mut tx,
         auth_session.user.unwrap().id,
         CommunityDraft {
@@ -308,10 +308,10 @@ pub async fn do_create_community(
             is_private: form.is_private == Some("on".to_string()),
         },
     )
-    .await;
+    .await?;
     let _ = tx.commit().await;
 
-    Ok(Redirect::to("/").into_response())
+    Ok(Redirect::to(&format!("/communities/{}", community.id)).into_response())
 }
 
 pub async fn create_community_form(
