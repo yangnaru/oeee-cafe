@@ -6,7 +6,7 @@ CREATE TABLE actors (
     url TEXT NOT NULL,
     type actor_type NOT NULL,
     username TEXT NOT NULL,
-    instance_host TEXT NOT NULL,
+    instance_host TEXT NOT NULL REFERENCES instances(host),
     handle_host TEXT NOT NULL,
     handle TEXT NOT NULL UNIQUE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -21,7 +21,8 @@ CREATE TABLE actors (
     private_key_pem TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    published_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    published_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    CONSTRAINT actor_username_check CHECK (username NOT LIKE '%@%')
 );
 
 CREATE INDEX idx_actors_user_id ON actors(user_id);
