@@ -52,10 +52,7 @@ pub struct PublicCommunityWithPosts {
 
 impl Community {
     pub fn get_url(&self) -> String {
-        format!(
-            "/communities/{}",
-            self.id.to_string()
-        )
+        format!("/communities/{}", self.id.to_string())
     }
 }
 
