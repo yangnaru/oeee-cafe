@@ -1,5 +1,4 @@
--- Remove constraints
-ALTER TABLE communities DROP CONSTRAINT CK_communities_slug_MinLength;
+-- Remove constraint
 ALTER TABLE communities DROP CONSTRAINT CK_communities_slug_RegularExpression;
 
 -- Remove slug column
