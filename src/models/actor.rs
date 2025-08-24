@@ -78,7 +78,7 @@ pub async fn create_actor_for_user(
     let now = Utc::now();
 
     let iri = format!("https://{}/ap/users/{}", config.domain, user.id.to_string());
-    let handle = format!("{}@{}", user.login_name, config.domain);
+    let handle = format!("@{}@{}", user.login_name, config.domain);
     let inbox_url = format!(
         "https://{}/ap/users/{}/inbox",
         config.domain,
@@ -142,7 +142,8 @@ pub async fn backfill_actors_for_existing_users(
     config: &AppConfig,
 ) -> Result<usize> {
     // Get user IDs who don't have actors
-    let user_ids = query_as!(UserIdRow,
+    let user_ids = query_as!(
+        UserIdRow,
         r#"
         SELECT u.id
         FROM users u
@@ -173,10 +174,11 @@ pub async fn update_actor_for_user(
     name: String,
     config: &AppConfig,
 ) -> Result<Option<Actor>> {
-    let handle = format!("{}@{}", username, config.domain);
+    let handle = format!("@{}@{}", username, config.domain);
     let url = format!("https://{}/@{}", config.domain, username);
-    
-    let actor = query_as!(Actor,
+
+    let actor = query_as!(
+        Actor,
         r#"
         UPDATE actors 
         SET username = $1, name = $2, handle = $3, url = $4, updated_at = now()
