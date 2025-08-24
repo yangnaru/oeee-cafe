@@ -2,8 +2,8 @@ use crate::app_error::AppError;
 use crate::models::actor::{create_actor_for_community, update_actor_for_community};
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
-    create_community, find_community_by_id, find_community_by_slug, get_own_communities, get_participating_communities,
-    get_public_communities, Community, CommunityDraft,
+    create_community, find_community_by_id, find_community_by_slug, get_own_communities,
+    get_participating_communities, get_public_communities, Community, CommunityDraft,
 };
 use crate::models::post::{find_published_posts_by_community_id, get_draft_post_count};
 use crate::models::user::AuthSession;
@@ -14,10 +14,10 @@ use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
 use axum_messages::Messages;
+use chrono::Utc;
 use minijinja::context;
 use serde::Deserialize;
 use sqlx::query;
-use chrono::Utc;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -32,14 +32,13 @@ pub async fn community(
 ) -> Result<impl IntoResponse, AppError> {
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    
+
     let (community, community_id) = if id.starts_with('@') {
         // Handle @slug format
         let slug = id.strip_prefix('@').unwrap().to_string();
         let community = find_community_by_slug(&mut tx, slug).await?;
         if let Some(community) = community {
-            let community_id = format!("@{}", community.slug);
-            (Some(community), community_id)
+            (Some(community.clone()), community.id.to_string())
         } else {
             (None, id)
         }
@@ -62,7 +61,7 @@ pub async fn community(
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
-    
+
     let community_uuid = community.as_ref().unwrap().id;
     let posts = find_published_posts_by_community_id(&mut tx, community_uuid).await?;
     let comments = find_latest_comments_in_community(&mut tx, community_uuid, 5).await?;
@@ -88,7 +87,7 @@ pub async fn community(
                 community => {
                     community.as_ref()
                 },
-                community_id => community_id,
+                community_id => community.as_ref().map(|c| c.id.to_string()).unwrap_or_default(),
                 domain => state.config.domain.clone(),
                 ..create_base_ftl_context(&bundle)
             })?
@@ -144,7 +143,7 @@ pub async fn community_iframe(
 ) -> Result<impl IntoResponse, AppError> {
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    
+
     let community = if id.starts_with('@') {
         // Handle @slug format
         let slug = id.strip_prefix('@').unwrap().to_string();
@@ -159,7 +158,9 @@ pub async fn community_iframe(
         let community = find_community_by_id(&mut tx, uuid).await?;
         if let Some(community) = &community {
             // Redirect UUID to @slug format
-            return Ok(Redirect::to(&format!("/communities/@{}/embed", community.slug)).into_response());
+            return Ok(
+                Redirect::to(&format!("/communities/@{}/embed", community.slug)).into_response(),
+            );
         } else {
             None
         }
@@ -168,7 +169,7 @@ pub async fn community_iframe(
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
-    
+
     let community_uuid = community.as_ref().unwrap().id;
     let posts = find_published_posts_by_community_id(&mut tx, community_uuid).await?;
 
@@ -432,7 +433,7 @@ pub async fn hx_edit_community(
 ) -> Result<impl IntoResponse, AppError> {
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    
+
     let community = if id.starts_with('@') {
         // Handle @slug format
         let slug = id.strip_prefix('@').unwrap().to_string();
@@ -443,7 +444,9 @@ pub async fn hx_edit_community(
         let community = find_community_by_id(&mut tx, community_uuid).await?;
         if let Some(community) = &community {
             // Redirect UUID to @slug format
-            return Ok(Redirect::to(&format!("/communities/@{}/edit", community.slug)).into_response());
+            return Ok(
+                Redirect::to(&format!("/communities/@{}/edit", community.slug)).into_response(),
+            );
         } else {
             None
         }
@@ -488,7 +491,7 @@ pub async fn hx_do_edit_community(
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    
+
     let (community_uuid, original_slug) = if id.starts_with('@') {
         // Handle @slug format
         let slug = id.strip_prefix('@').unwrap().to_string();
@@ -509,7 +512,7 @@ pub async fn hx_do_edit_community(
             return Ok(StatusCode::NOT_FOUND.into_response());
         }
     };
-    
+
     // First update the community
     let q = query!(
         "
@@ -525,7 +528,7 @@ pub async fn hx_do_edit_community(
         form.is_private == Some("on".to_string()),
     );
     let result = q.fetch_one(&mut *tx).await?;
-    
+
     // Then try to update the corresponding actor
     match update_actor_for_community(
         &mut tx,
@@ -534,15 +537,21 @@ pub async fn hx_do_edit_community(
         form.name.clone(),
         form.description.clone(),
         &state.config,
-    ).await {
+    )
+    .await
+    {
         Ok(_) => {
             // Success - commit transaction
             let _ = tx.commit().await;
-            
+
             // Check if slug changed - if so, redirect entire page to new URL
             if form.slug != original_slug {
                 // Use HTMX redirect to navigate to new slug URL
-                Ok(([("HX-Redirect", format!("/communities/@{}", form.slug).as_str())],).into_response())
+                Ok(([(
+                    "HX-Redirect",
+                    format!("/communities/@{}", form.slug).as_str(),
+                )],)
+                    .into_response())
             } else {
                 // Slug didn't change - return updated content block
                 let updated_community = Community {
@@ -569,7 +578,7 @@ pub async fn hx_do_edit_community(
                     .eval_to_state(context! {
                         current_user => auth_session.user,
                         community => updated_community,
-                        community_id => format!("@{}", form.slug),
+                        community_id => updated_community.id.to_string(),
                         domain => state.config.domain.clone(),
                         ..create_base_ftl_context(&bundle)
                     })?
@@ -577,11 +586,11 @@ pub async fn hx_do_edit_community(
 
                 Ok(Html(rendered).into_response())
             }
-        },
+        }
         Err(e) => {
             // Error - rollback transaction and return edit form with error
             let _ = tx.rollback().await;
-            
+
             // Check if it's a constraint violation (slug conflict)
             let error_message = if let Some(db_error) = e.downcast_ref::<sqlx::Error>() {
                 if let sqlx::Error::Database(db_err) = db_error {
@@ -592,15 +601,19 @@ pub async fn hx_do_edit_community(
                             .map(|u| u.preferred_language)
                             .unwrap_or_else(|| None);
                         let bundle = get_bundle(&accept_language, user_preferred_language);
-                        Some(bundle.format_pattern(
+                        Some(
                             bundle
-                                .get_message("community-slug-conflict-error")
-                                .unwrap()
-                                .value()
-                                .unwrap(),
-                            None,
-                            &mut vec![],
-                        ).to_string())
+                                .format_pattern(
+                                    bundle
+                                        .get_message("community-slug-conflict-error")
+                                        .unwrap()
+                                        .value()
+                                        .unwrap(),
+                                    None,
+                                    &mut vec![],
+                                )
+                                .to_string(),
+                        )
                     } else {
                         None
                     }
@@ -610,11 +623,11 @@ pub async fn hx_do_edit_community(
             } else {
                 None
             };
-            
+
             // Get current community data to show in the form
             let mut tx = db.begin().await?;
             let current_community = find_community_by_id(&mut tx, community_uuid).await?;
-            
+
             let template = state.env.get_template("community_edit.jinja")?;
             let user_preferred_language = auth_session
                 .user
