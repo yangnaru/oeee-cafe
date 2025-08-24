@@ -282,7 +282,7 @@ pub async fn communities(
 #[derive(Deserialize)]
 pub struct CreateCommunityForm {
     name: String,
-    display_name: String,
+    slug: String,
     description: String,
     is_private: Option<String>,
 }
@@ -303,7 +303,7 @@ pub async fn do_create_community(
         auth_session.user.unwrap().id,
         CommunityDraft {
             name: form.name,
-            display_name: form.display_name,
+            slug: form.slug,
             description: form.description,
             is_private: form.is_private == Some("on".to_string()),
         },
@@ -402,7 +402,7 @@ pub async fn hx_do_edit_community(
         community_uuid,
         CommunityDraft {
             name: form.name,
-            display_name: form.display_name,
+            slug: form.slug,
             description: form.description,
             is_private: form.is_private == Some("on".to_string()),
         },

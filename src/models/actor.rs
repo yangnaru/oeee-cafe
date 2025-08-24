@@ -308,7 +308,7 @@ pub async fn create_actor_for_community(
     let now = Utc::now();
 
     let iri = format!("https://{}/ap/communities/{}", config.domain, community.id);
-    let handle = format!("@{}@{}", community.display_name, config.domain);
+    let handle = format!("@{}@{}", community.slug, config.domain);
     let inbox_url = format!(
         "https://{}/ap/communities/{}/inbox",
         config.domain,
@@ -342,7 +342,7 @@ pub async fn create_actor_for_community(
         "#,
         iri,
         ActorType::Group as _,
-        community.display_name,
+        community.slug,
         config.domain,
         config.domain,
         handle,

@@ -14,7 +14,7 @@ pub struct Community {
     pub id: Uuid,
     pub owner_id: Uuid,
     pub name: String,
-    pub display_name: String,
+    pub slug: String,
     pub description: String,
     pub is_private: bool,
     pub updated_at: DateTime<Utc>,
@@ -29,7 +29,7 @@ pub struct PublicCommunity {
     pub owner_id: Uuid,
     pub owner_login_name: String,
     pub name: String,
-    pub display_name: String,
+    pub slug: String,
     pub description: String,
     pub is_private: bool,
     pub updated_at: DateTime<Utc>,
@@ -45,7 +45,7 @@ pub struct PublicCommunityWithPosts {
     pub owner_id: Uuid,
     pub owner_login_name: String,
     pub name: String,
-    pub display_name: String,
+    pub slug: String,
     pub description: String,
     pub is_private: bool,
     pub updated_at: DateTime<Utc>,
@@ -61,7 +61,7 @@ impl Community {
 
 pub struct CommunityDraft {
     pub name: String,
-    pub display_name: String,
+    pub slug: String,
     pub description: String,
     pub is_private: bool,
 }
@@ -72,7 +72,7 @@ pub async fn get_own_communities(
 ) -> Result<Vec<Community>> {
     let q = query_as!(
         Community,
-        "SELECT id, owner_id, name, display_name, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE owner_id = $1",
+        "SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE owner_id = $1",
         owner_id
     );
 
@@ -80,7 +80,7 @@ pub async fn get_own_communities(
 }
 
 pub async fn get_communities(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<Community>> {
-    let q = query_as!(Community, "SELECT id, owner_id, name, display_name, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities");
+    let q = query_as!(Community, "SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities");
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
@@ -91,7 +91,7 @@ pub async fn get_public_communities(
     let q = query_as!(
         PublicCommunity,
         "
-            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.display_name, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color, COALESCE(COUNT(posts.id), 0) AS posts_count
+            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.slug, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color, COALESCE(COUNT(posts.id), 0) AS posts_count
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             LEFT JOIN users ON communities.owner_id = users.id
@@ -112,7 +112,7 @@ pub async fn get_active_public_communities_excluding_owner(
     let q = query_as!(
         PublicCommunity,
         "
-            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.display_name, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color, COUNT(posts.id) AS posts_count
+            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.slug, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color, COUNT(posts.id) AS posts_count
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             LEFT JOIN users ON communities.owner_id = users.id
@@ -140,7 +140,7 @@ pub async fn get_user_communities_with_latest_9_posts(
                 communities.owner_id,
                 users.login_name AS owner_login_name,
                 communities.name,
-                communities.display_name,
+                communities.slug,
                 communities.description,
                 communities.is_private,
                 communities.updated_at,
@@ -216,7 +216,7 @@ pub async fn get_user_communities_with_latest_9_posts(
             owner_id: community.owner_id,
             owner_login_name: community.owner_login_name,
             name: community.name,
-            display_name: community.display_name,
+            slug: community.slug,
             description: community.description,
             is_private: community.is_private,
             updated_at: community.updated_at,
@@ -234,7 +234,7 @@ pub struct KnownCommunity {
     pub owner_id: Uuid,
     pub owner_login_name: String,
     pub name: String,
-    pub display_name: String,
+    pub slug: String,
     pub description: String,
     pub is_private: bool,
     pub updated_at: DateTime<Utc>,
@@ -251,7 +251,7 @@ pub async fn get_known_communities(
     let q = query_as!(
         KnownCommunity,
         "
-            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.display_name, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color
+            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.slug, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id
             LEFT JOIN users ON communities.owner_id = users.id
@@ -277,7 +277,7 @@ pub async fn get_participating_communities(
     let q = query_as!(
         Community,
         "
-            SELECT communities.id, communities.owner_id, communities.name, communities.display_name, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color
+            SELECT communities.id, communities.owner_id, communities.name, communities.slug, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id
             WHERE communities.id IN (
@@ -298,7 +298,7 @@ pub async fn find_community_by_id(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
 ) -> Result<Option<Community>> {
-    let q = query_as!(Community, "SELECT id, owner_id, name, display_name, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE id = $1", id);
+    let q = query_as!(Community, "SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE id = $1", id);
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
@@ -312,7 +312,7 @@ pub async fn create_community(
             INSERT INTO communities (
                 owner_id,
                 name,
-                display_name,
+                slug,
                 description,
                 is_private
             )
@@ -321,7 +321,7 @@ pub async fn create_community(
         ",
         owner_id,
         community_draft.name,
-        community_draft.display_name,
+        community_draft.slug,
         community_draft.description,
         community_draft.is_private,
     );
@@ -331,7 +331,7 @@ pub async fn create_community(
         id: result.id,
         owner_id,
         name: community_draft.name,
-        display_name: community_draft.display_name,
+        slug: community_draft.slug,
         description: community_draft.description,
         is_private: community_draft.is_private,
         created_at: result.created_at,
@@ -350,13 +350,13 @@ pub async fn update_community(
     let q = query!(
         "
             UPDATE communities
-            SET name = $2, display_name = $3, description = $4, is_private = $5, updated_at = now()
+            SET name = $2, slug = $3, description = $4, is_private = $5, updated_at = now()
             WHERE id = $1
             RETURNING owner_id, created_at
         ",
         id,
         community_draft.name,
-        community_draft.display_name,
+        community_draft.slug,
         community_draft.description,
         community_draft.is_private,
     );
@@ -367,7 +367,7 @@ pub async fn update_community(
         let _ = super::actor::update_actor_for_community(
             tx,
             id,
-            community_draft.display_name.clone(), // Use display_name as username
+            community_draft.slug.clone(), // Use slug as username
             community_draft.name.clone(),
             community_draft.description.clone(),
             config,
@@ -378,7 +378,7 @@ pub async fn update_community(
         id,
         owner_id: result.owner_id,
         name: community_draft.name,
-        display_name: community_draft.display_name,
+        slug: community_draft.slug,
         description: community_draft.description,
         is_private: community_draft.is_private,
         created_at: result.created_at,
