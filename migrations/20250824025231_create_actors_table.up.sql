@@ -2,7 +2,7 @@ CREATE TABLE actors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     iri TEXT NOT NULL UNIQUE,
     url TEXT NOT NULL,
-    actor_type TEXT NOT NULL,
+    type TEXT NOT NULL,
     username TEXT NOT NULL,
     instance_host TEXT NOT NULL,
     handle_host TEXT NOT NULL,

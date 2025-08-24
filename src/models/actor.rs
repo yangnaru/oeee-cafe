@@ -11,7 +11,7 @@ pub struct Actor {
     pub id: Uuid,
     pub iri: String,
     pub url: String,
-    pub actor_type: String,
+    pub r#type: String,
     pub username: String,
     pub instance_host: String,
     pub handle_host: String,
@@ -49,12 +49,13 @@ pub async fn create_actor_for_user(
     let now = Utc::now();
 
     let iri = format!("https://{}/ap/users/{}", config.domain, user.id.to_string());
-    let handle = format!("{}@{}", user.login_name, config.domain);
+    let handle = format!("@{}@{}", user.login_name, config.domain);
     let inbox_url = format!(
         "https://{}/ap/users/{}/inbox",
         config.domain,
         user.id.to_string()
     );
+    let shared_inbox_url = format!("https://{}/ap/inbox", config.domain);
     let followers_url = format!(
         "https://{}/ap/users/{}/followers",
         config.domain,
@@ -71,7 +72,7 @@ pub async fn create_actor_for_user(
         Actor,
         r#"
         INSERT INTO actors (
-            iri, actor_type, username, instance_host, handle_host, handle,
+            iri, type, username, instance_host, handle_host, handle,
             user_id, name, bio_html, automatically_approves_followers,
             avatar_url, header_url, inbox_url, shared_inbox_url, followers_url,
             featured_url, sensitive, public_key_pem, private_key_pem, url,
@@ -80,7 +81,7 @@ pub async fn create_actor_for_user(
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
         )
         RETURNING 
-            id, iri, actor_type, username, instance_host, handle_host, handle,
+            id, iri, type, username, instance_host, handle_host, handle,
             user_id, name, bio_html, automatically_approves_followers,
             avatar_url, header_url, inbox_url, shared_inbox_url, followers_url,
             featured_url, sensitive, public_key_pem, private_key_pem, url,
@@ -99,7 +100,7 @@ pub async fn create_actor_for_user(
         "", // avatar_url - empty for now
         "", // header_url - empty for now
         inbox_url,
-        "", // shared_inbox_url - empty for now
+        shared_inbox_url,
         followers_url,
         featured_url,
         false, // sensitive
