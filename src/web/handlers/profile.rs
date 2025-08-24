@@ -176,6 +176,7 @@ pub async fn profile(
         is_following => is_current_user_following,
         followings,
         user,
+        domain => state.config.domain.clone(),
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         public_community_posts,
         private_community_posts,

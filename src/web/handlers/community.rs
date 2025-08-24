@@ -89,6 +89,7 @@ pub async fn community(
                     community.as_ref()
                 },
                 community_id => community_id,
+                domain => state.config.domain.clone(),
                 ..create_base_ftl_context(&bundle)
             })?
             .render_block("community_edit_block")
@@ -100,6 +101,7 @@ pub async fn community(
         default_community_id => state.config.default_community_id.clone(),
         community => community,
         community_id => community_id,
+        domain => state.config.domain.clone(),
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         comments => comments.iter().map(
             |comment| {
@@ -466,6 +468,7 @@ pub async fn hx_edit_community(
         current_user => auth_session.user,
         community,
         community_id => id,
+        domain => state.config.domain.clone(),
         ..create_base_ftl_context(&bundle)
     })?;
 
@@ -567,6 +570,7 @@ pub async fn hx_do_edit_community(
                         current_user => auth_session.user,
                         community => updated_community,
                         community_id => format!("@{}", form.slug),
+                        domain => state.config.domain.clone(),
                         ..create_base_ftl_context(&bundle)
                     })?
                     .render_block("community_edit_block")?;
@@ -622,6 +626,7 @@ pub async fn hx_do_edit_community(
                 current_user => auth_session.user,
                 community => current_community,
                 community_id => id,
+                domain => state.config.domain.clone(),
                 error_message => error_message,
                 ..create_base_ftl_context(&bundle)
             })?;

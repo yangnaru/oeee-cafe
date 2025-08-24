@@ -7,7 +7,7 @@
     <div class="profile-header">
       <h2>
         {{ user.display_name }}
-        <span class="muted">@{{ user.login_name }}</span>
+        <span class="muted" style="user-select: all;">@{{ user.login_name }}@{{ domain }}</span>
       </h2>
       <div class="banner-controls">
         {% if current_user %}
