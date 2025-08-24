@@ -261,7 +261,7 @@ pub async fn update_actor_for_community(
     description: String,
     config: &AppConfig,
 ) -> Result<Option<Actor>> {
-    let handle = format!("@{}@{}", community_id, config.domain);
+    let handle = format!("@{}@{}", username, config.domain);
     let url = format!("https://{}/communities/{}", config.domain, community_id);
 
     let actor = query_as!(
@@ -308,7 +308,7 @@ pub async fn create_actor_for_community(
     let now = Utc::now();
 
     let iri = format!("https://{}/ap/communities/{}", config.domain, community.id);
-    let handle = format!("@{}@{}", community.id, config.domain);
+    let handle = format!("@{}@{}", community.display_name, config.domain);
     let inbox_url = format!(
         "https://{}/ap/communities/{}/inbox",
         config.domain,
@@ -342,7 +342,7 @@ pub async fn create_actor_for_community(
         "#,
         iri,
         ActorType::Group as _,
-        community.id.to_string(),
+        community.display_name,
         config.domain,
         config.domain,
         handle,
