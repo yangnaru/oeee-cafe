@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, Postgres, Transaction, Type};
 use uuid::Uuid;
 
+use crate::models::instance::find_or_create_local_instance;
 use crate::models::user::{find_user_by_id, User};
 use crate::AppConfig;
 
@@ -60,6 +61,9 @@ pub async fn create_actor_for_user(
     config: &AppConfig,
 ) -> Result<Actor> {
     use activitypub_federation::http_signatures::generate_actor_keypair;
+
+    // Ensure local instance exists
+    find_or_create_local_instance(tx, &config.domain, None, None).await?;
 
     // Generate RSA keypair for ActivityPub
     let keypair = generate_actor_keypair()?;

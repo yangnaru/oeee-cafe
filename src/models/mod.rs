@@ -6,6 +6,7 @@ pub mod email_verification_challenge;
 pub mod follow;
 pub mod guestbook_entry;
 pub mod image;
+pub mod instance;
 pub mod link;
 pub mod post;
 pub mod user;
