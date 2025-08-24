@@ -65,7 +65,7 @@ pub async fn create_actor_for_user(
         config.domain,
         user.id.to_string()
     );
-    let url = format!("https://{}/ap/users/{}", config.domain, user.id.to_string());
+    let url = format!("https://{}/@{}", config.domain, user.login_name);
 
     let actor = query_as!(
         Actor,
