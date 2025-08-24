@@ -1,9 +1,9 @@
 use crate::app_error::AppError;
-use crate::models::actor::create_actor_for_community;
+use crate::models::actor::{create_actor_for_community, update_actor_for_community};
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, get_participating_communities,
-    get_public_communities, update_community, CommunityDraft,
+    get_public_communities, Community, CommunityDraft,
 };
 use crate::models::post::{find_published_posts_by_community_id, get_draft_post_count};
 use crate::models::user::AuthSession;
@@ -16,6 +16,8 @@ use axum::{extract::State, http::StatusCode, response::Html, Form};
 use axum_messages::Messages;
 use minijinja::context;
 use serde::Deserialize;
+use sqlx::query;
+use chrono::Utc;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -436,35 +438,120 @@ pub async fn hx_do_edit_community(
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
-    let updated_community = update_community(
+    
+    // First update the community
+    let q = query!(
+        "
+            UPDATE communities
+            SET name = $2, slug = $3, description = $4, is_private = $5, updated_at = now()
+            WHERE id = $1
+            RETURNING owner_id, created_at
+        ",
+        community_uuid,
+        form.name,
+        form.slug,
+        form.description,
+        form.is_private == Some("on".to_string()),
+    );
+    let result = q.fetch_one(&mut *tx).await?;
+    
+    // Then try to update the corresponding actor
+    match update_actor_for_community(
         &mut tx,
         community_uuid,
-        CommunityDraft {
-            name: form.name,
-            slug: form.slug,
-            description: form.description,
-            is_private: form.is_private == Some("on".to_string()),
+        form.slug.clone(), // Use slug as username
+        form.name.clone(),
+        form.description.clone(),
+        &state.config,
+    ).await {
+        Ok(_) => {
+            // Success - commit transaction and return success response
+            let _ = tx.commit().await;
+            
+            let updated_community = Community {
+                id: community_uuid,
+                owner_id: result.owner_id,
+                name: form.name,
+                slug: form.slug,
+                description: form.description,
+                is_private: form.is_private == Some("on".to_string()),
+                created_at: result.created_at,
+                updated_at: Utc::now(),
+                background_color: None,
+                foreground_color: None,
+            };
+
+            let template = state.env.get_template("community.jinja")?;
+            let user_preferred_language = auth_session
+                .user
+                .clone()
+                .map(|u| u.preferred_language)
+                .unwrap_or_else(|| None);
+            let bundle = get_bundle(&accept_language, user_preferred_language);
+            let rendered = template
+                .eval_to_state(context! {
+                    current_user => auth_session.user,
+                    community => updated_community,
+                    community_id => id,
+                    ..create_base_ftl_context(&bundle)
+                })?
+                .render_block("community_edit_block")?;
+
+            Ok(Html(rendered).into_response())
         },
-        Some(&state.config), // Pass config to also update the community actor
-    )
-    .await?;
-    let _ = tx.commit().await;
+        Err(e) => {
+            // Error - rollback transaction and return edit form with error
+            let _ = tx.rollback().await;
+            
+            // Check if it's a constraint violation (slug conflict)
+            let error_message = if let Some(db_error) = e.downcast_ref::<sqlx::Error>() {
+                if let sqlx::Error::Database(db_err) = db_error {
+                    if db_err.constraint().is_some() {
+                        let user_preferred_language = auth_session
+                            .user
+                            .clone()
+                            .map(|u| u.preferred_language)
+                            .unwrap_or_else(|| None);
+                        let bundle = get_bundle(&accept_language, user_preferred_language);
+                        Some(bundle.format_pattern(
+                            bundle
+                                .get_message("community-slug-conflict-error")
+                                .unwrap()
+                                .value()
+                                .unwrap(),
+                            None,
+                            &mut vec![],
+                        ).to_string())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            
+            // Get current community data to show in the form
+            let mut tx = db.begin().await?;
+            let current_community = find_community_by_id(&mut tx, community_uuid).await?;
+            
+            let template = state.env.get_template("community_edit.jinja")?;
+            let user_preferred_language = auth_session
+                .user
+                .clone()
+                .map(|u| u.preferred_language)
+                .unwrap_or_else(|| None);
+            let bundle = get_bundle(&accept_language, user_preferred_language);
+            let rendered = template.render(context! {
+                current_user => auth_session.user,
+                community => current_community,
+                community_id => id,
+                error_message => error_message,
+                ..create_base_ftl_context(&bundle)
+            })?;
 
-    let template = state.env.get_template("community.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let rendered = template
-        .eval_to_state(context! {
-            current_user => auth_session.user,
-            community => updated_community,
-            community_id => id,
-            ..create_base_ftl_context(&bundle)
-        })?
-        .render_block("community_edit_block")?;
-
-    Ok(Html(rendered).into_response())
+            Ok(Html(rendered).into_response())
+        }
+    }
 }
