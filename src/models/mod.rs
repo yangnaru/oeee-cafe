@@ -8,5 +8,6 @@ pub mod guestbook_entry;
 pub mod image;
 pub mod instance;
 pub mod link;
+pub mod nodeinfo;
 pub mod post;
 pub mod user;

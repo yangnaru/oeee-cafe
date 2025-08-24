@@ -1,16 +1,20 @@
 use crate::app_error::AppError;
+use crate::models::actor::Actor;
 use crate::models::comment::{create_comment, find_comments_by_post_id, CommentDraft};
 use crate::models::community::{find_community_by_id, get_known_communities};
+use crate::models::follow;
 use crate::models::image::find_image_by_id;
 use crate::models::post::{
     delete_post, edit_post, edit_post_community, find_draft_posts_by_author_id, find_post_by_id,
     get_draft_post_count, increment_post_viewer_count, publish_post,
 };
 use crate::models::user::AuthSession;
+use crate::web::handlers::activitypub::{generate_object_id, Attachment, Create, Note};
 use crate::web::handlers::{
     create_base_ftl_context, get_bundle, parse_id_with_legacy_support, ParsedId,
 };
 use crate::web::state::AppState;
+use activitypub_federation::fetch::object_id::ObjectId;
 use anyhow::Error;
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::types::{Delete, ObjectIdentifier};
@@ -36,6 +40,129 @@ async fn get_community_slug_url(
     } else {
         Ok(format!("/communities/{}", community_id)) // Fallback to UUID if community not found
     }
+}
+
+async fn send_post_to_followers(
+    actor: &Actor,
+    post_id: Uuid,
+    title: String,
+    content: String,
+    state: &AppState,
+) -> Result<(), AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    // Get all followers for this actor
+    let followers = follow::find_followers_by_actor_id(&mut tx, actor.id).await?;
+
+    // Get post details including image information
+    let post = find_post_by_id(&mut tx, post_id).await?;
+    let post = post.ok_or_else(|| anyhow::anyhow!("Post not found"))?;
+
+    if followers.is_empty() {
+        tracing::info!(
+            "No followers found for actor {}, skipping ActivityPub post",
+            actor.iri
+        );
+        return Ok(());
+    }
+
+    // Get image details for attachment
+    let image_id = Uuid::parse_str(
+        post.get("image_id")
+            .and_then(|id| id.as_ref())
+            .ok_or_else(|| anyhow::anyhow!("Post has no image_id"))?,
+    )?;
+
+    let mut attachments = Vec::new();
+
+    if let Ok(image) = find_image_by_id(&mut tx, image_id).await {
+        let image_url = format!(
+            "{}/image/{}{}/{}",
+            state.config.r2_public_endpoint_url,
+            image.image_filename.chars().next().unwrap_or('0'),
+            image.image_filename.chars().nth(1).unwrap_or('0'),
+            image.image_filename
+        );
+
+        let attachment = Attachment {
+            r#type: "Document".to_string(),
+            url: image_url,
+            media_type: "image/png".to_string(), // Assuming PNG, could be determined from filename
+            name: title.clone().into(),
+            width: Some(image.width),
+            height: Some(image.height),
+        };
+        attachments.push(attachment);
+    }
+
+    // Create the Note object for the post
+    let post_url: url::Url = format!(
+        "https://{}/@{}/{}",
+        state.config.domain, actor.username, post_id
+    )
+    .parse()?;
+    let note_id = post_url.clone();
+    let actor_object_id = ObjectId::parse(&actor.iri)?;
+
+    let published = chrono::Utc::now().to_rfc3339();
+
+    // Create audience lists
+    let to = vec!["https://www.w3.org/ns/activitystreams#Public".to_string()];
+    let followers_collection = format!("{}/followers", actor.iri);
+    let cc = vec![followers_collection];
+
+    // Format content with title if available
+    let formatted_content = if title.is_empty() {
+        content
+    } else {
+        format!("<p>{}</p><p>{}</p>", title, content)
+    };
+
+    let note = Note::new(
+        note_id,
+        actor_object_id.clone(),
+        formatted_content,
+        to.clone(),
+        cc.clone(),
+        published.clone(),
+        post_url,
+        attachments,
+    );
+
+    // Create the Create activity
+    let activity_id = generate_object_id(&state.config.domain)?;
+    let create = Create::new(actor_object_id, note, activity_id, to, cc, published);
+
+    // Get follower inboxes
+    let follower_inboxes: Vec<url::Url> = followers
+        .iter()
+        .map(|follower| follower.inbox_url.parse())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if !follower_inboxes.is_empty() {
+        // For now, we'll create a minimal federation config to send activities
+        // In a production setup, this would be properly integrated with the federation middleware
+        let federation_config = activitypub_federation::config::FederationConfig::builder()
+            .domain(&state.config.domain)
+            .app_data(state.clone())
+            .build()
+            .await?;
+        let federation_data = federation_config.to_request_data();
+
+        // Send to all followers
+        actor
+            .send(create, follower_inboxes, false, &federation_data)
+            .await?;
+        tracing::info!(
+            "Sent Create activity for post {} to {} followers",
+            post_id,
+            followers.len()
+        );
+    }
+
+    tx.commit().await?;
+    Ok(())
 }
 
 pub async fn post_relay_view(
@@ -420,17 +547,33 @@ pub async fn post_publish(
             .unwrap(),
     )?;
     let community_url = get_community_slug_url(&mut tx, community_id).await?;
-    
+
     let _ = publish_post(
         &mut tx,
         post_id,
-        form.title,
-        form.content,
+        form.title.clone(),
+        form.content.clone(),
         is_sensitive,
         allow_relay,
     )
     .await;
+
+    // Find the actor for this user to send ActivityPub activities
+    let actor = Actor::find_by_user_id(&mut tx, user_id).await?;
+
     let _ = tx.commit().await;
+
+    // Send ActivityPub Create activity to followers if actor exists
+    if let Some(actor) = actor {
+        if let Err(e) =
+            send_post_to_followers(&actor, post_id, form.title, form.content, &state).await
+        {
+            tracing::error!("Failed to send post to ActivityPub followers: {:?}", e);
+            // Don't fail the entire operation if ActivityPub sending fails
+        }
+    } else {
+        tracing::warn!("No actor found for user {}, skipping ActivityPub", user_id);
+    }
 
     Ok(Redirect::to(&community_url).into_response())
 }
@@ -823,7 +966,7 @@ pub async fn hx_delete_post(
     let community_id = post.unwrap().get("community_id").unwrap().clone().unwrap();
     let community_id = Uuid::parse_str(&community_id)?;
     let community_url = get_community_slug_url(&mut tx, community_id).await?;
-    
+
     delete_post(&mut tx, post_uuid).await?;
     tx.commit().await?;
 

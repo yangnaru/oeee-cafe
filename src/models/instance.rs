@@ -47,3 +47,30 @@ pub async fn find_or_create_local_instance(
 
     Ok(instance)
 }
+
+pub async fn upsert_instance(
+    tx: &mut Transaction<'_, Postgres>,
+    host: &str,
+    software: Option<&str>,
+    software_version: Option<&str>,
+) -> Result<Instance> {
+    let instance = query_as!(
+        Instance,
+        r#"
+        INSERT INTO instances (host, software, software_version)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (host) DO UPDATE SET
+            software = COALESCE(EXCLUDED.software, instances.software),
+            software_version = COALESCE(EXCLUDED.software_version, instances.software_version),
+            updated_at = now()
+        RETURNING host, software, software_version, created_at, updated_at
+        "#,
+        host,
+        software,
+        software_version
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(instance)
+}

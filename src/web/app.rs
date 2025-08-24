@@ -5,7 +5,9 @@ use crate::web::handlers::account::{
     account, edit_account, edit_password, request_email_verification_code, save_language,
     verify_email_verification_code,
 };
-use crate::web::handlers::activitypub::{activitypub_get_user, activitypub_webfinger};
+use crate::web::handlers::activitypub::{
+    activitypub_get_user, activitypub_post_user_inbox, activitypub_webfinger,
+};
 use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::community::{
     communities, community, community_iframe, create_community_form, do_create_community,
@@ -150,6 +152,10 @@ impl App {
         let activitypub_router = Router::new()
             .route("/.well-known/webfinger", get(activitypub_webfinger))
             .route("/ap/users/:login_name", get(activitypub_get_user))
+            .route(
+                "/ap/users/:login_name/inbox",
+                post(activitypub_post_user_inbox),
+            )
             .layer(FederationMiddleware::new(activitypub_data));
 
         let app = Router::new()

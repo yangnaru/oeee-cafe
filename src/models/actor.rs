@@ -1,12 +1,21 @@
+use activitypub_federation::activity_queue::queue_activity;
+use activitypub_federation::activity_sending::SendActivityTask;
+use activitypub_federation::config::Data;
+use activitypub_federation::protocol::context::WithContext;
+use activitypub_federation::traits::ActivityHandler;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{query_as, Postgres, Transaction, Type};
+use url::Url;
 use uuid::Uuid;
 
+use crate::app_error::AppError;
 use crate::models::community::Community;
-use crate::models::instance::find_or_create_local_instance;
+use crate::models::instance::{find_or_create_local_instance, upsert_instance};
+use crate::models::nodeinfo;
 use crate::models::user::{find_user_by_id, User};
+use crate::web::state::AppState;
 use crate::AppConfig;
 
 #[derive(Debug)]
@@ -86,9 +95,9 @@ impl Actor {
         Ok(actor)
     }
 
-    pub async fn find_by_community_id(
+    pub async fn find_by_iri(
         tx: &mut Transaction<'_, Postgres>,
-        community_id: Uuid,
+        iri: String,
     ) -> Result<Option<Actor>> {
         let actor = query_as!(
             Actor,
@@ -99,14 +108,125 @@ impl Actor {
                 inbox_url, shared_inbox_url, followers_url, sensitive,
                 public_key_pem, private_key_pem, url,
                 created_at, updated_at, published_at
-            FROM actors WHERE community_id = $1
+            FROM actors WHERE iri = $1
             "#,
-            community_id
+            iri
         )
         .fetch_optional(&mut **tx)
         .await?;
-
         Ok(actor)
+    }
+
+    pub async fn create_or_update_actor(
+        tx: &mut Transaction<'_, Postgres>,
+        actor: &Actor,
+    ) -> Result<Actor> {
+        let now = Utc::now();
+
+        // Fetch nodeinfo for the instance to get software name and version
+        let nodeinfo = nodeinfo::fetch_nodeinfo(&actor.instance_host)
+            .await
+            .ok()
+            .flatten();
+        let (software_name, software_version) = if let Some(nodeinfo) = nodeinfo {
+            (
+                Some(nodeinfo.software.name),
+                Some(nodeinfo.software.version),
+            )
+        } else {
+            (None, None)
+        };
+
+        // Upsert the instance first with nodeinfo data
+        let _instance = upsert_instance(
+            tx,
+            &actor.instance_host,
+            software_name.as_deref(),
+            software_version.as_deref(),
+        )
+        .await?;
+
+        let created_actor = query_as!(
+            Actor,
+            r#"
+            INSERT INTO actors (
+                iri, type, username, instance_host, handle_host, handle,
+                user_id, community_id, name, bio_html, automatically_approves_followers,
+                inbox_url, shared_inbox_url, followers_url,
+                sensitive, public_key_pem, private_key_pem, url,
+                created_at, updated_at, published_at
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
+            )
+            ON CONFLICT (iri) DO UPDATE SET
+                username = EXCLUDED.username,
+                name = EXCLUDED.name,
+                bio_html = EXCLUDED.bio_html,
+                automatically_approves_followers = EXCLUDED.automatically_approves_followers,
+                inbox_url = EXCLUDED.inbox_url,
+                shared_inbox_url = EXCLUDED.shared_inbox_url,
+                followers_url = EXCLUDED.followers_url,
+                sensitive = EXCLUDED.sensitive,
+                public_key_pem = EXCLUDED.public_key_pem,
+                url = EXCLUDED.url,
+                updated_at = $19
+            RETURNING 
+                id, iri, type as "type: _", username, instance_host, handle_host, handle,
+                user_id, community_id, name, bio_html, automatically_approves_followers,
+                inbox_url, shared_inbox_url, followers_url,
+                sensitive, public_key_pem, private_key_pem, url,
+                created_at, updated_at, published_at
+            "#,
+            actor.iri,
+            actor.r#type as _,
+            actor.username,
+            actor.instance_host,
+            actor.handle_host,
+            actor.handle,
+            actor.user_id,
+            actor.community_id,
+            actor.name,
+            actor.bio_html,
+            actor.automatically_approves_followers,
+            actor.inbox_url,
+            actor.shared_inbox_url,
+            actor.followers_url,
+            actor.sensitive,
+            actor.public_key_pem,
+            actor.private_key_pem,
+            actor.url,
+            now,
+            now,
+            now
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+
+        Ok(created_actor)
+    }
+
+    pub(crate) async fn send<A>(
+        &self,
+        activity: A,
+        recipients: Vec<Url>,
+        use_queue: bool,
+        data: &Data<AppState>,
+    ) -> Result<(), AppError>
+    where
+        A: ActivityHandler + Serialize + std::fmt::Debug + Send + Sync,
+        <A as ActivityHandler>::Error: From<anyhow::Error> + From<serde_json::Error>,
+    {
+        let activity = WithContext::new_default(activity);
+        // Send through queue in some cases and bypass it in others to test both code paths
+        if use_queue {
+            queue_activity(&activity, self, recipients, data).await?;
+        } else {
+            let sends = SendActivityTask::prepare(&activity, self, recipients, data).await?;
+            for send in sends {
+                send.sign_and_send(data).await?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -129,17 +249,9 @@ pub async fn create_actor_for_user(
 
     let iri = format!("https://{}/ap/users/{}", config.domain, user.id);
     let handle = format!("@{}@{}", user.login_name, config.domain);
-    let inbox_url = format!(
-        "https://{}/ap/users/{}/inbox",
-        config.domain,
-        user.id
-    );
+    let inbox_url = format!("https://{}/ap/users/{}/inbox", config.domain, user.id);
     let shared_inbox_url = format!("https://{}/ap/inbox", config.domain);
-    let followers_url = format!(
-        "https://{}/ap/users/{}/followers",
-        config.domain,
-        user.id
-    );
+    let followers_url = format!("https://{}/ap/users/{}/followers", config.domain, user.id);
     let url = format!("https://{}/@{}", config.domain, user.login_name);
 
     let actor = query_as!(Actor,
@@ -311,14 +423,12 @@ pub async fn create_actor_for_community(
     let handle = format!("@{}@{}", community.slug, config.domain);
     let inbox_url = format!(
         "https://{}/ap/communities/{}/inbox",
-        config.domain,
-        community.id
+        config.domain, community.id
     );
     let shared_inbox_url = format!("https://{}/ap/inbox", config.domain);
     let followers_url = format!(
         "https://{}/ap/communities/{}/followers",
-        config.domain,
-        community.id
+        config.domain, community.id
     );
     let url = format!("https://{}/communities/{}", config.domain, community.id);
 
@@ -376,7 +486,7 @@ pub async fn backfill_actors_for_existing_communities(
 
     // Get all communities that don't have actors
     let communities = get_communities(tx).await?;
-    
+
     let mut created_count = 0;
     for community in communities {
         // Check if community already has an actor

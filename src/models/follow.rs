@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{query, Postgres, Transaction};
+use sqlx::{query, query_as, Postgres, Transaction};
 use uuid::Uuid;
 
 
@@ -135,4 +135,87 @@ pub async fn find_followings_by_user_id(
         .collect();
 
     Ok(following_infos)
+}
+
+pub async fn create_follow_by_actor_ids(
+    tx: &mut Transaction<'_, Postgres>,
+    follower_actor_id: Uuid,
+    following_actor_id: Uuid,
+) -> Result<Follow> {
+    let query = query!(
+        "INSERT INTO follows (follower_actor_id, following_actor_id) VALUES ($1, $2) 
+         ON CONFLICT (follower_actor_id, following_actor_id) DO NOTHING
+         RETURNING *",
+        follower_actor_id,
+        following_actor_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    match query {
+        Some(row) => Ok(Follow {
+            follower_actor_id: row.follower_actor_id,
+            following_actor_id: row.following_actor_id,
+            created_at: row.created_at,
+        }),
+        None => {
+            // Follow relationship already exists, fetch it
+            let existing = query!(
+                "SELECT * FROM follows WHERE follower_actor_id = $1 AND following_actor_id = $2",
+                follower_actor_id,
+                following_actor_id,
+            )
+            .fetch_one(&mut **tx)
+            .await?;
+            
+            Ok(Follow {
+                follower_actor_id: existing.follower_actor_id,
+                following_actor_id: existing.following_actor_id,
+                created_at: existing.created_at,
+            })
+        }
+    }
+}
+
+pub async fn unfollow_by_actor_ids(
+    tx: &mut Transaction<'_, Postgres>,
+    follower_actor_id: Uuid,
+    following_actor_id: Uuid,
+) -> Result<()> {
+    query!(
+        "DELETE FROM follows WHERE follower_actor_id = $1 AND following_actor_id = $2",
+        follower_actor_id,
+        following_actor_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+use crate::models::actor::Actor;
+
+pub async fn find_followers_by_actor_id(
+    tx: &mut Transaction<'_, Postgres>,
+    following_actor_id: Uuid,
+) -> Result<Vec<Actor>> {
+    let actors = query_as!(
+        Actor,
+        r#"
+        SELECT 
+            a.id, a.iri, a.type as "type: _", a.username, a.instance_host, 
+            a.handle_host, a.handle, a.user_id, a.community_id, a.name, a.bio_html, 
+            a.automatically_approves_followers, a.inbox_url, a.shared_inbox_url, 
+            a.followers_url, a.sensitive, a.public_key_pem, a.private_key_pem, 
+            a.url, a.created_at, a.updated_at, a.published_at
+        FROM follows f
+        JOIN actors a ON f.follower_actor_id = a.id
+        WHERE f.following_actor_id = $1
+        "#,
+        following_actor_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(actors)
 }
