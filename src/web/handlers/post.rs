@@ -7,7 +7,9 @@ use crate::models::post::{
     get_draft_post_count, increment_post_viewer_count, publish_post,
 };
 use crate::models::user::AuthSession;
-use crate::web::handlers::{create_base_ftl_context, get_bundle, parse_id_with_legacy_support, ParsedId};
+use crate::web::handlers::{
+    create_base_ftl_context, get_bundle, parse_id_with_legacy_support, ParsedId,
+};
 use crate::web::state::AppState;
 use anyhow::Error;
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
@@ -174,26 +176,27 @@ pub async fn post_view(
             .unwrap();
         Ok(Html(rendered).into_response())
     } else {
-        let rendered = template.render(context! {
-        current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        post => {
-            post.as_ref()
-        },
-        parent_post_id => post.clone().unwrap().get("parent_post_id")
-            .and_then(|id| id.as_ref())
-            .and_then(|id| Uuid::parse_str(id).ok())
-            .map(|uuid| uuid.to_string())
-            .unwrap_or_default(),
-        post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
-        community_id,
-        draft_post_count,
-        base_url => state.config.base_url.clone(),
-        comments,
-        ..create_base_ftl_context(&bundle)
-    })
-    .unwrap();
+        let rendered = template
+            .render(context! {
+                current_user => auth_session.user,
+                default_community_id => state.config.default_community_id.clone(),
+                r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+                post => {
+                    post.as_ref()
+                },
+                parent_post_id => post.clone().unwrap().get("parent_post_id")
+                    .and_then(|id| id.as_ref())
+                    .and_then(|id| Uuid::parse_str(id).ok())
+                    .map(|uuid| uuid.to_string())
+                    .unwrap_or_default(),
+                post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
+                community_id,
+                draft_post_count,
+                base_url => state.config.base_url.clone(),
+                comments,
+                ..create_base_ftl_context(&bundle)
+            })
+            .unwrap();
         Ok(Html(rendered).into_response())
     }
 }
@@ -330,10 +333,7 @@ pub async fn post_publish_form(
             .as_ref()
             .unwrap(),
     )?;
-    let link = format!(
-        "/communities/{}",
-        community_id.to_string()
-    );
+    let link = format!("/communities/{}", community_id.to_string());
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.jinja")?;
     let user_preferred_language = auth_session
@@ -810,13 +810,8 @@ pub async fn hx_delete_post(
     tx.commit().await?;
 
     let community_id = post.unwrap().get("community_id").unwrap().clone().unwrap();
-    let community_id =
-        community_id.clone();
-    Ok(([(
-        "HX-Redirect",
-        &format!("/communities/{}", community_id),
-    )],)
-        .into_response())
+    let community_id = community_id.clone();
+    Ok(([("HX-Redirect", &format!("/communities/{}", community_id))],).into_response())
 }
 
 pub async fn post_view_by_login_name(
@@ -831,7 +826,7 @@ pub async fn post_view_by_login_name(
         ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
-    
+
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
@@ -903,26 +898,27 @@ pub async fn post_view_by_login_name(
             .unwrap();
         Ok(Html(rendered).into_response())
     } else {
-        let rendered = template.render(context! {
-        current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        post => {
-            post.as_ref()
-        },
-        parent_post_id => post.clone().unwrap().get("parent_post_id")
-            .and_then(|id| id.as_ref())
-            .and_then(|id| Uuid::parse_str(id).ok())
-            .map(|uuid| uuid.to_string())
-            .unwrap_or_default(),
-        post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
-        community_id,
-        draft_post_count,
-        base_url => state.config.base_url.clone(),
-        comments,
-        ..create_base_ftl_context(&bundle)
-    })
-    .unwrap();
+        let rendered = template
+            .render(context! {
+                current_user => auth_session.user,
+                default_community_id => state.config.default_community_id.clone(),
+                r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+                post => {
+                    post.as_ref()
+                },
+                parent_post_id => post.clone().unwrap().get("parent_post_id")
+                    .and_then(|id| id.as_ref())
+                    .and_then(|id| Uuid::parse_str(id).ok())
+                    .map(|uuid| uuid.to_string())
+                    .unwrap_or_default(),
+                post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
+                community_id,
+                draft_post_count,
+                base_url => state.config.base_url.clone(),
+                comments,
+                ..create_base_ftl_context(&bundle)
+            })
+            .unwrap();
         Ok(Html(rendered).into_response())
     }
 }
@@ -936,7 +932,7 @@ pub async fn redirect_post_to_login_name(
         ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
-    
+
     let db = state.config.connect_database().await.unwrap();
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();

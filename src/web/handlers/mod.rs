@@ -2,6 +2,7 @@ use crate::app_error::AppError;
 use crate::locale::LOCALES;
 use crate::models::post::get_draft_post_count;
 use crate::models::user::{AuthSession, Language};
+use anyhow;
 use anyhow::Result;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -16,7 +17,6 @@ use axum::{
 };
 use data_encoding::BASE64URL_NOPAD;
 use uuid::Uuid;
-use anyhow;
 
 use fluent::bundle::FluentBundle;
 use fluent::FluentResource;
@@ -292,12 +292,16 @@ pub enum ParsedId {
     InvalidId(axum::response::Response),
 }
 
-pub fn parse_id_with_legacy_support(id_str: &str, base_path: &str, state: &crate::web::state::AppState) -> Result<ParsedId, AppError> {
+pub fn parse_id_with_legacy_support(
+    id_str: &str,
+    base_path: &str,
+    state: &crate::web::state::AppState,
+) -> Result<ParsedId, AppError> {
     // First try to parse as UUID directly
     if let Ok(uuid) = Uuid::parse_str(id_str) {
         return Ok(ParsedId::Uuid(uuid));
     }
-    
+
     // If that fails, try to decode as base64 and then parse as UUID
     match BASE64URL_NOPAD.decode(id_str.as_bytes()) {
         Ok(decoded_bytes) => {
@@ -306,7 +310,9 @@ pub fn parse_id_with_legacy_support(id_str: &str, base_path: &str, state: &crate
                 if let Ok(uuid) = Uuid::from_slice(&decoded_bytes) {
                     // Create redirect to UUID version
                     let redirect_url = format!("{}/{}", base_path, uuid);
-                    return Ok(ParsedId::Redirect(axum::response::Redirect::permanent(&redirect_url)));
+                    return Ok(ParsedId::Redirect(axum::response::Redirect::permanent(
+                        &redirect_url,
+                    )));
                 }
             }
         }
@@ -314,7 +320,7 @@ pub fn parse_id_with_legacy_support(id_str: &str, base_path: &str, state: &crate
             // Not valid base64, continue to error handling
         }
     }
-    
+
     // If neither UUID nor base64 decoding worked, render custom error page
     match state.env.get_template("invalid_id_error.jinja") {
         Ok(template) => {
@@ -332,7 +338,7 @@ pub fn parse_id_with_legacy_support(id_str: &str, base_path: &str, state: &crate
             // If template not found, fall back to generic error
         }
     }
-    
+
     // Fallback to generic error if template rendering fails
     Err(AppError::from(anyhow::anyhow!("Invalid ID format")))
 }
