@@ -3,6 +3,7 @@ use crate::models::email_verification_challenge::{
     create_email_verification_challenge, find_email_verification_challenge_by_id,
 };
 use crate::models::post::get_draft_post_count;
+use crate::models::actor::update_actor_for_user;
 use crate::models::user::{
     find_user_by_id, update_password, update_user, update_user_email_verified_at,
     update_user_preferred_language, AuthSession, Language,
@@ -397,11 +398,20 @@ pub async fn edit_account(
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
+    let user_id = auth_session.user.unwrap().id;
     let _ = update_user(
         &mut tx,
-        auth_session.user.unwrap().id,
+        user_id,
+        form.login_name.clone(),
+        form.display_name.clone(),
+    )
+    .await;
+    let _ = update_actor_for_user(
+        &mut tx,
+        user_id,
         form.login_name,
         form.display_name,
+        &state.config,
     )
     .await;
     let _ = tx.commit().await;

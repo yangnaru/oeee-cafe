@@ -165,3 +165,37 @@ pub async fn backfill_actors_for_existing_users(
 
     Ok(created_count)
 }
+
+pub async fn update_actor_for_user(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    username: String,
+    name: String,
+    config: &AppConfig,
+) -> Result<Option<Actor>> {
+    let handle = format!("{}@{}", username, config.domain);
+    let url = format!("https://{}/@{}", config.domain, username);
+    
+    let actor = query_as!(Actor,
+        r#"
+        UPDATE actors 
+        SET username = $1, name = $2, handle = $3, url = $4, updated_at = now()
+        WHERE user_id = $5
+        RETURNING 
+            id, iri, type as "type: _", username, instance_host, handle_host, handle,
+            user_id, name, bio_html, automatically_approves_followers,
+            inbox_url, shared_inbox_url, followers_url,
+            sensitive, public_key_pem, private_key_pem, url,
+            created_at, updated_at, published_at
+        "#,
+        username,
+        name,
+        handle,
+        url,
+        user_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    Ok(actor)
+}
