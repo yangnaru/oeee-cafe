@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 use sqlx::types::Uuid;
 use sqlx::{query, query_as, PgPool, Postgres, Transaction, Type};
 
+use crate::models::actor::create_actor_for_user;
+use crate::AppConfig;
+
 pub struct UserDraft {
     pub login_name: String,
     pub password_hash: String,
