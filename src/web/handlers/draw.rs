@@ -86,6 +86,7 @@ pub async fn start_draw(
         background_color => community.background_color,
         foreground_color => community.foreground_color,
         community_id => input.community_id,
+        community_slug => community.slug,
         draft_post_count,
         ..create_base_ftl_context(&bundle)
     })?;

@@ -32,7 +32,7 @@
       <div class="post-main">
         <p>
           {{ ftl_community }}:
-          <a href="/communities/{{ community_id }}">{{ post.community_name }}</a>
+          <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
         </p>
         <img class="post-image"
              width="{{ post.image_width }}"
@@ -51,7 +51,7 @@
           {% for (community, community_id ) in known_communities_with_community_id %}
             <tr>
               <td>
-                <a href="/communities/{{ community_id }}">{{ community.name }}</a>
+                <a href="/communities/@{{ community.slug }}">{{ community.name }}</a>
               </td>
               <td>
                 <form method="post" action="/posts/{{ post_id }}/edit/community">

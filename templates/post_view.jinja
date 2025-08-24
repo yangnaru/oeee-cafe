@@ -38,7 +38,7 @@
         <p>HIT: {{ post.viewer_count }}</p>
         <p>
           {{ ftl_community }}:
-          <a href="/communities/{{ community_id }}">{{ post.community_name }}</a>
+          <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
           {% if current_user.id == post.author_id -%}
             (<a href="/posts/{{ post_id }}/edit/community">{{ ftl_edit }}</a>)
           {%- endif %}

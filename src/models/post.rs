@@ -484,7 +484,8 @@ pub async fn find_post_by_id(
                 users.display_name AS display_name,
                 users.login_name AS login_name,
                 communities.id AS community_id,
-                communities.name AS community_name
+                communities.name AS community_name,
+                communities.slug AS community_slug
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
@@ -562,6 +563,10 @@ pub async fn find_post_by_id(
         map.insert(
             "community_name".to_string(),
             Some(row.community_name.to_string()),
+        );
+        map.insert(
+            "community_slug".to_string(),
+            Some(row.community_slug.to_string()),
         );
         map.insert(
             "parent_post_id".to_string(),

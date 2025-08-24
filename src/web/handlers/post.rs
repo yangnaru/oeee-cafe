@@ -25,6 +25,19 @@ use uuid::Uuid;
 
 use super::{handler_404, ExtractAcceptLanguage};
 
+// Helper function to get community @slug URL from UUID
+async fn get_community_slug_url(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    community_id: uuid::Uuid,
+) -> Result<String, AppError> {
+    let community = find_community_by_id(tx, community_id).await?;
+    if let Some(community) = community {
+        Ok(format!("/communities/@{}", community.slug))
+    } else {
+        Ok(format!("/communities/{}", community_id)) // Fallback to UUID if community not found
+    }
+}
+
 pub async fn post_relay_view(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -333,7 +346,7 @@ pub async fn post_publish_form(
             .as_ref()
             .unwrap(),
     )?;
-    let link = format!("/communities/{}", community_id);
+    let link = get_community_slug_url(&mut tx, community_id).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.jinja")?;
     let user_preferred_language = auth_session
@@ -397,6 +410,17 @@ pub async fn post_publish(
 
     let is_sensitive = form.is_sensitive == Some("on".to_string());
     let allow_relay = form.allow_relay == Some("on".to_string());
+    let community_id = Uuid::parse_str(
+        &post
+            .clone()
+            .unwrap()
+            .get("community_id")
+            .unwrap()
+            .clone()
+            .unwrap(),
+    )?;
+    let community_url = get_community_slug_url(&mut tx, community_id).await?;
+    
     let _ = publish_post(
         &mut tx,
         post_id,
@@ -408,17 +432,7 @@ pub async fn post_publish(
     .await;
     let _ = tx.commit().await;
 
-    let community_id = Uuid::parse_str(
-        &post
-            .clone()
-            .unwrap()
-            .get("community_id")
-            .unwrap()
-            .clone()
-            .unwrap(),
-    )?;
-    let community_id = community_id.to_string();
-    Ok(Redirect::to(&format!("/communities/{}", community_id)).into_response())
+    Ok(Redirect::to(&community_url).into_response())
 }
 
 pub async fn draft_posts(
@@ -806,12 +820,14 @@ pub async fn hx_delete_post(
         )
         .send()
         .await?;
+    let community_id = post.unwrap().get("community_id").unwrap().clone().unwrap();
+    let community_id = Uuid::parse_str(&community_id)?;
+    let community_url = get_community_slug_url(&mut tx, community_id).await?;
+    
     delete_post(&mut tx, post_uuid).await?;
     tx.commit().await?;
 
-    let community_id = post.unwrap().get("community_id").unwrap().clone().unwrap();
-    let community_id = community_id.clone();
-    Ok(([("HX-Redirect", &format!("/communities/{}", community_id))],).into_response())
+    Ok(([("HX-Redirect", &community_url)],).into_response())
 }
 
 pub async fn post_view_by_login_name(
