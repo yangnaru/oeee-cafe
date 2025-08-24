@@ -90,6 +90,7 @@ community-drawing-height = 高さ
 community-drawing-new = 新しい絵を描く
 community-no-posts = 公開された写真はありません。
 community-drawing-post-error = 写真の公開中にエラーが発生しました。 再送信してください。
+community-slug-conflict-error = このIDを持つコミュニティは既に存在します。別のIDを選択してください。
 
 profile-link = リンク
 profile-manage = 管理

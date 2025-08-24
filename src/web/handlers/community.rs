@@ -1,4 +1,5 @@
 use crate::app_error::AppError;
+use crate::models::actor::create_actor_for_community;
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
     create_community, find_community_by_id, get_own_communities, get_participating_communities,
@@ -289,7 +290,9 @@ pub struct CreateCommunityForm {
 
 pub async fn do_create_community(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
+    messages: Messages,
     Form(form): Form<CreateCommunityForm>,
 ) -> Result<impl IntoResponse, AppError> {
     if form.name.is_empty() {
@@ -300,7 +303,7 @@ pub async fn do_create_community(
     let mut tx = db.begin().await?;
     let community = create_community(
         &mut tx,
-        auth_session.user.unwrap().id,
+        auth_session.user.clone().unwrap().id,
         CommunityDraft {
             name: form.name,
             slug: form.slug,
@@ -309,9 +312,43 @@ pub async fn do_create_community(
         },
     )
     .await?;
-    let _ = tx.commit().await;
 
-    Ok(Redirect::to(&format!("/communities/{}", community.id)).into_response())
+    // Create actor for the community
+    match create_actor_for_community(&mut tx, &community, &state.config).await {
+        Ok(_) => {
+            let _ = tx.commit().await;
+            Ok(Redirect::to(&format!("/communities/{}", community.id)).into_response())
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            // Check if it's a unique constraint violation (handle conflict)
+            if let Some(db_error) = e.downcast_ref::<sqlx::Error>() {
+                if let sqlx::Error::Database(db_err) = db_error {
+                    if db_err.constraint().is_some() {
+                        let user_preferred_language = auth_session
+                            .user
+                            .clone()
+                            .map(|u| u.preferred_language)
+                            .unwrap_or_else(|| None);
+                        let bundle = get_bundle(&accept_language, user_preferred_language);
+                        let error_message = bundle.format_pattern(
+                            bundle
+                                .get_message("community-slug-conflict-error")
+                                .unwrap()
+                                .value()
+                                .unwrap(),
+                            None,
+                            &mut vec![],
+                        );
+                        messages.error(&error_message.to_string());
+                        return Ok(Redirect::to("/communities/create").into_response());
+                    }
+                }
+            }
+            // For other errors, re-throw
+            Err(e.into())
+        }
+    }
 }
 
 pub async fn create_community_form(

@@ -88,6 +88,7 @@ community-drawing-height = Height
 community-drawing-new = New post
 community-no-posts = No posts.
 community-drawing-post-error = There was an error while submitting. Try again.
+community-slug-conflict-error = A community with this ID already exists. Please choose a different ID.
 
 profile-link = Links
 profile-manage = Manage

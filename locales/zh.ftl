@@ -90,6 +90,7 @@ community-drawing-height = 高度
 community-drawing-new = 新作品
 community-no-posts = 暂无作品
 community-drawing-post-error = 发布作品时出错，请重试
+community-slug-conflict-error = 已存在使用此ID的社区，请选择不同的ID。
 
 profile-link = 链接
 profile-manage = 管理
