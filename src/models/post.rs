@@ -774,9 +774,11 @@ pub async fn find_following_posts_by_user_id(
                 posts.updated_at
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
-            LEFT JOIN follows ON posts.author_id = follows.following_id
+            LEFT JOIN actors author_actor ON posts.author_id = author_actor.user_id
+            LEFT JOIN follows ON author_actor.id = follows.following_actor_id
+            LEFT JOIN actors follower_actor ON follows.follower_actor_id = follower_actor.id
             LEFT JOIN communities ON posts.community_id = communities.id
-            WHERE follows.follower_id = $1
+            WHERE follower_actor.user_id = $1
             AND communities.is_private = FALSE
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
