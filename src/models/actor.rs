@@ -117,6 +117,29 @@ impl Actor {
         Ok(actor)
     }
 
+    pub async fn find_by_community_id(
+        tx: &mut Transaction<'_, Postgres>,
+        community_id: Uuid,
+    ) -> Result<Option<Actor>> {
+        let actor = query_as!(
+            Actor,
+            r#"
+            SELECT 
+                id, iri, type as "type: _", username, instance_host, handle_host, handle,
+                user_id, community_id, name, bio_html, automatically_approves_followers,
+                inbox_url, shared_inbox_url, followers_url, sensitive,
+                public_key_pem, private_key_pem, url,
+                created_at, updated_at, published_at
+            FROM actors WHERE community_id = $1
+            "#,
+            community_id
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        Ok(actor)
+    }
+
     pub async fn create_or_update_actor(
         tx: &mut Transaction<'_, Postgres>,
         actor: &Actor,

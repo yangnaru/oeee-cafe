@@ -165,6 +165,143 @@ async fn send_post_to_followers(
     Ok(())
 }
 
+async fn send_post_to_community_followers(
+    user_actor: &Actor,
+    community_id: Uuid,
+    post_id: Uuid,
+    title: String,
+    content: String,
+    state: &AppState,
+) -> Result<(), AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    // Find the community's actor
+    let community_actor = Actor::find_by_community_id(&mut tx, community_id).await?;
+    if let Some(community_actor) = community_actor {
+        // Get all followers for the community actor
+        let followers = follow::find_followers_by_actor_id(&mut tx, community_actor.id).await?;
+
+        if followers.is_empty() {
+            tracing::info!(
+                "No followers found for community actor {}, skipping ActivityPub post",
+                community_actor.iri
+            );
+            tx.commit().await?;
+            return Ok(());
+        }
+
+        // Get post details including image information
+        let post = find_post_by_id(&mut tx, post_id).await?;
+        let post = post.ok_or_else(|| anyhow::anyhow!("Post not found"))?;
+
+        // Get image details for attachment
+        let image_id = Uuid::parse_str(
+            post.get("image_id")
+                .and_then(|id| id.as_ref())
+                .ok_or_else(|| anyhow::anyhow!("Post has no image_id"))?,
+        )?;
+
+        let mut attachments = Vec::new();
+
+        if let Ok(image) = find_image_by_id(&mut tx, image_id).await {
+            let image_url = format!(
+                "{}/image/{}{}/{}",
+                state.config.r2_public_endpoint_url,
+                image.image_filename.chars().next().unwrap_or('0'),
+                image.image_filename.chars().nth(1).unwrap_or('0'),
+                image.image_filename
+            );
+
+            let attachment = Attachment {
+                r#type: "Document".to_string(),
+                url: image_url,
+                media_type: "image/png".to_string(), // Assuming PNG, could be determined from filename
+                name: title.clone().into(),
+                width: Some(image.width),
+                height: Some(image.height),
+            };
+            attachments.push(attachment);
+        }
+
+        // Create the Note object for the post
+        // The post should be attributed to the original user actor, not the community
+        let post_url: url::Url = format!(
+            "https://{}/@{}/{}",
+            state.config.domain, user_actor.username, post_id
+        )
+        .parse()?;
+        let note_id = post_url.clone();
+        let actor_object_id = ObjectId::parse(&user_actor.iri)?;
+
+        let published = chrono::Utc::now().to_rfc3339();
+
+        // Create audience lists - include the community in the audience
+        let to = vec!["https://www.w3.org/ns/activitystreams#Public".to_string()];
+        let cc = vec![
+            format!("{}/followers", user_actor.iri), // User's followers
+            format!("{}/followers", community_actor.iri), // Community's followers  
+            community_actor.iri.clone(), // The community itself
+        ];
+
+        // Format content with title if available
+        let formatted_content = if title.is_empty() {
+            content
+        } else {
+            format!("<p>{}</p><p>{}</p>", title, content)
+        };
+
+        let note = Note::new(
+            note_id,
+            actor_object_id.clone(),
+            formatted_content,
+            to.clone(),
+            cc.clone(),
+            published.clone(),
+            post_url,
+            attachments,
+        );
+
+        // Create the Create activity
+        let activity_id = generate_object_id(&state.config.domain)?;
+        let create = Create::new(actor_object_id, note, activity_id, to, cc, published);
+
+        // Get follower inboxes (community followers)
+        let follower_inboxes: Vec<url::Url> = followers
+            .iter()
+            .map(|follower| follower.inbox_url.parse())
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if !follower_inboxes.is_empty() {
+            // Create federation config to send activities
+            let federation_config = activitypub_federation::config::FederationConfig::builder()
+                .domain(&state.config.domain)
+                .app_data(state.clone())
+                .build()
+                .await?;
+            let federation_data = federation_config.to_request_data();
+
+            // Send to all community followers using the user actor (the original author)
+            user_actor
+                .send(create, follower_inboxes, false, &federation_data)
+                .await?;
+            tracing::info!(
+                "Sent Create activity for post {} to {} community followers",
+                post_id,
+                followers.len()
+            );
+        }
+    } else {
+        tracing::info!(
+            "No actor found for community {}, skipping community followers ActivityPub",
+            community_id
+        );
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
 pub async fn post_relay_view(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -565,10 +702,19 @@ pub async fn post_publish(
 
     // Send ActivityPub Create activity to followers if actor exists
     if let Some(actor) = actor {
+        // Send to user's followers
         if let Err(e) =
-            send_post_to_followers(&actor, post_id, form.title, form.content, &state).await
+            send_post_to_followers(&actor, post_id, form.title.clone(), form.content.clone(), &state).await
         {
-            tracing::error!("Failed to send post to ActivityPub followers: {:?}", e);
+            tracing::error!("Failed to send post to user's ActivityPub followers: {:?}", e);
+            // Don't fail the entire operation if ActivityPub sending fails
+        }
+
+        // Send to community's followers
+        if let Err(e) =
+            send_post_to_community_followers(&actor, community_id, post_id, form.title, form.content, &state).await
+        {
+            tracing::error!("Failed to send post to community's ActivityPub followers: {:?}", e);
             // Don't fail the entire operation if ActivityPub sending fails
         }
     } else {
