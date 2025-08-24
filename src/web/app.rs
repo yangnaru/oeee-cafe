@@ -6,7 +6,8 @@ use crate::web::handlers::account::{
     verify_email_verification_code,
 };
 use crate::web::handlers::activitypub::{
-    activitypub_get_user, activitypub_post_user_inbox, activitypub_webfinger,
+    activitypub_get_community, activitypub_get_user, activitypub_post_community_inbox,
+    activitypub_post_user_inbox, activitypub_webfinger,
 };
 use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::community::{
@@ -153,8 +154,16 @@ impl App {
             .route("/.well-known/webfinger", get(activitypub_webfinger))
             .route("/ap/users/:login_name", get(activitypub_get_user))
             .route(
+                "/ap/communities/:community_id",
+                get(activitypub_get_community),
+            )
+            .route(
                 "/ap/users/:login_name/inbox",
                 post(activitypub_post_user_inbox),
+            )
+            .route(
+                "/ap/communities/:community_id/inbox",
+                post(activitypub_post_community_inbox),
             )
             .layer(FederationMiddleware::new(activitypub_data));
 
