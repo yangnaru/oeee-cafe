@@ -403,6 +403,7 @@ pub async fn hx_do_edit_community(
             description: form.description,
             is_private: form.is_private == Some("on".to_string()),
         },
+        Some(&state.config), // Pass config to also update the community actor
     )
     .await?;
     let _ = tx.commit().await;

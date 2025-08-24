@@ -253,6 +253,43 @@ pub async fn update_actor_for_user(
     Ok(actor)
 }
 
+pub async fn update_actor_for_community(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+    username: String,
+    name: String,
+    description: String,
+    config: &AppConfig,
+) -> Result<Option<Actor>> {
+    let handle = format!("@{}@{}", community_id, config.domain);
+    let url = format!("https://{}/communities/{}", config.domain, community_id);
+
+    let actor = query_as!(
+        Actor,
+        r#"
+        UPDATE actors 
+        SET username = $1, name = $2, handle = $3, url = $4, bio_html = $5, updated_at = now()
+        WHERE community_id = $6
+        RETURNING 
+            id, iri, type as "type: _", username, instance_host, handle_host, handle,
+            user_id, community_id, name, bio_html, automatically_approves_followers,
+            inbox_url, shared_inbox_url, followers_url,
+            sensitive, public_key_pem, private_key_pem, url,
+            created_at, updated_at, published_at
+        "#,
+        username,
+        name,
+        handle,
+        url,
+        description, // Use community description as bio_html
+        community_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    Ok(actor)
+}
+
 pub async fn create_actor_for_community(
     tx: &mut Transaction<'_, Postgres>,
     community: &Community,

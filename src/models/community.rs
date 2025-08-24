@@ -335,6 +335,7 @@ pub async fn update_community(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
     community_draft: CommunityDraft,
+    config: Option<&crate::AppConfig>,
 ) -> Result<Community> {
     let q = query!(
         "
@@ -349,6 +350,18 @@ pub async fn update_community(
         community_draft.is_private,
     );
     let result = q.fetch_one(&mut **tx).await?;
+
+    // If config is provided, also update the corresponding community actor
+    if let Some(config) = config {
+        let _ = super::actor::update_actor_for_community(
+            tx,
+            id,
+            id.to_string(), // Use community UUID as username
+            community_draft.name.clone(),
+            community_draft.description.clone(),
+            config,
+        ).await;
+    }
 
     Ok(Community {
         id,
