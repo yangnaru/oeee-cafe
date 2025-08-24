@@ -20,12 +20,9 @@ pub struct Actor {
     pub name: String,
     pub bio_html: String,
     pub automatically_approves_followers: bool,
-    pub avatar_url: String,
-    pub header_url: String,
     pub inbox_url: String,
     pub shared_inbox_url: String,
     pub followers_url: String,
-    pub featured_url: String,
     pub sensitive: bool,
     pub public_key_pem: String,
     pub private_key_pem: String,
@@ -49,7 +46,7 @@ pub async fn create_actor_for_user(
     let now = Utc::now();
 
     let iri = format!("https://{}/ap/users/{}", config.domain, user.id.to_string());
-    let handle = format!("@{}@{}", user.login_name, config.domain);
+    let handle = format!("{}@{}", user.login_name, config.domain);
     let inbox_url = format!(
         "https://{}/ap/users/{}/inbox",
         config.domain,
@@ -61,11 +58,6 @@ pub async fn create_actor_for_user(
         config.domain,
         user.id.to_string()
     );
-    let featured_url = format!(
-        "https://{}/ap/users/{}/collections/featured",
-        config.domain,
-        user.id.to_string()
-    );
     let url = format!("https://{}/@{}", config.domain, user.login_name);
 
     let actor = query_as!(
@@ -74,17 +66,17 @@ pub async fn create_actor_for_user(
         INSERT INTO actors (
             iri, type, username, instance_host, handle_host, handle,
             user_id, name, bio_html, automatically_approves_followers,
-            avatar_url, header_url, inbox_url, shared_inbox_url, followers_url,
-            featured_url, sensitive, public_key_pem, private_key_pem, url,
+            inbox_url, shared_inbox_url, followers_url,
+            sensitive, public_key_pem, private_key_pem, url,
             created_at, updated_at, published_at
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
         )
         RETURNING 
             id, iri, type, username, instance_host, handle_host, handle,
             user_id, name, bio_html, automatically_approves_followers,
-            avatar_url, header_url, inbox_url, shared_inbox_url, followers_url,
-            featured_url, sensitive, public_key_pem, private_key_pem, url,
+            inbox_url, shared_inbox_url, followers_url,
+            sensitive, public_key_pem, private_key_pem, url,
             created_at, updated_at, published_at
         "#,
         iri,
@@ -97,12 +89,9 @@ pub async fn create_actor_for_user(
         user.display_name,
         "", // bio_html - empty for now
         true, // automatically_approves_followers
-        "", // avatar_url - empty for now
-        "", // header_url - empty for now
         inbox_url,
         shared_inbox_url,
         followers_url,
-        featured_url,
         false, // sensitive
         public_key_pem,
         private_key_pem,
