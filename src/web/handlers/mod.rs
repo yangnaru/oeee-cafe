@@ -31,6 +31,7 @@ use super::state::AppState;
 
 pub mod about;
 pub mod account;
+pub mod activitypub;
 pub mod auth;
 pub mod community;
 pub mod draw;

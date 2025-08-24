@@ -5,6 +5,7 @@ use crate::web::handlers::account::{
     account, edit_account, edit_password, request_email_verification_code, save_language,
     verify_email_verification_code,
 };
+use crate::web::handlers::activitypub::{activitypub_get_user, activitypub_webfinger};
 use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::community::{
     communities, community, community_iframe, create_community_form, do_create_community,
@@ -26,6 +27,7 @@ use crate::web::handlers::profile::{
     do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile, do_write_guestbook_entry,
     guestbook, profile, profile_banners_iframe, profile_iframe, profile_settings,
 };
+use activitypub_federation::config::{FederationConfig, FederationMiddleware};
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{delete, get, post, put};
@@ -137,6 +139,19 @@ impl App {
             )
             .route_layer(login_required!(Backend, login_url = "/login"));
 
+        let state = self.state.clone();
+        let domain = state.config.domain.clone();
+        let activitypub_data = FederationConfig::builder()
+            .domain(domain)
+            .app_data(state)
+            .build()
+            .await?;
+
+        let activitypub_router = Router::new()
+            .route("/.well-known/webfinger", get(activitypub_webfinger))
+            .route("/ap/users/:login_name", get(activitypub_get_user))
+            .layer(FederationMiddleware::new(activitypub_data));
+
         let app = Router::new()
             .route("/", get(home))
             .route("/communities", get(communities))
@@ -169,7 +184,8 @@ impl App {
             .layer(MessagesManagerLayer)
             .layer(auth_layer)
             .with_state(self.state.clone())
-            .merge(static_router);
+            .merge(static_router)
+            .merge(activitypub_router);
 
         // run our app with hyper, listening globally
         let addr = SocketAddr::from(([0, 0, 0, 0], self.state.config.port));

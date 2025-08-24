@@ -54,10 +54,35 @@ pub struct Actor {
     pub followers_url: String,
     pub sensitive: bool,
     pub public_key_pem: String,
-    pub private_key_pem: String,
+    pub private_key_pem: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub published_at: DateTime<Utc>,
+}
+
+impl Actor {
+    pub async fn find_by_user_id(
+        tx: &mut Transaction<'_, Postgres>,
+        user_id: Uuid,
+    ) -> Result<Option<Actor>> {
+        let actor = query_as!(
+            Actor,
+            r#"
+            SELECT 
+                id, iri, type as "type: _", username, instance_host, handle_host, handle,
+                user_id, name, bio_html, automatically_approves_followers,
+                inbox_url, shared_inbox_url, followers_url, sensitive,
+                public_key_pem, private_key_pem, url,
+                created_at, updated_at, published_at
+            FROM actors WHERE user_id = $1
+            "#,
+            user_id
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        Ok(actor)
+    }
 }
 
 pub async fn create_actor_for_user(
