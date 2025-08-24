@@ -14,6 +14,7 @@ debug = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+activitypub_federation = { version = "0.6.5", features = ["axum"] }
 anyhow = "1.0.81"
 argon2 = { version = "0.5.3", features = ["password-hash", "std"] }
 aws-sdk-s3 = "1.19.1"
