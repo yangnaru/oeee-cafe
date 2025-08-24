@@ -48,7 +48,7 @@ pub async fn create_actor_for_user(
 
     let now = Utc::now();
 
-    let iri = format!("https://{}/ap/users/{}", config.domain, user.login_name);
+    let iri = format!("https://{}/ap/users/{}", config.domain, user.id.to_string());
     let handle = format!("{}@{}", user.login_name, config.domain);
     let inbox_url = format!(
         "https://{}/ap/users/{}/inbox",
@@ -65,7 +65,7 @@ pub async fn create_actor_for_user(
         config.domain,
         user.id.to_string()
     );
-    let url = format!("https://{}/ap/users/{}", config.domain, user.login_name);
+    let url = format!("https://{}/ap/users/{}", config.domain, user.id.to_string());
 
     let actor = query_as!(
         Actor,
