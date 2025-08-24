@@ -183,7 +183,7 @@ pub async fn communities(
             let is_private = community.is_private;
             let updated_at = community.updated_at.to_string();
             let created_at = community.created_at.to_string();
-            let link = format!("/communities/{}", community.id.to_string());
+            let link = format!("/communities/{}", community.id);
             HashMap::<String, String>::from_iter(vec![
                 ("name".to_string(), name),
                 ("description".to_string(), description),
@@ -204,7 +204,7 @@ pub async fn communities(
             let is_private = community.is_private;
             let updated_at = community.updated_at.to_string();
             let created_at = community.created_at.to_string();
-            let link = format!("/communities/{}", community.id.to_string());
+            let link = format!("/communities/{}", community.id);
             HashMap::<String, String>::from_iter(vec![
                 ("name".to_string(), name),
                 (
@@ -236,7 +236,7 @@ pub async fn communities(
                 let is_private = community.is_private;
                 let updated_at = community.updated_at.to_string();
                 let created_at = community.created_at.to_string();
-                let link = format!("/communities/{}", community.id.to_string());
+                let link = format!("/communities/{}", community.id);
                 HashMap::<String, String>::from_iter(vec![
                     ("name".to_string(), name),
                     ("description".to_string(), description),

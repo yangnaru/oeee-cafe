@@ -102,18 +102,18 @@ pub async fn create_actor_for_user(
 
     let now = Utc::now();
 
-    let iri = format!("https://{}/ap/users/{}", config.domain, user.id.to_string());
+    let iri = format!("https://{}/ap/users/{}", config.domain, user.id);
     let handle = format!("@{}@{}", user.login_name, config.domain);
     let inbox_url = format!(
         "https://{}/ap/users/{}/inbox",
         config.domain,
-        user.id.to_string()
+        user.id
     );
     let shared_inbox_url = format!("https://{}/ap/inbox", config.domain);
     let followers_url = format!(
         "https://{}/ap/users/{}/followers",
         config.domain,
-        user.id.to_string()
+        user.id
     );
     let url = format!("https://{}/@{}", config.domain, user.login_name);
 

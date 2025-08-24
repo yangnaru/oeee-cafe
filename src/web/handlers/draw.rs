@@ -201,14 +201,13 @@ pub async fn draw_finish(
                 .unwrap();
         } else if name == "tool" {
             tool = std::str::from_utf8(data.as_ref()).unwrap().to_string();
-        } else if name == "parent_post_id" {
-            if !data.is_empty() {
+        } else if name == "parent_post_id"
+            && !data.is_empty() {
                 parent_post_id = Some(
-                    Uuid::parse_str(&std::str::from_utf8(data.as_ref()).unwrap().to_string())
+                    Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap())
                         .unwrap(),
                 );
             }
-        }
     }
     let start = SystemTime::now();
     let since_the_epoch = start

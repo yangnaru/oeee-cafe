@@ -333,7 +333,7 @@ pub async fn post_publish_form(
             .as_ref()
             .unwrap(),
     )?;
-    let link = format!("/communities/{}", community_id.to_string());
+    let link = format!("/communities/{}", community_id);
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.jinja")?;
     let user_preferred_language = auth_session

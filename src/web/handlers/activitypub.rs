@@ -53,7 +53,7 @@ impl Object for Actor {
         let db = data.app_data().config.connect_database().await?;
         let mut tx = db.begin().await?;
 
-        let user_id = Uuid::parse_str(&object_id.path_segments().unwrap().last().unwrap()).unwrap();
+        let user_id = Uuid::parse_str(object_id.path_segments().unwrap().next_back().unwrap()).unwrap();
         let actor = Actor::find_by_user_id(&mut tx, user_id).await?;
         Ok(actor)
     }
@@ -154,7 +154,7 @@ pub async fn activitypub_webfinger(
     let name = extract_webfinger_name(&query.resource, &data)?;
     let user = data.app_data().config.connect_database().await?;
     let mut tx = user.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &name).await?;
+    let user = find_user_by_login_name(&mut tx, name).await?;
     if user.is_none() {
         return Ok((StatusCode::NOT_FOUND, "User not found").into_response());
     }
