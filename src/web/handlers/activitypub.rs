@@ -12,6 +12,7 @@ use activitypub_federation::traits::{
 };
 
 use activitystreams_kinds::activity::{AcceptType, CreateType, FollowType, UndoType};
+use activitystreams_kinds::actor::GroupType;
 use activitystreams_kinds::object::NoteType;
 use axum::extract::{Path, Query};
 use axum::http::{HeaderMap, StatusCode};
@@ -23,6 +24,7 @@ use uuid::Uuid;
 
 use crate::app_error::AppError;
 use crate::models::actor::{Actor, ActorType};
+use crate::models::community::find_community_by_slug;
 use crate::models::follow;
 use crate::models::user::find_user_by_login_name;
 use crate::web::state::AppState;
@@ -43,10 +45,33 @@ pub struct Person {
     url: Url,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Group {
+    id: ObjectId<Actor>,
+    r#type: GroupType,
+    preferred_username: String,
+    name: String,
+    inbox: Url,
+    outbox: Url,
+    public_key: PublicKey,
+    endpoints: serde_json::Value,
+    followers: Url,
+    manually_approves_followers: bool,
+    url: Url,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum ActorObject {
+    Person(Person),
+    Group(Group),
+}
+
 #[async_trait::async_trait]
 impl Object for Actor {
     type DataType = AppState;
-    type Kind = Person;
+    type Kind = ActorObject;
     type Error = AppError;
 
     async fn read_from_id(
@@ -72,19 +97,35 @@ impl Object for Actor {
             "sharedInbox": "https://typo.blue/inbox"
         });
 
-        Ok(Person {
-            id: ObjectId::parse(&self.iri)?,
-            r#type: PersonType::Person,
-            inbox: self.inbox_url.parse()?,
-            public_key,
-            endpoints,
-            followers: self.followers_url.parse()?,
-            manually_approves_followers: !self.automatically_approves_followers,
-            name: self.name,
-            outbox: format!("{}/outbox", self.iri).parse()?,
-            preferred_username: self.username,
-            url: self.url.parse()?,
-        })
+        match self.r#type {
+            ActorType::Group => Ok(ActorObject::Group(Group {
+                id: ObjectId::parse(&self.iri)?,
+                r#type: GroupType::Group,
+                inbox: self.inbox_url.parse()?,
+                public_key,
+                endpoints,
+                followers: self.followers_url.parse()?,
+                manually_approves_followers: !self.automatically_approves_followers,
+                name: self.name,
+                outbox: format!("{}/outbox", self.iri).parse()?,
+                preferred_username: self.username,
+                url: self.url.parse()?,
+            })),
+            // Handle all other actor types as Person for ActivityPub compatibility
+            ActorType::Person | ActorType::Service | ActorType::Application | ActorType::Organization => Ok(ActorObject::Person(Person {
+                id: ObjectId::parse(&self.iri)?,
+                r#type: PersonType::Person,
+                inbox: self.inbox_url.parse()?,
+                public_key,
+                endpoints,
+                followers: self.followers_url.parse()?,
+                manually_approves_followers: !self.automatically_approves_followers,
+                name: self.name,
+                outbox: format!("{}/outbox", self.iri).parse()?,
+                preferred_username: self.username,
+                url: self.url.parse()?,
+            })),
+        }
     }
 
     async fn verify(
@@ -92,7 +133,11 @@ impl Object for Actor {
         expected_domain: &Url,
         _data: &Data<Self::DataType>,
     ) -> Result<(), Self::Error> {
-        verify_domains_match(json.id.inner(), expected_domain)?;
+        let id = match json {
+            ActorObject::Person(person) => &person.id,
+            ActorObject::Group(group) => &group.id,
+        };
+        verify_domains_match(id.inner(), expected_domain)?;
         Ok(())
     }
 
@@ -100,8 +145,35 @@ impl Object for Actor {
         json: Self::Kind,
         _data: &Data<Self::DataType>,
     ) -> Result<Self, Self::Error> {
+        let (id, inbox, public_key, endpoints, followers, manually_approves_followers, name, preferred_username, url, actor_type) = match json {
+            ActorObject::Person(person) => (
+                person.id,
+                person.inbox,
+                person.public_key,
+                person.endpoints,
+                person.followers,
+                person.manually_approves_followers,
+                person.name,
+                person.preferred_username,
+                person.url,
+                ActorType::Person,
+            ),
+            ActorObject::Group(group) => (
+                group.id,
+                group.inbox,
+                group.public_key,
+                group.endpoints,
+                group.followers,
+                group.manually_approves_followers,
+                group.name,
+                group.preferred_username,
+                group.url,
+                ActorType::Group,
+            ),
+        };
+
         // Parse instance host from the actor ID URL
-        let actor_url = json.id.inner();
+        let actor_url = id.inner();
         let instance_host = actor_url
             .host_str()
             .ok_or_else(|| anyhow::anyhow!("Could not extract host from actor URL"))?
@@ -109,35 +181,34 @@ impl Object for Actor {
 
         // Create handle components
         let handle_host = instance_host.clone();
-        let handle = format!("@{}@{}", json.preferred_username, handle_host);
+        let handle = format!("@{}@{}", preferred_username, handle_host);
 
         // Get shared inbox URL from endpoints if available, otherwise use main inbox
-        let shared_inbox_url = json
-            .endpoints
+        let shared_inbox_url = endpoints
             .get("sharedInbox")
             .and_then(|v| v.as_str())
-            .unwrap_or_else(|| json.inbox.as_str())
+            .unwrap_or_else(|| inbox.as_str())
             .to_string();
 
         Ok(Actor {
-            name: json.name,
-            iri: json.id.to_string(),
-            inbox_url: json.inbox.to_string(),
-            public_key_pem: json.public_key.public_key_pem,
+            name,
+            iri: id.to_string(),
+            inbox_url: inbox.to_string(),
+            public_key_pem: public_key.public_key_pem,
             private_key_pem: None,
             id: Uuid::new_v4(),
-            url: json.url.to_string(),
-            r#type: ActorType::Person,
-            username: json.preferred_username.clone(),
+            url: url.to_string(),
+            r#type: actor_type,
+            username: preferred_username.clone(),
             instance_host,
             handle_host,
             handle,
             user_id: None,
             community_id: None,
             bio_html: String::new(),
-            automatically_approves_followers: !json.manually_approves_followers,
+            automatically_approves_followers: !manually_approves_followers,
             shared_inbox_url,
-            followers_url: json.followers.to_string(),
+            followers_url: followers.to_string(),
             sensitive: false,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
@@ -174,24 +245,37 @@ pub async fn activitypub_webfinger(
     data: Data<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     let name = extract_webfinger_name(&query.resource, &data)?;
-    let user = data.app_data().config.connect_database().await?;
-    let mut tx = user.begin().await?;
+    let db = data.app_data().config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    // First, try to find a user with this login name
     let user = find_user_by_login_name(&mut tx, name).await?;
-    if user.is_none() {
-        return Ok((StatusCode::NOT_FOUND, "User not found").into_response());
+    if let Some(user) = user {
+        let actor = Actor::find_by_user_id(&mut tx, user.id).await?;
+        if let Some(actor) = actor {
+            return Ok(Json(build_webfinger_response(
+                query.resource,
+                actor.iri.parse().unwrap(),
+            ))
+            .into_response());
+        }
     }
 
-    let actor = Actor::find_by_user_id(&mut tx, user.unwrap().id).await?;
-
-    if let Some(actor) = actor {
-        Ok(Json(build_webfinger_response(
-            query.resource,
-            actor.iri.parse().unwrap(),
-        ))
-        .into_response())
-    } else {
-        Ok((StatusCode::NOT_FOUND, "Actor not found").into_response())
+    // If no user found, try to find a community with this slug
+    let community = find_community_by_slug(&mut tx, name.to_string()).await?;
+    if let Some(community) = community {
+        let actor = Actor::find_by_community_id(&mut tx, community.id).await?;
+        if let Some(actor) = actor {
+            return Ok(Json(build_webfinger_response(
+                query.resource,
+                actor.iri.parse().unwrap(),
+            ))
+            .into_response());
+        }
     }
+
+    // Neither user nor community found
+    Ok((StatusCode::NOT_FOUND, "User or community not found").into_response())
 }
 
 pub async fn activitypub_get_user(
@@ -212,6 +296,24 @@ pub async fn activitypub_get_user(
     }
 }
 
+pub async fn activitypub_get_community(
+    _header_map: HeaderMap,
+    Path(community_id): Path<String>,
+    data: Data<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = data.app_data().config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    if let Some(actor) =
+        Actor::find_by_community_id(&mut tx, Uuid::parse_str(&community_id).unwrap()).await?
+    {
+        let json_actor = actor.into_json(&data).await?;
+        Ok(FederationJson(WithContext::new_default(json_actor)).into_response())
+    } else {
+        Ok((StatusCode::NOT_FOUND, "Actor not found").into_response())
+    }
+}
+
 pub async fn activitypub_post_user_inbox(
     data: Data<AppState>,
     activity_data: ActivityData,
@@ -220,11 +322,27 @@ pub async fn activitypub_post_user_inbox(
         .await
 }
 
+pub async fn activitypub_post_community_inbox(
+    data: Data<AppState>,
+    activity_data: ActivityData,
+) -> impl IntoResponse {
+    receive_activity::<WithContext<GroupAcceptedActivities>, Actor, AppState>(activity_data, &data)
+        .await
+}
+
 /// List of all activities which this actor can receive.
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(untagged)]
 #[enum_delegate::implement(ActivityHandler)]
 pub enum PersonAcceptedActivities {
+    Follow(Follow),
+    Undo(Undo),
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(untagged)]
+#[enum_delegate::implement(ActivityHandler)]
+pub enum GroupAcceptedActivities {
     Follow(Follow),
     Undo(Undo),
 }
@@ -277,6 +395,7 @@ impl ActivityHandler for Follow {
         let mut tx = db.begin().await?;
 
         // Find the target actor being followed
+        tracing::info!("self.object: {:?}", self.object);
         let following_actor = Actor::find_by_iri(&mut tx, self.object.to_string()).await?;
         tracing::info!("following_actor: {:?}", following_actor);
 
@@ -367,7 +486,7 @@ impl ActivityHandler for Accept {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Undo {
     actor: ObjectId<Actor>,
