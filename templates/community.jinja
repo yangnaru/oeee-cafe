@@ -2,7 +2,7 @@
 {% block title %}
   {{ super() }} | {{ community.name }}
 {% endblock title %}
-{% block body %}
+{% block content %}
   <div class="center">
     {% block community_edit_block %}
       <div hx-target="this" hx-swap="outerHTML">
@@ -101,4 +101,4 @@
       <p>{{ ftl_community_no_posts }}</p>
     {% endif %}
   </div>
-{% endblock body %}
+{% endblock content %}

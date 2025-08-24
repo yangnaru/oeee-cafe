@@ -2,7 +2,7 @@
 {% block title %}
   {{ super() }} | {{ ftl_timeline }}
 {% endblock title %}
-{% block body %}
+{% block content %}
   <div class="center">
     <h2>{{ ftl_timeline_my }}</h2>
     {% if posts|length > 0 %}
@@ -22,4 +22,4 @@
       <p>{{ ftl_timeline_empty|safe }}</p>
     {% endif %}
   </div>
-{% endblock body %}
+{% endblock content %}

@@ -2,7 +2,7 @@
 {% block title %}
   {{ super() }} | {{ ftl_community }}
 {% endblock title %}
-{% block body %}
+{% block content %}
   <div class="center">
     <h2>{{ ftl_official_communities }}</h2>
     {% if official_communities %}
@@ -58,4 +58,4 @@
       <a href="/communities/new">{{ ftl_create_community }}</a>
     {% endif %}
   </div>
-{% endblock body %}
+{% endblock content %}

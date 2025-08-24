@@ -2,7 +2,7 @@
 {% block title %}
   {{ ftl_brand }}
 {% endblock title %}
-{% block body %}
+{% block content %}
   <div class="center">
     {% if non_official_public_community_posts| length > 0 %}
       <h2 class="home-section-title">{{ ftl_posts_from_public_communities }}</h2>
@@ -52,4 +52,4 @@
       <p>{{ ftl_timeline_empty|safe }}</p>
     {% endif %}
   </div>
-{% endblock body %}
+{% endblock content %}

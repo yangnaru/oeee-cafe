@@ -8,7 +8,7 @@
   {% endif %}
   ({{ ftl_post_replay }})
 {% endblock title %}
-{% block body %}
+{% block content %}
   <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
   <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}"
           charset="utf-8"></script>
@@ -53,4 +53,4 @@
       Neo.startViewer();
     });
   </script>
-{% endblock body %}
+{% endblock content %}

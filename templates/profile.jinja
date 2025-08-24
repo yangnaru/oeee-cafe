@@ -2,7 +2,7 @@
 {% block title %}
   {{ super() }} | {{ user.display_name }} (@{{ user.login_name }})
 {% endblock title %}
-{% block body %}
+{% block content %}
   <div class="center">
     <div class="profile-header">
       <h2>
@@ -120,4 +120,4 @@
   {% endif %}
 {% endif %}
 </div>
-{% endblock body %}
+{% endblock content %}

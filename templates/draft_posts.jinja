@@ -2,7 +2,7 @@
 {% block title %}
   {{ super() }} | {{ title }}
 {% endblock title %}
-{% block body %}
+{% block content %}
   <div class="center">
     <h2>{{ ftl_drafts }}</h2>
     <div class="posts-grid">
@@ -19,4 +19,4 @@
       {% endfor %}
     </div>
   </div>
-{% endblock body %}
+{% endblock content %}

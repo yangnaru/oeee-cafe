@@ -2,7 +2,7 @@
 {% block title %}
   {{ super() }} | {{ ftl_account }}
 {% endblock title %}
-{% block body %}
+{% block content %}
   <div class="center">
     <h2>{{ ftl_account }}</h2>
     <form method="post">
@@ -87,4 +87,4 @@
       <button type="submit">{{ ftl_sign_out }}</button>
     </form>
   </div>
-{% endblock body %}
+{% endblock content %}

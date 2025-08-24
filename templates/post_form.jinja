@@ -1,5 +1,5 @@
 {% extends "base.jinja" %}
-{% block body %}
+{% block content %}
   <div class="center">
     <p>{{ ftl_post_created_at }}: {{ post.created_at }}</p>
     <p>{{ ftl_post_duration }}: {{ post.paint_duration }}</p>
@@ -37,4 +37,4 @@
       <button type="submit">{{ ftl_delete }}</button>
     </form>
   </div>
-{% endblock body %}
+{% endblock content %}

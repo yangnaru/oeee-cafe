@@ -3,7 +3,7 @@
   {{ super() }} | {{
   ftl_profile_draw_banner }}
 {% endblock title %}
-{% block body %}
+{% block content %}
   <h2 class="center">{{ ftl_profile_draw_banner }}</h2>
   <link rel="stylesheet"
         href="{{ '/static/neo/dist/neo.css' | cachebuster | safe }}"
@@ -59,4 +59,4 @@
   };
   </script>
   <br />
-{% endblock body %}
+{% endblock content %}

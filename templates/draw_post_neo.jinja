@@ -7,8 +7,7 @@
     {{ ftl_community_drawing_new }} @ {{ community_name }}
   {% endif %}
 {% endblock title %}
-{%
-block body %}
+{% block content %}
 <h2 class="center">
   {% if parent_post %}
     Re: {{ parent_post.title }} @ {{ community_name }}
@@ -92,4 +91,4 @@ block body %}
 
 </script>
 <br />
-{% endblock body %}
+{% endblock content %}

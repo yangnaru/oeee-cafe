@@ -2,7 +2,7 @@
 {% block title %}
   {{ super() }} | {{ ftl_create_community }}
 {% endblock title %}
-{% block body %}
+{% block content %}
   <div class="center">
     <h2>{{ ftl_create_community }}</h2>
     <form method="post" action="/communities">
@@ -25,4 +25,4 @@
       <input type="submit" value="{{ ftl_create_community }}" />
     </form>
   </div>
-{% endblock body %}
+{% endblock content %}
