@@ -112,6 +112,7 @@ impl Object for Actor {
             handle_host: json.handle_host.to_string(),
             handle: json.handle.to_string(),
             user_id: None,
+            community_id: None,
             bio_html: String::new(),
             automatically_approves_followers: false,
             shared_inbox_url: String::new(),

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{query_as, Postgres, Transaction, Type};
 use uuid::Uuid;
 
+use crate::models::community::Community;
 use crate::models::instance::find_or_create_local_instance;
 use crate::models::user::{find_user_by_id, User};
 use crate::AppConfig;
@@ -46,6 +47,7 @@ pub struct Actor {
     pub handle_host: String,
     pub handle: String,
     pub user_id: Option<Uuid>,
+    pub community_id: Option<Uuid>,
     pub name: String,
     pub bio_html: String,
     pub automatically_approves_followers: bool,
@@ -70,13 +72,36 @@ impl Actor {
             r#"
             SELECT 
                 id, iri, type as "type: _", username, instance_host, handle_host, handle,
-                user_id, name, bio_html, automatically_approves_followers,
+                user_id, community_id, name, bio_html, automatically_approves_followers,
                 inbox_url, shared_inbox_url, followers_url, sensitive,
                 public_key_pem, private_key_pem, url,
                 created_at, updated_at, published_at
             FROM actors WHERE user_id = $1
             "#,
             user_id
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        Ok(actor)
+    }
+
+    pub async fn find_by_community_id(
+        tx: &mut Transaction<'_, Postgres>,
+        community_id: Uuid,
+    ) -> Result<Option<Actor>> {
+        let actor = query_as!(
+            Actor,
+            r#"
+            SELECT 
+                id, iri, type as "type: _", username, instance_host, handle_host, handle,
+                user_id, community_id, name, bio_html, automatically_approves_followers,
+                inbox_url, shared_inbox_url, followers_url, sensitive,
+                public_key_pem, private_key_pem, url,
+                created_at, updated_at, published_at
+            FROM actors WHERE community_id = $1
+            "#,
+            community_id
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -121,16 +146,16 @@ pub async fn create_actor_for_user(
         r#"
         INSERT INTO actors (
             iri, type, username, instance_host, handle_host, handle,
-            user_id, name, bio_html, automatically_approves_followers,
+            user_id, community_id, name, bio_html, automatically_approves_followers,
             inbox_url, shared_inbox_url, followers_url,
             sensitive, public_key_pem, private_key_pem, url,
             created_at, updated_at, published_at
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
         )
         RETURNING 
             id, iri, type as "type: _", username, instance_host, handle_host, handle,
-            user_id, name, bio_html, automatically_approves_followers,
+            user_id, community_id, name, bio_html, automatically_approves_followers,
             inbox_url, shared_inbox_url, followers_url,
             sensitive, public_key_pem, private_key_pem, url,
             created_at, updated_at, published_at
@@ -142,6 +167,7 @@ pub async fn create_actor_for_user(
         config.domain,
         handle,
         user.id,
+        None::<Uuid>, // community_id is None for user actors
         user.display_name,
         "", // bio_html - empty for now
         true, // automatically_approves_followers
@@ -210,7 +236,7 @@ pub async fn update_actor_for_user(
         WHERE user_id = $5
         RETURNING 
             id, iri, type as "type: _", username, instance_host, handle_host, handle,
-            user_id, name, bio_html, automatically_approves_followers,
+            user_id, community_id, name, bio_html, automatically_approves_followers,
             inbox_url, shared_inbox_url, followers_url,
             sensitive, public_key_pem, private_key_pem, url,
             created_at, updated_at, published_at
@@ -225,4 +251,121 @@ pub async fn update_actor_for_user(
     .await?;
 
     Ok(actor)
+}
+
+pub async fn create_actor_for_community(
+    tx: &mut Transaction<'_, Postgres>,
+    community: &Community,
+    config: &AppConfig,
+) -> Result<Actor> {
+    use activitypub_federation::http_signatures::generate_actor_keypair;
+
+    // Ensure local instance exists
+    find_or_create_local_instance(tx, &config.domain, None, None).await?;
+
+    // Generate RSA keypair for ActivityPub
+    let keypair = generate_actor_keypair()?;
+    let private_key_pem = keypair.private_key;
+    let public_key_pem = keypair.public_key;
+
+    let now = Utc::now();
+
+    let iri = format!("https://{}/ap/communities/{}", config.domain, community.id);
+    let handle = format!("@{}@{}", community.id, config.domain);
+    let inbox_url = format!(
+        "https://{}/ap/communities/{}/inbox",
+        config.domain,
+        community.id
+    );
+    let shared_inbox_url = format!("https://{}/ap/inbox", config.domain);
+    let followers_url = format!(
+        "https://{}/ap/communities/{}/followers",
+        config.domain,
+        community.id
+    );
+    let url = format!("https://{}/communities/{}", config.domain, community.id);
+
+    let actor = query_as!(Actor,
+        r#"
+        INSERT INTO actors (
+            iri, type, username, instance_host, handle_host, handle,
+            user_id, community_id, name, bio_html, automatically_approves_followers,
+            inbox_url, shared_inbox_url, followers_url,
+            sensitive, public_key_pem, private_key_pem, url,
+            created_at, updated_at, published_at
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
+        )
+        RETURNING 
+            id, iri, type as "type: _", username, instance_host, handle_host, handle,
+            user_id, community_id, name, bio_html, automatically_approves_followers,
+            inbox_url, shared_inbox_url, followers_url,
+            sensitive, public_key_pem, private_key_pem, url,
+            created_at, updated_at, published_at
+        "#,
+        iri,
+        ActorType::Group as _,
+        community.id.to_string(),
+        config.domain,
+        config.domain,
+        handle,
+        None::<Uuid>, // user_id is None for community actors
+        community.id, // community_id for community actors
+        community.name,
+        community.description, // Use description as bio_html
+        true, // automatically_approves_followers
+        inbox_url,
+        shared_inbox_url,
+        followers_url,
+        false, // sensitive
+        public_key_pem,
+        private_key_pem,
+        url,
+        now,
+        now,
+        now
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(actor)
+}
+
+pub async fn backfill_actors_for_existing_communities(
+    tx: &mut Transaction<'_, Postgres>,
+    config: &AppConfig,
+) -> Result<usize> {
+    use crate::models::community::get_communities;
+
+    // Get all communities that don't have actors
+    let communities = get_communities(tx).await?;
+    
+    let mut created_count = 0;
+    for community in communities {
+        // Check if community already has an actor
+        let existing_actor = query_as!(
+            Actor,
+            r#"
+            SELECT 
+                id, iri, type as "type: _", username, instance_host, handle_host, handle,
+                user_id, community_id, name, bio_html, automatically_approves_followers,
+                inbox_url, shared_inbox_url, followers_url, sensitive,
+                public_key_pem, private_key_pem, url,
+                created_at, updated_at, published_at
+            FROM actors 
+            WHERE iri = $1
+            "#,
+            format!("https://{}/ap/communities/{}", config.domain, community.id)
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        if existing_actor.is_none() {
+            create_actor_for_community(tx, &community, config).await?;
+            created_count += 1;
+            println!("✓ Created actor for community: {}", community.name);
+        }
+    }
+
+    Ok(created_count)
 }

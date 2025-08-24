@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use oeee_cafe::{
     models::{
-        actor::backfill_actors_for_existing_users,
+        actor::{backfill_actors_for_existing_users, backfill_actors_for_existing_communities},
         community::get_communities,
         user::{find_user_by_id, find_user_by_login_name, update_password},
     },
@@ -36,6 +36,8 @@ enum Commands {
     },
     /// Create actors for existing users that don't have them
     BackfillActors,
+    /// Create actors for existing communities that don't have them
+    BackfillCommunityActors,
 }
 
 #[tokio::main]
@@ -110,6 +112,12 @@ async fn main() -> Result<()> {
             let created_count = backfill_actors_for_existing_users(&mut tx, &cfg).await?;
             tx.commit().await?;
             println!("✅ Created {} actors for existing users", created_count);
+        }
+        Commands::BackfillCommunityActors => {
+            println!("Starting actor backfill for existing communities...");
+            let created_count = backfill_actors_for_existing_communities(&mut tx, &cfg).await?;
+            tx.commit().await?;
+            println!("✅ Created {} actors for existing communities", created_count);
         }
     }
 
