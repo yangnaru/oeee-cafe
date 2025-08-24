@@ -1,0 +1,1 @@
+ALTER TABLE actors ALTER COLUMN private_key_pem SET NOT NULL;
