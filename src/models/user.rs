@@ -255,6 +255,7 @@ pub async fn update_user(
 pub async fn create_user(
     tx: &mut Transaction<'_, Postgres>,
     user_draft: UserDraft,
+    config: &AppConfig,
 ) -> Result<User> {
     let q = query!(
         "
@@ -272,7 +273,7 @@ pub async fn create_user(
     );
     let result = q.fetch_one(&mut **tx).await?;
 
-    Ok(User {
+    let user = User {
         id: result.id,
         login_name: user_draft.login_name,
         password_hash: user_draft.password_hash,
@@ -283,7 +284,12 @@ pub async fn create_user(
         updated_at: result.updated_at,
         banner_id: None,
         preferred_language: None,
-    })
+    };
+
+    // Create actor for the user
+    create_actor_for_user(tx, &user, config).await?;
+
+    Ok(user)
 }
 
 pub async fn find_user_by_id(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<Option<User>> {
