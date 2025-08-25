@@ -9,11 +9,13 @@
   {% endif %}
 {% endblock title %}
 {% block head %}
+  <link rel="alternate"
+        type="application/activity+json"
+        href="https://{{ domain }}/ap/posts/{{ post.id }}" />
   <meta property="og:title" content="{{ post.title }}" />
   <meta property="og:description" content="{{ post.content }}" />
   <meta property="og:type" content="website" />
-  <meta property="og:url"
-        content="{{ base_url|safe }}/posts/{{ post_id }}" />
+  <meta property="og:url" content="{{ base_url|safe }}/posts/{{ post_id }}" />
   <meta property="og:image"
         content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
   <meta property="twitter:site" content="@oeee_cafe">

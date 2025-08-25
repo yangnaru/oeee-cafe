@@ -406,6 +406,7 @@ pub async fn post_view(
                 community_id,
                 draft_post_count,
                 base_url => state.config.base_url.clone(),
+                domain => state.config.domain.clone(),
                 comments,
                 ..create_base_ftl_context(&bundle)
             })
@@ -1171,6 +1172,7 @@ pub async fn post_view_by_login_name(
                 community_id,
                 draft_post_count,
                 base_url => state.config.base_url.clone(),
+                domain => state.config.domain.clone(),
                 comments,
                 ..create_base_ftl_context(&bundle)
             })
