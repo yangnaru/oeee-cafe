@@ -411,7 +411,7 @@ pub async fn update_actor_for_community(
     config: &AppConfig,
 ) -> Result<Option<Actor>> {
     let handle = format!("@{}@{}", username, config.domain);
-    let url = format!("https://{}/communities/{}", config.domain, community_id);
+    let url = format!("https://{}/communities/@{}", config.domain, username);
 
     let actor = query_as!(
         Actor,
