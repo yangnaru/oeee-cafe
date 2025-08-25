@@ -11,7 +11,7 @@ use activitypub_federation::traits::{
     ActivityHandler, Actor as ActivityPubFederationActor, Object,
 };
 
-use activitystreams_kinds::activity::{AcceptType, AnnounceType, CreateType, FollowType, UndoType};
+use activitystreams_kinds::activity::{AcceptType, AnnounceType, CreateType, FollowType, UndoType, UpdateType};
 use activitystreams_kinds::actor::GroupType;
 use activitystreams_kinds::object::NoteType;
 use axum::extract::{Path, Query};
@@ -32,7 +32,7 @@ use crate::models::post::find_post_by_id;
 use crate::models::user::find_user_by_login_name;
 use crate::web::state::AppState;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Person {
     id: ObjectId<Actor>,
@@ -48,7 +48,7 @@ pub struct Person {
     url: Url,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Group {
     id: ObjectId<Actor>,
@@ -64,7 +64,7 @@ pub struct Group {
     url: Url,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum ActorObject {
     Person(Person),
@@ -432,6 +432,7 @@ pub async fn activitypub_post_community_inbox(
 pub enum PersonAcceptedActivities {
     Follow(Follow),
     Undo(Undo),
+    Update(Update),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -440,6 +441,7 @@ pub enum PersonAcceptedActivities {
 pub enum GroupAcceptedActivities {
     Follow(Follow),
     Undo(Undo),
+    Update(Update),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -819,6 +821,90 @@ impl ActivityHandler for Announce {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Update {
+    actor: ObjectId<Actor>,
+    object: ActorObject,
+    r#type: UpdateType,
+    id: Url,
+    to: Vec<String>,
+    cc: Vec<String>,
+    published: String,
+}
+
+impl Update {
+    pub fn new(
+        actor: ObjectId<Actor>,
+        object: ActorObject,
+        id: Url,
+        to: Vec<String>,
+        cc: Vec<String>,
+        published: String,
+    ) -> Update {
+        Update {
+            actor,
+            object,
+            r#type: Default::default(),
+            id,
+            to,
+            cc,
+            published,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ActivityHandler for Update {
+    type DataType = AppState;
+    type Error = AppError;
+
+    fn id(&self) -> &Url {
+        &self.id
+    }
+
+    fn actor(&self) -> &Url {
+        self.actor.inner()
+    }
+
+    async fn verify(&self, _data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn receive(self, data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        // Update activities notify followers about actor profile changes
+        // We would typically update our local copy of the actor here
+        tracing::info!("Received Update activity: {:?}", self);
+        
+        let db = data.app_data().config.connect_database().await?;
+        let mut tx = db.begin().await?;
+        
+        // Find the actor being updated
+        let actor = Actor::find_by_iri(&mut tx, self.actor.to_string()).await?;
+        if let Some(mut actor) = actor {
+            // Update actor fields based on the object
+            match &self.object {
+                ActorObject::Person(person) => {
+                    actor.name = person.name.clone();
+                    actor.username = person.preferred_username.clone();
+                    actor.url = person.url.to_string();
+                }
+                ActorObject::Group(group) => {
+                    actor.name = group.name.clone(); 
+                    actor.username = group.preferred_username.clone();
+                    actor.url = group.url.to_string();
+                }
+            }
+            
+            // Update the actor in the database
+            Actor::create_or_update_actor(&mut tx, &actor).await?;
+            tx.commit().await?;
+        }
+        
+        Ok(())
+    }
+}
+
 pub fn generate_object_id(domain: &str) -> Result<Url, AppError> {
     Ok(Url::parse(&format!(
         "https://{}/objects/{}",
@@ -904,4 +990,68 @@ pub async fn create_note_from_post(
     );
 
     Ok(note)
+}
+
+pub async fn send_update_activity(
+    actor: &Actor,
+    app_state: &crate::web::state::AppState,
+) -> Result<(), AppError> {
+    use crate::models::follow::get_follower_shared_inboxes_for_actor;
+    use activitypub_federation::config::FederationConfig;
+    
+    let db = app_state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    
+    // Get follower inboxes
+    let follower_inboxes = get_follower_shared_inboxes_for_actor(&mut tx, actor.id).await?;
+    tx.commit().await?;
+    
+    if follower_inboxes.is_empty() {
+        return Ok(());
+    }
+    
+    // Convert inboxes to Urls
+    let inbox_urls: Result<Vec<Url>, _> = follower_inboxes
+        .into_iter()
+        .map(|inbox| inbox.parse::<Url>())
+        .collect();
+    let inbox_urls = inbox_urls?;
+    
+    // Create federation config and data
+    let federation_config = FederationConfig::builder()
+        .domain(app_state.config.domain.clone())
+        .app_data(app_state.clone())
+        .build()
+        .await?;
+    let federation_data = federation_config.to_request_data();
+    
+    // Create the updated actor object
+    let actor_object = actor.clone().into_json(&federation_data).await?;
+    
+    // Generate activity ID
+    let activity_id = generate_object_id(&app_state.config.domain)?;
+    
+    // Set up audience - public update
+    let to = vec!["https://www.w3.org/ns/activitystreams#Public".to_string()];
+    let cc = vec![format!("{}/followers", actor.iri)];
+    
+    // Create Update activity
+    let update_activity = Update::new(
+        ObjectId::parse(&actor.iri)?,
+        actor_object,
+        activity_id,
+        to,
+        cc,
+        chrono::Utc::now().to_rfc3339(),
+    );
+    
+    // Send the activity to followers
+    actor.send(
+        update_activity,
+        inbox_urls,
+        false, // Don't use queue for now
+        &federation_data,
+    ).await?;
+    
+    Ok(())
 }

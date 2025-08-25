@@ -1,9 +1,9 @@
 use crate::app_error::AppError;
-use crate::models::actor::{create_actor_for_community, update_actor_for_community};
+use crate::models::actor::create_actor_for_community;
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
     create_community, find_community_by_id, find_community_by_slug, get_own_communities,
-    get_participating_communities, get_public_communities, Community, CommunityDraft,
+    get_participating_communities, get_public_communities, update_community_with_activity, CommunityDraft,
 };
 use crate::models::post::{find_published_posts_by_community_id, get_draft_post_count};
 use crate::models::user::AuthSession;
@@ -14,10 +14,8 @@ use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
 use axum_messages::Messages;
-use chrono::Utc;
 use minijinja::context;
 use serde::Deserialize;
-use sqlx::query;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -513,34 +511,16 @@ pub async fn hx_do_edit_community(
         }
     };
 
-    // First update the community
-    let q = query!(
-        "
-            UPDATE communities
-            SET name = $2, slug = $3, description = $4, is_private = $5, updated_at = now()
-            WHERE id = $1
-            RETURNING owner_id, created_at
-        ",
-        community_uuid,
-        form.name,
-        form.slug,
-        form.description,
-        form.is_private == Some("on".to_string()),
-    );
-    let result = q.fetch_one(&mut *tx).await?;
+    // Update the community (with ActivityPub Update activity)
+    let community_draft = CommunityDraft {
+        name: form.name.clone(),
+        slug: form.slug.clone(),
+        description: form.description.clone(),
+        is_private: form.is_private == Some("on".to_string()),
+    };
 
-    // Then try to update the corresponding actor
-    match update_actor_for_community(
-        &mut tx,
-        community_uuid,
-        form.slug.clone(), // Use slug as username
-        form.name.clone(),
-        form.description.clone(),
-        &state.config,
-    )
-    .await
-    {
-        Ok(_) => {
+    match update_community_with_activity(&mut tx, community_uuid, community_draft, &state.config, Some(&state)).await {
+        Ok(updated_community) => {
             // Success - commit transaction
             let _ = tx.commit().await;
 
@@ -554,19 +534,6 @@ pub async fn hx_do_edit_community(
                     .into_response())
             } else {
                 // Slug didn't change - return updated content block
-                let updated_community = Community {
-                    id: community_uuid,
-                    owner_id: result.owner_id,
-                    name: form.name.clone(),
-                    slug: form.slug.clone(),
-                    description: form.description.clone(),
-                    is_private: form.is_private == Some("on".to_string()),
-                    created_at: result.created_at,
-                    updated_at: Utc::now(),
-                    background_color: None,
-                    foreground_color: None,
-                };
-
                 let template = state.env.get_template("community.jinja")?;
                 let user_preferred_language = auth_session
                     .user

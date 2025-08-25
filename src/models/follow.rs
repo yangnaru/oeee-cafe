@@ -219,3 +219,22 @@ pub async fn find_followers_by_actor_id(
 
     Ok(actors)
 }
+
+pub async fn get_follower_shared_inboxes_for_actor(
+    tx: &mut Transaction<'_, Postgres>,
+    following_actor_id: Uuid,
+) -> Result<Vec<String>> {
+    let inboxes = query!(
+        r#"
+        SELECT DISTINCT a.shared_inbox_url
+        FROM follows f
+        JOIN actors a ON f.follower_actor_id = a.id
+        WHERE f.following_actor_id = $1
+        "#,
+        following_actor_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(inboxes.into_iter().map(|row| row.shared_inbox_url).collect())
+}

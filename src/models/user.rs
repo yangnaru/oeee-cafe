@@ -252,6 +252,35 @@ pub async fn update_user(
     })
 }
 
+pub async fn update_user_with_activity(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    login_name: String,
+    display_name: String,
+    config: &AppConfig,
+    state: Option<&crate::web::state::AppState>,
+) -> Result<User> {
+    
+    // First update the user
+    let updated_user = update_user(tx, id, login_name.clone(), display_name.clone()).await?;
+    
+    // Update the corresponding actor
+    let _ = super::actor::update_actor_for_user(tx, id, login_name, display_name, config).await;
+    
+    // If state is provided, send ActivityPub Update activity
+    if let Some(state) = state {
+        // Get the updated actor
+        if let Some(updated_actor) = super::actor::Actor::find_by_user_id(tx, id).await? {
+            // Send Update activity - don't fail if this fails
+            if let Err(e) = crate::web::handlers::activitypub::send_update_activity(&updated_actor, state).await {
+                tracing::warn!("Failed to send Update activity for user {}: {:?}", id, e);
+            }
+        }
+    }
+    
+    Ok(updated_user)
+}
+
 pub async fn create_user(
     tx: &mut Transaction<'_, Postgres>,
     user_draft: UserDraft,
