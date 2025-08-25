@@ -65,7 +65,7 @@
         {% endif %}
         <div class="center">
           <p>
-            {{ ftl_post_author }}: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted">@{{ post.login_name }}</span>
+            {{ ftl_post_author }}: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted fediverse-handle">@{{ post.login_name }}@{{ domain }}</span>
           </p>
           {% block post_edit_block %}
             <div hx-target="this" hx-swap="outerHTML">

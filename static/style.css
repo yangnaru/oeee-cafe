@@ -305,6 +305,10 @@ nav a:visited,
   border: solid 1px var(--main-border-color);
 }
 
+.fediverse-handle {
+  user-select: all;
+}
+
 /* Cucumber */
 
 #cucumber-container {
