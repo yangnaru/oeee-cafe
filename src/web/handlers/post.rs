@@ -1388,6 +1388,24 @@ pub async fn post_relay_view_by_login_name(
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("draw_post_neo.jinja").unwrap();
+    
+    let community_id = Uuid::parse_str(
+        post.clone()
+            .unwrap()
+            .get("community_id")
+            .unwrap()
+            .as_ref()
+            .unwrap(),
+    )
+    .unwrap();
+    let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+    
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -1396,9 +1414,17 @@ pub async fn post_relay_view_by_login_name(
     let bundle = get_bundle(&accept_language, user_preferred_language);
     let rendered = template
         .render(context! {
+            parent_post => post.clone().unwrap(),
             current_user => auth_session.user,
-            post => post.clone(),
-            parent_post_id => uuid.to_string(),
+            default_community_id => state.config.default_community_id.clone(),
+            r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+            community_name => community.name,
+            width => post.clone().unwrap().get("image_width").unwrap().as_ref().unwrap().parse::<u32>()?,
+            height => post.unwrap().get("image_height").unwrap().as_ref().unwrap().parse::<u32>()?,
+            background_color => community.background_color,
+            foreground_color => community.foreground_color,
+            community_id => community_id.to_string(),
+            draft_post_count,
             ..create_base_ftl_context(&bundle)
         })
         .unwrap();
