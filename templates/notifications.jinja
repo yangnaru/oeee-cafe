@@ -8,7 +8,7 @@
     {% if comments %}
       {% for (comment, post_id) in comments %}
         <div class="comment notification-comment">
-          <a href="/posts/{{ post_id }}">
+          <a href="/@{{ comment.post_author_login_name }}/{{ post_id }}">
             <img class="post-image notification-post-image"
                  width="{{ comment.post_image_width }}"
                  height="{{ comment.post_image_height }}"

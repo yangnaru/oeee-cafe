@@ -22,7 +22,7 @@
     <input type="hidden" id="viewer" />
     <p>
       {{ ftl_post_title }}:
-      <a href="/posts/{{ post_id }}">
+      <a href="/@{{ post.login_name }}/{{ post_id }}">
         {% if post.title %}
           {{ post.title }}
         {% else %}

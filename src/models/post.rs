@@ -27,6 +27,7 @@ pub struct SerializablePost {
     pub id: Uuid,
     pub title: Option<String>,
     pub author_id: Uuid,
+    pub user_login_name: Option<String>,
     pub paint_duration: String,
     pub stroke_count: i32,
     pub viewer_count: i32,
@@ -34,6 +35,7 @@ pub struct SerializablePost {
     pub image_width: i32,
     pub image_height: i32,
     pub replay_filename: String,
+    pub is_sensitive: Option<bool>,
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -62,6 +64,7 @@ pub struct SerializablePostForHome {
     pub id: Uuid,
     pub title: Option<String>,
     pub author_id: Uuid,
+    pub user_login_name: String,
     pub paint_duration: String,
     pub stroke_count: i32,
     pub viewer_count: i32,
@@ -136,12 +139,14 @@ pub async fn find_posts_by_community_id(
             id: row.id,
             title: row.title,
             author_id: row.author_id,
+            user_login_name: None,
             paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
             image_filename: row.image_filename,
             image_width: row.width,
             image_height: row.height,
             replay_filename: row.replay_filename,
+            is_sensitive: None,
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,
@@ -311,12 +316,14 @@ pub async fn find_draft_posts_by_author_id(
             title: row.title,
             viewer_count: row.viewer_count,
             author_id: row.author_id,
+            user_login_name: None,
             paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
             image_filename: row.image_filename,
             image_width: row.width,
             image_height: row.height,
             replay_filename: row.replay_filename,
+            is_sensitive: None,
             published_at: row.published_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -334,6 +341,7 @@ pub async fn find_published_posts_by_community_id(
                 posts.id,
                 posts.title,
                 posts.author_id,
+                users.login_name,
                 images.paint_duration,
                 images.stroke_count,
                 images.image_filename,
@@ -341,11 +349,13 @@ pub async fn find_published_posts_by_community_id(
                 images.height,
                 images.replay_filename,
                 posts.viewer_count,
+                posts.is_sensitive,
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
+            LEFT JOIN users ON posts.author_id = users.id
             WHERE community_id = $1
             AND published_at IS NOT NULL
             AND posts.deleted_at IS NULL
@@ -360,12 +370,14 @@ pub async fn find_published_posts_by_community_id(
             id: row.id,
             title: row.title,
             author_id: row.author_id,
+            user_login_name: Some(row.login_name),
             paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
             image_filename: row.image_filename,
             image_width: row.width,
             image_height: row.height,
             replay_filename: row.replay_filename,
+            is_sensitive: row.is_sensitive,
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,
@@ -427,12 +439,14 @@ pub async fn create_post(
         id: post.id,
         title: None,
         author_id: post_draft.author_id,
+        user_login_name: None,
         paint_duration: post_draft.paint_duration.microseconds.to_string(),
         stroke_count: post_draft.stroke_count,
         image_filename: post_draft.image_filename,
         image_width: post_draft.width,
         image_height: post_draft.height,
         replay_filename: post_draft.replay_filename,
+        is_sensitive: None,
         viewer_count: 0,
         published_at: None,
         created_at: post.created_at,
@@ -674,6 +688,7 @@ pub async fn find_public_community_posts(
                 posts.id,
                 posts.title,
                 posts.author_id,
+                users.login_name,
                 images.paint_duration,
                 images.stroke_count,
                 images.image_filename,
@@ -688,6 +703,7 @@ pub async fn find_public_community_posts(
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
+            LEFT JOIN users ON posts.author_id = users.id
             WHERE communities.is_private = FALSE
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
@@ -701,6 +717,7 @@ pub async fn find_public_community_posts(
             id: row.id,
             title: row.title,
             author_id: row.author_id,
+            user_login_name: row.login_name,
             paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
             image_filename: row.image_filename,
@@ -726,6 +743,7 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
                 posts.id,
                 posts.title,
                 posts.author_id,
+                users.login_name,
                 images.paint_duration,
                 images.stroke_count,
                 images.image_filename,
@@ -740,6 +758,7 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
+            LEFT JOIN users ON posts.author_id = users.id
             WHERE communities.is_private = FALSE
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
@@ -756,6 +775,7 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
             id: row.id,
             title: row.title,
             author_id: row.author_id,
+            user_login_name: row.login_name,
             paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
             image_filename: row.image_filename,
@@ -781,6 +801,7 @@ pub async fn find_following_posts_by_user_id(
                 posts.id,
                 posts.title,
                 posts.author_id,
+                users.login_name,
                 images.paint_duration,
                 images.stroke_count,
                 images.image_filename,
@@ -788,11 +809,13 @@ pub async fn find_following_posts_by_user_id(
                 images.height,
                 images.replay_filename,
                 posts.viewer_count,
+                posts.is_sensitive,
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
+            LEFT JOIN users ON posts.author_id = users.id
             LEFT JOIN actors author_actor ON posts.author_id = author_actor.user_id
             LEFT JOIN follows ON author_actor.id = follows.following_actor_id
             LEFT JOIN actors follower_actor ON follows.follower_actor_id = follower_actor.id
@@ -812,12 +835,14 @@ pub async fn find_following_posts_by_user_id(
             id: row.id,
             title: row.title,
             author_id: row.author_id,
+            user_login_name: Some(row.login_name),
             paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
             image_filename: row.image_filename,
             image_width: row.width,
             image_height: row.height,
             replay_filename: row.replay_filename,
+            is_sensitive: row.is_sensitive,
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,

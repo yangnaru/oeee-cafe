@@ -35,7 +35,7 @@
         <p>{{ ftl_post_published_at }}: {{ post.published_at }}</p>
         <p>
           {{ ftl_post_duration }}: {{ post.paint_duration }}
-          <a href="/posts/{{ post_id }}/replay">{{ ftl_post_replay }}</a>
+          <a href="/@{{ post.login_name }}/{{ post_id }}/replay">{{ ftl_post_replay }}</a>
         </p>
         <p>HIT: {{ post.viewer_count }}</p>
         <p>
@@ -46,7 +46,7 @@
           {%- endif %}
         </p>
         {% if post.image_tool == "neo" and post.allow_relay == "true" %}
-          <a href="/posts/{{ post_id }}/relay">
+          <a href="/@{{ post.login_name }}/{{ post_id }}/relay">
             <img class="post-image"
                  width="{{ post.image_width }}"
                  height="{{ post.image_height }}"
@@ -76,7 +76,7 @@
                 {% else %}
                   {{ ftl_post_no_title }}
                 {% endif %}
-                {% if parent_post_id %}<a href="/posts/{{ parent_post_id }}">↵</a>{% endif %}
+                {% if parent_post_id %}<a href="/@{{ parent_post_author_login_name }}/{{ parent_post_id }}">↵</a>{% endif %}
               </p>
               <p>
                 {{ ftl_post_description }}: <div class="post-content">{{ post.content|markdown|safe }}</div>

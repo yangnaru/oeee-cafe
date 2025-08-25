@@ -43,6 +43,7 @@ pub struct NotificationComment {
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub post_title: Option<String>,
+    pub post_author_login_name: String,
     pub post_image_filename: Option<String>,
     pub post_image_width: Option<i32>,
     pub post_image_height: Option<i32>,
@@ -105,12 +106,14 @@ pub async fn find_comments_to_posts_by_author(
             users.display_name AS user_display_name,
             users.login_name AS user_login_name,
             posts.title AS post_title,
+            post_authors.login_name AS post_author_login_name,
             images.image_filename AS post_image_filename,
             images.width AS post_image_width,
             images.height AS post_image_height
         FROM comments
         LEFT JOIN users ON comments.user_id = users.id
         LEFT JOIN posts ON comments.post_id = posts.id
+        LEFT JOIN users AS post_authors ON posts.author_id = post_authors.id
         LEFT JOIN images ON posts.image_id = images.id
         WHERE posts.author_id = $1
         AND comments.user_id != $1
@@ -143,12 +146,14 @@ pub async fn find_latest_comments_in_community(
             users.display_name AS user_display_name,
             users.login_name AS user_login_name,
             posts.title AS post_title,
+            post_authors.login_name AS post_author_login_name,
             images.image_filename AS post_image_filename,
             images.width AS post_image_width,
             images.height AS post_image_height
         FROM comments
         LEFT JOIN users ON comments.user_id = users.id
         LEFT JOIN posts ON comments.post_id = posts.id
+        LEFT JOIN users AS post_authors ON posts.author_id = post_authors.id
         LEFT JOIN images ON posts.image_id = images.id
         WHERE posts.community_id = $1
         AND posts.published_at IS NOT NULL

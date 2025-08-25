@@ -347,6 +347,27 @@ pub async fn post_view(
 
     let comments = find_comments_by_post_id(&mut tx, uuid).await.unwrap();
 
+    // Get parent post data if it exists
+    let parent_post_author_login_name = if let Some(parent_post_id_str) = post
+        .clone()
+        .unwrap()
+        .get("parent_post_id")
+        .and_then(|id| id.as_ref())
+    {
+        if let Ok(parent_uuid) = Uuid::parse_str(parent_post_id_str) {
+            find_post_by_id(&mut tx, parent_uuid)
+                .await
+                .unwrap_or(None)
+                .and_then(|parent_post| parent_post.get("login_name").cloned())
+                .flatten()
+                .unwrap_or_default()
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
     let community_id = Uuid::parse_str(
         post.clone()
             .as_ref()
@@ -402,6 +423,7 @@ pub async fn post_view(
                     .and_then(|id| Uuid::parse_str(id).ok())
                     .map(|uuid| uuid.to_string())
                     .unwrap_or_default(),
+                parent_post_author_login_name => parent_post_author_login_name.clone(),
                 post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
                 community_id,
                 draft_post_count,
@@ -1138,6 +1160,27 @@ pub async fn post_view_by_login_name(
     let comments = find_comments_by_post_id(&mut tx, uuid).await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
 
+    // Get parent post data if it exists
+    let parent_post_author_login_name = if let Some(parent_post_id_str) = post
+        .clone()
+        .unwrap()
+        .get("parent_post_id")
+        .and_then(|id| id.as_ref())
+    {
+        if let Ok(parent_uuid) = Uuid::parse_str(parent_post_id_str) {
+            find_post_by_id(&mut tx, parent_uuid)
+                .await
+                .unwrap_or(None)
+                .and_then(|parent_post| parent_post.get("login_name").cloned())
+                .flatten()
+                .unwrap_or_default()
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
     let community_id = Uuid::parse_str(
         post.clone()
             .as_ref()
@@ -1193,6 +1236,7 @@ pub async fn post_view_by_login_name(
                     .and_then(|id| Uuid::parse_str(id).ok())
                     .map(|uuid| uuid.to_string())
                     .unwrap_or_default(),
+                parent_post_author_login_name => parent_post_author_login_name.clone(),
                 post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
                 community_id,
                 draft_post_count,

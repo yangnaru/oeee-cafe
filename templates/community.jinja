@@ -72,7 +72,7 @@
       <div class="comment-list">
         {% for comment in comments %}
           <div class="comment-list-item">
-            <a href="/@{{ comment.user_login_name }}">{{ comment.user_display_name }}</a>@<a href="/posts/{{ comment.post_id }}">
+            <a href="/@{{ comment.user_login_name }}">{{ comment.user_display_name }}</a>@<a href="/@{{ comment.user_login_name }}/{{ comment.post_id }}">
               {% if comment.post_title %}
                 {{ comment.post_title }}
               {% else %}
@@ -89,7 +89,7 @@
       <div class="posts-grid">
         {% for post in posts %}
           <div class="posts-grid-item">
-            <a href="/posts/{{ post.id }}">
+            <a href="/@{{ post.user_login_name }}/{{ post.id }}">
               <img alt="{{ post.title }}"
                    width="{{ post.image_width }}"
                    height="{{ post.image_height }}"

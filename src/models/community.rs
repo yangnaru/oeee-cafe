@@ -171,6 +171,7 @@ pub async fn get_user_communities_with_latest_9_posts(
                     posts.id,
                     posts.title,
                     posts.author_id,
+                    users.login_name,
                     images.paint_duration AS paint_duration,
                     images.stroke_count AS stroke_count,
                     images.image_filename AS image_filename,
@@ -178,11 +179,13 @@ pub async fn get_user_communities_with_latest_9_posts(
                     images.height AS height,
                     images.replay_filename AS replay_filename,
                     posts.viewer_count,
+                    posts.is_sensitive,
                     posts.published_at,
                     posts.created_at,
                     posts.updated_at
                 FROM posts
                 LEFT JOIN images ON posts.image_id = images.id
+                LEFT JOIN users ON posts.author_id = users.id
                 WHERE community_id = $1
                 AND posts.deleted_at IS NULL
                 AND posts.published_at IS NOT NULL
@@ -198,12 +201,14 @@ pub async fn get_user_communities_with_latest_9_posts(
                 id: row.id,
                 title: row.title,
                 author_id: row.author_id,
+                user_login_name: Some(row.login_name),
                 paint_duration: row.paint_duration.microseconds.to_string(),
                 stroke_count: row.stroke_count,
                 image_filename: row.image_filename,
                 image_width: row.width,
                 image_height: row.height,
                 replay_filename: row.replay_filename,
+                is_sensitive: row.is_sensitive,
                 viewer_count: row.viewer_count,
                 published_at: row.published_at,
                 created_at: row.created_at,
