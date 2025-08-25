@@ -39,6 +39,7 @@ icu_locid = "1.4.0"
 intl-memoizer = "0.5.1"
 lazy_static = "1.4.0"
 lettre = "0.11.6"
+markdown = "1.0.0"
 minijinja = { version = "1.0.12", features = ["loader"] }
 minijinja-contrib = { version = "1.0.12", features = ["datetime", "timezone"] }
 rand = "0.8.5"

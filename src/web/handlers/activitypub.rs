@@ -24,6 +24,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::app_error::AppError;
+use crate::markdown_utils::process_markdown_content;
 use crate::models::actor::{Actor, ActorType};
 use crate::models::community::find_community_by_slug;
 use crate::models::follow;
@@ -933,11 +934,12 @@ pub async fn create_note_from_post(
         .and_then(|c| c.as_ref())
         .map_or("", |v| v);
 
-    // Format content with title if available
+    // Format content with title if available and process as markdown
     let formatted_content = if title.is_empty() {
-        content.to_string()
+        process_markdown_content(content)
     } else {
-        format!("<p>{}</p><p>{}</p>", title, content)
+        let combined_content = format!("{}\n\n{}", title, content);
+        process_markdown_content(&combined_content)
     };
 
     // Get attachments if image exists

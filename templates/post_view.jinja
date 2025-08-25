@@ -79,7 +79,7 @@
                 {% if parent_post_id %}<a href="/posts/{{ parent_post_id }}">↵</a>{% endif %}
               </p>
               <p>
-                {{ ftl_post_description }}: <pre class="post-content">{{ post.content }}</pre>
+                {{ ftl_post_description }}: <div class="post-content">{{ post.content|markdown|safe }}</div>
               </p>
               {% if current_user.id == post.author_id %}
                 <div class="post-menu">

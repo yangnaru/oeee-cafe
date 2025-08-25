@@ -51,6 +51,11 @@ fn main() {
                 format!("{}?{}", value, timestamp)
             }
             env.add_filter("cachebuster", cachebuster);
+
+            fn markdown_to_html(value: String) -> String {
+                oeee_cafe::markdown_utils::process_markdown_content(&value)
+            }
+            env.add_filter("markdown", markdown_to_html);
             env.set_loader(path_loader(&template_path));
 
             let state = AppState {
