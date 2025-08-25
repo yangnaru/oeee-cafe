@@ -11,7 +11,7 @@ use activitypub_federation::traits::{
     ActivityHandler, Actor as ActivityPubFederationActor, Object,
 };
 
-use activitystreams_kinds::activity::{AcceptType, CreateType, FollowType, UndoType};
+use activitystreams_kinds::activity::{AcceptType, AnnounceType, CreateType, FollowType, UndoType};
 use activitystreams_kinds::actor::GroupType;
 use activitystreams_kinds::object::NoteType;
 use axum::extract::{Path, Query};
@@ -26,6 +26,8 @@ use crate::app_error::AppError;
 use crate::models::actor::{Actor, ActorType};
 use crate::models::community::find_community_by_slug;
 use crate::models::follow;
+use crate::models::image::find_image_by_id;
+use crate::models::post::find_post_by_id;
 use crate::models::user::find_user_by_login_name;
 use crate::web::state::AppState;
 
@@ -112,7 +114,10 @@ impl Object for Actor {
                 url: self.url.parse()?,
             })),
             // Handle all other actor types as Person for ActivityPub compatibility
-            ActorType::Person | ActorType::Service | ActorType::Application | ActorType::Organization => Ok(ActorObject::Person(Person {
+            ActorType::Person
+            | ActorType::Service
+            | ActorType::Application
+            | ActorType::Organization => Ok(ActorObject::Person(Person {
                 id: ObjectId::parse(&self.iri)?,
                 r#type: PersonType::Person,
                 inbox: self.inbox_url.parse()?,
@@ -145,7 +150,18 @@ impl Object for Actor {
         json: Self::Kind,
         _data: &Data<Self::DataType>,
     ) -> Result<Self, Self::Error> {
-        let (id, inbox, public_key, endpoints, followers, manually_approves_followers, name, preferred_username, url, actor_type) = match json {
+        let (
+            id,
+            inbox,
+            public_key,
+            endpoints,
+            followers,
+            manually_approves_followers,
+            name,
+            preferred_username,
+            url,
+            actor_type,
+        ) = match json {
             ActorObject::Person(person) => (
                 person.id,
                 person.inbox,
@@ -311,6 +327,41 @@ pub async fn activitypub_get_community(
         Ok(FederationJson(WithContext::new_default(json_actor)).into_response())
     } else {
         Ok((StatusCode::NOT_FOUND, "Actor not found").into_response())
+    }
+}
+
+pub async fn activitypub_get_post(
+    _header_map: HeaderMap,
+    Path(post_id): Path<String>,
+    data: Data<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = data.app_data().config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    let post_uuid = Uuid::parse_str(&post_id)?;
+    
+    if let Some(post) = find_post_by_id(&mut tx, post_uuid).await? {
+        let author_id = Uuid::parse_str(post.get("author_id").unwrap().as_ref().unwrap())?;
+
+        // Find the author's actor
+        let author_actor = Actor::find_by_user_id(&mut tx, author_id).await?;
+        if author_actor.is_none() {
+            return Ok((StatusCode::NOT_FOUND, "Author actor not found").into_response());
+        }
+        let author_actor = author_actor.unwrap();
+
+        // Use the shared function to create the Note
+        let note = create_note_from_post(
+            &mut tx,
+            post_uuid,
+            &author_actor,
+            &data.app_data().config.domain,
+            &data.app_data().config.r2_public_endpoint_url,
+        ).await?;
+
+        Ok(FederationJson(WithContext::new_default(note)).into_response())
+    } else {
+        Ok((StatusCode::NOT_FOUND, "Post not found").into_response())
     }
 }
 
@@ -555,7 +606,7 @@ impl ActivityHandler for Undo {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Attachment {
     pub r#type: String,
@@ -566,10 +617,10 @@ pub struct Attachment {
     pub height: Option<i32>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Note {
-    id: Url,
+    pub id: Url,
     r#type: NoteType,
     attributed_to: ObjectId<Actor>,
     content: String,
@@ -665,10 +716,154 @@ impl ActivityHandler for Create {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Announce {
+    actor: ObjectId<Actor>,
+    object: Url,
+    r#type: AnnounceType,
+    id: Url,
+    to: Vec<String>,
+    cc: Vec<String>,
+    published: String,
+}
+
+impl Announce {
+    pub fn new(
+        actor: ObjectId<Actor>,
+        object: Url,
+        id: Url,
+        to: Vec<String>,
+        cc: Vec<String>,
+        published: String,
+    ) -> Announce {
+        Announce {
+            actor,
+            object,
+            r#type: Default::default(),
+            id,
+            to,
+            cc,
+            published,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ActivityHandler for Announce {
+    type DataType = AppState;
+    type Error = AppError;
+
+    fn id(&self) -> &Url {
+        &self.id
+    }
+
+    fn actor(&self) -> &Url {
+        self.actor.inner()
+    }
+
+    async fn verify(&self, _data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn receive(self, _data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        // Announce activities are typically sent outbound, not received
+        // If we wanted to handle incoming Announce activities (e.g., boosts from other servers),
+        // we would implement the logic here
+        tracing::info!("Received Announce activity: {:?}", self);
+        Ok(())
+    }
+}
+
 pub fn generate_object_id(domain: &str) -> Result<Url, AppError> {
     Ok(Url::parse(&format!(
         "https://{}/objects/{}",
         domain,
         Uuid::new_v4()
     ))?)
+}
+
+pub async fn create_note_from_post(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    post_id: Uuid,
+    author_actor: &Actor,
+    domain: &str,
+    r2_public_endpoint_url: &str,
+) -> Result<Note, AppError> {
+    // Get post details
+    let post = find_post_by_id(tx, post_id).await?;
+    let post = post.ok_or_else(|| anyhow::anyhow!("Post not found"))?;
+
+    // Get title and content
+    let title = post.get("title").and_then(|t| t.as_ref()).map_or("", |v| v);
+    let content = post.get("content").and_then(|c| c.as_ref()).map_or("", |v| v);
+
+    // Format content with title if available
+    let formatted_content = if title.is_empty() {
+        content.to_string()
+    } else {
+        format!("<p>{}</p><p>{}</p>", title, content)
+    };
+
+    // Get attachments if image exists
+    let mut attachments = Vec::new();
+    if let Some(Some(image_id_str)) = post.get("image_id") {
+        if let Ok(image_id) = Uuid::parse_str(image_id_str) {
+            if let Ok(image) = find_image_by_id(tx, image_id).await {
+                let image_url = format!(
+                    "{}/image/{}{}/{}",
+                    r2_public_endpoint_url,
+                    image.image_filename.chars().next().unwrap_or('0'),
+                    image.image_filename.chars().nth(1).unwrap_or('0'),
+                    image.image_filename
+                );
+
+                let attachment = Attachment {
+                    r#type: "Image".to_string(),
+                    url: image_url,
+                    media_type: "image/png".to_string(),
+                    name: Some(title.to_string()),
+                    width: Some(image.width),
+                    height: Some(image.height),
+                };
+                attachments.push(attachment);
+            }
+        }
+    }
+
+    // Create URLs and IDs
+    let post_url: Url = format!(
+        "https://{}/@{}/{}",
+        domain,
+        author_actor.username,
+        post_id
+    ).parse()?;
+    
+    let note_id: Url = format!("https://{}/ap/posts/{}", domain, post_id).parse()?;
+
+    // Set up audience - public post
+    let to = vec!["https://www.w3.org/ns/activitystreams#Public".to_string()];
+    let cc = vec![format!("{}/followers", author_actor.iri)];
+
+    // Get published date
+    let published = post
+        .get("published_at")
+        .and_then(|p| p.as_ref())
+        .and_then(|p| chrono::DateTime::parse_from_rfc3339(p).ok())
+        .map(|dt| dt.to_rfc3339())
+        .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+
+    // Create the Note object
+    let note = Note::new(
+        note_id,
+        ObjectId::<Actor>::parse(&author_actor.iri)?,
+        formatted_content,
+        to,
+        cc,
+        published,
+        post_url,
+        attachments,
+    );
+
+    Ok(note)
 }

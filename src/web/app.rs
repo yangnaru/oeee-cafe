@@ -6,7 +6,7 @@ use crate::web::handlers::account::{
     verify_email_verification_code,
 };
 use crate::web::handlers::activitypub::{
-    activitypub_get_community, activitypub_get_user, activitypub_post_community_inbox,
+    activitypub_get_community, activitypub_get_post, activitypub_get_user, activitypub_post_community_inbox,
     activitypub_post_user_inbox, activitypub_webfinger,
 };
 use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
@@ -153,6 +153,7 @@ impl App {
         let activitypub_router = Router::new()
             .route("/.well-known/webfinger", get(activitypub_webfinger))
             .route("/ap/users/:login_name", get(activitypub_get_user))
+            .route("/ap/posts/:post_id", get(activitypub_get_post))
             .route(
                 "/ap/communities/:community_id",
                 get(activitypub_get_community),
