@@ -2,12 +2,17 @@
 {% block title %}
   {{ super() }} | {{ community.name }}
 {% endblock title %}
+{% block head %}
+  <link rel="alternate"
+        type="application/activity+json"
+        href="https://{{ domain }}/ap/communities/{{ community.id }}" />
+{% endblock head %}
 {% block content %}
   <div class="center">
     {% block community_edit_block %}
       <div hx-target="this" hx-swap="outerHTML">
         <h2>{{ community.name }}</h2>
-        <p style="color: #666; font-size: 14px; margin: 5px 0; user-select: all;">@{{ community.slug }}@{{ domain }}</p>
+        <p style="color: #666; font-size: 14px; margin: 5px 0; user-select: all">@{{ community.slug }}@{{ domain }}</p>
         <p>{{ community.description }}</p>
         {% if current_user.id == community.owner_id %}
           <div class="community-menu">

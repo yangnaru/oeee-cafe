@@ -2,6 +2,11 @@
 {% block title %}
   {{ super() }} | {{ user.display_name }} (@{{ user.login_name }})
 {% endblock title %}
+{% block head %}
+  <link rel="alternate"
+        type="application/activity+json"
+        href="https://{{ domain }}/ap/users/{{ user.id }}" />
+{% endblock head %}
 {% block content %}
   <div class="center">
     <div class="profile-header">
