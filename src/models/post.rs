@@ -850,3 +850,42 @@ pub async fn delete_post(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result
 
     Ok(())
 }
+
+pub async fn delete_post_with_activity(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    app_state: Option<&crate::web::state::AppState>,
+) -> Result<()> {
+    // First, get post details before deletion
+    let post = find_post_by_id(tx, id).await?;
+    let post = match post {
+        Some(post) => post,
+        None => return Err(anyhow::anyhow!("Post not found")),
+    };
+    
+    // Get the author's actor
+    let author_id_str = post.get("author_id")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| anyhow::anyhow!("Post has no author"))?;
+    let author_id = uuid::Uuid::parse_str(author_id_str)?;
+    
+    // Perform the deletion
+    delete_post(tx, id).await?;
+    
+    // If app_state is provided, send ActivityPub Delete activity
+    if let Some(state) = app_state {
+        // Get the author's actor
+        if let Some(author_actor) = crate::models::actor::Actor::find_by_user_id(tx, author_id).await? {
+            // Create the object URL that was deleted
+            let object_url = format!("https://{}/ap/posts/{}", state.config.domain, id);
+            let object_url = object_url.parse()?;
+            
+            // Send Delete activity - don't fail if this fails
+            if let Err(e) = crate::web::handlers::activitypub::send_delete_activity(&author_actor, object_url, state).await {
+                tracing::warn!("Failed to send Delete activity for post {}: {:?}", id, e);
+            }
+        }
+    }
+    
+    Ok(())
+}

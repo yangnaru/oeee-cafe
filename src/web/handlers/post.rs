@@ -5,7 +5,7 @@ use crate::models::community::{find_community_by_id, get_known_communities};
 use crate::models::follow;
 use crate::models::image::find_image_by_id;
 use crate::models::post::{
-    delete_post, edit_post, edit_post_community, find_draft_posts_by_author_id, find_post_by_id,
+    delete_post_with_activity, edit_post, edit_post_community, find_draft_posts_by_author_id, find_post_by_id,
     get_draft_post_count, increment_post_viewer_count, publish_post,
 };
 use crate::models::user::AuthSession;
@@ -1048,7 +1048,7 @@ pub async fn hx_delete_post(
     let client = Client::from_conf(config);
     client
         .delete_objects()
-        .bucket(state.config.aws_s3_bucket)
+        .bucket(state.config.aws_s3_bucket.clone())
         .delete(
             Delete::builder()
                 .set_objects(Some(
@@ -1065,7 +1065,7 @@ pub async fn hx_delete_post(
     let community_id = Uuid::parse_str(&community_id)?;
     let community_url = get_community_slug_url(&mut tx, community_id).await?;
 
-    delete_post(&mut tx, post_uuid).await?;
+    delete_post_with_activity(&mut tx, post_uuid, Some(&state)).await?;
     tx.commit().await?;
 
     Ok(([("HX-Redirect", &community_url)],).into_response())

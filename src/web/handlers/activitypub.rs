@@ -11,7 +11,7 @@ use activitypub_federation::traits::{
     ActivityHandler, Actor as ActivityPubFederationActor, Object,
 };
 
-use activitystreams_kinds::activity::{AcceptType, AnnounceType, CreateType, FollowType, UndoType, UpdateType};
+use activitystreams_kinds::activity::{AcceptType, AnnounceType, CreateType, DeleteType, FollowType, UndoType, UpdateType};
 use activitystreams_kinds::actor::GroupType;
 use activitystreams_kinds::object::NoteType;
 use axum::extract::{Path, Query};
@@ -433,6 +433,7 @@ pub enum PersonAcceptedActivities {
     Follow(Follow),
     Undo(Undo),
     Update(Update),
+    Delete(Delete),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -442,6 +443,7 @@ pub enum GroupAcceptedActivities {
     Follow(Follow),
     Undo(Undo),
     Update(Update),
+    Delete(Delete),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -1054,4 +1056,141 @@ pub async fn send_update_activity(
     ).await?;
     
     Ok(())
+}
+
+pub async fn send_delete_activity(
+    actor: &Actor,
+    object_url: Url,
+    app_state: &crate::web::state::AppState,
+) -> Result<(), AppError> {
+    use crate::models::follow::get_follower_shared_inboxes_for_actor;
+    use activitypub_federation::config::FederationConfig;
+    
+    let db = app_state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    
+    // Get follower inboxes
+    let follower_inboxes = get_follower_shared_inboxes_for_actor(&mut tx, actor.id).await?;
+    tx.commit().await?;
+    
+    if follower_inboxes.is_empty() {
+        return Ok(());
+    }
+    
+    // Convert inboxes to Urls
+    let inbox_urls: Result<Vec<Url>, _> = follower_inboxes
+        .into_iter()
+        .map(|inbox| inbox.parse::<Url>())
+        .collect();
+    let inbox_urls = inbox_urls?;
+    
+    // Create federation config and data
+    let federation_config = FederationConfig::builder()
+        .domain(app_state.config.domain.clone())
+        .app_data(app_state.clone())
+        .build()
+        .await?;
+    let federation_data = federation_config.to_request_data();
+    
+    // Generate activity ID
+    let activity_id = generate_object_id(&app_state.config.domain)?;
+    
+    // Set up audience - public delete
+    let to = vec!["https://www.w3.org/ns/activitystreams#Public".to_string()];
+    let cc = vec![format!("{}/followers", actor.iri)];
+    
+    // Create Delete activity
+    let delete_activity = Delete::new(
+        ObjectId::parse(&actor.iri)?,
+        object_url,
+        activity_id,
+        to,
+        cc,
+        chrono::Utc::now().to_rfc3339(),
+    );
+    
+    // Send the activity to followers
+    actor.send(
+        delete_activity,
+        inbox_urls,
+        false, // Don't use queue for now
+        &federation_data,
+    ).await?;
+    
+    Ok(())
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Delete {
+    actor: ObjectId<Actor>,
+    object: Url,
+    r#type: DeleteType,
+    id: Url,
+    to: Vec<String>,
+    cc: Vec<String>,
+    published: String,
+}
+
+impl Delete {
+    pub fn new(
+        actor: ObjectId<Actor>,
+        object: Url,
+        id: Url,
+        to: Vec<String>,
+        cc: Vec<String>,
+        published: String,
+    ) -> Delete {
+        Delete {
+            actor,
+            object,
+            r#type: Default::default(),
+            id,
+            to,
+            cc,
+            published,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ActivityHandler for Delete {
+    type DataType = AppState;
+    type Error = AppError;
+
+    fn id(&self) -> &Url {
+        &self.id
+    }
+
+    fn actor(&self) -> &Url {
+        self.actor.inner()
+    }
+
+    async fn verify(&self, _data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn receive(self, data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        // Delete activities notify followers about object deletion
+        // We would typically mark the object as deleted in our local copy
+        tracing::info!("Received Delete activity: {:?}", self);
+        
+        let db = data.app_data().config.connect_database().await?;
+        let mut tx = db.begin().await?;
+        
+        // Check if this is a post deletion by trying to parse the object URL
+        let object_url = self.object.to_string();
+        if let Some(post_id_str) = object_url.strip_prefix(&format!("https://{}/ap/posts/", data.app_data().config.domain)) {
+            if let Ok(post_id) = uuid::Uuid::parse_str(post_id_str) {
+                // Mark the post as deleted in our database
+                use crate::models::post::delete_post;
+                if let Err(e) = delete_post(&mut tx, post_id).await {
+                    tracing::warn!("Failed to delete post {} from Delete activity: {:?}", post_id, e);
+                }
+                tx.commit().await?;
+            }
+        }
+        
+        Ok(())
+    }
 }
