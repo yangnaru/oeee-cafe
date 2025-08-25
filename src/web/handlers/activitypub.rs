@@ -19,6 +19,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use url::Url;
 use uuid::Uuid;
 
@@ -96,7 +97,7 @@ impl Object for Actor {
 
         let endpoints = serde_json::json!({
             "type": "as:Endpoints",
-            "sharedInbox": "https://typo.blue/inbox"
+            "sharedInbox": format!("https://{}/inbox", self.instance_host)
         });
 
         match self.r#type {
@@ -306,7 +307,21 @@ pub async fn activitypub_get_user(
         Actor::find_by_user_id(&mut tx, Uuid::parse_str(&actor_id).unwrap()).await?
     {
         let json_actor = actor.into_json(&data).await?;
-        Ok(FederationJson(WithContext::new_default(json_actor)).into_response())
+        let context = [
+            "https://www.w3.org/ns/activitystreams",
+            "https://w3id.org/security/v1",
+        ];
+
+        let activity = WithContext::new(
+            json_actor,
+            serde_json::Value::Array(
+                context
+                    .into_iter()
+                    .map(|s| serde_json::Value::String(s.to_string()))
+                    .collect(),
+            ),
+        );
+        Ok(FederationJson(activity).into_response())
     } else {
         Ok((StatusCode::NOT_FOUND, "Actor not found").into_response())
     }
@@ -324,7 +339,21 @@ pub async fn activitypub_get_community(
         Actor::find_by_community_id(&mut tx, Uuid::parse_str(&community_id).unwrap()).await?
     {
         let json_actor = actor.into_json(&data).await?;
-        Ok(FederationJson(WithContext::new_default(json_actor)).into_response())
+        let context = [
+            "https://www.w3.org/ns/activitystreams",
+            "https://w3id.org/security/v1",
+        ];
+
+        let activity = WithContext::new(
+            json_actor,
+            serde_json::Value::Array(
+                context
+                    .into_iter()
+                    .map(|s| serde_json::Value::String(s.to_string()))
+                    .collect(),
+            ),
+        );
+        Ok(FederationJson(activity).into_response())
     } else {
         Ok((StatusCode::NOT_FOUND, "Actor not found").into_response())
     }
@@ -360,7 +389,21 @@ pub async fn activitypub_get_post(
         )
         .await?;
 
-        Ok(FederationJson(WithContext::new_default(note)).into_response())
+        let context = [
+            "https://www.w3.org/ns/activitystreams",
+            "https://w3id.org/security/v1",
+        ];
+
+        Ok(FederationJson(WithContext::new(
+            note,
+            Value::Array(
+                context
+                    .into_iter()
+                    .map(|s| Value::String(s.to_string()))
+                    .collect(),
+            ),
+        ))
+        .into_response())
     } else {
         Ok((StatusCode::NOT_FOUND, "Post not found").into_response())
     }

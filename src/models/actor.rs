@@ -6,6 +6,7 @@ use activitypub_federation::traits::ActivityHandler;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::{query_as, Postgres, Transaction, Type};
 use url::Url;
 use uuid::Uuid;
@@ -239,7 +240,20 @@ impl Actor {
         A: ActivityHandler + Serialize + std::fmt::Debug + Send + Sync,
         <A as ActivityHandler>::Error: From<anyhow::Error> + From<serde_json::Error>,
     {
-        let activity = WithContext::new_default(activity);
+        let context = [
+            "https://www.w3.org/ns/activitystreams",
+            "https://w3id.org/security/v1",
+        ];
+
+        let activity = WithContext::new(
+            activity,
+            Value::Array(
+                context
+                    .into_iter()
+                    .map(|s| Value::String(s.to_string()))
+                    .collect(),
+            ),
+        );
         // Send through queue in some cases and bypass it in others to test both code paths
         if use_queue {
             queue_activity(&activity, self, recipients, data).await?;
