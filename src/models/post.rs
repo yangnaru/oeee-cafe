@@ -558,9 +558,17 @@ pub async fn find_post_by_id(
             }
         }
 
+        let updated_at_seoul = row.updated_at.with_timezone(&Seoul);
+        let updated_at_human_readable = updated_at_seoul.format("%Y-%m-%d %H:%M").to_string();
         map.insert(
             "updated_at".to_string(),
-            Some(row.updated_at.format("%Y-%m-%d %H:%M").to_string()),
+            Some(updated_at_human_readable),
+        );
+        
+        // Insert UTC updated_at time with timezone
+        map.insert(
+            "updated_at_utc".to_string(),
+            Some(row.updated_at.to_rfc3339()),
         );
         map.insert(
             "community_id".to_string(),

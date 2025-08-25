@@ -10,7 +10,7 @@ use crate::models::post::{
 };
 use crate::models::user::AuthSession;
 use crate::web::handlers::activitypub::{
-    create_note_from_post, generate_object_id, Announce, Create, Note,
+    create_note_from_post, create_updated_note_from_post, generate_object_id, Announce, Create, Note, UpdateNote,
 };
 use crate::web::handlers::{
     create_base_ftl_context, get_bundle, parse_id_with_legacy_support, ParsedId,
@@ -949,14 +949,39 @@ pub async fn hx_do_edit_post(
     let _ = edit_post(
         &mut tx,
         post_uuid,
-        form.title,
-        form.content,
+        form.title.clone(),
+        form.content.clone(),
         form.is_sensitive == Some("on".to_string()),
         form.allow_relay == Some("on".to_string()),
     )
     .await;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
+    
+    // Find the actor for this user to send ActivityPub activities
+    let actor = Actor::find_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    
     let _ = tx.commit().await;
+
+    // Send ActivityPub Update activity to followers if actor exists and post is published
+    if let Some(actor) = actor {
+        if let Some(ref post_data) = post {
+            // Only send ActivityPub activities for published posts
+            if post_data.get("published_at").and_then(|p| p.as_ref()).is_some() {
+                // Send update to user's followers
+                if let Err(e) = send_post_update_to_followers(
+                    &actor,
+                    post_uuid,
+                    &state,
+                ).await {
+                    tracing::error!(
+                        "Failed to send post update to user's ActivityPub followers: {:?}",
+                        e
+                    );
+                    // Don't fail the entire operation if ActivityPub sending fails
+                }
+            }
+        }
+    }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja")?;
     let user_preferred_language = auth_session
@@ -1204,4 +1229,78 @@ pub async fn redirect_post_to_login_name(
         }
         None => Ok(StatusCode::NOT_FOUND.into_response()),
     }
+}
+
+async fn send_post_update_to_followers(
+    actor: &Actor,
+    post_id: Uuid,
+    state: &AppState,
+) -> Result<(), AppError> {
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+
+    // Get all followers for this actor
+    let followers = follow::find_followers_by_actor_id(&mut tx, actor.id).await?;
+
+    // Use the function to create the updated Note with timestamp
+    let note = create_updated_note_from_post(
+        &mut tx,
+        post_id,
+        actor,
+        &state.config.domain,
+        &state.config.r2_public_endpoint_url,
+    )
+    .await?;
+
+    let actor_object_id = ObjectId::parse(&actor.iri)?;
+    let to = vec!["https://www.w3.org/ns/activitystreams#Public".to_string()];
+    let cc = vec![format!("{}/followers", actor.iri)];
+    let published = chrono::Utc::now().to_rfc3339();
+
+    tracing::info!("Updated Note: {:?}", note);
+
+    // Only send to followers if there are any
+    if !followers.is_empty() {
+        // Create the Update activity for the Note
+        let activity_id = generate_object_id(&state.config.domain)?;
+        let update = UpdateNote::new(
+            actor_object_id,
+            note,
+            activity_id,
+            to,
+            cc,
+            published,
+        );
+
+        // Get follower inboxes
+        let follower_inboxes: Vec<url::Url> = followers
+            .iter()
+            .map(|follower| follower.inbox_url.parse())
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if !follower_inboxes.is_empty() {
+            // Create federation config to send activities
+            let federation_config = activitypub_federation::config::FederationConfig::builder()
+                .domain(&state.config.domain)
+                .app_data(state.clone())
+                .build()
+                .await?;
+            let federation_data = federation_config.to_request_data();
+
+            // Send to all followers
+            actor
+                .send(update, follower_inboxes, false, &federation_data)
+                .await?;
+            tracing::info!(
+                "Sent Update activity for post {} to {} followers",
+                post_id,
+                followers.len()
+            );
+        }
+    } else {
+        tracing::info!("No followers to send Update activity to for post {}", post_id);
+    }
+
+    tx.commit().await?;
+    Ok(())
 }
