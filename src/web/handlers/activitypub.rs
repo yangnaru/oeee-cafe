@@ -339,7 +339,7 @@ pub async fn activitypub_get_post(
     let mut tx = db.begin().await?;
 
     let post_uuid = Uuid::parse_str(&post_id)?;
-    
+
     if let Some(post) = find_post_by_id(&mut tx, post_uuid).await? {
         let author_id = Uuid::parse_str(post.get("author_id").unwrap().as_ref().unwrap())?;
 
@@ -357,7 +357,8 @@ pub async fn activitypub_get_post(
             &author_actor,
             &data.app_data().config.domain,
             &data.app_data().config.r2_public_endpoint_url,
-        ).await?;
+        )
+        .await?;
 
         Ok(FederationJson(WithContext::new_default(note)).into_response())
     } else {
@@ -796,7 +797,10 @@ pub async fn create_note_from_post(
 
     // Get title and content
     let title = post.get("title").and_then(|t| t.as_ref()).map_or("", |v| v);
-    let content = post.get("content").and_then(|c| c.as_ref()).map_or("", |v| v);
+    let content = post
+        .get("content")
+        .and_then(|c| c.as_ref())
+        .map_or("", |v| v);
 
     // Format content with title if available
     let formatted_content = if title.is_empty() {
@@ -832,13 +836,9 @@ pub async fn create_note_from_post(
     }
 
     // Create URLs and IDs
-    let post_url: Url = format!(
-        "https://{}/@{}/{}",
-        domain,
-        author_actor.username,
-        post_id
-    ).parse()?;
-    
+    let post_url: Url =
+        format!("https://{}/@{}/{}", domain, author_actor.username, post_id).parse()?;
+
     let note_id: Url = format!("https://{}/ap/posts/{}", domain, post_id).parse()?;
 
     // Set up audience - public post
@@ -846,12 +846,7 @@ pub async fn create_note_from_post(
     let cc = vec![format!("{}/followers", author_actor.iri)];
 
     // Get published date
-    let published = post
-        .get("published_at")
-        .and_then(|p| p.as_ref())
-        .and_then(|p| chrono::DateTime::parse_from_rfc3339(p).ok())
-        .map(|dt| dt.to_rfc3339())
-        .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+    let published = post.get("published_at_utc").unwrap();
 
     // Create the Note object
     let note = Note::new(
@@ -860,7 +855,7 @@ pub async fn create_note_from_post(
         formatted_content,
         to,
         cc,
-        published,
+        published.clone().unwrap_or_default(),
         post_url,
         attachments,
     );

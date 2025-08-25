@@ -549,6 +549,12 @@ pub async fn find_post_by_id(
                     "published_at".to_string(),
                     Some(published_at_human_readable),
                 );
+
+                // Insert UTC published_at time with timezone
+                map.insert(
+                    "published_at_utc".to_string(),
+                    Some(published_at.to_rfc3339()),
+                );
             }
         }
 

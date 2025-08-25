@@ -9,7 +9,9 @@ use crate::models::post::{
     get_draft_post_count, increment_post_viewer_count, publish_post,
 };
 use crate::models::user::AuthSession;
-use crate::web::handlers::activitypub::{create_note_from_post, generate_object_id, Announce, Create, Note};
+use crate::web::handlers::activitypub::{
+    create_note_from_post, generate_object_id, Announce, Create, Note,
+};
 use crate::web::handlers::{
     create_base_ftl_context, get_bundle, parse_id_with_legacy_support, ParsedId,
 };
@@ -62,7 +64,8 @@ async fn send_post_to_followers(
         actor,
         &state.config.domain,
         &state.config.r2_public_endpoint_url,
-    ).await?;
+    )
+    .await?;
 
     let actor_object_id = ObjectId::parse(&actor.iri)?;
     let to = vec!["https://www.w3.org/ns/activitystreams#Public".to_string()];
