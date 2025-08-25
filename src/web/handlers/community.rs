@@ -381,7 +381,7 @@ pub async fn do_create_community(
                             None,
                             &mut vec![],
                         );
-                        messages.error(&error_message.to_string());
+                        messages.error(error_message.to_string());
                         return Ok(Redirect::to("/communities/new").into_response());
                     }
                 }
