@@ -5,12 +5,13 @@ use crate::models::community::{find_community_by_id, get_known_communities};
 use crate::models::follow;
 use crate::models::image::find_image_by_id;
 use crate::models::post::{
-    delete_post_with_activity, edit_post, edit_post_community, find_draft_posts_by_author_id, find_post_by_id,
-    get_draft_post_count, increment_post_viewer_count, publish_post,
+    delete_post_with_activity, edit_post, edit_post_community, find_draft_posts_by_author_id,
+    find_post_by_id, get_draft_post_count, increment_post_viewer_count, publish_post,
 };
 use crate::models::user::AuthSession;
 use crate::web::handlers::activitypub::{
-    create_note_from_post, create_updated_note_from_post, generate_object_id, Announce, Create, Note, UpdateNote,
+    create_note_from_post, create_updated_note_from_post, generate_object_id, Announce, Create,
+    Note, UpdateNote,
 };
 use crate::web::handlers::{
     create_base_ftl_context, get_bundle, parse_id_with_legacy_support, ParsedId,
@@ -130,6 +131,9 @@ async fn send_post_to_community_followers(
     note: &Note,
     state: &AppState,
 ) -> Result<(), AppError> {
+    // Print note
+    tracing::info!("Note: {:?}", note);
+
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
 
@@ -978,23 +982,23 @@ pub async fn hx_do_edit_post(
     )
     .await;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
-    
+
     // Find the actor for this user to send ActivityPub activities
     let actor = Actor::find_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
-    
+
     let _ = tx.commit().await;
 
     // Send ActivityPub Update activity to followers if actor exists and post is published
     if let Some(actor) = actor {
         if let Some(ref post_data) = post {
             // Only send ActivityPub activities for published posts
-            if post_data.get("published_at").and_then(|p| p.as_ref()).is_some() {
+            if post_data
+                .get("published_at")
+                .and_then(|p| p.as_ref())
+                .is_some()
+            {
                 // Send update to user's followers
-                if let Err(e) = send_post_update_to_followers(
-                    &actor,
-                    post_uuid,
-                    &state,
-                ).await {
+                if let Err(e) = send_post_update_to_followers(&actor, post_uuid, &state).await {
                     tracing::error!(
                         "Failed to send post update to user's ActivityPub followers: {:?}",
                         e
@@ -1307,14 +1311,7 @@ async fn send_post_update_to_followers(
     if !followers.is_empty() {
         // Create the Update activity for the Note
         let activity_id = generate_object_id(&state.config.domain)?;
-        let update = UpdateNote::new(
-            actor_object_id,
-            note,
-            activity_id,
-            to,
-            cc,
-            published,
-        );
+        let update = UpdateNote::new(actor_object_id, note, activity_id, to, cc, published);
 
         // Get follower inboxes
         let follower_inboxes: Vec<url::Url> = followers
@@ -1342,9 +1339,152 @@ async fn send_post_update_to_followers(
             );
         }
     } else {
-        tracing::info!("No followers to send Update activity to for post {}", post_id);
+        tracing::info!(
+            "No followers to send Update activity to for post {}",
+            post_id
+        );
     }
 
     tx.commit().await?;
     Ok(())
+}
+
+pub async fn post_relay_view_by_login_name(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    Path((login_name, post_id)): Path<(String, String)>,
+) -> Result<impl IntoResponse, AppError> {
+    let uuid = match parse_id_with_legacy_support(&post_id, &format!("/@{}", login_name), &state)? {
+        ParsedId::Uuid(uuid) => uuid,
+        ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+        ParsedId::InvalidId(error_response) => return Ok(error_response),
+    };
+
+    let db = state.config.connect_database().await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
+    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+
+    match post {
+        Some(ref post_data) => {
+            let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
+            if post_login_name != &login_name {
+                return Ok(StatusCode::NOT_FOUND.into_response());
+            }
+        }
+        None => {
+            return Ok((
+                StatusCode::NOT_FOUND,
+                handler_404(
+                    auth_session,
+                    ExtractAcceptLanguage(accept_language),
+                    State(state),
+                )
+                .await?,
+            )
+                .into_response());
+        }
+    }
+
+    let template: minijinja::Template<'_, '_> =
+        state.env.get_template("draw_post_neo.jinja").unwrap();
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template
+        .render(context! {
+            current_user => auth_session.user,
+            post => post.clone(),
+            parent_post_id => uuid.to_string(),
+            ..create_base_ftl_context(&bundle)
+        })
+        .unwrap();
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn post_replay_view_by_login_name(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path((login_name, post_id)): Path<(String, String)>,
+) -> Result<impl IntoResponse, AppError> {
+    let uuid = match parse_id_with_legacy_support(&post_id, &format!("/@{}", login_name), &state)? {
+        ParsedId::Uuid(uuid) => uuid,
+        ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+        ParsedId::InvalidId(error_response) => return Ok(error_response),
+    };
+
+    let db = state.config.connect_database().await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
+    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+
+    match post {
+        Some(ref post_data) => {
+            let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
+            if post_login_name != &login_name {
+                return Ok(StatusCode::NOT_FOUND.into_response());
+            }
+        }
+        None => {
+            return Ok(StatusCode::NOT_FOUND.into_response());
+        }
+    }
+
+    let community_id = Uuid::parse_str(
+        post.clone()
+            .as_ref()
+            .unwrap()
+            .get("community_id")
+            .unwrap()
+            .as_ref()
+            .unwrap(),
+    )
+    .unwrap();
+
+    let draft_post_count = match auth_session.user.clone() {
+        Some(user) => get_draft_post_count(&mut tx, user.id)
+            .await
+            .unwrap_or_default(),
+        None => 0,
+    };
+    let community_id = community_id.to_string();
+
+    let template_filename = match post.clone().unwrap().get("replay_filename") {
+        Some(replay_filename) => {
+            let replay_filename = replay_filename.as_ref().unwrap();
+            if replay_filename.ends_with(".pch") {
+                "post_replay_view_pch.jinja"
+            } else if replay_filename.ends_with(".tgkr") {
+                "post_replay_view_tgkr.jinja"
+            } else {
+                "post_replay_view_pch.jinja"
+            }
+        }
+        None => "post_replay_view_pch.jinja",
+    };
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename).unwrap();
+    let user_preferred_language = auth_session
+        .user
+        .clone()
+        .map(|u| u.preferred_language)
+        .unwrap_or_else(|| None);
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let rendered = template
+        .render(context! {
+            current_user => auth_session.user,
+            r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+            post => {
+                post.as_ref()
+            },
+            post_id => post_id,
+            community_id,
+            draft_post_count,
+            ..create_base_ftl_context(&bundle)
+        })
+        .unwrap();
+    Ok(Html(rendered).into_response())
 }

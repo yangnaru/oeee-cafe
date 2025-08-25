@@ -240,6 +240,9 @@ impl Actor {
         A: ActivityHandler + Serialize + std::fmt::Debug + Send + Sync,
         <A as ActivityHandler>::Error: From<anyhow::Error> + From<serde_json::Error>,
     {
+        // Print activity
+        tracing::info!("Activity: {:?}", activity);
+
         let context = [
             "https://www.w3.org/ns/activitystreams",
             "https://w3id.org/security/v1",
