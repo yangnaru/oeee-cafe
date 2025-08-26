@@ -3,7 +3,8 @@ use crate::models::actor::create_actor_for_community;
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
     create_community, find_community_by_id, find_community_by_slug, get_own_communities,
-    get_participating_communities, get_public_communities, update_community_with_activity, CommunityDraft,
+    get_participating_communities, get_public_communities, update_community_with_activity,
+    CommunityDraft,
 };
 use crate::models::post::{find_published_posts_by_community_id, get_draft_post_count};
 use crate::models::user::AuthSession;
@@ -107,6 +108,7 @@ pub async fn community(
                     ("user_login_name".to_string(), comment.user_login_name.clone().to_string()),
                     ("user_display_name".to_string(), comment.user_display_name.clone().to_string()),
                     ("post_title".to_string(), comment.post_title.clone().unwrap_or_default().to_string()),
+                    ("post_author_login_name".to_string(), comment.post_author_login_name.clone().to_string()),
                     ("post_id".to_string(), comment.post_id.to_string().to_string()),
                     ("created_at".to_string(), comment.created_at.to_string()),
                     ("content".to_string(), comment.content.clone().to_string()),
@@ -521,7 +523,15 @@ pub async fn hx_do_edit_community(
         is_private: form.is_private == Some("on".to_string()),
     };
 
-    match update_community_with_activity(&mut tx, community_uuid, community_draft, &state.config, Some(&state)).await {
+    match update_community_with_activity(
+        &mut tx,
+        community_uuid,
+        community_draft,
+        &state.config,
+        Some(&state),
+    )
+    .await
+    {
         Ok(updated_community) => {
             // Success - commit transaction
             let _ = tx.commit().await;

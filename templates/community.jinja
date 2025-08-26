@@ -77,12 +77,11 @@
       <div class="comment-list">
         {% for comment in comments %}
           <div class="comment-list-item">
-            <a href="/@{{ comment.user_login_name }}">{{ comment.user_display_name }}</a>@<a href="/@{{ comment.user_login_name }}/{{ comment.post_id }}">
+            <a href="/@{{ comment.user_login_name }}">{{ comment.user_display_name }}</a> → <a href="/@{{ comment.post_author_login_name }}/{{ comment.post_id }}">
               {% if comment.post_title %}
                 {{ comment.post_title }}
               {% else %}
-                {{
-                ftl_post_no_title }}
+                {{ ftl_post_no_title }}
               {% endif %}
             </a>: {{ comment.content }}
           </div>
