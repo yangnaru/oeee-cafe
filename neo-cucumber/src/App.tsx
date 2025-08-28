@@ -396,19 +396,24 @@ function App() {
     sortedUsers.forEach(([userId, userEngine]) => {
       const engine = userEngine.engine;
       
+      // Only apply visibility toggles to local user, remote users always show both layers
+      const isLocalUser = userId === userIdRef.current;
+      const fgVisible = isLocalUser ? drawingState.fgVisible : true;
+      const bgVisible = isLocalUser ? drawingState.bgVisible : true;
+      
       // Composite this user's foreground and background using the same algorithm as DrawingEngine
       const userComposite = compositeEngineLayer(
         engine.layers.foreground,
         engine.layers.background,
-        drawingState.fgVisible,
-        drawingState.bgVisible,
+        fgVisible,
+        bgVisible,
         engine.imageWidth,
         engine.imageHeight
       );
       
       allLayers.push(userComposite);
-      const userType = userId === userIdRef.current ? 'local' : 'remote';
-      console.log(`Prepared composite for ${userType} user: ${userId}`);
+      const userType = isLocalUser ? 'local' : 'remote';
+      console.log(`Prepared composite for ${userType} user: ${userId} (fg: ${fgVisible}, bg: ${bgVisible})`);
     });
     
     // Composite all user layers together
