@@ -334,6 +334,38 @@ function App() {
         fgThumbnailRef.current,
         bgThumbnailRef.current
       );
+
+      // Connect to WebSocket on canvas load
+      const ws = new WebSocket(
+        "ws://100.65.148.126:3000/collaborate/1d57bd0d-be56-43d4-8b66-da739128fb22/ws"
+      );
+
+      ws.onopen = (event) => {
+        console.log("WebSocket connected:", event);
+      };
+
+      ws.onmessage = (event) => {
+        console.log("WebSocket message received:", event);
+        console.log("Message data:", event.data);
+      };
+
+      ws.onerror = (event) => {
+        console.error("WebSocket error:", event);
+      };
+
+      ws.onclose = (event) => {
+        console.log("WebSocket closed:", event);
+      };
+
+      // Clean up WebSocket connection when component unmounts
+      return () => {
+        if (
+          ws.readyState === WebSocket.OPEN ||
+          ws.readyState === WebSocket.CONNECTING
+        ) {
+          ws.close();
+        }
+      };
     }
   }, []);
 
@@ -399,19 +431,27 @@ function App() {
   // Update canvas when layer visibility changes
   useEffect(() => {
     if (drawingEngine) {
-      const fgCtx = fgThumbnailRef.current?.getContext('2d');
-      const bgCtx = bgThumbnailRef.current?.getContext('2d');
-      const canvasCtx = canvasRef.current?.getContext('2d');
-      
+      const fgCtx = fgThumbnailRef.current?.getContext("2d");
+      const bgCtx = bgThumbnailRef.current?.getContext("2d");
+      const canvasCtx = canvasRef.current?.getContext("2d");
+
       // Update layer thumbnails and composite
       drawingEngine.updateLayerThumbnails(fgCtx, bgCtx);
-      drawingEngine.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
-      
+      drawingEngine.compositeLayers(
+        drawingState.fgVisible,
+        drawingState.bgVisible
+      );
+
       // Update main canvas
       if (canvasCtx && drawingEngine.compositeBuffer) {
         canvasCtx.putImageData(
-          new ImageData(drawingEngine.compositeBuffer, drawingEngine.imageWidth, drawingEngine.imageHeight),
-          0, 0
+          new ImageData(
+            drawingEngine.compositeBuffer,
+            drawingEngine.imageWidth,
+            drawingEngine.imageHeight
+          ),
+          0,
+          0
         );
       }
     }
@@ -583,9 +623,15 @@ function App() {
                       e.preventDefault(); // Prevent browser context menu
                       // Toggle layer visibility
                       if (layer === "foreground") {
-                        setDrawingState((prev) => ({ ...prev, fgVisible: !prev.fgVisible }));
+                        setDrawingState((prev) => ({
+                          ...prev,
+                          fgVisible: !prev.fgVisible,
+                        }));
                       } else {
-                        setDrawingState((prev) => ({ ...prev, bgVisible: !prev.bgVisible }));
+                        setDrawingState((prev) => ({
+                          ...prev,
+                          bgVisible: !prev.bgVisible,
+                        }));
                       }
                     }}
                     title={`Left click to select layer, right click to toggle visibility`}
@@ -593,15 +639,29 @@ function App() {
                   {layer === "foreground" ? "FG" : "BG"}
                   <input
                     type="checkbox"
-                    checked={layer === "foreground" ? drawingState.fgVisible : drawingState.bgVisible}
+                    checked={
+                      layer === "foreground"
+                        ? drawingState.fgVisible
+                        : drawingState.bgVisible
+                    }
                     onChange={(e) => {
                       if (layer === "foreground") {
-                        setDrawingState((prev) => ({ ...prev, fgVisible: e.target.checked }));
+                        setDrawingState((prev) => ({
+                          ...prev,
+                          fgVisible: e.target.checked,
+                        }));
                       } else {
-                        setDrawingState((prev) => ({ ...prev, bgVisible: e.target.checked }));
+                        setDrawingState((prev) => ({
+                          ...prev,
+                          bgVisible: e.target.checked,
+                        }));
                       }
                     }}
-                    title={`${layer === "foreground" ? "Show/hide foreground" : "Show/hide background"} layer`}
+                    title={`${
+                      layer === "foreground"
+                        ? "Show/hide foreground"
+                        : "Show/hide background"
+                    } layer`}
                   />
                 </label>
               ))}

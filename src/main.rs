@@ -2,6 +2,8 @@ use minijinja::{path_loader, Environment};
 use oeee_cafe::web::app::App;
 use oeee_cafe::web::state::AppState;
 use oeee_cafe::AppConfig;
+use dashmap::DashMap;
+use std::sync::Arc;
 use std::env::args;
 use std::path::PathBuf;
 use std::process::exit;
@@ -61,6 +63,7 @@ fn main() {
             let state = AppState {
                 config: cfg.clone(),
                 env,
+                collaboration_rooms: Arc::new(DashMap::new()),
             };
 
             App::new(state).await.unwrap().serve().await.unwrap()

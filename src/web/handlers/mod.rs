@@ -33,6 +33,7 @@ pub mod about;
 pub mod account;
 pub mod activitypub;
 pub mod auth;
+pub mod collaborate;
 pub mod community;
 pub mod draw;
 pub mod home;
