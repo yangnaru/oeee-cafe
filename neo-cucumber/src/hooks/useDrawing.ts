@@ -171,6 +171,31 @@ export const useDrawing = (
             drawingState.opacity
           );
 
+          // Send fill event through WebSocket
+          if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
+            const fillEventData = {
+              type: 'fill',
+              userId: userIdRef?.current,
+              layer: drawingState.layerType,
+              x: Math.floor(coords.x),
+              y: Math.floor(coords.y),
+              color: {
+                r: r,
+                g: g,
+                b: b,
+                a: drawingState.opacity
+              },
+              timestamp: Date.now()
+            };
+            
+            try {
+              wsRef.current.send(JSON.stringify(fillEventData));
+              console.log('Sent fill event:', fillEventData);
+            } catch (error) {
+              console.error('Failed to send fill event:', error);
+            }
+          }
+
           drawingEngineRef.current.updateLayerThumbnails(
             fgThumbnailRef.current?.getContext('2d') || undefined, 
             bgThumbnailRef.current?.getContext('2d') || undefined

@@ -451,6 +451,30 @@ function App() {
                 // Return a new Map to trigger re-render
                 return new Map(prev);
               });
+            } else if (messageData.type === 'fill') {
+              // Apply fill operation to user's engine
+              setUserEngines(prev => {
+                const userEngine = prev.get(messageData.userId);
+                if (userEngine && messageData.color) {
+                  const engine = userEngine.engine;
+                  const targetLayer = messageData.layer === 'foreground' ? engine.layers.foreground : engine.layers.background;
+                  
+                  // Use the DrawingEngine's doFloodFill method
+                  engine.doFloodFill(
+                    targetLayer,
+                    messageData.x,
+                    messageData.y,
+                    messageData.color.r || 0,
+                    messageData.color.g || 0,
+                    messageData.color.b || 0,
+                    messageData.color.a || 255
+                  );
+                  
+                  console.log(`Applied fill from user ${messageData.userId} to ${messageData.layer} layer at (${messageData.x}, ${messageData.y})`);
+                }
+                // Return a new Map to trigger re-render
+                return new Map(prev);
+              });
             } else if (messageData.type === 'pointerup') {
               // Handle pointerup events (could be used for stroke completion, etc.)
               console.log(`Received pointerup from user ${messageData.userId} at (${messageData.x}, ${messageData.y})`);
