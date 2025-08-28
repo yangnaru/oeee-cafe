@@ -139,7 +139,9 @@ function App() {
       const newMap = new Map(prev);
       newMap.set(userId, { engine, firstSeen });
       
-      console.log(`Created drawing engine for new user: ${userId}, first seen: ${new Date(firstSeen).toISOString()}`);
+      console.log(`Created drawing engine for REMOTE user: ${userId}, first seen: ${new Date(firstSeen).toISOString()}`);
+      console.log(`Local user joined at: ${new Date(localUserJoinTimeRef.current).toISOString()}`);
+      console.log(`Remote user timestamp ${firstSeen > localUserJoinTimeRef.current ? 'AFTER' : 'BEFORE'} local user`);
       return newMap;
     });
   }, []);
@@ -379,6 +381,14 @@ function App() {
       ([, a], [, b]) => b.firstSeen - a.firstSeen
     );
     
+    // Debug logging for layer ordering
+    console.log('Layer ordering (bottom to top):');
+    sortedUsers.forEach(([userId, userEngine], index) => {
+      const userType = userId === userIdRef.current ? 'LOCAL' : 'REMOTE';
+      const joinTime = new Date(userEngine.firstSeen).toISOString();
+      console.log(`  ${index}: ${userType} ${userId} (joined: ${joinTime})`);
+    });
+    
     // Collect all user layers for proper compositing
     const allLayers: Uint8ClampedArray[] = [];
     
@@ -450,9 +460,15 @@ function App() {
 
       ws.onopen = (event) => {
         console.log("WebSocket connected:", event);
-        // Set the local user join timestamp when WebSocket connects
-        localUserJoinTimeRef.current = Date.now();
-        console.log(`Local user joined at: ${new Date(localUserJoinTimeRef.current).toISOString()}`);
+        // Set join timestamp after a short delay to let stored messages arrive first
+        setTimeout(() => {
+          if (localUserJoinTimeRef.current === 0) { // Only set if not already set
+            localUserJoinTimeRef.current = Date.now();
+            console.log(`Local user join timestamp set after stored messages: ${new Date(localUserJoinTimeRef.current).toISOString()}`);
+            // Trigger re-compositing with proper timestamp
+            compositeCallbackRef.current?.();
+          }
+        }, 100); // 100ms should be enough for stored messages
       };
 
       ws.onmessage = (event) => {
