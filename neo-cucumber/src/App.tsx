@@ -145,65 +145,6 @@ function App() {
   }, []);
 
 
-  // Function to composite all user layers to the main canvas
-  const compositeAllUserLayers = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Clear the canvas
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    // Create a combined map including local user and remote users
-    const allUsers = new Map(userEngines);
-    
-    // Add local user if drawingEngine exists
-    if (drawingEngine) {
-      allUsers.set(userIdRef.current, {
-        engine: drawingEngine,
-        firstSeen: 0 // Local user gets earliest timestamp (top layer)
-      });
-    }
-    
-    // Sort users by firstSeen timestamp (later joiners first = lower layer order)
-    const sortedUsers = Array.from(allUsers.entries()).sort(
-      ([, a], [, b]) => b.firstSeen - a.firstSeen
-    );
-    
-    // Collect all user layers for proper compositing
-    const allLayers: Uint8ClampedArray[] = [];
-    
-    // Add each user's composite layer (background + foreground) in order
-    sortedUsers.forEach(([userId, userEngine]) => {
-      const engine = userEngine.engine;
-      
-      // Composite this user's foreground and background using the same algorithm as DrawingEngine
-      const userComposite = compositeEngineLayer(
-        engine.layers.foreground,
-        engine.layers.background,
-        drawingState.fgVisible,
-        drawingState.bgVisible,
-        engine.imageWidth,
-        engine.imageHeight
-      );
-      
-      allLayers.push(userComposite);
-      const userType = userId === userIdRef.current ? 'local' : 'remote';
-      console.log(`Prepared composite for ${userType} user: ${userId}`);
-    });
-    
-    // Composite all user layers together
-    const finalComposite = compositeLayers(allLayers, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    // Put the final result on the main canvas
-    const finalImageData = new ImageData(finalComposite, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.putImageData(finalImageData, 0, 0);
-    
-    console.log(`Composited ${sortedUsers.length} user layers (including local)`);
-  }, [userEngines, drawingEngine, drawingState.fgVisible, drawingState.bgVisible]);
-
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fgThumbnailRef = useRef<HTMLCanvasElement>(null);
   const bgThumbnailRef = useRef<HTMLCanvasElement>(null);
@@ -385,6 +326,15 @@ function App() {
     []
   );
 
+  // Ref to store the compositing function for the callback
+  const compositeCallbackRef = useRef<(() => void) | null>(null);
+
+  // Callback to trigger unified compositing when local drawing changes
+  const handleLocalDrawingChange = useCallback(() => {
+    // Call the compositing function if available
+    compositeCallbackRef.current?.();
+  }, []);
+
   // Use the drawing hook
   const { undo, redo, drawingEngine } = useDrawing(
     canvasRef,
@@ -397,8 +347,73 @@ function App() {
     CANVAS_WIDTH,
     CANVAS_HEIGHT,
     wsRef,
-    userIdRef
+    userIdRef,
+    handleLocalDrawingChange
   );
+
+  // Function to composite all user layers to the main canvas
+  const compositeAllUserLayers = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Clear the canvas
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Create a combined map including local user and remote users
+    const allUsers = new Map(userEngines);
+    
+    // Add local user if drawingEngine exists
+    if (drawingEngine) {
+      allUsers.set(userIdRef.current, {
+        engine: drawingEngine,
+        firstSeen: 0 // Local user gets earliest timestamp (top layer)
+      });
+    }
+    
+    // Sort users by firstSeen timestamp (later joiners first = lower layer order)
+    const sortedUsers = Array.from(allUsers.entries()).sort(
+      ([, a], [, b]) => b.firstSeen - a.firstSeen
+    );
+    
+    // Collect all user layers for proper compositing
+    const allLayers: Uint8ClampedArray[] = [];
+    
+    // Add each user's composite layer (background + foreground) in order
+    sortedUsers.forEach(([userId, userEngine]) => {
+      const engine = userEngine.engine;
+      
+      // Composite this user's foreground and background using the same algorithm as DrawingEngine
+      const userComposite = compositeEngineLayer(
+        engine.layers.foreground,
+        engine.layers.background,
+        drawingState.fgVisible,
+        drawingState.bgVisible,
+        engine.imageWidth,
+        engine.imageHeight
+      );
+      
+      allLayers.push(userComposite);
+      const userType = userId === userIdRef.current ? 'local' : 'remote';
+      console.log(`Prepared composite for ${userType} user: ${userId}`);
+    });
+    
+    // Composite all user layers together
+    const finalComposite = compositeLayers(allLayers, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Put the final result on the main canvas
+    const finalImageData = new ImageData(finalComposite, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.putImageData(finalImageData, 0, 0);
+    
+    console.log(`Composited ${sortedUsers.length} user layers (including local)`);
+  }, [userEngines, drawingEngine, drawingState.fgVisible, drawingState.bgVisible]);
+
+  // Set the compositing callback ref after compositeAllUserLayers is defined
+  useEffect(() => {
+    compositeCallbackRef.current = compositeAllUserLayers;
+  }, [compositeAllUserLayers]);
 
   const handleZoomReset = useCallback(() => {
     const resetIndex = zoomLevels.findIndex((level) => level >= 1.0);

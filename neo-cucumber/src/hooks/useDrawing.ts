@@ -23,7 +23,8 @@ export const useDrawing = (
   canvasWidth: number = 500,
   canvasHeight: number = 500,
   wsRef?: React.RefObject<WebSocket | null>,
-  userIdRef?: React.RefObject<string>
+  userIdRef?: React.RefObject<string>,
+  onDrawingChange?: () => void
 ) => {
   console.log('🚀 useDrawing hook START');
   console.log('useDrawing hook called with canvas dimensions:', canvasWidth, canvasHeight);
@@ -200,14 +201,8 @@ export const useDrawing = (
             fgThumbnailRef.current?.getContext('2d') || undefined, 
             bgThumbnailRef.current?.getContext('2d') || undefined
           );
-          drawingEngineRef.current.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
-          
-          if (contextRef.current && drawingEngineRef.current.compositeBuffer) {
-            contextRef.current.putImageData(
-              new ImageData(drawingEngineRef.current.compositeBuffer, drawingEngineRef.current.imageWidth, drawingEngineRef.current.imageHeight),
-              0, 0
-            );
-          }
+          // Notify parent component that drawing has changed
+          onDrawingChange?.();
 
           // Save state after fill operation
           if (drawingEngineRef.current.layers.foreground && drawingEngineRef.current.layers.background) {
@@ -251,14 +246,8 @@ export const useDrawing = (
             fgThumbnailRef.current?.getContext('2d') || undefined, 
             bgThumbnailRef.current?.getContext('2d') || undefined
           );
-          drawingEngineRef.current.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
-          
-          if (contextRef.current && drawingEngineRef.current.compositeBuffer) {
-            contextRef.current.putImageData(
-              new ImageData(drawingEngineRef.current.compositeBuffer, drawingEngineRef.current.imageWidth, drawingEngineRef.current.imageHeight),
-              0, 0
-            );
-          }
+          // Notify parent component that drawing has changed
+          onDrawingChange?.();
           
           // Send single click drawing event through WebSocket
           if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -432,16 +421,8 @@ export const useDrawing = (
         fgThumbnailRef.current?.getContext('2d') || undefined, 
         bgThumbnailRef.current?.getContext('2d') || undefined
       );
-      drawingEngineRef.current.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
-      
-      console.log('Updating canvas with composite buffer, ctx available:', !!contextRef.current);
-      if (contextRef.current && drawingEngineRef.current.compositeBuffer) {
-        contextRef.current.putImageData(
-          new ImageData(drawingEngineRef.current.compositeBuffer, drawingEngineRef.current.imageWidth, drawingEngineRef.current.imageHeight),
-          0, 0
-        );
-        console.log('Canvas updated with drawing');
-      }
+      // Notify parent component that drawing has changed
+      onDrawingChange?.();
     };
 
     // Add pointer event listeners (handles mouse, touch, and pen)
@@ -508,12 +489,8 @@ export const useDrawing = (
         fgThumbnailRef.current?.getContext('2d') || undefined, 
         bgThumbnailRef.current?.getContext('2d') || undefined
       );
-      drawingEngineRef.current.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
-      
-      contextRef.current.putImageData(
-        new ImageData(drawingEngineRef.current.compositeBuffer, drawingEngineRef.current.imageWidth, drawingEngineRef.current.imageHeight),
-        0, 0
-      );
+      // Notify parent component that drawing has changed
+      onDrawingChange?.();
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
     }
   }, [history]);
@@ -531,12 +508,8 @@ export const useDrawing = (
         fgThumbnailRef.current?.getContext('2d') || undefined, 
         bgThumbnailRef.current?.getContext('2d') || undefined
       );
-      drawingEngineRef.current.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
-      
-      contextRef.current.putImageData(
-        new ImageData(drawingEngineRef.current.compositeBuffer, drawingEngineRef.current.imageWidth, drawingEngineRef.current.imageHeight),
-        0, 0
-      );
+      // Notify parent component that drawing has changed
+      onDrawingChange?.();
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
     }
   }, [history]);
