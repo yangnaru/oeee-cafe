@@ -156,8 +156,19 @@ function App() {
     // Clear the canvas
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
+    // Create a combined map including local user and remote users
+    const allUsers = new Map(userEngines);
+    
+    // Add local user if drawingEngine exists
+    if (drawingEngine) {
+      allUsers.set(userIdRef.current, {
+        engine: drawingEngine,
+        firstSeen: 0 // Local user gets earliest timestamp (top layer)
+      });
+    }
+    
     // Sort users by firstSeen timestamp (later joiners first = lower layer order)
-    const sortedUsers = Array.from(userEngines.entries()).sort(
+    const sortedUsers = Array.from(allUsers.entries()).sort(
       ([, a], [, b]) => b.firstSeen - a.firstSeen
     );
     
@@ -179,7 +190,8 @@ function App() {
       );
       
       allLayers.push(userComposite);
-      console.log(`Prepared composite for user: ${userId}`);
+      const userType = userId === userIdRef.current ? 'local' : 'remote';
+      console.log(`Prepared composite for ${userType} user: ${userId}`);
     });
     
     // Composite all user layers together
@@ -189,8 +201,8 @@ function App() {
     const finalImageData = new ImageData(finalComposite, CANVAS_WIDTH, CANVAS_HEIGHT);
     ctx.putImageData(finalImageData, 0, 0);
     
-    console.log(`Composited ${sortedUsers.length} user layers`);
-  }, [userEngines]);
+    console.log(`Composited ${sortedUsers.length} user layers (including local)`);
+  }, [userEngines, drawingEngine, drawingState.fgVisible, drawingState.bgVisible]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fgThumbnailRef = useRef<HTMLCanvasElement>(null);
@@ -612,30 +624,12 @@ function App() {
     if (drawingEngine) {
       const fgCtx = fgThumbnailRef.current?.getContext("2d");
       const bgCtx = bgThumbnailRef.current?.getContext("2d");
-      const canvasCtx = canvasRef.current?.getContext("2d");
 
-      // Update layer thumbnails and composite
+      // Update layer thumbnails only
       drawingEngine.updateLayerThumbnails(fgCtx, bgCtx);
-      drawingEngine.compositeLayers(
-        drawingState.fgVisible,
-        drawingState.bgVisible
-      );
-
-      // Update main canvas with drawing engine composite
-      if (canvasCtx && drawingEngine.compositeBuffer) {
-        canvasCtx.putImageData(
-          new ImageData(
-            drawingEngine.compositeBuffer,
-            drawingEngine.imageWidth,
-            drawingEngine.imageHeight
-          ),
-          0,
-          0
-        );
-      }
     }
     
-    // Composite all user layers on top
+    // Composite all user layers (including local user)
     compositeAllUserLayers();
   }, [drawingState.fgVisible, drawingState.bgVisible, drawingEngine, userEngines, compositeAllUserLayers]);
 
