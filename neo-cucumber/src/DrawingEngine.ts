@@ -1,0 +1,672 @@
+export class DrawingEngine {
+  public imageWidth: number;
+  public imageHeight: number;
+  public layers: { [key: string]: Uint8ClampedArray };
+  public compositeBuffer: Uint8ClampedArray;
+  
+  private brush: { [key: number]: Uint8Array } = {};
+  private tone: { [key: string]: Uint8Array } = {};
+  private aerr = 0;
+  private prevLine: [[number, number], [number, number]] | null = null;
+  private panOffsetX = 0;
+  private panOffsetY = 0;
+
+  // Alpha calculation constants
+  private static readonly ALPHATYPE_PEN = 0;
+  private static readonly ALPHATYPE_FILL = 1;
+  private static readonly ALPHATYPE_BRUSH = 2;
+
+  constructor(width: number = 500, height: number = 500) {
+    this.imageWidth = width;
+    this.imageHeight = height;
+    
+    this.layers = {
+      background: new Uint8ClampedArray(width * height * 4),
+      foreground: new Uint8ClampedArray(width * height * 4),
+    };
+    
+    this.compositeBuffer = new Uint8ClampedArray(width * height * 4);
+    
+    this.initializeBrushes();
+    this.initializeTones();
+  }
+
+  private initializeBrushes() {
+    // init brush
+    for (let r = 1; r <= 30; r++) {
+      this.brush[r] = new Uint8Array(r * r);
+      const mask = this.brush[r];
+      let index = 0;
+      for (let x = 0; x < r; x++) {
+        for (let y = 0; y < r; y++) {
+          const xx = x + 0.5 - r / 2.0;
+          const yy = y + 0.5 - r / 2.0;
+          mask[index++] = xx * xx + yy * yy <= (r * r) / 4 ? 1 : 0;
+        }
+      }
+    }
+    this.brush[3][0] = 0;
+    this.brush[3][2] = 0;
+    this.brush[3][6] = 0;
+    this.brush[3][8] = 0;
+
+    this.brush[5][1] = 0;
+    this.brush[5][3] = 0;
+    this.brush[5][5] = 0;
+    this.brush[5][9] = 0;
+    this.brush[5][15] = 0;
+    this.brush[5][19] = 0;
+    this.brush[5][21] = 0;
+    this.brush[5][23] = 0;
+  }
+
+  private initializeTones() {
+    // init tone
+    // Initialize tone patterns similar to Neo.Painter
+    const tonePattern = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    const toneData: Uint8Array[] = [];
+
+    for (let i = 0; i < 16; i++) {
+      const arr = new Uint8Array(16);
+      for (let j = 0; j < 16; j++) {
+        arr[j] = i >= tonePattern[j] ? 1 : 0;
+      }
+      toneData.push(arr);
+    }
+
+    // Optionally, fill the `tone` object for compatibility
+    for (let i = 0; i < 16; i++) {
+      this.tone[i] = toneData[i];
+    }
+  }
+
+  // Function to get tone data based on alpha value
+  private getToneData(alpha: number): Uint8Array {
+    const alphaTable = [
+      23, 47, 69, 92, 114, 114, 114, 138, 161, 184, 184, 207, 230, 230, 253,
+    ];
+    for (let i = 0; i < alphaTable.length; i++) {
+      if (alpha < alphaTable[i]) {
+        return this.tone[i] as Uint8Array;
+      }
+    }
+    return this.tone[alphaTable.length] as Uint8Array;
+  }
+
+  private getAlpha(type: number, opacity: number): number {
+    let a1 = opacity / 255.0;
+
+    switch (type) {
+      case DrawingEngine.ALPHATYPE_PEN:
+        if (a1 > 0.5) {
+          a1 = 1.0 / 16 + ((a1 - 0.5) * 30.0) / 16;
+        } else {
+          a1 = Math.sqrt(2 * a1) / 16.0;
+        }
+        a1 = Math.min(1, Math.max(0, a1));
+        break;
+
+      case DrawingEngine.ALPHATYPE_FILL:
+        a1 = -0.00056 * a1 + 0.0042 / (1.0 - a1) - 0.0042;
+        a1 = Math.min(1.0, Math.max(0, a1 * 10));
+        break;
+
+      case DrawingEngine.ALPHATYPE_BRUSH:
+        a1 = -0.00056 * a1 + 0.0042 / (1.0 - a1) - 0.0042;
+        a1 = Math.min(1.0, Math.max(0, a1));
+        break;
+    }
+
+    if (a1 < 1.0 / 255) {
+      this.aerr += a1;
+      a1 = 0;
+      while (this.aerr > 1.0 / 255) {
+        a1 = 1.0 / 255;
+        this.aerr -= 1.0 / 255;
+      }
+    }
+
+    return a1;
+  }
+
+  // Function to composite layers with FG on top of BG
+  public compositeLayers(fgVisible: boolean = true, bgVisible: boolean = true) {
+    for (let i = 0; i < this.compositeBuffer.length; i += 4) {
+      // Get background layer values (only if visible)
+      const bgR = bgVisible ? this.layers.background[i] : 0;
+      const bgG = bgVisible ? this.layers.background[i + 1] : 0;
+      const bgB = bgVisible ? this.layers.background[i + 2] : 0;
+      const bgA = bgVisible ? this.layers.background[i + 3] / 255 : 0;
+
+      // Get foreground layer values (only if visible)
+      const fgR = fgVisible ? this.layers.foreground[i] : 0;
+      const fgG = fgVisible ? this.layers.foreground[i + 1] : 0;
+      const fgB = fgVisible ? this.layers.foreground[i + 2] : 0;
+      const fgA = fgVisible ? this.layers.foreground[i + 3] / 255 : 0;
+
+      // Alpha composite: FG over BG
+      const outA = fgA + bgA * (1 - fgA);
+
+      if (outA > 0) {
+        this.compositeBuffer[i] = Math.round(
+          (fgR * fgA + bgR * bgA * (1 - fgA)) / outA
+        );
+        this.compositeBuffer[i + 1] = Math.round(
+          (fgG * fgA + bgG * bgA * (1 - fgA)) / outA
+        );
+        this.compositeBuffer[i + 2] = Math.round(
+          (fgB * fgA + bgB * bgA * (1 - fgA)) / outA
+        );
+        this.compositeBuffer[i + 3] = Math.round(outA * 255);
+      } else {
+        this.compositeBuffer[i] = 0;
+        this.compositeBuffer[i + 1] = 0;
+        this.compositeBuffer[i + 2] = 0;
+        this.compositeBuffer[i + 3] = 0;
+      }
+    }
+  }
+
+  // Function to update layer thumbnails
+  public updateLayerThumbnails(fgThumbnailCtx?: CanvasRenderingContext2D | null, bgThumbnailCtx?: CanvasRenderingContext2D | null) {
+    // Check if thumbnail contexts exist
+    if (!fgThumbnailCtx || !bgThumbnailCtx) {
+      return;
+    }
+
+    const thumbnailHeight = 50;
+
+    // Calculate thumbnail dimensions based on main canvas aspect ratio
+    const aspectRatio = this.imageWidth / this.imageHeight;
+    const thumbnailWidth = Math.round(thumbnailHeight * aspectRatio);
+
+    // Create temporary canvas for scaling
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = this.imageWidth;
+    tempCanvas.height = this.imageHeight;
+    const tempCtx = tempCanvas.getContext("2d");
+    if (!tempCtx) {
+      return;
+    }
+    tempCtx.imageSmoothingEnabled = false;
+
+    // Update foreground thumbnail
+    const fgImageData = new ImageData(this.layers.foreground, this.imageWidth, this.imageHeight);
+    tempCtx.putImageData(fgImageData, 0, 0);
+    fgThumbnailCtx.clearRect(0, 0, thumbnailWidth, thumbnailHeight);
+    fgThumbnailCtx.drawImage(
+      tempCanvas,
+      0,
+      0,
+      this.imageWidth,
+      this.imageHeight,
+      0,
+      0,
+      thumbnailWidth,
+      thumbnailHeight
+    );
+
+    // Update background thumbnail
+    const bgImageData = new ImageData(this.layers.background, this.imageWidth, this.imageHeight);
+    tempCtx.putImageData(bgImageData, 0, 0);
+    bgThumbnailCtx.clearRect(0, 0, thumbnailWidth, thumbnailHeight);
+    bgThumbnailCtx.drawImage(
+      tempCanvas,
+      0,
+      0,
+      this.imageWidth,
+      this.imageHeight,
+      0,
+      0,
+      thumbnailWidth,
+      thumbnailHeight
+    );
+  }
+
+  // Pan offset management
+  public updatePanOffset(deltaX: number, deltaY: number, canvas?: HTMLCanvasElement) {
+    this.panOffsetX += deltaX;
+    this.panOffsetY += deltaY;
+    this.updateCanvasPan(canvas);
+  }
+
+  public adjustPanForZoom(deltaX: number, deltaY: number, canvas?: HTMLCanvasElement) {
+    this.panOffsetX += deltaX;
+    this.panOffsetY += deltaY;
+    this.updateCanvasPan(canvas);
+  }
+
+  public resetPan(canvas?: HTMLCanvasElement) {
+    this.panOffsetX = 0;
+    this.panOffsetY = 0;
+    this.updateCanvasPan(canvas);
+  }
+
+  private updateCanvasPan(canvas?: HTMLCanvasElement) {
+    if (!canvas) return;
+
+    // Only update the transform, let React handle the width/height
+    canvas.style.transform = `translate(${this.panOffsetX}px, ${this.panOffsetY}px)`;
+  }
+
+  public drawPoint(
+    ctx: Uint8ClampedArray,
+    px: number,
+    py: number,
+    size: number,
+    r: number,
+    g: number,
+    b: number,
+    a: number,
+    updatePrevLine: boolean = true
+  ) {
+    const d = size;
+    const r0 = Math.floor(d / 2);
+    const x = px - r0;
+    const y = py - r0;
+
+    const shape = this.brush[d];
+    let shapeIndex = 0;
+
+    const r1 = r;
+    const g1 = g;
+    const b1 = b;
+    const a1 = a;
+
+    if (a1 === 0) return;
+
+    for (let i = 0; i < d; i++) {
+      for (let j = 0; j < d; j++) {
+        const currentX = x + j;
+        const currentY = y + i;
+
+        if (
+          currentX >= 0 &&
+          currentX < this.imageWidth &&
+          currentY >= 0 &&
+          currentY < this.imageHeight &&
+          shape[shapeIndex]
+        ) {
+          const index = (currentY * this.imageWidth + currentX) * 4;
+
+          const r0 = ctx[index + 0];
+          const g0 = ctx[index + 1];
+          const b0 = ctx[index + 2];
+          const a0 = ctx[index + 3] / 255.0;
+
+          const alpha = a0 + a1 - a0 * a1;
+          if (alpha > 0) {
+            const a1x = Math.max(a1, 1.0 / 255);
+
+            let r = (r1 * a1x + r0 * a0 * (1 - a1x)) / alpha;
+            let g = (g1 * a1x + g0 * a0 * (1 - a1x)) / alpha;
+            let b = (b1 * a1x + b0 * a0 * (1 - a1x)) / alpha;
+
+            r = r1 > r0 ? Math.ceil(r) : Math.floor(r);
+            g = g1 > g0 ? Math.ceil(g) : Math.floor(g);
+            b = b1 > b0 ? Math.ceil(b) : Math.floor(b);
+
+            const finalAlpha = Math.ceil(alpha * 255);
+
+            ctx[index + 0] = r;
+            ctx[index + 1] = g;
+            ctx[index + 2] = b;
+            ctx[index + 3] = finalAlpha;
+          }
+        }
+        shapeIndex++;
+      }
+    }
+
+    // Update prevLine to track this point (used for standalone point drawing)
+    if (updatePrevLine) {
+      this.prevLine = [
+        [px, py],
+        [px, py],
+      ];
+    }
+  }
+
+  private erasePoint(
+    ctx: Uint8ClampedArray,
+    px: number,
+    py: number,
+    size: number,
+    a: number,
+    updatePrevLine: boolean = true
+  ) {
+    const d = size;
+    const r0 = Math.floor(d / 2);
+    const x = px - r0;
+    const y = py - r0;
+
+    const shape = this.brush[d];
+    let shapeIndex = 0;
+    const eraserAlpha = Math.floor(a * 255); // Convert to 0-255 range
+
+    for (let i = 0; i < d; i++) {
+      for (let j = 0; j < d; j++) {
+        const currentX = x + j;
+        const currentY = y + i;
+
+        if (
+          currentX >= 0 &&
+          currentX < this.imageWidth &&
+          currentY >= 0 &&
+          currentY < this.imageHeight &&
+          shape[shapeIndex]
+        ) {
+          const index = (currentY * this.imageWidth + currentX) * 4;
+
+          // Neo.Painter eraser algorithm
+          ctx[index + 3] -= eraserAlpha / ((d * (255.0 - eraserAlpha)) / 255.0);
+
+          // Clamp alpha to valid range
+          ctx[index + 3] = Math.max(0, Math.min(255, ctx[index + 3]));
+        }
+        shapeIndex++;
+      }
+    }
+
+    // Update prevLine to track this point (used for standalone point drawing)
+    if (updatePrevLine) {
+      this.prevLine = [
+        [px, py],
+        [px, py],
+      ];
+    }
+  }
+
+  // Helper function to fill a horizontal line with direct replacement
+  private fillHorizontalLine(
+    buf8: Uint8ClampedArray,
+    x0: number,
+    x1: number,
+    y: number,
+    r: number,
+    g: number,
+    b: number,
+    a: number
+  ) {
+    const width = this.imageWidth;
+    for (let x = x0; x <= x1; x++) {
+      const index = (y * width + x) * 4;
+      buf8[index] = r;
+      buf8[index + 1] = g;
+      buf8[index + 2] = b;
+      buf8[index + 3] = a;
+    }
+  }
+
+  // Helper function to scan a line for connected pixels (Neo.Painter version)
+  private scanLine(
+    x0: number,
+    x1: number,
+    y: number,
+    stack: { x: number; y: number }[]
+  ) {
+    for (let x = x0; x <= x1; x++) {
+      stack.push({ x: x, y: y });
+    }
+  }
+
+  // Neo.Painter flood fill algorithm with alpha support
+  public doFloodFill(
+    ctx: Uint8ClampedArray,
+    startX: number,
+    startY: number,
+    fillR: number,
+    fillG: number,
+    fillB: number,
+    fillA: number
+  ) {
+    const x = Math.round(startX);
+    const y = Math.round(startY);
+
+    if (x < 0 || x >= this.imageWidth || y < 0 || y >= this.imageHeight) {
+      return;
+    }
+
+    const width = this.imageWidth;
+    const stack: { x: number; y: number }[] = [{ x: x, y: y }];
+
+    // Get starting pixel color
+    const startIndex = (y * width + x) * 4;
+    const baseR = ctx[startIndex];
+    const baseG = ctx[startIndex + 1];
+    const baseB = ctx[startIndex + 2];
+    const baseA = ctx[startIndex + 3];
+
+    // Don't fill if colors are the same
+    if (
+      baseR === fillR &&
+      baseG === fillG &&
+      baseB === fillB &&
+      baseA === fillA
+    ) {
+      return;
+    }
+
+    // Scale stack limit proportionally to canvas size
+    // Base limit of 1M for a 500x500 canvas, scale proportionally
+    const baseCanvasSize = 500 * 500;
+    const currentCanvasSize = this.imageWidth * this.imageHeight;
+    const scaleFactor = currentCanvasSize / baseCanvasSize;
+    const maxStackSize = Math.floor(1000000 * scaleFactor);
+
+    while (stack.length > 0) {
+      if (stack.length > maxStackSize) {
+        console.log(
+          `flood fill stack limit reached: ${maxStackSize} for canvas ${this.imageWidth}x${this.imageHeight}`
+        );
+        break;
+      }
+
+      const point = stack.pop()!;
+      let px = point.x;
+      const py = point.y;
+      let x0 = px;
+      let x1 = px;
+
+      const pixelIndex = (py * width + px) * 4;
+
+      // Check if pixel matches base color
+      if (
+        ctx[pixelIndex] !== baseR ||
+        ctx[pixelIndex + 1] !== baseG ||
+        ctx[pixelIndex + 2] !== baseB ||
+        ctx[pixelIndex + 3] !== baseA
+      )
+        continue;
+
+      // Expand left
+      for (; x0 > 0; x0--) {
+        const leftIndex = (py * width + (x0 - 1)) * 4;
+        if (
+          ctx[leftIndex] !== baseR ||
+          ctx[leftIndex + 1] !== baseG ||
+          ctx[leftIndex + 2] !== baseB ||
+          ctx[leftIndex + 3] !== baseA
+        )
+          break;
+      }
+
+      // Expand right
+      for (; x1 < this.imageWidth - 1; x1++) {
+        const rightIndex = (py * width + (x1 + 1)) * 4;
+        if (
+          ctx[rightIndex] !== baseR ||
+          ctx[rightIndex + 1] !== baseG ||
+          ctx[rightIndex + 2] !== baseB ||
+          ctx[rightIndex + 3] !== baseA
+        )
+          break;
+      }
+
+      this.fillHorizontalLine(ctx, x0, x1, py, fillR, fillG, fillB, fillA);
+
+      if (py + 1 < this.imageHeight) {
+        this.scanLine(x0, x1, py + 1, stack);
+      }
+      if (py - 1 >= 0) {
+        this.scanLine(x0, x1, py - 1, stack);
+      }
+    }
+  }
+
+  private drawTone(
+    buf8: Uint8ClampedArray,
+    x0: number,
+    y0: number,
+    d: number,
+    r: number,
+    g: number,
+    b: number,
+    a: number
+  ) {
+    const r0 = Math.floor(d / 2);
+
+    let x = x0 - r0;
+    let y = y0 - r0;
+
+    const shape = this.brush[d];
+    let shapeIndex = 0;
+
+    const toneData = this.getToneData(a);
+
+    for (let i = 0; i < d; i++) {
+      for (let j = 0; j < d; j++) {
+        const currentX = x + j;
+        const currentY = y + i;
+
+        if (
+          currentX >= 0 &&
+          currentX < this.imageWidth &&
+          currentY >= 0 &&
+          currentY < this.imageHeight &&
+          shape[shapeIndex]
+        ) {
+          // Use absolute screen coordinates for tone pattern
+          if (toneData[(currentY % 4) * 4 + (currentX % 4)]) {
+            const index = (currentY * this.imageWidth + currentX) * 4;
+            buf8[index + 0] = r;
+            buf8[index + 1] = g;
+            buf8[index + 2] = b;
+            buf8[index + 3] = 255;
+          }
+        }
+        shapeIndex++;
+      }
+    }
+  }
+
+  public drawLine(
+    ctx: Uint8ClampedArray,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    brushSize: number,
+    brushType: string,
+    r: number,
+    g: number,
+    b: number,
+    opacity: number
+  ) {
+    this.aerr = 0;
+    const dx = Math.abs(x1 - x0);
+    const sx = x0 < x1 ? 1 : -1;
+    const dy = Math.abs(y1 - y0);
+    const sy = y0 < y1 ? 1 : -1;
+    let err = (dx > dy ? dx : -dy) / 2;
+
+    let currentX = x0;
+    let currentY = y0;
+
+    let a = 1;
+    if (brushType === "solid") {
+      a = this.getAlpha(DrawingEngine.ALPHATYPE_PEN, opacity);
+    } else if (brushType === "halftone") {
+      a = opacity / 255.0;
+    } else if (brushType === "eraser") {
+      a = opacity / 255.0;
+    }
+
+    while (true) {
+      // Check if this point should be plotted (avoid double-plotting)
+      if (
+        this.prevLine === null ||
+        !(
+          (this.prevLine[0][0] === currentX && this.prevLine[0][1] === currentY) ||
+          (this.prevLine[1][0] === currentX && this.prevLine[1][1] === currentY)
+        )
+      ) {
+        if (brushType === "solid") {
+          this.drawPoint(ctx, currentX, currentY, brushSize, r, g, b, a, false);
+        } else if (brushType === "halftone") {
+          this.drawTone(ctx, currentX, currentY, brushSize, r, g, b, a * 255);
+        } else if (brushType === "eraser") {
+          this.erasePoint(ctx, currentX, currentY, brushSize, a, false);
+        }
+      }
+
+      if (currentX === x1 && currentY === y1) break;
+
+      const e2 = err;
+      if (e2 > -dx) {
+        err -= dy;
+        currentX += sx;
+      }
+      if (e2 < dy) {
+        err += dx;
+        currentY += sy;
+      }
+    }
+
+    // Update prevLine to track this line segment
+    this.prevLine = [
+      [x0, y0],
+      [x1, y1],
+    ];
+  }
+
+  public initialize(ctx?: CanvasRenderingContext2D, fgThumbnail?: HTMLCanvasElement, bgThumbnail?: HTMLCanvasElement) {
+    // Set thumbnail canvas dimensions dynamically based on aspect ratio
+    const thumbnailHeight = 50;
+    const aspectRatio = this.imageWidth / this.imageHeight;
+    const thumbnailWidth = Math.round(thumbnailHeight * aspectRatio);
+
+    if (fgThumbnail && bgThumbnail) {
+      fgThumbnail.width = thumbnailWidth;
+      fgThumbnail.height = thumbnailHeight;
+      bgThumbnail.width = thumbnailWidth;
+      bgThumbnail.height = thumbnailHeight;
+    }
+
+    // Initial composite and render
+    const fgThumbnailCtx = fgThumbnail?.getContext('2d');
+    const bgThumbnailCtx = bgThumbnail?.getContext('2d');
+    if (fgThumbnailCtx) fgThumbnailCtx.imageSmoothingEnabled = false;
+    if (bgThumbnailCtx) bgThumbnailCtx.imageSmoothingEnabled = false;
+    
+    this.updateLayerThumbnails(fgThumbnailCtx, bgThumbnailCtx);
+    this.compositeLayers();
+    
+    if (ctx) {
+      ctx.putImageData(
+        new ImageData(this.compositeBuffer, this.imageWidth, this.imageHeight),
+        0,
+        0
+      );
+    }
+
+    console.log(`DrawingEngine initialized with dimensions: ${this.imageWidth}x${this.imageHeight}`);
+  }
+
+  public dispose() {
+    // Clean up resources if needed
+    this.layers.background = new Uint8ClampedArray(0);
+    this.layers.foreground = new Uint8ClampedArray(0);
+    this.compositeBuffer = new Uint8ClampedArray(0);
+  }
+}

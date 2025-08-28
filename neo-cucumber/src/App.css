@@ -1,0 +1,429 @@
+@media (prefers-color-scheme: light) {
+  :root {
+    --main-bg-color: white;
+    --main-text-color: black;
+    --main-nav-bg-color: #c4ee62;
+    --main-border-color: #3c6712;
+    --main-highlight-color: #ef842d;
+    --main-anchor-color: black;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --main-bg-color: #2c2c2c;
+    --main-text-color: #e0e0e0;
+    --main-nav-bg-color: #2c2c2c;
+    --main-border-color: #5a5a5a;
+    --main-highlight-color: #ff8c00;
+    --main-anchor-color: #e0e0e0;
+  }
+}
+
+body {
+  background-color: var(--main-bg-color);
+  color: var(--main-text-color);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+#app {
+  display: flex;
+  gap: 1em;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+}
+
+#controls {
+  position: fixed;
+  top: 5em;
+  right: 1em;
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+  padding: 1em;
+  border: 1px solid var(--main-border-color);
+  background-color: var(--main-bg-color);
+  /* Allow normal touch interactions on controls */
+  touch-action: auto;
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
+#canvas {
+  margin: 3em auto;
+  border: 1px solid var(--main-border-color);
+  background-color: white;
+  /* Ensure proper touch and pen support */
+  touch-action: none;
+  cursor: crosshair;
+  /* Prevent text selection and touch behaviors during drawing */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  /* Prevent context menu on long press */
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#color-palette {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0em;
+  padding: 1em;
+  border: 1px solid var(--main-border-color);
+  align-self: flex-start;
+}
+
+#color-picker-container {
+  display: flex;
+  flex-direction: row;
+  gap: 1em;
+}
+
+.color-btn {
+  width: 22px;
+  height: 18px;
+  border: 1px solid var(--main-border-color);
+  padding: 0;
+  margin: 0.1em;
+  /* background-color will be set via inline style or JS, not here */
+}
+
+.color-btn.selected {
+  box-shadow: rgb(0, 0, 0) 0px 0px 0px 2px, inset 0px 0px 0px 1px white;
+  transform: scale(1.1);
+}
+
+.color-btn {
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.color-btn:hover {
+  transform: scale(1.05);
+  box-shadow: rgb(0, 0, 0) 0px 0px 0px 1px;
+}
+
+#brush-type-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+}
+
+#layer-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+#layer-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.25em;
+  border: 1px solid var(--main-border-color);
+  background-color: var(--main-bg-color);
+}
+
+.layer-thumbnail {
+  border: 1px solid var(--main-border-color);
+  image-rendering: pixelated;
+  background-color: white;
+  background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
+    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%),
+    linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+}
+
+/* History controls */
+#history-controls button {
+  padding: 0.5em 1em;
+  border: 1px solid var(--main-border-color);
+  background-color: var(--main-bg-color);
+  color: var(--main-text-color);
+  cursor: pointer;
+}
+
+#history-controls button:hover:not(:disabled) {
+  background-color: var(--main-highlight-color);
+  color: white;
+}
+
+#history-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--main-bg-color);
+  color: var(--main-text-color);
+}
+
+/* Collaborative UI Styles */
+#connection-status {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  z-index: 1000;
+}
+
+#connection-status.connected {
+  background-color: #4caf50;
+  color: white;
+}
+
+#connection-status.disconnected {
+  background-color: #f44336;
+  color: white;
+}
+
+#participants-container {
+  position: fixed;
+  top: 50px;
+  right: 10px;
+  width: 200px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px;
+  z-index: 999;
+}
+
+#participants-container h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+}
+
+.participant {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.participant:last-child {
+  border-bottom: none;
+}
+
+.participant-name {
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.participant-layers {
+  font-size: 10px;
+  color: #666;
+}
+
+.participant-order {
+  font-size: 10px;
+  color: #999;
+}
+
+#chat-container {
+  position: fixed;
+  top: 50px;
+  left: 10px;
+  width: 250px;
+  height: 300px;
+  background-color: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  z-index: 999;
+}
+
+#chat-container h3 {
+  margin: 0;
+  padding: 8px 10px;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #ccc;
+  font-size: 14px;
+  border-radius: 4px 4px 0 0;
+}
+
+#chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 5px;
+  font-size: 12px;
+}
+
+.chat-message {
+  margin-bottom: 8px;
+  padding: 4px;
+  border-radius: 2px;
+  background-color: #f8f8f8;
+}
+
+.chat-username {
+  font-weight: bold;
+  color: #2196f3;
+}
+
+.chat-timestamp {
+  font-size: 10px;
+  color: #999;
+  margin-left: 8px;
+}
+
+.chat-text {
+  margin-top: 2px;
+  word-wrap: break-word;
+}
+
+#chat-input-container {
+  display: flex;
+  padding: 5px;
+  border-top: 1px solid #ccc;
+}
+
+#chat-input {
+  flex: 1;
+  padding: 4px;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+#chat-send {
+  margin-left: 5px;
+  padding: 4px 8px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#chat-send:hover {
+  background-color: #1976d2;
+}
+
+#notifications {
+  position: fixed;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  pointer-events: none;
+}
+
+.notification {
+  background-color: #333;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.notification-error {
+  background-color: #f44336;
+}
+
+.notification-info {
+  background-color: #2196f3;
+}
+
+/* Session header styles */
+.drawing-session-container {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.session-header {
+  padding: 10px 20px;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.session-header h1 {
+  margin: 0;
+  font-size: 18px;
+  color: black;
+}
+
+.session-info {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  font-size: 14px;
+  color: black;
+}
+
+.drawing-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.connection-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.connection-controls input {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.btn {
+  display: inline-block;
+  padding: 6px 12px;
+  text-decoration: none;
+  border-radius: 4px;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+#connection-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+#connection-status.connected {
+  background-color: #28a745;
+  color: white;
+}
+
+#connection-status.disconnected {
+  background-color: #dc3545;
+  color: white;
+}
