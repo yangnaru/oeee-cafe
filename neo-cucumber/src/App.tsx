@@ -119,6 +119,30 @@ function App() {
     canRedo: false,
   });
 
+  // Track user IDs and their layers
+  const [userLayers, setUserLayers] = useState<Map<string, { foreground: ImageData | null, background: ImageData | null }>>(new Map());
+
+  // Function to create layers for a new user
+  const createUserLayers = useCallback((userId: string) => {
+    if (!userLayers.has(userId)) {
+      // Create empty ImageData for foreground and background layers
+      const foreground = new ImageData(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const background = new ImageData(CANVAS_WIDTH, CANVAS_HEIGHT);
+      
+      // Initialize with transparent pixels (RGBA = 0,0,0,0)
+      foreground.data.fill(0);
+      background.data.fill(0);
+      
+      setUserLayers(prev => {
+        const newMap = new Map(prev);
+        newMap.set(userId, { foreground, background });
+        return newMap;
+      });
+      
+      console.log(`Created layers for new user: ${userId}`);
+    }
+  }, [userLayers]);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fgThumbnailRef = useRef<HTMLCanvasElement>(null);
   const bgThumbnailRef = useRef<HTMLCanvasElement>(null);
@@ -354,6 +378,18 @@ function App() {
       ws.onmessage = (event) => {
         console.log("WebSocket message received:", event);
         console.log("Message data:", event.data);
+        
+        try {
+          const messageData = JSON.parse(event.data);
+          
+          // Check if message contains a userId
+          if (messageData.userId && typeof messageData.userId === 'string') {
+            // Create layers for new user if they don't exist
+            createUserLayers(messageData.userId);
+          }
+        } catch (error) {
+          console.error("Failed to parse WebSocket message:", error);
+        }
       };
 
       ws.onerror = (event) => {
