@@ -123,6 +123,8 @@ function App() {
   const fgThumbnailRef = useRef<HTMLCanvasElement>(null);
   const bgThumbnailRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const userIdRef = useRef<string>(crypto.randomUUID());
 
   const updateBrushType = useCallback((type: BrushType) => {
     setDrawingState((prev) => {
@@ -308,7 +310,9 @@ function App() {
     handleHistoryChange,
     Math.round(currentZoom * 100),
     CANVAS_WIDTH,
-    CANVAS_HEIGHT
+    CANVAS_HEIGHT,
+    wsRef,
+    userIdRef
   );
 
   const handleZoomReset = useCallback(() => {
@@ -337,8 +341,11 @@ function App() {
 
       // Connect to WebSocket on canvas load
       const ws = new WebSocket(
-        "ws://100.65.148.126:3000/collaborate/1d57bd0d-be56-43d4-8b66-da739128fb22/ws"
+        "wss://jihyeoks-macbook-air.tail2f2e3.ts.net/api/collaborate/1d57bd0d-be56-43d4-8b66-da739128fb22/ws"
       );
+
+      // Store WebSocket reference for use in other components
+      wsRef.current = ws;
 
       ws.onopen = (event) => {
         console.log("WebSocket connected:", event);
@@ -359,6 +366,7 @@ function App() {
 
       // Clean up WebSocket connection when component unmounts
       return () => {
+        wsRef.current = null;
         if (
           ws.readyState === WebSocket.OPEN ||
           ws.readyState === WebSocket.CONNECTING

@@ -21,7 +21,9 @@ export const useDrawing = (
   onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void,
   zoomLevel?: number,
   canvasWidth: number = 500,
-  canvasHeight: number = 500
+  canvasHeight: number = 500,
+  wsRef?: React.RefObject<WebSocket | null>,
+  userIdRef?: React.RefObject<string>
 ) => {
   console.log('🚀 useDrawing hook START');
   console.log('useDrawing hook called with canvas dimensions:', canvasWidth, canvasHeight);
@@ -207,6 +209,28 @@ export const useDrawing = (
       // Only handle the active pointer
       if (activePointerId !== e.pointerId) return;
       
+      // Send pointerup event through WebSocket
+      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const coords = getCanvasCoordinates(e.clientX, e.clientY);
+        const eventData = {
+          type: 'pointerup',
+          userId: userIdRef?.current,
+          x: coords.x,
+          y: coords.y,
+          button: e.button,
+          pointerType: e.pointerType,
+          pressure: e.pressure,
+          timestamp: Date.now()
+        };
+        
+        try {
+          wsRef.current.send(JSON.stringify(eventData));
+          console.log('Sent pointerup event:', eventData);
+        } catch (error) {
+          console.error('Failed to send pointerup event:', error);
+        }
+      }
+      
       if (e.button === 1 || isPanning) {
         isPanning = false;
       }
@@ -282,6 +306,36 @@ export const useDrawing = (
         effectiveOpacity
       );
 
+      // Send drawLine event through WebSocket
+      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const drawEventData = {
+          type: 'drawLine',
+          userId: userIdRef?.current,
+          layer: drawingState.layerType,
+          fromX: prevX,
+          fromY: prevY,
+          toX: currentX,
+          toY: currentY,
+          brushSize: drawingState.brushSize,
+          brushType: drawingState.brushType,
+          pointerType: e.pointerType,
+          color: {
+            r: r,
+            g: g,
+            b: b,
+            a: effectiveOpacity
+          },
+          timestamp: Date.now()
+        };
+        
+        try {
+          wsRef.current.send(JSON.stringify(drawEventData));
+          console.log('Sent drawLine event:', drawEventData);
+        } catch (error) {
+          console.error('Failed to send drawLine event:', error);
+        }
+      }
+
       drawingEngineRef.current.updateLayerThumbnails(
         fgThumbnailRef.current?.getContext('2d') || undefined, 
         bgThumbnailRef.current?.getContext('2d') || undefined
@@ -327,7 +381,7 @@ export const useDrawing = (
       app.removeEventListener('touchmove', preventTouchOnCanvas);
       app.removeEventListener('touchend', preventTouchOnCanvas);
     };
-  }, [appRef, canvasRef, drawingState, history]);
+  }, [appRef, canvasRef, drawingState, history, wsRef, userIdRef]);
 
   useEffect(() => {
     console.log('useEffect for initializeDrawing triggered');
