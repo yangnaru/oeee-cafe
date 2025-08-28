@@ -151,6 +151,7 @@ function App() {
   const appRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const userIdRef = useRef<string>(crypto.randomUUID());
+  const localUserJoinTimeRef = useRef<number>(0);
 
   const updateBrushType = useCallback((type: BrushType) => {
     setDrawingState((prev) => {
@@ -369,7 +370,7 @@ function App() {
     if (drawingEngine) {
       allUsers.set(userIdRef.current, {
         engine: drawingEngine,
-        firstSeen: 0 // Local user gets earliest timestamp (top layer)
+        firstSeen: localUserJoinTimeRef.current // Use actual join timestamp
       });
     }
     
@@ -449,6 +450,9 @@ function App() {
 
       ws.onopen = (event) => {
         console.log("WebSocket connected:", event);
+        // Set the local user join timestamp when WebSocket connects
+        localUserJoinTimeRef.current = Date.now();
+        console.log(`Local user joined at: ${new Date(localUserJoinTimeRef.current).toISOString()}`);
       };
 
       ws.onmessage = (event) => {
