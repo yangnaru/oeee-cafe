@@ -169,8 +169,8 @@ export class DrawingEngine {
 
   // Function to update layer thumbnails
   public updateLayerThumbnails(fgThumbnailCtx?: CanvasRenderingContext2D | null, bgThumbnailCtx?: CanvasRenderingContext2D | null) {
-    // Check if thumbnail contexts exist
-    if (!fgThumbnailCtx || !bgThumbnailCtx) {
+    // Early return if no contexts provided
+    if (!fgThumbnailCtx && !bgThumbnailCtx) {
       return;
     }
 
@@ -190,37 +190,44 @@ export class DrawingEngine {
     }
     tempCtx.imageSmoothingEnabled = false;
 
-    // Update foreground thumbnail
-    const fgImageData = new ImageData(this.layers.foreground, this.imageWidth, this.imageHeight);
-    tempCtx.putImageData(fgImageData, 0, 0);
-    fgThumbnailCtx.clearRect(0, 0, thumbnailWidth, thumbnailHeight);
-    fgThumbnailCtx.drawImage(
-      tempCanvas,
-      0,
-      0,
-      this.imageWidth,
-      this.imageHeight,
-      0,
-      0,
-      thumbnailWidth,
-      thumbnailHeight
-    );
+    // Update foreground thumbnail if context available
+    if (fgThumbnailCtx) {
+      const fgImageData = new ImageData(this.layers.foreground, this.imageWidth, this.imageHeight);
+      tempCtx.clearRect(0, 0, this.imageWidth, this.imageHeight);
+      tempCtx.putImageData(fgImageData, 0, 0);
+      fgThumbnailCtx.clearRect(0, 0, thumbnailWidth, thumbnailHeight);
+      fgThumbnailCtx.drawImage(
+        tempCanvas,
+        0,
+        0,
+        this.imageWidth,
+        this.imageHeight,
+        0,
+        0,
+        thumbnailWidth,
+        thumbnailHeight
+      );
+    }
 
-    // Update background thumbnail
-    const bgImageData = new ImageData(this.layers.background, this.imageWidth, this.imageHeight);
-    tempCtx.putImageData(bgImageData, 0, 0);
-    bgThumbnailCtx.clearRect(0, 0, thumbnailWidth, thumbnailHeight);
-    bgThumbnailCtx.drawImage(
-      tempCanvas,
-      0,
-      0,
-      this.imageWidth,
-      this.imageHeight,
-      0,
-      0,
-      thumbnailWidth,
-      thumbnailHeight
-    );
+    // Update background thumbnail if context available
+    if (bgThumbnailCtx) {
+      const bgImageData = new ImageData(this.layers.background, this.imageWidth, this.imageHeight);
+      // Clear temp canvas to prevent foreground contamination
+      tempCtx.clearRect(0, 0, this.imageWidth, this.imageHeight);
+      tempCtx.putImageData(bgImageData, 0, 0);
+      bgThumbnailCtx.clearRect(0, 0, thumbnailWidth, thumbnailHeight);
+      bgThumbnailCtx.drawImage(
+        tempCanvas,
+        0,
+        0,
+        this.imageWidth,
+        this.imageHeight,
+        0,
+        0,
+        thumbnailWidth,
+        thumbnailHeight
+      );
+    }
   }
 
   // Pan offset management
