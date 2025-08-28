@@ -6,6 +6,7 @@ import {
   startTransition,
 } from "react";
 import { useDrawing } from "./hooks/useDrawing";
+import { DrawingEngine } from "./DrawingEngine";
 import "./App.css";
 
 const zoomMin = 0.5;
@@ -119,29 +120,63 @@ function App() {
     canRedo: false,
   });
 
-  // Track user IDs and their layers
-  const [userLayers, setUserLayers] = useState<Map<string, { foreground: ImageData | null, background: ImageData | null }>>(new Map());
+  // Track user IDs and their drawing engines
+  const [userEngines, setUserEngines] = useState<Map<string, { engine: DrawingEngine, firstSeen: number }>>(new Map());
 
-  // Function to create layers for a new user
-  const createUserLayers = useCallback((userId: string) => {
-    if (!userLayers.has(userId)) {
-      // Create empty ImageData for foreground and background layers
-      const foreground = new ImageData(CANVAS_WIDTH, CANVAS_HEIGHT);
-      const background = new ImageData(CANVAS_WIDTH, CANVAS_HEIGHT);
+  // Function to create drawing engine for a new user
+  const createUserEngine = useCallback((userId: string) => {
+    setUserEngines(prev => {
+      // Check if user already exists in the current state
+      if (prev.has(userId)) {
+        return prev; // Return unchanged state if user already exists
+      }
       
-      // Initialize with transparent pixels (RGBA = 0,0,0,0)
-      foreground.data.fill(0);
-      background.data.fill(0);
+      // Create new DrawingEngine for this user
+      const engine = new DrawingEngine(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const firstSeen = Date.now();
       
-      setUserLayers(prev => {
-        const newMap = new Map(prev);
-        newMap.set(userId, { foreground, background });
-        return newMap;
-      });
+      const newMap = new Map(prev);
+      newMap.set(userId, { engine, firstSeen });
       
-      console.log(`Created layers for new user: ${userId}`);
-    }
-  }, [userLayers]);
+      console.log(`Created drawing engine for new user: ${userId}, first seen: ${new Date(firstSeen).toISOString()}`);
+      return newMap;
+    });
+  }, []);
+
+
+  // Function to composite all user layers to the main canvas
+  const compositeAllUserLayers = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Clear the canvas
+    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Sort users by firstSeen timestamp (later joiners first = lower layer order)
+    const sortedUsers = Array.from(userEngines.entries()).sort(
+      ([, a], [, b]) => b.firstSeen - a.firstSeen
+    );
+    
+    // Composite layers in order: later joiners at the bottom, earlier joiners on top
+    sortedUsers.forEach(([userId, userEngine]) => {
+      const engine = userEngine.engine;
+      
+      // Draw background layer first
+      const backgroundImageData = new ImageData(engine.layers.background, engine.imageWidth, engine.imageHeight);
+      ctx.putImageData(backgroundImageData, 0, 0);
+      
+      // Draw foreground layer on top
+      const foregroundImageData = new ImageData(engine.layers.foreground, engine.imageWidth, engine.imageHeight);
+      ctx.putImageData(foregroundImageData, 0, 0);
+      
+      console.log(`Composited layers for user: ${userId}`);
+    });
+    
+    console.log(`Composited ${sortedUsers.length} user layers`);
+  }, [userEngines]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fgThumbnailRef = useRef<HTMLCanvasElement>(null);
@@ -384,8 +419,42 @@ function App() {
           
           // Check if message contains a userId
           if (messageData.userId && typeof messageData.userId === 'string') {
-            // Create layers for new user if they don't exist
-            createUserLayers(messageData.userId);
+            // Create drawing engine for new user if they don't exist
+            createUserEngine(messageData.userId);
+            
+            // Handle different event types
+            if (messageData.type === 'drawLine') {
+              // Apply drawing to user's engine
+              setUserEngines(prev => {
+                const userEngine = prev.get(messageData.userId);
+                if (userEngine && messageData.color) {
+                  const engine = userEngine.engine;
+                  const targetLayer = messageData.layer === 'foreground' ? engine.layers.foreground : engine.layers.background;
+                  
+                  // Use the DrawingEngine's drawLine method
+                  engine.drawLine(
+                    targetLayer,
+                    messageData.fromX,
+                    messageData.fromY,
+                    messageData.toX,
+                    messageData.toY,
+                    messageData.brushSize || 1,
+                    messageData.brushType || 'solid',
+                    messageData.color.r || 0,
+                    messageData.color.g || 0,
+                    messageData.color.b || 0,
+                    messageData.color.a || 255
+                  );
+                  
+                  console.log(`Applied drawLine from user ${messageData.userId} to ${messageData.layer} layer using ${messageData.brushType} brush`);
+                }
+                // Return a new Map to trigger re-render
+                return new Map(prev);
+              });
+            } else if (messageData.type === 'pointerup') {
+              // Handle pointerup events (could be used for stroke completion, etc.)
+              console.log(`Received pointerup from user ${messageData.userId} at (${messageData.x}, ${messageData.y})`);
+            }
           }
         } catch (error) {
           console.error("Failed to parse WebSocket message:", error);
@@ -472,7 +541,7 @@ function App() {
     drawingEngine,
   ]);
 
-  // Update canvas when layer visibility changes
+  // Update canvas when layer visibility changes or user layers change
   useEffect(() => {
     if (drawingEngine) {
       const fgCtx = fgThumbnailRef.current?.getContext("2d");
@@ -486,7 +555,7 @@ function App() {
         drawingState.bgVisible
       );
 
-      // Update main canvas
+      // Update main canvas with drawing engine composite
       if (canvasCtx && drawingEngine.compositeBuffer) {
         canvasCtx.putImageData(
           new ImageData(
@@ -499,7 +568,10 @@ function App() {
         );
       }
     }
-  }, [drawingState.fgVisible, drawingState.bgVisible, drawingEngine]);
+    
+    // Composite all user layers on top
+    compositeAllUserLayers();
+  }, [drawingState.fgVisible, drawingState.bgVisible, drawingEngine, userEngines, compositeAllUserLayers]);
 
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
