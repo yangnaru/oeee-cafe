@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useDrawing } from "./hooks/useDrawing";
 import { DrawingEngine } from "./DrawingEngine";
+import { compositeEngineLayer, compositeLayers } from "./compositing";
 import "./App.css";
 
 const zoomMin = 0.5;
@@ -160,20 +161,33 @@ function App() {
       ([, a], [, b]) => b.firstSeen - a.firstSeen
     );
     
-    // Composite layers in order: later joiners at the bottom, earlier joiners on top
+    // Collect all user layers for proper compositing
+    const allLayers: Uint8ClampedArray[] = [];
+    
+    // Add each user's composite layer (background + foreground) in order
     sortedUsers.forEach(([userId, userEngine]) => {
       const engine = userEngine.engine;
       
-      // Draw background layer first
-      const backgroundImageData = new ImageData(engine.layers.background, engine.imageWidth, engine.imageHeight);
-      ctx.putImageData(backgroundImageData, 0, 0);
+      // Composite this user's foreground and background using the same algorithm as DrawingEngine
+      const userComposite = compositeEngineLayer(
+        engine.layers.foreground,
+        engine.layers.background,
+        drawingState.fgVisible,
+        drawingState.bgVisible,
+        engine.imageWidth,
+        engine.imageHeight
+      );
       
-      // Draw foreground layer on top
-      const foregroundImageData = new ImageData(engine.layers.foreground, engine.imageWidth, engine.imageHeight);
-      ctx.putImageData(foregroundImageData, 0, 0);
-      
-      console.log(`Composited layers for user: ${userId}`);
+      allLayers.push(userComposite);
+      console.log(`Prepared composite for user: ${userId}`);
     });
+    
+    // Composite all user layers together
+    const finalComposite = compositeLayers(allLayers, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Put the final result on the main canvas
+    const finalImageData = new ImageData(finalComposite, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.putImageData(finalImageData, 0, 0);
     
     console.log(`Composited ${sortedUsers.length} user layers`);
   }, [userEngines]);
