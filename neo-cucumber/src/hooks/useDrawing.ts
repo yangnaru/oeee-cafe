@@ -221,6 +221,73 @@ export const useDrawing = (
             console.log('No drawing engine available for drawing');
             return;
           }
+          
+          // Draw at the initial click position
+          const r = parseInt(drawingState.color.slice(1, 3), 16);
+          const g = parseInt(drawingState.color.slice(3, 5), 16);
+          const b = parseInt(drawingState.color.slice(5, 7), 16);
+          
+          // Use pressure if available (for pen/stylus)
+          let effectiveOpacity = drawingState.opacity;
+          if (e.pointerType === 'pen' && e.pressure > 0) {
+            effectiveOpacity = Math.floor(drawingState.opacity * e.pressure);
+          }
+          
+          // Draw single point using drawLine method (works for all brush types)
+          drawingEngineRef.current.drawLine(
+            drawingEngineRef.current.layers[drawingState.layerType],
+            coords.x,
+            coords.y,
+            coords.x,
+            coords.y,
+            drawingState.brushSize,
+            drawingState.brushType,
+            r, g, b,
+            effectiveOpacity
+          );
+          
+          // Update thumbnails and composite
+          drawingEngineRef.current.updateLayerThumbnails(
+            fgThumbnailRef.current?.getContext('2d') || undefined, 
+            bgThumbnailRef.current?.getContext('2d') || undefined
+          );
+          drawingEngineRef.current.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
+          
+          if (contextRef.current && drawingEngineRef.current.compositeBuffer) {
+            contextRef.current.putImageData(
+              new ImageData(drawingEngineRef.current.compositeBuffer, drawingEngineRef.current.imageWidth, drawingEngineRef.current.imageHeight),
+              0, 0
+            );
+          }
+          
+          // Send single click drawing event through WebSocket
+          if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
+            const drawEventData = {
+              type: 'drawPoint',
+              userId: userIdRef?.current,
+              layer: drawingState.layerType,
+              x: coords.x,
+              y: coords.y,
+              brushSize: drawingState.brushSize,
+              brushType: drawingState.brushType,
+              pointerType: e.pointerType,
+              color: {
+                r: r,
+                g: g,
+                b: b,
+                a: effectiveOpacity
+              },
+              timestamp: Date.now()
+            };
+            
+            try {
+              wsRef.current.send(JSON.stringify(drawEventData));
+              console.log('Sent drawPoint event:', drawEventData);
+            } catch (error) {
+              console.error('Failed to send drawPoint event:', error);
+            }
+          }
+          
           isDrawing = true;
           currentX = coords.x;
           currentY = coords.y;

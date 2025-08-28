@@ -475,6 +475,34 @@ function App() {
                 // Return a new Map to trigger re-render
                 return new Map(prev);
               });
+            } else if (messageData.type === 'drawPoint') {
+              // Apply single point drawing to user's engine
+              setUserEngines(prev => {
+                const userEngine = prev.get(messageData.userId);
+                if (userEngine && messageData.color) {
+                  const engine = userEngine.engine;
+                  const targetLayer = messageData.layer === 'foreground' ? engine.layers.foreground : engine.layers.background;
+                  
+                  // Use the DrawingEngine's drawLine method with same start/end point
+                  engine.drawLine(
+                    targetLayer,
+                    messageData.x,
+                    messageData.y,
+                    messageData.x,
+                    messageData.y,
+                    messageData.brushSize || 1,
+                    messageData.brushType || 'solid',
+                    messageData.color.r || 0,
+                    messageData.color.g || 0,
+                    messageData.color.b || 0,
+                    messageData.color.a || 255
+                  );
+                  
+                  console.log(`Applied drawPoint from user ${messageData.userId} to ${messageData.layer} layer using ${messageData.brushType} brush at (${messageData.x}, ${messageData.y})`);
+                }
+                // Return a new Map to trigger re-render
+                return new Map(prev);
+              });
             } else if (messageData.type === 'pointerup') {
               // Handle pointerup events (could be used for stroke completion, etc.)
               console.log(`Received pointerup from user ${messageData.userId} at (${messageData.x}, ${messageData.y})`);
