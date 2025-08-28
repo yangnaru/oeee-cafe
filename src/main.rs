@@ -64,6 +64,7 @@ fn main() {
                 config: cfg.clone(),
                 env,
                 collaboration_rooms: Arc::new(DashMap::new()),
+                message_history: Arc::new(DashMap::new()),
             };
 
             App::new(state).await.unwrap().serve().await.unwrap()

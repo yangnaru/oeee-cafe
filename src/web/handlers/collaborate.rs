@@ -31,6 +31,17 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
         .or_insert_with(DashMap::new)
         .insert(connection_id.clone(), tx.clone());
     
+    // Send stored messages to new client
+    if let Some(history) = state.message_history.get(&room_uuid) {
+        for stored_msg in history.iter() {
+            if tx.send(stored_msg.clone()).is_err() {
+                warn!("Failed to send stored message to new connection {}", connection_id);
+                break;
+            }
+        }
+        debug!("Sent {} stored messages to new connection {}", history.len(), connection_id);
+    }
+    
     // Spawn task to handle outgoing messages
     let connection_id_clone = connection_id.clone();
     let outgoing_task = tokio::spawn(async move {
@@ -57,7 +68,25 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
             continue;
         }
         
-        debug!("Received message from connection {} in room {}", connection_id, room_uuid);
+        // Store message in history
+        let (history_count, history_bytes) = {
+            let mut history = state.message_history
+                .entry(room_uuid)
+                .or_insert_with(Vec::new);
+            history.push(msg.clone());
+            
+            let total_bytes = history.iter().map(|m| match m {
+                Message::Text(text) => text.len(),
+                Message::Binary(data) => data.len(),
+                _ => 0,
+            }).sum::<usize>();
+            
+            (history.len(), total_bytes)
+        };
+        
+        let history_mb = history_bytes as f64 / 1_048_576.0;
+        debug!("Received message from connection {} in room {} (history: {} messages, {:.2} MB)", 
+               connection_id, room_uuid, history_count, history_mb);
         
         // Broadcast message to all other connections in the same room
         if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
