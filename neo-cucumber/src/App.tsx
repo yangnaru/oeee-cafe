@@ -498,13 +498,26 @@ function App() {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        // Send initial join message to establish user presence and layer order
+        const joinMessage = {
+          type: "join",
+          userId: userIdRef.current,
+          timestamp: Date.now(),
+        };
+        
+        try {
+          ws.send(JSON.stringify(joinMessage));
+        } catch (error) {
+          console.error("Failed to send join message:", error);
+        }
+        
         // Set join timestamp after a short delay to let stored messages arrive first
         setTimeout(() => {
           if (localUserJoinTimeRef.current === 0) {
             // Only set if not already set
             localUserJoinTimeRef.current = Date.now();
             // Trigger re-compositing with proper timestamp
-            compositeCallbackRef.current?.();
+            needsRecompositionRef.current = true;
           }
         }, 100); // 100ms should be enough for stored messages
       };
@@ -597,6 +610,17 @@ function App() {
                 );
                 
                 // Mark for recomposition instead of triggering React re-render
+                needsRecompositionRef.current = true;
+              }
+            } else if (messageData.type === "join") {
+              // Handle user join events for proper layer ordering
+              console.log(`User ${messageData.userId} joined at ${messageData.timestamp}`);
+              
+              // Update the user's firstSeen timestamp if we have their engine
+              const userEngine = userEnginesRef.current.get(messageData.userId);
+              if (userEngine && messageData.timestamp) {
+                // Update firstSeen to match the server timestamp for consistent ordering
+                userEngine.firstSeen = messageData.timestamp;
                 needsRecompositionRef.current = true;
               }
             } else if (messageData.type === "pointerup") {
