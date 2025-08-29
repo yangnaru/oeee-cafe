@@ -33,9 +33,11 @@ export const useDrawing = (
   const history = useCanvasHistory(30);
 
   // Update the ref when callback changes
+  const onDrawingChangeRef = useRef(onDrawingChange);
   useEffect(() => {
     onHistoryChangeRef.current = onHistoryChange;
-  }, [onHistoryChange]);
+    onDrawingChangeRef.current = onDrawingChange;
+  }, [onHistoryChange, onDrawingChange]);
 
   // Initialize drawing engine
   const initializeDrawing = useCallback(() => {
@@ -90,20 +92,23 @@ export const useDrawing = (
     canvasHeight,
   ]);
 
+  // Drawing state refs to prevent recreation on re-renders
+  const drawingStateRef = useRef({
+    isDrawing: false,
+    prevX: 0,
+    prevY: 0,
+    currentX: 0,
+    currentY: 0,
+    isPanning: false,
+    panStartX: 0,
+    panStartY: 0,
+    activePointerId: null as number | null,
+  });
+
   // Handle drawing events
   const setupDrawingEvents = useCallback(() => {
     const app = appRef.current;
     if (!app) return;
-
-    let isDrawing = false;
-    let prevX = 0;
-    let prevY = 0;
-    let currentX = 0;
-    let currentY = 0;
-    let isPanning = false;
-    let panStartX = 0;
-    let panStartY = 0;
-    let activePointerId: number | null = null;
 
     // Convert screen coordinates to canvas coordinates
     const getCanvasCoordinates = (clientX: number, clientY: number) => {
@@ -148,16 +153,16 @@ export const useDrawing = (
       e.preventDefault();
 
       // Only handle one pointer at a time
-      if (activePointerId !== null && activePointerId !== e.pointerId) return;
+      if (drawingStateRef.current.activePointerId !== null && drawingStateRef.current.activePointerId !== e.pointerId) return;
 
-      activePointerId = e.pointerId;
+      drawingStateRef.current.activePointerId = e.pointerId;
       app.setPointerCapture(e.pointerId);
 
       if (e.button === 1 || (e.pointerType === "touch" && e.buttons === 0)) {
         // Middle mouse button or touch (for panning)
-        isPanning = true;
-        panStartX = e.clientX;
-        panStartY = e.clientY;
+        drawingStateRef.current.isPanning = true;
+        drawingStateRef.current.panStartX = e.clientX;
+        drawingStateRef.current.panStartY = e.clientY;
         return;
       }
 
@@ -215,7 +220,7 @@ export const useDrawing = (
             bgThumbnailRef.current?.getContext("2d") || undefined
           );
           // Notify parent component that drawing has changed
-          onDrawingChange?.();
+          onDrawingChangeRef.current?.();
 
           // Save state after fill operation
           if (
@@ -265,7 +270,7 @@ export const useDrawing = (
             bgThumbnailRef.current?.getContext("2d") || undefined
           );
           // Notify parent component that drawing has changed
-          onDrawingChange?.();
+          onDrawingChangeRef.current?.();
 
           // Send single click drawing event through WebSocket
           if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -294,18 +299,18 @@ export const useDrawing = (
             }
           }
 
-          isDrawing = true;
-          currentX = coords.x;
-          currentY = coords.y;
-          prevX = currentX;
-          prevY = currentY;
+          drawingStateRef.current.isDrawing = true;
+          drawingStateRef.current.currentX = coords.x;
+          drawingStateRef.current.currentY = coords.y;
+          drawingStateRef.current.prevX = drawingStateRef.current.currentX;
+          drawingStateRef.current.prevY = drawingStateRef.current.currentY;
         }
       }
     };
 
     const handlePointerUp = (e: PointerEvent) => {
       // Only handle the active pointer
-      if (activePointerId !== e.pointerId) return;
+      if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
       // Send pointerup event through WebSocket
       if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -328,15 +333,15 @@ export const useDrawing = (
         }
       }
 
-      if (e.button === 1 || isPanning) {
-        isPanning = false;
+      if (e.button === 1 || drawingStateRef.current.isPanning) {
+        drawingStateRef.current.isPanning = false;
       }
 
       if (
         (e.button === 0 ||
           e.pointerType === "touch" ||
           e.pointerType === "pen") &&
-        isDrawing
+        drawingStateRef.current.isDrawing
       ) {
         // Save state after stroke ends
         if (
@@ -351,23 +356,23 @@ export const useDrawing = (
           onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
         }
 
-        isDrawing = false;
+        drawingStateRef.current.isDrawing = false;
       }
 
       // Release pointer capture
       if (app.hasPointerCapture(e.pointerId)) {
         app.releasePointerCapture(e.pointerId);
       }
-      activePointerId = null;
+      drawingStateRef.current.activePointerId = null;
     };
 
     const handlePointerMove = (e: PointerEvent) => {
       // Only handle the active pointer
-      if (activePointerId !== e.pointerId) return;
+      if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
-      if (isPanning) {
-        const deltaX = e.clientX - panStartX;
-        const deltaY = e.clientY - panStartY;
+      if (drawingStateRef.current.isPanning) {
+        const deltaX = e.clientX - drawingStateRef.current.panStartX;
+        const deltaY = e.clientY - drawingStateRef.current.panStartY;
 
         // Update the engine's pan offset
         if (drawingEngineRef.current) {
@@ -378,18 +383,18 @@ export const useDrawing = (
           );
         }
 
-        panStartX = e.clientX;
-        panStartY = e.clientY;
+        drawingStateRef.current.panStartX = e.clientX;
+        drawingStateRef.current.panStartY = e.clientY;
         return;
       }
 
-      if (!isDrawing || drawingState.brushType === "fill") return;
+      if (!drawingStateRef.current.isDrawing || drawingState.brushType === "fill") return;
 
-      prevX = currentX;
-      prevY = currentY;
+      drawingStateRef.current.prevX = drawingStateRef.current.currentX;
+      drawingStateRef.current.prevY = drawingStateRef.current.currentY;
       const coords = getCanvasCoordinates(e.clientX, e.clientY);
-      currentX = coords.x;
-      currentY = coords.y;
+      drawingStateRef.current.currentX = coords.x;
+      drawingStateRef.current.currentY = coords.y;
 
       if (!drawingEngineRef.current) {
         return;
@@ -408,10 +413,10 @@ export const useDrawing = (
 
       drawingEngineRef.current.drawLine(
         drawingEngineRef.current.layers[drawingState.layerType],
-        prevX,
-        prevY,
-        currentX,
-        currentY,
+        drawingStateRef.current.prevX,
+        drawingStateRef.current.prevY,
+        drawingStateRef.current.currentX,
+        drawingStateRef.current.currentY,
         drawingState.brushSize,
         drawingState.brushType,
         r,
@@ -426,10 +431,10 @@ export const useDrawing = (
           type: "drawLine",
           userId: userIdRef?.current,
           layer: drawingState.layerType,
-          fromX: prevX,
-          fromY: prevY,
-          toX: currentX,
-          toY: currentY,
+          fromX: drawingStateRef.current.prevX,
+          fromY: drawingStateRef.current.prevY,
+          toX: drawingStateRef.current.currentX,
+          toY: drawingStateRef.current.currentY,
           brushSize: drawingState.brushSize,
           brushType: drawingState.brushType,
           pointerType: e.pointerType,
