@@ -3,7 +3,7 @@ export class DrawingEngine {
   public imageHeight: number;
   public layers: { [key: string]: Uint8ClampedArray };
   public compositeBuffer: Uint8ClampedArray;
-  
+
   private brush: { [key: number]: Uint8Array } = {};
   private tone: { [key: string]: Uint8Array } = {};
   private aerr = 0;
@@ -19,14 +19,14 @@ export class DrawingEngine {
   constructor(width: number = 500, height: number = 500) {
     this.imageWidth = width;
     this.imageHeight = height;
-    
+
     this.layers = {
       background: new Uint8ClampedArray(width * height * 4),
       foreground: new Uint8ClampedArray(width * height * 4),
     };
-    
+
     this.compositeBuffer = new Uint8ClampedArray(width * height * 4);
-    
+
     this.initializeBrushes();
     this.initializeTones();
   }
@@ -168,7 +168,10 @@ export class DrawingEngine {
   }
 
   // Function to update layer thumbnails
-  public updateLayerThumbnails(fgThumbnailCtx?: CanvasRenderingContext2D | null, bgThumbnailCtx?: CanvasRenderingContext2D | null) {
+  public updateLayerThumbnails(
+    fgThumbnailCtx?: CanvasRenderingContext2D | null,
+    bgThumbnailCtx?: CanvasRenderingContext2D | null
+  ) {
     // Early return if no contexts provided
     if (!fgThumbnailCtx && !bgThumbnailCtx) {
       return;
@@ -192,7 +195,11 @@ export class DrawingEngine {
 
     // Update foreground thumbnail if context available
     if (fgThumbnailCtx) {
-      const fgImageData = new ImageData(this.layers.foreground, this.imageWidth, this.imageHeight);
+      const fgImageData = new ImageData(
+        this.layers.foreground,
+        this.imageWidth,
+        this.imageHeight
+      );
       tempCtx.clearRect(0, 0, this.imageWidth, this.imageHeight);
       tempCtx.putImageData(fgImageData, 0, 0);
       fgThumbnailCtx.clearRect(0, 0, thumbnailWidth, thumbnailHeight);
@@ -211,7 +218,11 @@ export class DrawingEngine {
 
     // Update background thumbnail if context available
     if (bgThumbnailCtx) {
-      const bgImageData = new ImageData(this.layers.background, this.imageWidth, this.imageHeight);
+      const bgImageData = new ImageData(
+        this.layers.background,
+        this.imageWidth,
+        this.imageHeight
+      );
       // Clear temp canvas to prevent foreground contamination
       tempCtx.clearRect(0, 0, this.imageWidth, this.imageHeight);
       tempCtx.putImageData(bgImageData, 0, 0);
@@ -231,13 +242,21 @@ export class DrawingEngine {
   }
 
   // Pan offset management
-  public updatePanOffset(deltaX: number, deltaY: number, canvas?: HTMLCanvasElement) {
+  public updatePanOffset(
+    deltaX: number,
+    deltaY: number,
+    canvas?: HTMLCanvasElement
+  ) {
     this.panOffsetX += deltaX;
     this.panOffsetY += deltaY;
     this.updateCanvasPan(canvas);
   }
 
-  public adjustPanForZoom(deltaX: number, deltaY: number, canvas?: HTMLCanvasElement) {
+  public adjustPanForZoom(
+    deltaX: number,
+    deltaY: number,
+    canvas?: HTMLCanvasElement
+  ) {
     this.panOffsetX += deltaX;
     this.panOffsetY += deltaY;
     this.updateCanvasPan(canvas);
@@ -463,9 +482,6 @@ export class DrawingEngine {
 
     while (stack.length > 0) {
       if (stack.length > maxStackSize) {
-        console.log(
-          `flood fill stack limit reached: ${maxStackSize} for canvas ${this.imageWidth}x${this.imageHeight}`
-        );
         break;
       }
 
@@ -604,7 +620,8 @@ export class DrawingEngine {
       if (
         this.prevLine === null ||
         !(
-          (this.prevLine[0][0] === currentX && this.prevLine[0][1] === currentY) ||
+          (this.prevLine[0][0] === currentX &&
+            this.prevLine[0][1] === currentY) ||
           (this.prevLine[1][0] === currentX && this.prevLine[1][1] === currentY)
         )
       ) {
@@ -637,7 +654,11 @@ export class DrawingEngine {
     ];
   }
 
-  public initialize(ctx?: CanvasRenderingContext2D, fgThumbnail?: HTMLCanvasElement, bgThumbnail?: HTMLCanvasElement) {
+  public initialize(
+    ctx?: CanvasRenderingContext2D,
+    fgThumbnail?: HTMLCanvasElement,
+    bgThumbnail?: HTMLCanvasElement
+  ) {
     // Set thumbnail canvas dimensions dynamically based on aspect ratio
     const thumbnailHeight = 50;
     const aspectRatio = this.imageWidth / this.imageHeight;
@@ -651,14 +672,14 @@ export class DrawingEngine {
     }
 
     // Initial composite and render
-    const fgThumbnailCtx = fgThumbnail?.getContext('2d');
-    const bgThumbnailCtx = bgThumbnail?.getContext('2d');
+    const fgThumbnailCtx = fgThumbnail?.getContext("2d");
+    const bgThumbnailCtx = bgThumbnail?.getContext("2d");
     if (fgThumbnailCtx) fgThumbnailCtx.imageSmoothingEnabled = false;
     if (bgThumbnailCtx) bgThumbnailCtx.imageSmoothingEnabled = false;
-    
+
     this.updateLayerThumbnails(fgThumbnailCtx, bgThumbnailCtx);
     this.compositeLayers();
-    
+
     if (ctx) {
       ctx.putImageData(
         new ImageData(this.compositeBuffer, this.imageWidth, this.imageHeight),
@@ -666,8 +687,6 @@ export class DrawingEngine {
         0
       );
     }
-
-    console.log(`DrawingEngine initialized with dimensions: ${this.imageWidth}x${this.imageHeight}`);
   }
 
   public dispose() {

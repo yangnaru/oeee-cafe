@@ -122,30 +122,28 @@ function App() {
   });
 
   // Track user IDs and their drawing engines
-  const [userEngines, setUserEngines] = useState<Map<string, { engine: DrawingEngine, firstSeen: number }>>(new Map());
+  const [userEngines, setUserEngines] = useState<
+    Map<string, { engine: DrawingEngine; firstSeen: number }>
+  >(new Map());
 
   // Function to create drawing engine for a new user
   const createUserEngine = useCallback((userId: string) => {
-    setUserEngines(prev => {
+    setUserEngines((prev) => {
       // Check if user already exists in the current state
       if (prev.has(userId)) {
         return prev; // Return unchanged state if user already exists
       }
-      
+
       // Create new DrawingEngine for this user
       const engine = new DrawingEngine(CANVAS_WIDTH, CANVAS_HEIGHT);
       const firstSeen = Date.now();
-      
+
       const newMap = new Map(prev);
       newMap.set(userId, { engine, firstSeen });
-      
-      console.log(`Created drawing engine for REMOTE user: ${userId}, first seen: ${new Date(firstSeen).toISOString()}`);
-      console.log(`Local user joined at: ${new Date(localUserJoinTimeRef.current).toISOString()}`);
-      console.log(`Remote user timestamp ${firstSeen > localUserJoinTimeRef.current ? 'AFTER' : 'BEFORE'} local user`);
+
       return newMap;
     });
   }, []);
-
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fgThumbnailRef = useRef<HTMLCanvasElement>(null);
@@ -358,49 +356,41 @@ function App() {
   const compositeAllUserLayers = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
+
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    
+
     // Clear the canvas
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
+
     // Create a combined map including local user and remote users
     const allUsers = new Map(userEngines);
-    
+
     // Add local user if drawingEngine exists
     if (drawingEngine) {
       allUsers.set(userIdRef.current, {
         engine: drawingEngine,
-        firstSeen: localUserJoinTimeRef.current // Use actual join timestamp
+        firstSeen: localUserJoinTimeRef.current, // Use actual join timestamp
       });
     }
-    
+
     // Sort users by firstSeen timestamp (later joiners first = lower layer order)
     const sortedUsers = Array.from(allUsers.entries()).sort(
       ([, a], [, b]) => b.firstSeen - a.firstSeen
     );
-    
-    // Debug logging for layer ordering
-    console.log('Layer ordering (bottom to top):');
-    sortedUsers.forEach(([userId, userEngine], index) => {
-      const userType = userId === userIdRef.current ? 'LOCAL' : 'REMOTE';
-      const joinTime = new Date(userEngine.firstSeen).toISOString();
-      console.log(`  ${index}: ${userType} ${userId} (joined: ${joinTime})`);
-    });
-    
+
     // Collect all user layers for proper compositing
     const allLayers: Uint8ClampedArray[] = [];
-    
+
     // Add each user's composite layer (background + foreground) in order
     sortedUsers.forEach(([userId, userEngine]) => {
       const engine = userEngine.engine;
-      
+
       // Only apply visibility toggles to local user, remote users always show both layers
       const isLocalUser = userId === userIdRef.current;
       const fgVisible = isLocalUser ? drawingState.fgVisible : true;
       const bgVisible = isLocalUser ? drawingState.bgVisible : true;
-      
+
       // Composite this user's foreground and background using the same algorithm as DrawingEngine
       const userComposite = compositeEngineLayer(
         engine.layers.foreground,
@@ -410,21 +400,30 @@ function App() {
         engine.imageWidth,
         engine.imageHeight
       );
-      
+
       allLayers.push(userComposite);
-      const userType = isLocalUser ? 'local' : 'remote';
-      console.log(`Prepared composite for ${userType} user: ${userId} (fg: ${fgVisible}, bg: ${bgVisible})`);
     });
-    
+
     // Composite all user layers together
-    const finalComposite = compositeLayers(allLayers, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
+    const finalComposite = compositeLayers(
+      allLayers,
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT
+    );
+
     // Put the final result on the main canvas
-    const finalImageData = new ImageData(finalComposite, CANVAS_WIDTH, CANVAS_HEIGHT);
+    const finalImageData = new ImageData(
+      finalComposite,
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT
+    );
     ctx.putImageData(finalImageData, 0, 0);
-    
-    console.log(`Composited ${sortedUsers.length} user layers (including local)`);
-  }, [userEngines, drawingEngine, drawingState.fgVisible, drawingState.bgVisible]);
+  }, [
+    userEngines,
+    drawingEngine,
+    drawingState.fgVisible,
+    drawingState.bgVisible,
+  ]);
 
   // Set the compositing callback ref after compositeAllUserLayers is defined
   useEffect(() => {
@@ -463,13 +462,12 @@ function App() {
       // Store WebSocket reference for use in other components
       wsRef.current = ws;
 
-      ws.onopen = (event) => {
-        console.log("WebSocket connected:", event);
+      ws.onopen = () => {
         // Set join timestamp after a short delay to let stored messages arrive first
         setTimeout(() => {
-          if (localUserJoinTimeRef.current === 0) { // Only set if not already set
+          if (localUserJoinTimeRef.current === 0) {
+            // Only set if not already set
             localUserJoinTimeRef.current = Date.now();
-            console.log(`Local user join timestamp set after stored messages: ${new Date(localUserJoinTimeRef.current).toISOString()}`);
             // Trigger re-compositing with proper timestamp
             compositeCallbackRef.current?.();
           }
@@ -477,26 +475,26 @@ function App() {
       };
 
       ws.onmessage = (event) => {
-        console.log("WebSocket message received:", event);
-        console.log("Message data:", event.data);
-        
         try {
           const messageData = JSON.parse(event.data);
-          
+
           // Check if message contains a userId
-          if (messageData.userId && typeof messageData.userId === 'string') {
+          if (messageData.userId && typeof messageData.userId === "string") {
             // Create drawing engine for new user if they don't exist
             createUserEngine(messageData.userId);
-            
+
             // Handle different event types
-            if (messageData.type === 'drawLine') {
+            if (messageData.type === "drawLine") {
               // Apply drawing to user's engine
-              setUserEngines(prev => {
+              setUserEngines((prev) => {
                 const userEngine = prev.get(messageData.userId);
                 if (userEngine && messageData.color) {
                   const engine = userEngine.engine;
-                  const targetLayer = messageData.layer === 'foreground' ? engine.layers.foreground : engine.layers.background;
-                  
+                  const targetLayer =
+                    messageData.layer === "foreground"
+                      ? engine.layers.foreground
+                      : engine.layers.background;
+
                   // Use the DrawingEngine's drawLine method
                   engine.drawLine(
                     targetLayer,
@@ -505,26 +503,27 @@ function App() {
                     messageData.toX,
                     messageData.toY,
                     messageData.brushSize || 1,
-                    messageData.brushType || 'solid',
+                    messageData.brushType || "solid",
                     messageData.color.r || 0,
                     messageData.color.g || 0,
                     messageData.color.b || 0,
                     messageData.color.a || 255
                   );
-                  
-                  console.log(`Applied drawLine from user ${messageData.userId} to ${messageData.layer} layer using ${messageData.brushType} brush`);
                 }
                 // Return a new Map to trigger re-render
                 return new Map(prev);
               });
-            } else if (messageData.type === 'fill') {
+            } else if (messageData.type === "fill") {
               // Apply fill operation to user's engine
-              setUserEngines(prev => {
+              setUserEngines((prev) => {
                 const userEngine = prev.get(messageData.userId);
                 if (userEngine && messageData.color) {
                   const engine = userEngine.engine;
-                  const targetLayer = messageData.layer === 'foreground' ? engine.layers.foreground : engine.layers.background;
-                  
+                  const targetLayer =
+                    messageData.layer === "foreground"
+                      ? engine.layers.foreground
+                      : engine.layers.background;
+
                   // Use the DrawingEngine's doFloodFill method
                   engine.doFloodFill(
                     targetLayer,
@@ -535,20 +534,21 @@ function App() {
                     messageData.color.b || 0,
                     messageData.color.a || 255
                   );
-                  
-                  console.log(`Applied fill from user ${messageData.userId} to ${messageData.layer} layer at (${messageData.x}, ${messageData.y})`);
                 }
                 // Return a new Map to trigger re-render
                 return new Map(prev);
               });
-            } else if (messageData.type === 'drawPoint') {
+            } else if (messageData.type === "drawPoint") {
               // Apply single point drawing to user's engine
-              setUserEngines(prev => {
+              setUserEngines((prev) => {
                 const userEngine = prev.get(messageData.userId);
                 if (userEngine && messageData.color) {
                   const engine = userEngine.engine;
-                  const targetLayer = messageData.layer === 'foreground' ? engine.layers.foreground : engine.layers.background;
-                  
+                  const targetLayer =
+                    messageData.layer === "foreground"
+                      ? engine.layers.foreground
+                      : engine.layers.background;
+
                   // Use the DrawingEngine's drawLine method with same start/end point
                   engine.drawLine(
                     targetLayer,
@@ -557,21 +557,21 @@ function App() {
                     messageData.x,
                     messageData.y,
                     messageData.brushSize || 1,
-                    messageData.brushType || 'solid',
+                    messageData.brushType || "solid",
                     messageData.color.r || 0,
                     messageData.color.g || 0,
                     messageData.color.b || 0,
                     messageData.color.a || 255
                   );
-                  
-                  console.log(`Applied drawPoint from user ${messageData.userId} to ${messageData.layer} layer using ${messageData.brushType} brush at (${messageData.x}, ${messageData.y})`);
                 }
                 // Return a new Map to trigger re-render
                 return new Map(prev);
               });
-            } else if (messageData.type === 'pointerup') {
+            } else if (messageData.type === "pointerup") {
               // Handle pointerup events (could be used for stroke completion, etc.)
-              console.log(`Received pointerup from user ${messageData.userId} at (${messageData.x}, ${messageData.y})`);
+              console.log(
+                `Received pointerup from user ${messageData.userId} at (${messageData.x}, ${messageData.y})`
+              );
             }
           }
         } catch (error) {
@@ -668,10 +668,16 @@ function App() {
       // Update layer thumbnails only
       drawingEngine.updateLayerThumbnails(fgCtx, bgCtx);
     }
-    
+
     // Composite all user layers (including local user)
     compositeAllUserLayers();
-  }, [drawingState.fgVisible, drawingState.bgVisible, drawingEngine, userEngines, compositeAllUserLayers]);
+  }, [
+    drawingState.fgVisible,
+    drawingState.bgVisible,
+    drawingEngine,
+    userEngines,
+    compositeAllUserLayers,
+  ]);
 
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
