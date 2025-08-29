@@ -249,11 +249,8 @@ export const useDrawing = (
           const g = parseInt(drawingState.color.slice(3, 5), 16);
           const b = parseInt(drawingState.color.slice(5, 7), 16);
 
-          // Use pressure if available (for pen/stylus)
-          let effectiveOpacity = drawingState.opacity;
-          if (e.pointerType === "pen" && e.pressure > 0) {
-            effectiveOpacity = Math.floor(drawingState.opacity * e.pressure);
-          }
+          // Use standard opacity
+          const effectiveOpacity = drawingState.opacity;
 
           // Draw single point using drawLine method (works for all brush types)
           drawingEngineRef.current.drawLine(
@@ -328,7 +325,6 @@ export const useDrawing = (
           y: coords.y,
           button: e.button,
           pointerType: e.pointerType,
-          pressure: e.pressure,
           timestamp: Date.now(),
         };
 
@@ -414,12 +410,8 @@ export const useDrawing = (
       const g = parseInt(drawingState.color.slice(3, 5), 16);
       const b = parseInt(drawingState.color.slice(5, 7), 16);
 
-      // Use pressure if available (for pen/stylus)
-      let effectiveOpacity = drawingState.opacity;
-      if (e.pointerType === "pen" && e.pressure > 0) {
-        // Scale opacity based on pressure (0-1 range)
-        effectiveOpacity = Math.floor(drawingState.opacity * e.pressure);
-      }
+      // Use standard opacity
+      const effectiveOpacity = drawingState.opacity;
 
       drawingEngineRef.current.drawLine(
         drawingEngineRef.current.layers[drawingState.layerType],

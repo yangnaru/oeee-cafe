@@ -122,9 +122,12 @@ function App() {
 
   // Track user IDs and their drawing engines (using ref to avoid re-renders)
   const userEnginesRef = useRef<
-    Map<string, { engine: DrawingEngine; firstSeen: number; canvas: HTMLCanvasElement }>
+    Map<
+      string,
+      { engine: DrawingEngine; firstSeen: number; canvas: HTMLCanvasElement }
+    >
   >(new Map());
-  
+
   // Dirty flag to track when recomposition is needed
   const needsRecompositionRef = useRef(false);
 
@@ -138,12 +141,12 @@ function App() {
     // Create new DrawingEngine for this user
     const engine = new DrawingEngine(CANVAS_WIDTH, CANVAS_HEIGHT);
     const firstSeen = Date.now();
-    
+
     // Create offscreen canvas for this user
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = CANVAS_WIDTH;
     canvas.height = CANVAS_HEIGHT;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.imageSmoothingEnabled = false;
       engine.initialize(ctx);
@@ -372,7 +375,12 @@ function App() {
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     // Create a combined array including all users
-    const allUsers: Array<{ userId: string; engine: DrawingEngine; firstSeen: number; canvas?: HTMLCanvasElement }> = [];
+    const allUsers: Array<{
+      userId: string;
+      engine: DrawingEngine;
+      firstSeen: number;
+      canvas?: HTMLCanvasElement;
+    }> = [];
 
     // Add remote users
     userEnginesRef.current.forEach((userData, userId) => {
@@ -394,36 +402,44 @@ function App() {
     // Composite each user's canvas onto the main canvas using Canvas API (much faster!)
     allUsers.forEach(({ userId, engine, canvas }) => {
       const isLocalUser = userId === userIdRef.current;
-      
+
       if (isLocalUser) {
         // For local user, composite layers and create temporary canvas
         engine.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
-        
+
         // Create temporary canvas to draw composite buffer
-        const tempCanvas = document.createElement('canvas');
+        const tempCanvas = document.createElement("canvas");
         tempCanvas.width = CANVAS_WIDTH;
         tempCanvas.height = CANVAS_HEIGHT;
-        const tempCtx = tempCanvas.getContext('2d');
+        const tempCtx = tempCanvas.getContext("2d");
         if (tempCtx) {
           const compositeData = engine.compositeBuffer;
-          const imageData = new ImageData(compositeData, CANVAS_WIDTH, CANVAS_HEIGHT);
+          const imageData = new ImageData(
+            compositeData,
+            CANVAS_WIDTH,
+            CANVAS_HEIGHT
+          );
           tempCtx.putImageData(imageData, 0, 0);
-          
+
           // Draw temp canvas onto main canvas
           ctx.drawImage(tempCanvas, 0, 0);
         }
       } else if (canvas) {
         // For remote users, update their offscreen canvas first
-        const userCtx = canvas.getContext('2d');
+        const userCtx = canvas.getContext("2d");
         if (userCtx) {
           userCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
           engine.compositeLayers(true, true); // Always show both layers for remote users
-          
+
           // Get the composite data and draw to user's offscreen canvas
           const compositeData = engine.compositeBuffer;
-          const imageData = new ImageData(compositeData, CANVAS_WIDTH, CANVAS_HEIGHT);
+          const imageData = new ImageData(
+            compositeData,
+            CANVAS_WIDTH,
+            CANVAS_HEIGHT
+          );
           userCtx.putImageData(imageData, 0, 0);
-          
+
           // Draw user's canvas onto main canvas
           ctx.drawImage(canvas, 0, 0);
         }
@@ -504,13 +520,13 @@ function App() {
           userId: userIdRef.current,
           timestamp: Date.now(),
         };
-        
+
         try {
           ws.send(JSON.stringify(joinMessage));
         } catch (error) {
           console.error("Failed to send join message:", error);
         }
-        
+
         // Set join timestamp after a short delay to let stored messages arrive first
         setTimeout(() => {
           if (localUserJoinTimeRef.current === 0) {
@@ -556,7 +572,7 @@ function App() {
                   messageData.color.b || 0,
                   messageData.color.a || 255
                 );
-                
+
                 // Mark for recomposition instead of triggering React re-render
                 needsRecompositionRef.current = true;
               }
@@ -580,7 +596,7 @@ function App() {
                   messageData.color.b || 0,
                   messageData.color.a || 255
                 );
-                
+
                 // Mark for recomposition instead of triggering React re-render
                 needsRecompositionRef.current = true;
               }
@@ -608,14 +624,16 @@ function App() {
                   messageData.color.b || 0,
                   messageData.color.a || 255
                 );
-                
+
                 // Mark for recomposition instead of triggering React re-render
                 needsRecompositionRef.current = true;
               }
             } else if (messageData.type === "join") {
               // Handle user join events for proper layer ordering
-              console.log(`User ${messageData.userId} joined at ${messageData.timestamp}`);
-              
+              console.log(
+                `User ${messageData.userId} joined at ${messageData.timestamp}`
+              );
+
               // Update the user's firstSeen timestamp if we have their engine
               const userEngine = userEnginesRef.current.get(messageData.userId);
               if (userEngine && messageData.timestamp) {
@@ -727,11 +745,7 @@ function App() {
 
     // Mark for recomposition (RAF loop will handle it)
     needsRecompositionRef.current = true;
-  }, [
-    drawingState.fgVisible,
-    drawingState.bgVisible,
-    drawingEngine,
-  ]);
+  }, [drawingState.fgVisible, drawingState.bgVisible, drawingEngine]);
 
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
