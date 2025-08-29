@@ -3,6 +3,7 @@ export class DrawingEngine {
   public imageHeight: number;
   public layers: { [key: string]: Uint8ClampedArray };
   public compositeBuffer: Uint8ClampedArray;
+  public canvas: HTMLCanvasElement | null = null;
 
   private brush: { [key: number]: Uint8Array } = {};
   private tone: { [key: string]: Uint8Array } = {};
@@ -659,6 +660,10 @@ export class DrawingEngine {
     fgThumbnail?: HTMLCanvasElement,
     bgThumbnail?: HTMLCanvasElement
   ) {
+    // Store the canvas reference
+    if (ctx) {
+      this.canvas = ctx.canvas;
+    }
     // Set thumbnail canvas dimensions dynamically based on aspect ratio
     const thumbnailHeight = 50;
     const aspectRatio = this.imageWidth / this.imageHeight;

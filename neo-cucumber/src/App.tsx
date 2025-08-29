@@ -7,7 +7,6 @@ import {
 } from "react";
 import { useDrawing } from "./hooks/useDrawing";
 import { DrawingEngine } from "./DrawingEngine";
-import { compositeEngineLayer, compositeLayers } from "./compositing";
 import "./App.css";
 
 const zoomMin = 0.5;
@@ -121,28 +120,37 @@ function App() {
     canRedo: false,
   });
 
-  // Track user IDs and their drawing engines
-  const [userEngines, setUserEngines] = useState<
-    Map<string, { engine: DrawingEngine; firstSeen: number }>
+  // Track user IDs and their drawing engines (using ref to avoid re-renders)
+  const userEnginesRef = useRef<
+    Map<string, { engine: DrawingEngine; firstSeen: number; canvas: HTMLCanvasElement }>
   >(new Map());
+  
+  // Dirty flag to track when recomposition is needed
+  const needsRecompositionRef = useRef(false);
 
   // Function to create drawing engine for a new user
   const createUserEngine = useCallback((userId: string) => {
-    setUserEngines((prev) => {
-      // Check if user already exists in the current state
-      if (prev.has(userId)) {
-        return prev; // Return unchanged state if user already exists
-      }
+    // Check if user already exists
+    if (userEnginesRef.current.has(userId)) {
+      return;
+    }
 
-      // Create new DrawingEngine for this user
-      const engine = new DrawingEngine(CANVAS_WIDTH, CANVAS_HEIGHT);
-      const firstSeen = Date.now();
+    // Create new DrawingEngine for this user
+    const engine = new DrawingEngine(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const firstSeen = Date.now();
+    
+    // Create offscreen canvas for this user
+    const canvas = document.createElement('canvas');
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.imageSmoothingEnabled = false;
+      engine.initialize(ctx);
+    }
 
-      const newMap = new Map(prev);
-      newMap.set(userId, { engine, firstSeen });
-
-      return newMap;
-    });
+    userEnginesRef.current.set(userId, { engine, firstSeen, canvas });
+    needsRecompositionRef.current = true;
   }, []);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -332,8 +340,8 @@ function App() {
 
   // Callback to trigger unified compositing when local drawing changes
   const handleLocalDrawingChange = useCallback(() => {
-    // Call the compositing function if available
-    compositeCallbackRef.current?.();
+    // Mark for recomposition (RAF loop will handle it)
+    needsRecompositionRef.current = true;
   }, []);
 
   // Use the drawing hook
@@ -352,10 +360,10 @@ function App() {
     handleLocalDrawingChange
   );
 
-  // Function to composite all user layers to the main canvas
+  // RAF-based compositing system for better performance
   const compositeAllUserLayers = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !needsRecompositionRef.current) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -363,72 +371,99 @@ function App() {
     // Clear the canvas
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Create a combined map including local user and remote users
-    const allUsers = new Map(userEngines);
+    // Create a combined array including all users
+    const allUsers: Array<{ userId: string; engine: DrawingEngine; firstSeen: number; canvas?: HTMLCanvasElement }> = [];
+
+    // Add remote users
+    userEnginesRef.current.forEach((userData, userId) => {
+      allUsers.push({ userId, ...userData });
+    });
 
     // Add local user if drawingEngine exists
     if (drawingEngine) {
-      allUsers.set(userIdRef.current, {
+      allUsers.push({
+        userId: userIdRef.current,
         engine: drawingEngine,
-        firstSeen: localUserJoinTimeRef.current, // Use actual join timestamp
+        firstSeen: localUserJoinTimeRef.current,
       });
     }
 
     // Sort users by firstSeen timestamp (later joiners first = lower layer order)
-    const sortedUsers = Array.from(allUsers.entries()).sort(
-      ([, a], [, b]) => b.firstSeen - a.firstSeen
-    );
+    allUsers.sort((a, b) => b.firstSeen - a.firstSeen);
 
-    // Collect all user layers for proper compositing
-    const allLayers: Uint8ClampedArray[] = [];
-
-    // Add each user's composite layer (background + foreground) in order
-    sortedUsers.forEach(([userId, userEngine]) => {
-      const engine = userEngine.engine;
-
-      // Only apply visibility toggles to local user, remote users always show both layers
+    // Composite each user's canvas onto the main canvas using Canvas API (much faster!)
+    allUsers.forEach(({ userId, engine, canvas }) => {
       const isLocalUser = userId === userIdRef.current;
-      const fgVisible = isLocalUser ? drawingState.fgVisible : true;
-      const bgVisible = isLocalUser ? drawingState.bgVisible : true;
-
-      // Composite this user's foreground and background using the same algorithm as DrawingEngine
-      const userComposite = compositeEngineLayer(
-        engine.layers.foreground,
-        engine.layers.background,
-        fgVisible,
-        bgVisible,
-        engine.imageWidth,
-        engine.imageHeight
-      );
-
-      allLayers.push(userComposite);
+      
+      if (isLocalUser) {
+        // For local user, composite layers and create temporary canvas
+        engine.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
+        
+        // Create temporary canvas to draw composite buffer
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = CANVAS_WIDTH;
+        tempCanvas.height = CANVAS_HEIGHT;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) {
+          const compositeData = engine.compositeBuffer;
+          const imageData = new ImageData(compositeData, CANVAS_WIDTH, CANVAS_HEIGHT);
+          tempCtx.putImageData(imageData, 0, 0);
+          
+          // Draw temp canvas onto main canvas
+          ctx.drawImage(tempCanvas, 0, 0);
+        }
+      } else if (canvas) {
+        // For remote users, update their offscreen canvas first
+        const userCtx = canvas.getContext('2d');
+        if (userCtx) {
+          userCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+          engine.compositeLayers(true, true); // Always show both layers for remote users
+          
+          // Get the composite data and draw to user's offscreen canvas
+          const compositeData = engine.compositeBuffer;
+          const imageData = new ImageData(compositeData, CANVAS_WIDTH, CANVAS_HEIGHT);
+          userCtx.putImageData(imageData, 0, 0);
+          
+          // Draw user's canvas onto main canvas
+          ctx.drawImage(canvas, 0, 0);
+        }
+      }
     });
 
-    // Composite all user layers together
-    const finalComposite = compositeLayers(
-      allLayers,
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT
-    );
-
-    // Put the final result on the main canvas
-    const finalImageData = new ImageData(
-      finalComposite,
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT
-    );
-    ctx.putImageData(finalImageData, 0, 0);
-  }, [
-    userEngines,
-    drawingEngine,
-    drawingState.fgVisible,
-    drawingState.bgVisible,
-  ]);
+    needsRecompositionRef.current = false;
+  }, [drawingEngine, drawingState.fgVisible, drawingState.bgVisible]);
 
   // Set the compositing callback ref after compositeAllUserLayers is defined
   useEffect(() => {
     compositeCallbackRef.current = compositeAllUserLayers;
   }, [compositeAllUserLayers]);
+
+  // RAF-based rendering loop
+  const rafId = useRef<number | null>(null);
+  const startRenderLoop = useCallback(() => {
+    const render = () => {
+      if (needsRecompositionRef.current) {
+        compositeAllUserLayers();
+      }
+      rafId.current = requestAnimationFrame(render);
+    };
+    rafId.current = requestAnimationFrame(render);
+  }, [compositeAllUserLayers]);
+
+  const stopRenderLoop = useCallback(() => {
+    if (rafId.current !== null) {
+      cancelAnimationFrame(rafId.current);
+      rafId.current = null;
+    }
+  }, []);
+
+  // Start/stop render loop based on canvas availability
+  useEffect(() => {
+    if (canvasRef.current) {
+      startRenderLoop();
+    }
+    return stopRenderLoop;
+  }, [startRenderLoop, stopRenderLoop]);
 
   const handleZoomReset = useCallback(() => {
     const resetIndex = zoomLevels.findIndex((level) => level >= 1.0);
@@ -485,88 +520,85 @@ function App() {
 
             // Handle different event types
             if (messageData.type === "drawLine") {
-              // Apply drawing to user's engine
-              setUserEngines((prev) => {
-                const userEngine = prev.get(messageData.userId);
-                if (userEngine && messageData.color) {
-                  const engine = userEngine.engine;
-                  const targetLayer =
-                    messageData.layer === "foreground"
-                      ? engine.layers.foreground
-                      : engine.layers.background;
+              // Apply drawing to user's engine directly (no React state update)
+              const userEngine = userEnginesRef.current.get(messageData.userId);
+              if (userEngine && messageData.color) {
+                const engine = userEngine.engine;
+                const targetLayer =
+                  messageData.layer === "foreground"
+                    ? engine.layers.foreground
+                    : engine.layers.background;
 
-                  // Use the DrawingEngine's drawLine method
-                  engine.drawLine(
-                    targetLayer,
-                    messageData.fromX,
-                    messageData.fromY,
-                    messageData.toX,
-                    messageData.toY,
-                    messageData.brushSize || 1,
-                    messageData.brushType || "solid",
-                    messageData.color.r || 0,
-                    messageData.color.g || 0,
-                    messageData.color.b || 0,
-                    messageData.color.a || 255
-                  );
-                }
-                // Return a new Map to trigger re-render
-                return new Map(prev);
-              });
+                // Use the DrawingEngine's drawLine method
+                engine.drawLine(
+                  targetLayer,
+                  messageData.fromX,
+                  messageData.fromY,
+                  messageData.toX,
+                  messageData.toY,
+                  messageData.brushSize || 1,
+                  messageData.brushType || "solid",
+                  messageData.color.r || 0,
+                  messageData.color.g || 0,
+                  messageData.color.b || 0,
+                  messageData.color.a || 255
+                );
+                
+                // Mark for recomposition instead of triggering React re-render
+                needsRecompositionRef.current = true;
+              }
             } else if (messageData.type === "fill") {
-              // Apply fill operation to user's engine
-              setUserEngines((prev) => {
-                const userEngine = prev.get(messageData.userId);
-                if (userEngine && messageData.color) {
-                  const engine = userEngine.engine;
-                  const targetLayer =
-                    messageData.layer === "foreground"
-                      ? engine.layers.foreground
-                      : engine.layers.background;
+              // Apply fill operation to user's engine directly (no React state update)
+              const userEngine = userEnginesRef.current.get(messageData.userId);
+              if (userEngine && messageData.color) {
+                const engine = userEngine.engine;
+                const targetLayer =
+                  messageData.layer === "foreground"
+                    ? engine.layers.foreground
+                    : engine.layers.background;
 
-                  // Use the DrawingEngine's doFloodFill method
-                  engine.doFloodFill(
-                    targetLayer,
-                    messageData.x,
-                    messageData.y,
-                    messageData.color.r || 0,
-                    messageData.color.g || 0,
-                    messageData.color.b || 0,
-                    messageData.color.a || 255
-                  );
-                }
-                // Return a new Map to trigger re-render
-                return new Map(prev);
-              });
+                // Use the DrawingEngine's doFloodFill method
+                engine.doFloodFill(
+                  targetLayer,
+                  messageData.x,
+                  messageData.y,
+                  messageData.color.r || 0,
+                  messageData.color.g || 0,
+                  messageData.color.b || 0,
+                  messageData.color.a || 255
+                );
+                
+                // Mark for recomposition instead of triggering React re-render
+                needsRecompositionRef.current = true;
+              }
             } else if (messageData.type === "drawPoint") {
-              // Apply single point drawing to user's engine
-              setUserEngines((prev) => {
-                const userEngine = prev.get(messageData.userId);
-                if (userEngine && messageData.color) {
-                  const engine = userEngine.engine;
-                  const targetLayer =
-                    messageData.layer === "foreground"
-                      ? engine.layers.foreground
-                      : engine.layers.background;
+              // Apply single point drawing to user's engine directly (no React state update)
+              const userEngine = userEnginesRef.current.get(messageData.userId);
+              if (userEngine && messageData.color) {
+                const engine = userEngine.engine;
+                const targetLayer =
+                  messageData.layer === "foreground"
+                    ? engine.layers.foreground
+                    : engine.layers.background;
 
-                  // Use the DrawingEngine's drawLine method with same start/end point
-                  engine.drawLine(
-                    targetLayer,
-                    messageData.x,
-                    messageData.y,
-                    messageData.x,
-                    messageData.y,
-                    messageData.brushSize || 1,
-                    messageData.brushType || "solid",
-                    messageData.color.r || 0,
-                    messageData.color.g || 0,
-                    messageData.color.b || 0,
-                    messageData.color.a || 255
-                  );
-                }
-                // Return a new Map to trigger re-render
-                return new Map(prev);
-              });
+                // Use the DrawingEngine's drawLine method with same start/end point
+                engine.drawLine(
+                  targetLayer,
+                  messageData.x,
+                  messageData.y,
+                  messageData.x,
+                  messageData.y,
+                  messageData.brushSize || 1,
+                  messageData.brushType || "solid",
+                  messageData.color.r || 0,
+                  messageData.color.g || 0,
+                  messageData.color.b || 0,
+                  messageData.color.a || 255
+                );
+                
+                // Mark for recomposition instead of triggering React re-render
+                needsRecompositionRef.current = true;
+              }
             } else if (messageData.type === "pointerup") {
               // Handle pointerup events (could be used for stroke completion, etc.)
               console.log(
@@ -659,7 +691,7 @@ function App() {
     drawingEngine,
   ]);
 
-  // Update canvas when layer visibility changes or user layers change
+  // Update canvas when layer visibility changes
   useEffect(() => {
     if (drawingEngine) {
       const fgCtx = fgThumbnailRef.current?.getContext("2d");
@@ -669,14 +701,12 @@ function App() {
       drawingEngine.updateLayerThumbnails(fgCtx, bgCtx);
     }
 
-    // Composite all user layers (including local user)
-    compositeAllUserLayers();
+    // Mark for recomposition (RAF loop will handle it)
+    needsRecompositionRef.current = true;
   }, [
     drawingState.fgVisible,
     drawingState.bgVisible,
     drawingEngine,
-    userEngines,
-    compositeAllUserLayers,
   ]);
 
   // Add keyboard shortcuts for undo/redo

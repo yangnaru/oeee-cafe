@@ -153,7 +153,11 @@ export const useDrawing = (
       e.preventDefault();
 
       // Only handle one pointer at a time
-      if (drawingStateRef.current.activePointerId !== null && drawingStateRef.current.activePointerId !== e.pointerId) return;
+      if (
+        drawingStateRef.current.activePointerId !== null &&
+        drawingStateRef.current.activePointerId !== e.pointerId
+      )
+        return;
 
       drawingStateRef.current.activePointerId = e.pointerId;
       app.setPointerCapture(e.pointerId);
@@ -212,7 +216,9 @@ export const useDrawing = (
 
             try {
               wsRef.current.send(JSON.stringify(fillEventData));
-            } catch (error) {}
+            } catch (error) {
+              console.error("Failed to send fill event:", error);
+            }
           }
 
           drawingEngineRef.current.updateLayerThumbnails(
@@ -388,7 +394,11 @@ export const useDrawing = (
         return;
       }
 
-      if (!drawingStateRef.current.isDrawing || drawingState.brushType === "fill") return;
+      if (
+        !drawingStateRef.current.isDrawing ||
+        drawingState.brushType === "fill"
+      )
+        return;
 
       drawingStateRef.current.prevX = drawingStateRef.current.currentX;
       drawingStateRef.current.prevY = drawingStateRef.current.currentY;
