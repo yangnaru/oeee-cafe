@@ -10,7 +10,7 @@ pub struct Image {
     pub width: i32,
     pub height: i32,
     pub image_filename: String,
-    pub replay_filename: String,
+    pub replay_filename: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 

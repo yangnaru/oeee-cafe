@@ -12,9 +12,10 @@ export const MSG_TYPE = {
   JOIN: 0x01,
   SNAPSHOT: 0x02,
   CHAT: 0x03,
-  SAVE: 0x04,
+  // SAVE: 0x04, // Removed - now handled via HTTP POST
   SNAPSHOT_REQUEST: 0x05,
   JOIN_RESPONSE: 0x06,
+  END_SESSION: 0x07,
   
   // Client messages (>= 0x10) - server just broadcasts
   DRAW_LINE: 0x10,
@@ -323,6 +324,23 @@ export function encodeSnapshotRequest(timestamp: number): ArrayBuffer {
 }
 
 /**
+ * Encode END_SESSION message (0x07)
+ * Format: [0x07][UUID:16][postUrlLength:2][postUrl:variable(UTF-8)]
+ */
+export function encodeEndSession(userId: string, postUrl: string): ArrayBuffer {
+  const encoder = new TextEncoder();
+  const urlBytes = encoder.encode(postUrl);
+  const buffer = new Uint8Array(19 + urlBytes.length);
+  
+  buffer[0] = MSG_TYPE.END_SESSION;
+  buffer.set(uuidToBytes(userId), 1);
+  writeUint16LE(buffer, 17, urlBytes.length);
+  buffer.set(urlBytes, 19);
+  
+  return buffer.buffer;
+}
+
+/**
  * Encode POINTER_UP message (0x13)
  * Format: [0x13][UUID:16][x:2][y:2][button:1][pointerType:1]
  */
@@ -417,6 +435,12 @@ export interface PointerUpMessage {
   pointerType: 'mouse' | 'pen' | 'touch';
 }
 
+export interface EndSessionMessage {
+  type: 'endSession';
+  userId: string;
+  postUrl: string;
+}
+
 export type DecodedMessage = 
   | JoinMessage 
   | JoinResponseMessage
@@ -426,7 +450,8 @@ export type DecodedMessage =
   | DrawLineMessage 
   | DrawPointMessage 
   | FillMessage 
-  | PointerUpMessage;
+  | PointerUpMessage
+  | EndSessionMessage;
 
 /**
  * Decode binary message based on message type
@@ -555,6 +580,18 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         pointerType: buffer[22] === POINTER_TYPE.MOUSE ? 'mouse' :
                      buffer[22] === POINTER_TYPE.PEN ? 'pen' : 'touch'
       };
+      
+    case MSG_TYPE.END_SESSION: {
+      if (buffer.length < 19) return null;
+      const urlLength = readUint16LE(buffer, 17);
+      if (buffer.length < 19 + urlLength) return null;
+      const decoder = new TextDecoder();
+      return {
+        type: 'endSession',
+        userId: bytesToUuid(buffer.slice(1, 17)),
+        postUrl: decoder.decode(buffer.slice(19, 19 + urlLength))
+      };
+    }
       
     default:
       return null;

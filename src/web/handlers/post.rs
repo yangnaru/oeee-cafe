@@ -1067,13 +1067,7 @@ pub async fn hx_delete_post(
     .unwrap();
     let image = find_image_by_id(&mut tx, image_id).await?;
 
-    let keys = [
-        format!(
-            "replay/{}{}/{}",
-            image.replay_filename.chars().next().unwrap(),
-            image.replay_filename.chars().nth(1).unwrap(),
-            image.replay_filename
-        ),
+    let mut keys = vec![
         format!(
             "image/{}{}/{}",
             image.image_filename.chars().next().unwrap(),
@@ -1081,6 +1075,16 @@ pub async fn hx_delete_post(
             image.image_filename
         ),
     ];
+    
+    // Only add replay file to deletion if it exists
+    if let Some(ref replay_filename) = image.replay_filename {
+        keys.push(format!(
+            "replay/{}{}/{}",
+            replay_filename.chars().next().unwrap(),
+            replay_filename.chars().nth(1).unwrap(),
+            replay_filename
+        ));
+    }
 
     let credentials: AwsCredentials = AwsCredentials::new(
         state.config.aws_access_key_id.clone(),

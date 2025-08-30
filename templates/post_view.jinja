@@ -35,7 +35,9 @@
         <p>{{ ftl_post_published_at }}: {{ post.published_at }}</p>
         <p>
           {{ ftl_post_duration }}: {{ post.paint_duration }}
-          <a href="/@{{ post.login_name }}/{{ post_id }}/replay">{{ ftl_post_replay }}</a>
+          {% if post.replay_filename %}
+            <a href="/@{{ post.login_name }}/{{ post_id }}/replay">{{ ftl_post_replay }}</a>
+          {% endif %}
         </p>
         <p>HIT: {{ post.viewer_count }}</p>
         <p>

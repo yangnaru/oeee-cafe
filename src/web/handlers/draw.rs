@@ -273,7 +273,7 @@ pub async fn draw_finish(
         width,
         height,
         image_filename: format!("{}.png", image_sha256),
-        replay_filename,
+        replay_filename: Some(replay_filename),
         tool: tool_enum,
         parent_post_id,
     };
@@ -397,7 +397,7 @@ pub async fn banner_draw_finish(
         width,
         height,
         image_filename: format!("{}.png", image_sha256),
-        replay_filename: format!("{}.pch", replay_sha256),
+        replay_filename: Some(format!("{}.pch", replay_sha256)),
     };
 
     let db = state.config.connect_database().await?;

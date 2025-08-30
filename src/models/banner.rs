@@ -20,7 +20,7 @@ pub struct BannerDraft {
     pub width: i32,
     pub height: i32,
     pub image_filename: String,
-    pub replay_filename: String,
+    pub replay_filename: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -32,7 +32,7 @@ pub struct SerializableBanner {
     pub width: i32,
     pub height: i32,
     pub image_filename: String,
-    pub replay_filename: String,
+    pub replay_filename: Option<String>,
     pub viewer_count: i32,
     pub published_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,

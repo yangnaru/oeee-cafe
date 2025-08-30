@@ -8,7 +8,7 @@ import {
 import { useDrawing } from "./hooks/useDrawing";
 import { DrawingEngine } from "./DrawingEngine";
 import { pngDataToLayer } from "./utils/canvasSnapshot";
-import { encodeJoin, decodeMessage } from "./utils/binaryProtocol";
+import { encodeJoin, encodeEndSession, decodeMessage } from "./utils/binaryProtocol";
 import { Chat } from "./components/Chat";
 import "./App.css";
 
@@ -143,6 +143,11 @@ function App() {
 
   // Track whether JOIN_RESPONSE has been received
   const [joinResponseReceived, setJoinResponseReceived] = useState(false);
+
+  // Track session ownership and saving state
+  const [isSessionOwner, setIsSessionOwner] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
 
   // Chat message handler
   const handleChatMessage = useCallback((_message: any) => {
@@ -492,6 +497,73 @@ function App() {
     link.click();
     document.body.removeChild(link);
   }, []);
+
+  // Function to save collaborative drawing to gallery
+  const saveCollaborativeDrawing = useCallback(async () => {
+    if (!isSessionOwner || isSaving || !canvasDimensions) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      
+      // Extract session ID from URL
+      const pathSegments = window.location.pathname.split("/");
+      const sessionId = pathSegments[2];
+      
+      if (!sessionId) {
+        throw new Error("Could not determine session ID");
+      }
+
+      // Step 1: Get canvas as PNG blob
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        throw new Error("Canvas not available");
+      }
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error("Failed to create blob from canvas"));
+          }
+        }, 'image/png');
+      });
+
+      // Step 2: Send POST request to save
+      const response = await fetch(`/collaborate/${sessionId}`, {
+        method: 'POST',
+        body: blob,
+        headers: {
+          'Content-Type': 'image/png',
+        },
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log("Drawing saved successfully:", result);
+        
+        // Step 3: Send END_SESSION message with actual post URL after successful save
+        const endSessionMsg = encodeEndSession(userIdRef.current, result.post_url);
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(endSessionMsg);
+          console.log("END_SESSION message sent to all participants with post URL:", result.post_url);
+        }
+        
+        // Redirect owner to the post page to add description
+        window.location.href = result.post_url;
+      } else {
+        const errorText = await response.text();
+        throw new Error(`Failed to save drawing: ${response.status} ${errorText}`);
+      }
+    } catch (error) {
+      console.error('Save failed:', error);
+      alert(`Failed to save drawing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsSaving(false);
+    }
+  }, [isSessionOwner, isSaving, canvasDimensions]);
 
   // Function to get WebSocket URL dynamically
   const getWebSocketUrl = useCallback(() => {
@@ -1012,6 +1084,11 @@ function App() {
               users: message.userIds.map((id: string) => id.substring(0, 8)),
             });
 
+            // Determine if current user is the session owner (first in the ordered list)
+            const isOwner = message.userIds.length > 0 && message.userIds[0] === userIdRef.current;
+            setIsSessionOwner(isOwner);
+            console.log("Session ownership:", { isOwner, currentUser: userIdRef.current.substring(0, 8) });
+
             // Only update canvas dimensions if they haven't been set yet
             if (!joinResponseReceived) {
               setCanvasDimensions({
@@ -1044,6 +1121,23 @@ function App() {
 
             // Mark for recomposition to update layer order
             needsRecompositionRef.current = true;
+            break;
+          }
+
+          case "endSession": {
+            console.log("END_SESSION received:", {
+              userId: message.userId.substring(0, 8),
+              postUrl: message.postUrl,
+              isFromOwner: message.userId !== userIdRef.current
+            });
+
+            if (message.userId !== userIdRef.current) {
+              // Show notification to non-owners
+              setSessionEnded(true);
+              
+              // Redirect immediately to the post URL
+              window.location.href = message.postUrl;
+            }
             break;
           }
 
@@ -1698,7 +1792,45 @@ function App() {
                 Reset
               </button>
             </div>
+
+            {/* Save button - only show for session owner */}
+            {isSessionOwner && (
+              <div id="save-controls">
+                <button
+                  id="save-btn"
+                  type="button"
+                  onClick={saveCollaborativeDrawing}
+                  disabled={isSaving || sessionEnded || !joinResponseReceived}
+                  title={
+                    isSaving 
+                      ? "Saving drawing..." 
+                      : sessionEnded 
+                        ? "Session ended" 
+                        : !joinResponseReceived 
+                          ? "Loading..." 
+                          : "Save drawing to gallery"
+                  }
+                >
+                  {isSaving ? "Saving..." : "💾 Save to Gallery"}
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* Session ending notification for non-owners */}
+          {sessionEnded && !isSessionOwner && (
+            <div className="session-ending-overlay">
+              <div className="session-ending-content">
+                <div className="session-ending-spinner">🥒</div>
+                <div className="session-ending-message">
+                  Session is ending. The drawing is being saved to the gallery...
+                </div>
+                <div className="session-ending-redirect">
+                  You'll be redirected to the post page shortly.
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -34,7 +34,7 @@ pub struct SerializablePost {
     pub image_filename: String,
     pub image_width: i32,
     pub image_height: i32,
-    pub replay_filename: String,
+    pub replay_filename: Option<String>,
     pub is_sensitive: Option<bool>,
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
@@ -52,7 +52,7 @@ pub struct SerializableProfilePost {
     pub image_filename: String,
     pub image_width: i32,
     pub image_height: i32,
-    pub replay_filename: String,
+    pub replay_filename: Option<String>,
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -71,7 +71,7 @@ pub struct SerializablePostForHome {
     pub image_filename: String,
     pub image_width: i32,
     pub image_height: i32,
-    pub replay_filename: String,
+    pub replay_filename: Option<String>,
     pub is_sensitive: bool,
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
@@ -85,11 +85,14 @@ impl Post {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Type)]
-#[sqlx(type_name = "tool", rename_all = "lowercase")]
+#[sqlx(type_name = "tool", rename_all = "kebab-case")]
 pub enum Tool {
     Neo,
     Tegaki,
     Cucumber,
+    #[serde(rename = "neo-cucumber")]
+    #[sqlx(rename = "neo-cucumber")]
+    NeoCucumber,
 }
 
 pub struct PostDraft {
@@ -100,7 +103,7 @@ pub struct PostDraft {
     pub width: i32,
     pub height: i32,
     pub image_filename: String,
-    pub replay_filename: String,
+    pub replay_filename: Option<String>,
     pub tool: Tool,
     pub parent_post_id: Option<Uuid>,
 }
@@ -540,7 +543,7 @@ pub async fn find_post_by_id(
         map.insert("image_width".to_string(), Some(row.width.to_string()));
         map.insert("image_height".to_string(), Some(row.height.to_string()));
         map.insert("image_filename".to_string(), Some(row.image_filename));
-        map.insert("replay_filename".to_string(), Some(row.replay_filename));
+        map.insert("replay_filename".to_string(), row.replay_filename);
         map.insert(
             "viewer_count".to_string(),
             Some(row.viewer_count.to_string()),

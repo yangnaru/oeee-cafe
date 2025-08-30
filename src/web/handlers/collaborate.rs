@@ -3,7 +3,8 @@ use crate::models::user::AuthSession;
 use crate::web::handlers::{create_base_ftl_context, get_bundle, ExtractAcceptLanguage};
 use crate::web::state::AppState;
 use axum::extract::{ws::Message, Path, State, WebSocketUpgrade, Query};
-use axum::response::{Html, Response, Redirect, Json, IntoResponse};
+use axum::response::{Html, Response, Json, IntoResponse};
+use axum::body::Bytes;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
 use hex;
@@ -58,6 +59,13 @@ pub struct CreateSessionRequest {
 pub struct CreateSessionResponse {
     session_id: String,
     url: String,
+}
+
+#[derive(Serialize)]
+pub struct SaveSessionResponse {
+    post_id: String,
+    owner_login_name: String,
+    post_url: String,
 }
 
 #[derive(Serialize)]
@@ -203,10 +211,59 @@ pub async fn create_collaborative_session(
     }))
 }
 
+// Save collaborative session handler
+pub async fn save_collaborative_session(
+    Path(session_uuid): Path<Uuid>,
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    body: Bytes,
+) -> Result<Json<SaveSessionResponse>, AppError> {
+    let user = auth_session.user.ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
+    
+    let db = state.config.connect_database().await?;
+    
+    // Verify user is the session owner
+    let session = sqlx::query!(
+        r#"
+        SELECT owner_id, u.login_name as owner_login_name FROM collaborative_sessions cs
+        JOIN users u ON cs.owner_id = u.id
+        WHERE cs.id = $1 AND cs.is_active = true
+        "#,
+        session_uuid
+    )
+    .fetch_optional(&db)
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("Session not found or not active"))?;
+    
+    if session.owner_id != user.id {
+        return Err(anyhow::anyhow!("Only session owner can save").into());
+    }
+    
+    // Convert Bytes to Vec<u8> for handle_save_request
+    let png_data = body.to_vec();
+    
+    // Call the existing save request handler
+    let (post_id, owner_login_name) = handle_save_request(
+        db,
+        session_uuid,
+        user.id,
+        png_data,
+        state,
+    ).await.map_err(|e| anyhow::anyhow!("Save failed: {}", e))?;
+    
+    let post_url = format!("/@{}/{}", owner_login_name, post_id);
+    
+    Ok(Json(SaveSessionResponse {
+        post_id: post_id.to_string(),
+        owner_login_name,
+        post_url,
+    }))
+}
+
 // Serve collaborative app handler
 pub async fn serve_collaborative_app(
     Path(session_uuid): Path<Uuid>,
-    Query(params): Query<HashMap<String, String>>,
+    Query(_params): Query<HashMap<String, String>>,
     auth_session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
@@ -216,7 +273,7 @@ pub async fn serve_collaborative_app(
     let db = state.config.connect_database().await?;
     
     // Get session - anyone with the link can access
-    let session = sqlx::query!(
+    let _session = sqlx::query!(
         r#"
         SELECT width, height FROM collaborative_sessions
         WHERE id = $1 AND is_active = true
@@ -625,6 +682,46 @@ async fn handle_socket(
                                 );
                             }
                         }
+                        0x07 => {
+                            // END_SESSION message: [0x07][UUID:16][postUrlLength:2][postUrl:variable]
+                            if is_owner && data.len() >= 19 {
+                                if let Ok(sender_uuid) = bytes_to_uuid(&data[1..17]) {
+                                    if sender_uuid == user_id {
+                                        let url_length = u16::from_le_bytes([data[17], data[18]]) as usize;
+                                        
+                                        if data.len() >= 19 + url_length {
+                                            if let Ok(post_url) = std::str::from_utf8(&data[19..19 + url_length]) {
+                                                info!(
+                                                    "END_SESSION from owner {} in session {}, redirecting to: {}",
+                                                    user_login_name, room_uuid, post_url
+                                                );
+                                                
+                                                // Broadcast END_SESSION to all participants in the room (including sender)
+                                                if let Some(room_connections) = state.collaboration_rooms.get(&room_uuid) {
+                                                    let end_session_msg = msg.clone();
+                                                    for conn_ref in room_connections.iter() {
+                                                        let conn_id = conn_ref.key();
+                                                        let sender = conn_ref.value();
+                                                        if sender.send(end_session_msg.clone()).is_err() {
+                                                            debug!("Failed to send END_SESSION to connection {}", conn_id);
+                                                        }
+                                                    }
+                                                    info!(
+                                                        "Broadcasted END_SESSION to {} connections in room {}",
+                                                        room_connections.len(), room_uuid
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if !is_owner {
+                                warn!(
+                                    "Non-owner {} attempted to end session {}",
+                                    user_login_name, room_uuid
+                                );
+                            }
+                        }
                         _ => {
                             debug!(
                                 "Unknown server message type: 0x{:02x} in room {}",
@@ -780,12 +877,14 @@ async fn handle_save_request(
     owner_id: Uuid,
     png_data: Vec<u8>,
     state: AppState,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(Uuid, String), Box<dyn std::error::Error + Send + Sync>> {
     // Get session details and verify ownership
     let session = sqlx::query!(
         r#"
-        SELECT owner_id, title, width, height, community_id FROM collaborative_sessions
-        WHERE id = $1 AND is_active = true AND owner_id = $2
+        SELECT cs.owner_id, cs.title, cs.width, cs.height, cs.community_id, u.login_name as owner_login_name 
+        FROM collaborative_sessions cs
+        JOIN users u ON cs.owner_id = u.id
+        WHERE cs.id = $1 AND cs.is_active = true AND cs.owner_id = $2
         "#,
         session_id,
         owner_id
@@ -870,14 +969,13 @@ async fn handle_save_request(
     
     sqlx::query!(
         r#"
-        INSERT INTO images (id, width, height, paint_duration, stroke_count, image_filename, replay_filename)
-        VALUES ($1, $2, $3, INTERVAL '0 seconds', 0, $4, $5)
+        INSERT INTO images (id, width, height, paint_duration, stroke_count, image_filename, replay_filename, tool)
+        VALUES ($1, $2, $3, INTERVAL '0 seconds', 0, $4, NULL, 'neo-cucumber'::tool)
         "#,
         image_id,
         session.width,
         session.height,
         format!("{}.png", image_sha256),
-        format!("{}.pch", image_sha256), // Placeholder replay filename
     )
     .execute(&mut *tx)
     .await?;
@@ -886,8 +984,8 @@ async fn handle_save_request(
     let post_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO posts (id, author_id, community_id, image_id, is_sensitive)
-        VALUES ($1, $2, $3, $4, false)
+        INSERT INTO posts (id, author_id, community_id, image_id, is_sensitive, published_at)
+        VALUES ($1, $2, $3, $4, false, NOW())
         "#,
         post_id,
         owner_id,
@@ -913,5 +1011,5 @@ async fn handle_save_request(
         session_id, post_id
     );
 
-    Ok(())
+    Ok((post_id, session.owner_login_name))
 }
