@@ -100,24 +100,12 @@ const DEFAULT_PALETTE_COLORS = [
   "#fcece2",
 ];
 
-// Function to get canvas dimensions from URL params and clean URL
-const getCanvasDimensions = () => {
-  const params = new URLSearchParams(window.location.search);
-  const width = parseInt(params.get("width") || "500");
-  const height = parseInt(params.get("height") || "500");
-
-  // Clean up URL if it has query parameters
-  if (window.location.search) {
-    const cleanUrl = window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
-  }
-
-  return { width, height };
-};
 
 function App() {
-  // Get canvas dimensions from URL params and clean URL
-  const { width: CANVAS_WIDTH, height: CANVAS_HEIGHT } = getCanvasDimensions();
+  // Canvas dimensions will be set when JOIN_RESPONSE is received
+  const [canvasDimensions, setCanvasDimensions] = useState<{width: number; height: number} | null>(null);
+  const CANVAS_WIDTH = canvasDimensions?.width || 0;
+  const CANVAS_HEIGHT = canvasDimensions?.height || 0;
 
   const [selectedPaletteIndex, setSelectedPaletteIndex] = useState(1); // Start with black selected
   const [paletteColors, setPaletteColors] = useState(DEFAULT_PALETTE_COLORS);
@@ -151,6 +139,9 @@ function App() {
   // Track authentication state
   const [authError, setAuthError] = useState(false);
 
+  // Track whether JOIN_RESPONSE has been received
+  const [joinResponseReceived, setJoinResponseReceived] = useState(false);
+
   // Chat message handler
   const handleChatMessage = useCallback((_message: any) => {
     // Chat messages are handled entirely by the Chat component
@@ -180,7 +171,7 @@ function App() {
 
   // Initialize cached temporary canvas for performance
   const initTempCanvas = useCallback(() => {
-    if (!tempCanvasRef.current) {
+    if (!tempCanvasRef.current && CANVAS_WIDTH > 0 && CANVAS_HEIGHT > 0) {
       tempCanvasRef.current = document.createElement("canvas");
       tempCanvasRef.current.width = CANVAS_WIDTH;
       tempCanvasRef.current.height = CANVAS_HEIGHT;
@@ -192,20 +183,29 @@ function App() {
   }, [CANVAS_WIDTH, CANVAS_HEIGHT]);
 
   // Function to create drawing engine for a new user
-  const createUserEngine = useCallback((userId: string) => {
+  const createUserEngine = useCallback((userId: string, width?: number, height?: number) => {
     // Check if user already exists
     if (userEnginesRef.current.has(userId)) {
       return;
     }
 
+    // Use server dimensions if provided, otherwise fall back to current canvas dimensions
+    const engineWidth = width || CANVAS_WIDTH;
+    const engineHeight = height || CANVAS_HEIGHT;
+
+    // Don't create engine if dimensions are not available yet
+    if (engineWidth <= 0 || engineHeight <= 0) {
+      return;
+    }
+
     // Create new DrawingEngine for this user
-    const engine = new DrawingEngine(CANVAS_WIDTH, CANVAS_HEIGHT);
+    const engine = new DrawingEngine(engineWidth, engineHeight);
     const firstSeen = Date.now();
 
     // Create offscreen canvas for this user
     const canvas = document.createElement("canvas");
-    canvas.width = CANVAS_WIDTH;
-    canvas.height = CANVAS_HEIGHT;
+    canvas.width = engineWidth;
+    canvas.height = engineHeight;
     const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.imageSmoothingEnabled = false;
@@ -214,7 +214,7 @@ function App() {
 
     userEnginesRef.current.set(userId, { engine, firstSeen, canvas });
     needsRecompositionRef.current = true;
-  }, []);
+  }, [CANVAS_WIDTH, CANVAS_HEIGHT]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fgThumbnailRef = useRef<HTMLCanvasElement>(null);
@@ -408,7 +408,10 @@ function App() {
     needsRecompositionRef.current = true;
   }, []);
 
-  // Use the drawing hook
+  // Use the drawing hook - pass safe defaults when dimensions are not available
+  // Disable drawing until JOIN_RESPONSE is received
+  const drawingDisabled = isCatchingUp || !joinResponseReceived;
+  
   const { undo, redo, drawingEngine } = useDrawing(
     canvasRef,
     appRef,
@@ -417,12 +420,12 @@ function App() {
     drawingState,
     handleHistoryChange,
     Math.round(currentZoom * 100),
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT,
+    Math.max(CANVAS_WIDTH, 1), // Use minimum 1x1 when not available
+    Math.max(CANVAS_HEIGHT, 1), // Use minimum 1x1 when not available
     wsRef,
     userIdRef,
     handleLocalDrawingChange,
-    isCatchingUp,
+    drawingDisabled,
     connectionState
   );
 
@@ -432,6 +435,11 @@ function App() {
 
     // Clear auth error state
     setAuthError(false);
+
+    // Reset JOIN_RESPONSE state to wait for new response
+    setJoinResponseReceived(false);
+    setCanvasDimensions(null);
+    setIsCatchingUp(true);
 
     // Clear canvas states before reconnecting
     if (drawingEngine) {
@@ -990,12 +998,38 @@ function App() {
           }
 
           case "joinResponse": {
+            console.log("JOIN_RESPONSE received:", {
+              width: message.width,
+              height: message.height,
+              userCount: message.userIds.length,
+              users: message.userIds.map((id: string) => id.substring(0, 8))
+            });
+            
+            // Only update canvas dimensions if they haven't been set yet
+            if (!joinResponseReceived) {
+              setCanvasDimensions({ width: message.width, height: message.height });
+              setJoinResponseReceived(true);
+              
+              // End catching up phase since we now have the essential JOIN_RESPONSE
+              setIsCatchingUp(false);
+              if (catchupTimeoutRef.current) {
+                clearTimeout(catchupTimeoutRef.current);
+                catchupTimeoutRef.current = null;
+              }
+              console.log("JOIN_RESPONSE received - ready for drawing");
+              
+              // Reinitialize local drawing engine with server dimensions
+              if (drawingEngine) {
+                drawingEngine.reinitialize(message.width, message.height);
+              }
+            }
+            
             // Store the server-provided user order
             userOrderRef.current = [...message.userIds];
 
-            // Initialize drawing engines for all users in the list
+            // Initialize drawing engines for all users in the list with server dimensions
             message.userIds.forEach((userId: string) => {
-              createUserEngine(userId);
+              createUserEngine(userId, message.width, message.height);
             });
 
             // Mark for recomposition to update layer order
@@ -1032,7 +1066,7 @@ function App() {
 
           case "snapshot": {
             const userEngine = userEnginesRef.current.get(message.userId);
-            if (userEngine) {
+            if (userEngine && CANVAS_WIDTH > 0 && CANVAS_HEIGHT > 0) {
               try {
                 pngDataToLayer(message.pngData, CANVAS_WIDTH, CANVAS_HEIGHT)
                   .then((layerData) => {
@@ -1064,12 +1098,14 @@ function App() {
     fetchAuthInfo,
     drawingEngine,
     handleLocalDrawingChange,
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT,
   ]);
 
   // RAF-based compositing system for better performance
   const compositeAllUserLayers = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !needsRecompositionRef.current) return;
+    if (!canvas || !needsRecompositionRef.current || CANVAS_WIDTH <= 0 || CANVAS_HEIGHT <= 0) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -1144,8 +1180,8 @@ function App() {
           const compositeData = engine.compositeBuffer;
           const imageData = new ImageData(
             compositeData,
-            CANVAS_WIDTH,
-            CANVAS_HEIGHT
+            engine.imageWidth,
+            engine.imageHeight
           );
           tempCtxRef.current.putImageData(imageData, 0, 0);
 
@@ -1156,15 +1192,15 @@ function App() {
         // For remote users, update their offscreen canvas first
         const userCtx = canvas.getContext("2d");
         if (userCtx) {
-          userCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+          userCtx.clearRect(0, 0, engine.imageWidth, engine.imageHeight);
           engine.compositeLayers(true, true); // Always show both layers for remote users
 
           // Get the composite data and draw to user's offscreen canvas
           const compositeData = engine.compositeBuffer;
           const imageData = new ImageData(
             compositeData,
-            CANVAS_WIDTH,
-            CANVAS_HEIGHT
+            engine.imageWidth,
+            engine.imageHeight
           );
           userCtx.putImageData(imageData, 0, 0);
 
@@ -1175,7 +1211,7 @@ function App() {
     });
 
     needsRecompositionRef.current = false;
-  }, [drawingEngine, drawingState.fgVisible, drawingState.bgVisible]);
+  }, [drawingEngine, drawingState.fgVisible, drawingState.bgVisible, CANVAS_WIDTH, CANVAS_HEIGHT]);
 
   // Set the compositing callback ref after compositeAllUserLayers is defined
   useEffect(() => {
@@ -1229,9 +1265,32 @@ function App() {
     }
   }, [zoomLevels, drawingEngine]);
 
-  // Initialize canvas dimensions and thumbnails
+  // Initialize WebSocket connection on component mount
   useEffect(() => {
-    if (canvasRef.current) {
+    // Enable connection and connect to WebSocket
+    shouldConnectRef.current = true;
+    // Defer WebSocket connection until we have user authentication
+    const initConnection = async () => {
+      const authSuccess = await fetchAuthInfo();
+      if (authSuccess) {
+        connectWebSocket();
+      }
+    };
+    initConnection();
+
+    // Clean up WebSocket connection when component unmounts
+    return () => {
+      shouldConnectRef.current = false;
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [connectWebSocket, fetchAuthInfo]);
+
+  // Initialize canvas dimensions and thumbnails when dimensions are received
+  useEffect(() => {
+    if (canvasRef.current && canvasDimensions) {
       canvasRef.current.width = CANVAS_WIDTH;
       canvasRef.current.height = CANVAS_HEIGHT;
 
@@ -1241,28 +1300,8 @@ function App() {
         fgThumbnailRef.current,
         bgThumbnailRef.current
       );
-
-      // Enable connection and connect to WebSocket on canvas load
-      shouldConnectRef.current = true;
-      // Defer WebSocket connection until we have user authentication
-      const initConnection = async () => {
-        const authSuccess = await fetchAuthInfo();
-        if (authSuccess) {
-          connectWebSocket();
-        }
-      };
-      initConnection();
-
-      // Clean up WebSocket connection when component unmounts
-      return () => {
-        shouldConnectRef.current = false;
-        if (wsRef.current) {
-          wsRef.current.close();
-          wsRef.current = null;
-        }
-      };
     }
-  }, [connectWebSocket, fetchAuthInfo]);
+  }, [canvasDimensions, CANVAS_WIDTH, CANVAS_HEIGHT]);
 
   // Add scroll wheel zoom functionality
   useEffect(() => {
@@ -1424,14 +1463,21 @@ function App() {
               )}
             </div>
           )}
-          <canvas
-            id="canvas"
-            ref={canvasRef}
-            width={CANVAS_WIDTH}
-            height={CANVAS_HEIGHT}
-            className={drawingState.brushType === "pan" ? "pan-cursor" : ""}
-            style={{ imageRendering: "pixelated" }}
-          ></canvas>
+          {canvasDimensions ? (
+            <canvas
+              id="canvas"
+              ref={canvasRef}
+              width={CANVAS_WIDTH}
+              height={CANVAS_HEIGHT}
+              className={drawingState.brushType === "pan" ? "pan-cursor" : ""}
+              style={{ imageRendering: "pixelated" }}
+            ></canvas>
+          ) : (
+            <div className="canvas-loading">
+              <div className="canvas-loading-spinner">🥒</div>
+              <div>Waiting for canvas dimensions...</div>
+            </div>
+          )}
           <div id="controls">
             <div id="history-controls">
               <button

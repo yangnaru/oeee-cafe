@@ -32,6 +32,29 @@ export class DrawingEngine {
     this.initializeTones();
   }
 
+  /**
+   * Reinitialize the drawing engine with new dimensions
+   * This will clear all existing drawing data
+   */
+  public reinitialize(width: number, height: number): void {
+    this.imageWidth = width;
+    this.imageHeight = height;
+
+    // Recreate buffers with new dimensions - this clears all existing data
+    this.layers = {
+      background: new Uint8ClampedArray(width * height * 4),
+      foreground: new Uint8ClampedArray(width * height * 4),
+    };
+
+    this.compositeBuffer = new Uint8ClampedArray(width * height * 4);
+
+    // Reset drawing state
+    this.prevLine = null;
+    this.aerr = 0;
+    this.panOffsetX = 0;
+    this.panOffsetY = 0;
+  }
+
   private initializeBrushes() {
     // init brush
     for (let r = 1; r <= 30; r++) {
