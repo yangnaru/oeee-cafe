@@ -185,6 +185,22 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
                                 }
                             }
                         }
+                        0x03 => {
+                            // CHAT message: [0x03][UUID:16][timestamp:8][msgLength:2][msgData:variable]
+                            if data.len() >= 27 {
+                                if let Ok(chat_user) = bytes_to_uuid(&data[1..17]) {
+                                    let timestamp = read_u64_le(data, 17);
+                                    let msg_length = u16::from_le_bytes([data[25], data[26]]) as usize;
+                                    
+                                    if data.len() >= 27 + msg_length {
+                                        if let Ok(chat_text) = std::str::from_utf8(&data[27..27 + msg_length]) {
+                                            debug!("Chat message from user {} at {}: {}", 
+                                                   chat_user, timestamp, chat_text);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         _ => {
                             debug!("Unknown server message type: 0x{:02x} in room {}", msg_type, room_uuid);
                         }
@@ -194,12 +210,22 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
             }
         }
         
-        // Store message in history
+        // Store message in history (skip chat messages)
         let (history_count, history_bytes) = {
             let mut history = state.message_history
                 .entry(room_uuid)
                 .or_insert_with(Vec::new);
-            history.push(msg.clone());
+            
+            // Don't store chat messages in history - they're not persistent
+            let should_store = if let Message::Binary(data) = &msg {
+                !data.is_empty() && data[0] != 0x03 // Skip CHAT messages (0x03)
+            } else {
+                true // Store other message types
+            };
+            
+            if should_store {
+                history.push(msg.clone());
+            }
             
             let total_bytes = history.iter().map(|m| match m {
                 Message::Text(text) => text.len(),
@@ -214,19 +240,26 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
         debug!("Received message from connection {} in room {} (history: {} messages, {:.2} MB)", 
                connection_id, room_uuid, history_count, history_mb);
         
-        // Broadcast message to all other connections in the same room
+        // Broadcast message to all connections in the same room
         if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
             let mut failed_connections = Vec::new();
+            
+            // Check if this is a chat message - if so, broadcast to everyone including sender
+            let include_sender = if let Message::Binary(data) = &msg {
+                !data.is_empty() && data[0] == 0x03 // CHAT messages (0x03) include sender
+            } else {
+                false
+            };
             
             for entry in room.iter() {
                 let (other_connection_id, other_tx) = entry.pair();
                 
-                // Skip sender
-                if *other_connection_id == connection_id {
+                // Skip sender for non-chat messages
+                if !include_sender && *other_connection_id == connection_id {
                     continue;
                 }
                 
-                // Try to send message to other connection
+                // Try to send message to connection
                 if other_tx.send(msg.clone()).is_err() {
                     failed_connections.push(other_connection_id.clone());
                 }

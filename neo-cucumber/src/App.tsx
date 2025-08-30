@@ -9,6 +9,7 @@ import { useDrawing } from "./hooks/useDrawing";
 import { DrawingEngine } from "./DrawingEngine";
 import { pngDataToLayer } from "./utils/canvasSnapshot";
 import { encodeJoin, decodeMessage } from "./utils/binaryProtocol";
+import { Chat } from "./components/Chat";
 import "./App.css";
 
 const zoomMin = 0.5;
@@ -121,6 +122,12 @@ function App() {
     canUndo: false,
     canRedo: false,
   });
+
+  // Chat message handler
+  const handleChatMessage = useCallback((message: any) => {
+    // Chat messages are handled entirely by the Chat component
+    // This callback is here for future extensions if needed
+  }, []);
 
   // Track user IDs and their drawing engines (using ref to avoid re-renders)
   const userEnginesRef = useRef<
@@ -664,6 +671,33 @@ function App() {
                   userEngine.firstSeen = message.timestamp;
                   needsRecompositionRef.current = true;
                 }
+
+                // Add system message to chat when someone joins
+                if ((window as any).addChatMessage && message.userId !== userIdRef.current) {
+                  (window as any).addChatMessage({
+                    id: `join-${message.userId}-${message.timestamp}`,
+                    type: 'system',
+                    userId: 'system',
+                    username: 'System',
+                    message: `User ${message.userId.substring(0, 8)} joined`,
+                    timestamp: message.timestamp
+                  });
+                }
+                break;
+              }
+
+              case 'chat': {
+                // Add chat message to chat component
+                if ((window as any).addChatMessage) {
+                  (window as any).addChatMessage({
+                    id: `chat-${message.userId}-${message.timestamp}`,
+                    type: 'user',
+                    userId: message.userId,
+                    username: message.userId.substring(0, 8),
+                    message: message.message,
+                    timestamp: message.timestamp
+                  });
+                }
                 break;
               }
 
@@ -820,6 +854,11 @@ function App() {
   return (
     <div className="drawing-session-container">
       <div className="drawing-area">
+        <Chat 
+          wsRef={wsRef}
+          userId={userIdRef.current}
+          onChatMessage={handleChatMessage}
+        />
         <div id="app" ref={appRef}>
           <canvas
             id="canvas"

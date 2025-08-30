@@ -11,6 +11,7 @@ export const MSG_TYPE = {
   // Server messages (< 0x10) - server parses and handles
   JOIN: 0x01,
   SNAPSHOT: 0x02,
+  CHAT: 0x03,
   
   // Client messages (>= 0x10) - server just broadcasts
   DRAW_LINE: 0x10,
@@ -248,6 +249,28 @@ export function encodeFill(
 }
 
 /**
+ * Encode CHAT message (0x03)
+ * Format: [0x03][UUID:16][timestamp:8][msgLength:2][msgData:variable(UTF-8)]
+ */
+export function encodeChat(
+  userId: string,
+  message: string,
+  timestamp: number
+): ArrayBuffer {
+  const encoder = new TextEncoder();
+  const msgBytes = encoder.encode(message);
+  const buffer = new Uint8Array(27 + msgBytes.length);
+  
+  buffer[0] = MSG_TYPE.CHAT;
+  buffer.set(uuidToBytes(userId), 1);
+  writeUint64LE(buffer, 17, timestamp);
+  writeUint16LE(buffer, 25, msgBytes.length);
+  buffer.set(msgBytes, 27);
+  
+  return buffer.buffer;
+}
+
+/**
  * Encode POINTER_UP message (0x13)
  * Format: [0x13][UUID:16][x:2][y:2][button:1][pointerType:1]
  */
@@ -315,6 +338,13 @@ export interface FillMessage {
   color: { r: number; g: number; b: number; a: number };
 }
 
+export interface ChatMessage {
+  type: 'chat';
+  userId: string;
+  timestamp: number;
+  message: string;
+}
+
 export interface PointerUpMessage {
   type: 'pointerup';
   userId: string;
@@ -326,6 +356,7 @@ export interface PointerUpMessage {
 export type DecodedMessage = 
   | JoinMessage 
   | SnapshotMessage 
+  | ChatMessage
   | DrawLineMessage 
   | DrawPointMessage 
   | FillMessage 
@@ -347,6 +378,18 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         type: 'join',
         userId: bytesToUuid(buffer.slice(1, 17)),
         timestamp: readUint64LE(buffer, 17)
+      };
+      
+    case MSG_TYPE.CHAT:
+      if (buffer.length < 27) return null;
+      const msgLength = readUint16LE(buffer, 25);
+      if (buffer.length < 27 + msgLength) return null;
+      const decoder = new TextDecoder();
+      return {
+        type: 'chat',
+        userId: bytesToUuid(buffer.slice(1, 17)),
+        timestamp: readUint64LE(buffer, 17),
+        message: decoder.decode(buffer.slice(27, 27 + msgLength))
       };
       
     case MSG_TYPE.SNAPSHOT:
