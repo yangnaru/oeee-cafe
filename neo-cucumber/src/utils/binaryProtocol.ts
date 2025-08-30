@@ -78,6 +78,15 @@ function writeUint16LE(buffer: Uint8Array, offset: number, value: number): void 
 }
 
 /**
+ * Write little-endian int16 to buffer
+ */
+function writeInt16LE(buffer: Uint8Array, offset: number, value: number): void {
+  const uint16Value = value < 0 ? value + 65536 : value;
+  buffer[offset] = uint16Value & 0xff;
+  buffer[offset + 1] = (uint16Value >> 8) & 0xff;
+}
+
+/**
  * Write little-endian uint32 to buffer
  */
 function writeUint32LE(buffer: Uint8Array, offset: number, value: number): void {
@@ -100,6 +109,14 @@ function writeUint64LE(buffer: Uint8Array, offset: number, value: number): void 
  */
 function readUint16LE(buffer: Uint8Array, offset: number): number {
   return buffer[offset] | (buffer[offset + 1] << 8);
+}
+
+/**
+ * Read little-endian int16 from buffer
+ */
+function readInt16LE(buffer: Uint8Array, offset: number): number {
+  const uint16Value = buffer[offset] | (buffer[offset + 1] << 8);
+  return uint16Value >= 32768 ? uint16Value - 65536 : uint16Value;
 }
 
 /**
@@ -173,10 +190,10 @@ export function encodeDrawLine(
   buffer[0] = MSG_TYPE.DRAW_LINE;
   buffer.set(uuidToBytes(userId), 1);
   buffer[17] = layer === 'foreground' ? LAYER.FOREGROUND : LAYER.BACKGROUND;
-  writeUint16LE(buffer, 18, Math.round(fromX));
-  writeUint16LE(buffer, 20, Math.round(fromY));
-  writeUint16LE(buffer, 22, Math.round(toX));
-  writeUint16LE(buffer, 24, Math.round(toY));
+  writeInt16LE(buffer, 18, Math.round(fromX));
+  writeInt16LE(buffer, 20, Math.round(fromY));
+  writeInt16LE(buffer, 22, Math.round(toX));
+  writeInt16LE(buffer, 24, Math.round(toY));
   buffer[26] = brushSize;
   buffer[27] = brushType === 'solid' ? BRUSH_TYPE.SOLID : 
                brushType === 'halftone' ? BRUSH_TYPE.HALFTONE : BRUSH_TYPE.ERASER;
@@ -208,8 +225,8 @@ export function encodeDrawPoint(
   buffer[0] = MSG_TYPE.DRAW_POINT;
   buffer.set(uuidToBytes(userId), 1);
   buffer[17] = layer === 'foreground' ? LAYER.FOREGROUND : LAYER.BACKGROUND;
-  writeUint16LE(buffer, 18, Math.round(x));
-  writeUint16LE(buffer, 20, Math.round(y));
+  writeInt16LE(buffer, 18, Math.round(x));
+  writeInt16LE(buffer, 20, Math.round(y));
   buffer[22] = brushSize;
   buffer[23] = brushType === 'solid' ? BRUSH_TYPE.SOLID : 
                brushType === 'halftone' ? BRUSH_TYPE.HALFTONE : BRUSH_TYPE.ERASER;
@@ -238,8 +255,8 @@ export function encodeFill(
   buffer[0] = MSG_TYPE.FILL;
   buffer.set(uuidToBytes(userId), 1);
   buffer[17] = layer === 'foreground' ? LAYER.FOREGROUND : LAYER.BACKGROUND;
-  writeUint16LE(buffer, 18, Math.round(x));
-  writeUint16LE(buffer, 20, Math.round(y));
+  writeInt16LE(buffer, 18, Math.round(x));
+  writeInt16LE(buffer, 20, Math.round(y));
   buffer[22] = r;
   buffer[23] = g;
   buffer[24] = b;
@@ -284,8 +301,8 @@ export function encodePointerUp(
   
   buffer[0] = MSG_TYPE.POINTER_UP;
   buffer.set(uuidToBytes(userId), 1);
-  writeUint16LE(buffer, 17, Math.round(x));
-  writeUint16LE(buffer, 19, Math.round(y));
+  writeInt16LE(buffer, 17, Math.round(x));
+  writeInt16LE(buffer, 19, Math.round(y));
   buffer[21] = button;
   buffer[22] = pointerType === 'mouse' ? POINTER_TYPE.MOUSE :
                pointerType === 'pen' ? POINTER_TYPE.PEN : POINTER_TYPE.TOUCH;
@@ -409,10 +426,10 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         type: 'drawLine',
         userId: bytesToUuid(buffer.slice(1, 17)),
         layer: buffer[17] === LAYER.FOREGROUND ? 'foreground' : 'background',
-        fromX: readUint16LE(buffer, 18),
-        fromY: readUint16LE(buffer, 20),
-        toX: readUint16LE(buffer, 22),
-        toY: readUint16LE(buffer, 24),
+        fromX: readInt16LE(buffer, 18),
+        fromY: readInt16LE(buffer, 20),
+        toX: readInt16LE(buffer, 22),
+        toY: readInt16LE(buffer, 24),
         brushSize: buffer[26],
         brushType: buffer[27] === BRUSH_TYPE.SOLID ? 'solid' :
                    buffer[27] === BRUSH_TYPE.HALFTONE ? 'halftone' : 'eraser',
@@ -427,8 +444,8 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         type: 'drawPoint',
         userId: bytesToUuid(buffer.slice(1, 17)),
         layer: buffer[17] === LAYER.FOREGROUND ? 'foreground' : 'background',
-        x: readUint16LE(buffer, 18),
-        y: readUint16LE(buffer, 20),
+        x: readInt16LE(buffer, 18),
+        y: readInt16LE(buffer, 20),
         brushSize: buffer[22],
         brushType: buffer[23] === BRUSH_TYPE.SOLID ? 'solid' :
                    buffer[23] === BRUSH_TYPE.HALFTONE ? 'halftone' : 'eraser',
@@ -443,8 +460,8 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         type: 'fill',
         userId: bytesToUuid(buffer.slice(1, 17)),
         layer: buffer[17] === LAYER.FOREGROUND ? 'foreground' : 'background',
-        x: readUint16LE(buffer, 18),
-        y: readUint16LE(buffer, 20),
+        x: readInt16LE(buffer, 18),
+        y: readInt16LE(buffer, 20),
         color: { r: buffer[22], g: buffer[23], b: buffer[24], a: buffer[25] }
       };
       
@@ -453,8 +470,8 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       return {
         type: 'pointerup',
         userId: bytesToUuid(buffer.slice(1, 17)),
-        x: readUint16LE(buffer, 17),
-        y: readUint16LE(buffer, 19),
+        x: readInt16LE(buffer, 17),
+        y: readInt16LE(buffer, 19),
         button: buffer[21],
         pointerType: buffer[22] === POINTER_TYPE.MOUSE ? 'mouse' :
                      buffer[22] === POINTER_TYPE.PEN ? 'pen' : 'touch'
