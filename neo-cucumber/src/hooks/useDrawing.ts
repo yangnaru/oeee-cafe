@@ -14,7 +14,7 @@ interface DrawingState {
   brushSize: number;
   opacity: number;
   color: string;
-  brushType: "solid" | "halftone" | "eraser" | "fill";
+  brushType: "solid" | "halftone" | "eraser" | "fill" | "pan";
   layerType: "foreground" | "background";
   fgVisible: boolean;
   bgVisible: boolean;
@@ -178,8 +178,9 @@ export const useDrawing = (
       drawingStateRef.current.activePointerId = e.pointerId;
       app.setPointerCapture(e.pointerId);
 
-      if (e.button === 1 || (e.pointerType === "touch" && e.buttons === 0)) {
-        // Middle mouse button or touch (for panning)
+      if (e.button === 1 || (e.pointerType === "touch" && e.buttons === 0) || 
+          (e.button === 0 && drawingState.brushType === "pan")) {
+        // Middle mouse button, touch, or pan tool selected (for panning)
         drawingStateRef.current.isPanning = true;
         drawingStateRef.current.panStartX = e.clientX;
         drawingStateRef.current.panStartY = e.clientY;
@@ -187,9 +188,10 @@ export const useDrawing = (
       }
 
       if (
-        e.button === 0 ||
+        (e.button === 0 ||
         e.pointerType === "touch" ||
-        e.pointerType === "pen"
+        e.pointerType === "pen") &&
+        drawingState.brushType !== "pan"
       ) {
         const coords = getCanvasCoordinates(e.clientX, e.clientY);
 
@@ -326,25 +328,25 @@ export const useDrawing = (
       // Disable drawing while catching up to stored messages or when disconnected
       if (isCatchingUp || connectionState !== 'connected') return;
 
-      // Send pointerup event through WebSocket
-      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
-        const coords = getCanvasCoordinates(e.clientX, e.clientY);
-        try {
-          const binaryMessage = encodePointerUp(
-            userIdRef.current,
-            coords.x, coords.y,
-            e.button,
-            e.pointerType as 'mouse' | 'pen' | 'touch'
-          );
-          wsRef.current.send(binaryMessage);
-        } catch (error) {
-          console.error("Failed to send pointerup event:", error);
-        }
-      }
-
       if (e.button === 1 || drawingStateRef.current.isPanning) {
+        // Handle panning end - don't send WebSocket events for panning
         drawingStateRef.current.isPanning = false;
       } else {
+        // Send pointerup event through WebSocket only for drawing operations
+        if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
+          const coords = getCanvasCoordinates(e.clientX, e.clientY);
+          try {
+            const binaryMessage = encodePointerUp(
+              userIdRef.current,
+              coords.x, coords.y,
+              e.button,
+              e.pointerType as 'mouse' | 'pen' | 'touch'
+            );
+            wsRef.current.send(binaryMessage);
+          } catch (error) {
+            console.error("Failed to send pointerup event:", error);
+          }
+        }
         // Mark drawing as inactive for drawing operations
         isDrawingRef.current = false;
         
@@ -411,7 +413,8 @@ export const useDrawing = (
 
       if (
         !drawingStateRef.current.isDrawing ||
-        drawingState.brushType === "fill"
+        drawingState.brushType === "fill" ||
+        drawingState.brushType === "pan"
       )
         return;
 

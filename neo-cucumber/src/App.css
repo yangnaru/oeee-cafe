@@ -67,6 +67,14 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+#canvas.pan-cursor {
+  cursor: grab;
+}
+
+#canvas.pan-cursor:active {
+  cursor: grabbing;
+}
+
 #color-palette {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

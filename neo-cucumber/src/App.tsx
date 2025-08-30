@@ -47,7 +47,7 @@ const getZoomLevels = (): number[] => {
 };
 // SPDX-SnippetEnd
 
-type BrushType = "solid" | "halftone" | "eraser" | "fill";
+type BrushType = "solid" | "halftone" | "eraser" | "fill" | "pan";
 type LayerType = "foreground" | "background";
 
 // Utility function to set thumbnail dimensions based on canvas aspect ratio
@@ -186,7 +186,7 @@ function App() {
     setDrawingState((prev) => {
       let newOpacity = prev.opacity;
       if (type === "halftone") newOpacity = 23;
-      else if (["solid", "eraser", "fill"].includes(type)) newOpacity = 255;
+      else if (["solid", "eraser", "fill", "pan"].includes(type)) newOpacity = 255;
 
       return { ...prev, brushType: type, opacity: newOpacity };
     });
@@ -1051,6 +1051,7 @@ function App() {
             ref={canvasRef}
             width={CANVAS_WIDTH}
             height={CANVAS_HEIGHT}
+            className={drawingState.brushType === "pan" ? "pan-cursor" : ""}
             style={{ imageRendering: "pixelated" }}
           ></canvas>
           <div id="controls">
@@ -1073,7 +1074,7 @@ function App() {
               </button>
             </div>
             <div id="brush-type-controls">
-              {(["solid", "halftone", "eraser", "fill"] as BrushType[]).map(
+              {(["solid", "halftone", "eraser", "fill", "pan"] as BrushType[]).map(
                 (type) => (
                   <label key={type}>
                     <input
