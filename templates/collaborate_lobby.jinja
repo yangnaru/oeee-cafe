@@ -1,52 +1,52 @@
 {% extends "base.jinja" %}
 {% block title %}
-  {{ super() }} | Collaborative Drawing
+  {{ super() }} | {{ ftl_collaborate_title }}
 {% endblock title %}
 {% block content %}
   <div class="center">
-    <h2>Collaborative Drawing Sessions</h2>
+    <h2>{{ ftl_collaborate_title }}</h2>
     
     <div class="create-session-section">
-      <h3>Create New Session</h3>
+      <h3>{{ ftl_collaborate_create_session }}</h3>
       <form id="create-session-form" method="post" action="/collaborate">
-        <div class="form-group">
-          <label for="community">Community:</label>
+        <p>
+          <label for="community">{{ ftl_collaborate_community_label }}:</label>
           <select id="community" name="community_id" required>
             {% for community in communities %}
               <option value="{{ community.id }}">{{ community.name }}</option>
             {% endfor %}
           </select>
-        </div>
+        </p>
         
-        <div class="form-group">
-          <label for="canvas-size">Canvas Size:</label>
+        <p>
+          <label for="canvas-size">{{ ftl_collaborate_canvas_size_label }}:</label>
           <select id="canvas-size" name="canvas-size" required>
             {% for size_value, size_label in canvas_sizes %}
               <option value="{{ size_value }}">{{ size_label }}</option>
             {% endfor %}
           </select>
-        </div>
+        </p>
         
-        <div class="form-group">
-          <label for="session-title">Session Title (optional):</label>
-          <input type="text" id="session-title" name="title" maxlength="100" placeholder="Enter a title for your session">
-        </div>
+        <p>
+          <label for="session-title">{{ ftl_collaborate_session_title_label }}:</label>
+          <input type="text" id="session-title" name="title" maxlength="100" placeholder="{{ ftl_collaborate_session_title_placeholder }}">
+        </p>
         
-        <div class="form-group">
-          <label>
+        <p>
+          <label for="is-public">
             <input type="checkbox" id="is-public" name="is_public" checked>
-            Show in public lobby
+            {{ ftl_collaborate_public_session_label }}
           </label>
-          <small>Uncheck to create a private session (link-only access)</small>
-        </div>
+        </p>
+        <small>{{ ftl_collaborate_public_session_description }}</small>
         
-        <button type="submit" class="btn btn-primary">Create Session</button>
+        <input type="submit" value="{{ ftl_collaborate_create_button }}">
       </form>
     </div>
 
     {% if active_sessions|length > 0 %}
       <div class="active-sessions-section">
-        <h3>Active Public Sessions</h3>
+        <h3>{{ ftl_collaborate_active_sessions }}</h3>
         <div class="sessions-grid">
           {% for session in active_sessions %}
             <div class="session-card">
@@ -54,24 +54,28 @@
                 {% if session.title %}
                   <h4>{{ session.title }}</h4>
                 {% else %}
-                  <h4>Untitled Session</h4>
+                  <h4>{{ ftl_post_no_title }}</h4>
                 {% endif %}
-                <small>by @{{ session.owner_login_name }}</small>
+                <small>{{ ftl_collaborate_session_by }}{{ session.owner_login_name }}</small>
               </div>
               
               <div class="session-info">
                 <div class="session-meta">
                   <span class="canvas-size">{{ session.width }}×{{ session.height }}</span>
-                  <span class="participant-count">{{ session.participant_count }} participants</span>
-                </div>
-                <div class="session-time">
-                  Created {{ session.created_at|dateformat(format="short", tz="Asia/Seoul") }}
+                  <span class="participant-count">
+                    {% if session.participant_count == 1 %}
+                      {{ ftl_collaborate_session_participants_singular }}
+                    {% else %}
+                      {{ session.participant_count }}{{ ftl_collaborate_session_participants_plural }}
+                    {% endif %}
+                  </span>
+                  <span class="session-time">{{ ftl_collaborate_session_created }} {{ session.created_at|dateformat(format="short", tz="Asia/Seoul") }}</span>
                 </div>
               </div>
               
               <div class="session-actions">
-                <a href="/collaborate/{{ session.id }}?width={{ session.width }}&height={{ session.height }}" class="btn btn-primary">
-                  Join Session
+                <a href="/collaborate/{{ session.id }}?width={{ session.width }}&height={{ session.height }}">
+                  {{ ftl_collaborate_join_session }}
                 </a>
               </div>
             </div>
@@ -80,120 +84,126 @@
       </div>
     {% else %}
       <div class="no-sessions">
-        <p>No active public sessions. Create one to get started!</p>
+        <p>{{ ftl_collaborate_no_sessions }}</p>
       </div>
     {% endif %}
   </div>
 
   <style>
+    /* Oeee Cafe style collaborative lobby */
     .create-session-section {
-      background: #f5f5f5;
-      padding: 2em;
-      margin-bottom: 2em;
-      border-radius: 8px;
-      border: 1px solid #ddd;
+      background-color: var(--main-nav-bg-color);
+      border: 1px solid var(--main-border-color);
+      padding: 8px;
+      margin-bottom: 8px;
     }
     
-    .form-group {
-      margin-bottom: 1em;
+    .create-session-section h3 {
+      margin: 0 0 8px 0;
     }
     
-    .form-group label {
-      display: block;
-      margin-bottom: 0.5em;
-      font-weight: bold;
+    .create-session-section p {
+      margin: 8px 0;
     }
     
-    .form-group select, 
-    .form-group input[type="text"] {
-      width: 100%;
-      max-width: 300px;
-      padding: 0.5em;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+    .create-session-section label {
+      font-weight: normal;
     }
     
-    .form-group small {
-      display: block;
-      color: #666;
-      font-size: 0.85em;
-      margin-top: 0.25em;
+    .create-session-section select,
+    .create-session-section input[type="text"] {
+      font-family: inherit;
+      font-size: inherit;
     }
     
-    .btn {
-      display: inline-block;
-      padding: 0.5em 1em;
-      text-decoration: none;
-      border-radius: 4px;
-      font-weight: bold;
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
+    .create-session-section small {
+      font-size: 0.9em;
+      color: var(--main-text-color);
+      opacity: 0.7;
     }
     
-    .btn-primary {
-      background-color: #007bff;
-      color: white;
+    .create-session-section input[type="submit"] {
+      margin-top: 8px;
     }
     
-    .btn-primary:hover {
-      background-color: #0056b3;
+    .active-sessions-section {
+      margin-top: 8px;
+    }
+    
+    .active-sessions-section h3 {
+      padding: 8px;
+      background-color: var(--main-nav-bg-color);
+      border: 1px solid var(--main-border-color);
+      margin: 0 0 8px 0;
     }
     
     .sessions-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 1em;
-      margin-top: 1em;
+      gap: 8px;
     }
     
     .session-card {
-      background: #f9f9f9;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 1em;
+      border: 1px solid var(--main-border-color);
+      padding: 8px;
+      background-color: var(--main-bg-color);
     }
     
     .session-header h4 {
-      margin: 0 0 0.25em 0;
-      color: #333;
+      margin: 0 0 4px 0;
+      color: var(--main-text-color);
     }
     
     .session-header small {
-      color: #666;
+      color: var(--main-text-color);
+      opacity: 0.7;
     }
     
     .session-info {
-      margin: 1em 0;
+      margin: 8px 0;
     }
     
     .session-meta {
       display: flex;
-      gap: 1em;
-      margin-bottom: 0.5em;
+      gap: 8px;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
     }
     
     .session-meta span {
-      background: #e0e0e0;
-      padding: 0.25em 0.5em;
-      border-radius: 4px;
-      font-size: 0.85em;
-    }
-    
-    .session-time {
-      color: #666;
-      font-size: 0.85em;
+      background-color: var(--main-nav-bg-color);
+      border: 1px solid var(--main-border-color);
+      padding: 2px 4px;
+      font-size: 0.9em;
     }
     
     .session-actions {
       text-align: right;
     }
     
+    .session-actions input[type="submit"],
+    .session-actions a {
+      background-color: var(--main-nav-bg-color);
+      border: 1px solid var(--main-border-color);
+      color: var(--main-text-color);
+      padding: 4px 8px;
+      text-decoration: none;
+      display: inline-block;
+      cursor: pointer;
+    }
+    
+    .session-actions input[type="submit"]:hover,
+    .session-actions a:hover {
+      background-color: var(--main-border-color);
+    }
+    
     .no-sessions {
       text-align: center;
-      padding: 2em;
-      color: #666;
+      padding: 16px;
+      color: var(--main-text-color);
+      opacity: 0.7;
       font-style: italic;
+      border: 1px solid var(--main-border-color);
     }
   </style>
 

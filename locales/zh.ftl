@@ -65,6 +65,24 @@ allow-relay = 允许接续创作
 sensitive = 敏感内容
 draft-post = 草稿作品
 
+# Collaborative drawing
+collaborate-title = 协作绘画会话
+collaborate-create-session = 创建新会话
+collaborate-community-label = 社区
+collaborate-canvas-size-label = 画布尺寸
+collaborate-session-title-label = 会话标题 (可选)
+collaborate-session-title-placeholder = 输入会话标题
+collaborate-public-session-label = 显示在公共大厅
+collaborate-public-session-description = 取消选中创建私人会话 (仅链接访问)
+collaborate-create-button = 创建会话
+collaborate-active-sessions = 活跃的公共会话
+collaborate-no-sessions = 没有活跃的公共会话。创建一个开始吧！
+collaborate-session-by = 由 @
+collaborate-session-participants-singular = 1位参与者
+collaborate-session-participants-plural = 位参与者
+collaborate-session-created = 创建于
+collaborate-join-session = 加入会话
+
 welcome = 欢迎，{ $name }！
 
 comment-created-at = 评论时间

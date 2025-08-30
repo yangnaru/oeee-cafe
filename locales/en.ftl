@@ -63,6 +63,24 @@ allow-relay = Allow relay posts
 sensitive = Sensitive
 draft-post = Draft post
 
+# Collaborative drawing
+collaborate-title = Collaborative Drawing Sessions
+collaborate-create-session = Create New Session
+collaborate-community-label = Community
+collaborate-canvas-size-label = Canvas Size
+collaborate-session-title-label = Session Title (optional)
+collaborate-session-title-placeholder = Enter a title for your session
+collaborate-public-session-label = Show in public lobby
+collaborate-public-session-description = Uncheck to create a private session (link-only access)
+collaborate-create-button = Create Session
+collaborate-active-sessions = Active Public Sessions
+collaborate-no-sessions = No active public sessions. Create one to get started!
+collaborate-session-by = by @
+collaborate-session-participants-singular = 1 participant
+collaborate-session-participants-plural = participants
+collaborate-session-created = Created
+collaborate-join-session = Join Session
+
 welcome = Welcome, { $name }!
 
 comment-created-at = Commented at

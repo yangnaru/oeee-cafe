@@ -65,6 +65,24 @@ allow-relay = リレー描画を許可
 sensitive = 敏感な内容
 draft-post = 一時保管された図
 
+# Collaborative drawing
+collaborate-title = 協調お絵かき セッション
+collaborate-create-session = 新しいセッションを作成
+collaborate-community-label = コミュニティ
+collaborate-canvas-size-label = キャンバス サイズ
+collaborate-session-title-label = セッション タイトル (任意)
+collaborate-session-title-placeholder = セッションのタイトルを入力してください
+collaborate-public-session-label = 公開ロビーに表示
+collaborate-public-session-description = チェックを外すとプライベート セッション (リンクのみアクセス) になります
+collaborate-create-button = セッションを作成
+collaborate-active-sessions = アクティブな公開セッション
+collaborate-no-sessions = アクティブな公開セッションはありません。作成して始めましょう！
+collaborate-session-by = @
+collaborate-session-participants-singular = 1人の参加者
+collaborate-session-participants-plural = 人の参加者
+collaborate-session-created = 作成日時
+collaborate-join-session = セッションに参加
+
 welcome = { $name }さん、ようこそ！
 
 comment-created-at = 時刻
