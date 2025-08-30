@@ -171,6 +171,26 @@ function App() {
   // Dirty flag to track when recomposition is needed
   const needsRecompositionRef = useRef(false);
 
+  // Cached temporary canvas for local user compositing (performance optimization for Safari)
+  const tempCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const tempCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+
+  // Safari detection for performance optimizations
+  const isSafari = useRef(/^((?!chrome|android).)*safari/i.test(navigator.userAgent));
+
+  // Initialize cached temporary canvas for performance
+  const initTempCanvas = useCallback(() => {
+    if (!tempCanvasRef.current) {
+      tempCanvasRef.current = document.createElement("canvas");
+      tempCanvasRef.current.width = CANVAS_WIDTH;
+      tempCanvasRef.current.height = CANVAS_HEIGHT;
+      tempCtxRef.current = tempCanvasRef.current.getContext("2d");
+      if (tempCtxRef.current) {
+        tempCtxRef.current.imageSmoothingEnabled = false;
+      }
+    }
+  }, [CANVAS_WIDTH, CANVAS_HEIGHT]);
+
   // Function to create drawing engine for a new user
   const createUserEngine = useCallback((userId: string) => {
     // Check if user already exists
@@ -460,8 +480,21 @@ function App() {
 
   // Function to get WebSocket URL dynamically
   const getWebSocketUrl = useCallback(() => {
+    console.log("Generating WebSocket URL:", {
+      currentUrl: window.location.href,
+      pathname: window.location.pathname,
+      protocol: window.location.protocol,
+      host: window.location.host,
+      isDev: import.meta.env.DEV,
+      viteWsUrl: import.meta.env.VITE_WS_URL,
+    });
+
     // Option 1: Use environment variable if set
     if (import.meta.env.VITE_WS_URL) {
+      console.log(
+        "Using environment WebSocket URL:",
+        import.meta.env.VITE_WS_URL
+      );
       return import.meta.env.VITE_WS_URL;
     }
 
@@ -474,63 +507,101 @@ function App() {
     const uuidPattern =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+    console.log("URL path analysis:", {
+      pathSegments: pathSegments,
+      sessionSegment: pathSegments[2],
+      isValidUuid: pathSegments[2] ? uuidPattern.test(pathSegments[2]) : false,
+    });
+
     if (
       pathSegments[1] === "collaborate" &&
       pathSegments[2] &&
       uuidPattern.test(pathSegments[2])
     ) {
       const sessionId = pathSegments[2];
+      let wsUrl;
 
       // Use different paths for dev vs prod
       if (import.meta.env.DEV) {
         // Development: use /api prefix which gets proxied
-        return `${protocol}//${host}/api/collaborate/${sessionId}/ws`;
+        wsUrl = `${protocol}//${host}/api/collaborate/${sessionId}/ws`;
       } else {
         // Production: direct path
-        return `${protocol}//${host}/collaborate/${sessionId}/ws`;
+        wsUrl = `${protocol}//${host}/collaborate/${sessionId}/ws`;
       }
+
+      console.log("Generated WebSocket URL:", wsUrl);
+      return wsUrl;
     }
 
     // Fallback - should not happen in normal usage
-    throw new Error("Invalid collaborative session URL");
+    const error = new Error("Invalid collaborative session URL");
+    console.error("Failed to generate WebSocket URL:", {
+      error: error.message,
+      pathname: window.location.pathname,
+      pathSegments: pathSegments,
+    });
+    throw error;
   }, []);
 
   // Function to establish WebSocket connection
   const fetchAuthInfo = useCallback(async (): Promise<boolean> => {
     try {
+      console.log("Attempting to fetch auth info from /api/auth");
       const response = await fetch("/api/auth", {
         method: "GET",
         credentials: "include",
       });
 
       if (!response.ok) {
-        throw new Error(`Auth failed: ${response.status}`);
+        console.error("Auth request failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url,
+          headers: Object.fromEntries(response.headers.entries()),
+        });
+        throw new Error(
+          `Auth failed: ${response.status} ${response.statusText}`
+        );
       }
 
       const authInfo = await response.json();
       userIdRef.current = authInfo.user_id;
-      console.log(
-        "Authenticated as:",
-        authInfo.login_name,
-        "ID:",
-        authInfo.user_id
-      );
+      console.log("Authentication successful:", {
+        loginName: authInfo.login_name,
+        userId: authInfo.user_id,
+        timestamp: new Date().toISOString(),
+      });
       return true;
     } catch (error) {
-      console.error("Failed to fetch auth info:", error);
+      console.error("Failed to fetch auth info:", {
+        error: error,
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+        currentUrl: window.location.href,
+      });
       setAuthError(true);
       return false;
     }
   }, []);
 
   const connectWebSocket = useCallback(async () => {
+    console.log("WebSocket connection attempt started:", {
+      shouldConnect: shouldConnectRef.current,
+      existingConnection: !!wsRef.current,
+      currentUser: userIdRef.current,
+      timestamp: new Date().toISOString(),
+    });
+
     // Only connect if we should be connecting
     if (!shouldConnectRef.current && wsRef.current) {
+      console.log("Connection attempt aborted - should not connect");
       return;
     }
 
     // Clean up any existing connection
     if (wsRef.current) {
+      console.log("Cleaning up existing WebSocket connection");
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -539,17 +610,41 @@ function App() {
 
     // Fetch user ID if not already set - don't proceed if auth fails
     if (!userIdRef.current) {
+      console.log("No user ID found, fetching authentication info");
       const authSuccess = await fetchAuthInfo();
       if (!authSuccess) {
+        console.error(
+          "Authentication failed, cannot establish WebSocket connection"
+        );
         setConnectionState("disconnected");
         return;
       }
+    } else {
+      console.log("Using existing user ID:", userIdRef.current);
     }
-    const ws = new WebSocket(getWebSocketUrl());
-    wsRef.current = ws;
+
+    try {
+      const wsUrl = getWebSocketUrl();
+      console.log("Creating WebSocket connection to:", wsUrl);
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+    } catch (error) {
+      console.error("Failed to create WebSocket:", {
+        error: error,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      setConnectionState("disconnected");
+      return;
+    }
+
+    const ws = wsRef.current!;
 
     ws.onopen = () => {
-      console.log("WebSocket connected");
+      console.log("WebSocket connected successfully:", {
+        url: ws.url,
+        readyState: ws.readyState,
+        timestamp: new Date().toISOString(),
+      });
       setConnectionState("connected");
 
       // Send initial join message to establish user presence and layer order
@@ -629,12 +724,27 @@ function App() {
     };
 
     ws.onerror = (event) => {
-      console.error("WebSocket error:", event);
+      console.error("WebSocket error details:", {
+        readyState: ws.readyState,
+        url: ws.url,
+        event: event,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        connectionState: connectionState,
+      });
       setConnectionState("disconnected");
     };
 
     ws.onclose = (event) => {
-      console.log("WebSocket closed:", event.code, event.reason);
+      console.log("WebSocket closed details:", {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+        url: ws.url,
+        timestamp: new Date().toISOString(),
+        readyState: ws.readyState,
+        shouldConnect: shouldConnectRef.current,
+      });
       setConnectionState("disconnected");
       // No automatic reconnection - user must manually reconnect
     };
@@ -645,17 +755,6 @@ function App() {
         // Handle different message types
         switch (message.type) {
           case "drawLine": {
-            console.log("Drawing event - drawLine:", {
-              userId: message.userId.substring(0, 8),
-              isLocalUser: message.userId === userIdRef.current,
-              layer: message.layer,
-              from: { x: message.fromX, y: message.fromY },
-              to: { x: message.toX, y: message.toY },
-              brushSize: message.brushSize,
-              brushType: message.brushType,
-              color: message.color
-            });
-            
             // Check if this is the local user's drawing event
             if (message.userId === userIdRef.current && drawingEngine) {
               const targetLayer =
@@ -710,12 +809,12 @@ function App() {
                   message.color.a
                 );
 
-                // Update thumbnails for the remote user's engine
-                engine.updateLayerThumbnails();
+                // Update thumbnails for the remote user's engine (throttled for Safari)
+                if (!isSafari.current || Math.random() < 0.3) {
+                  engine.updateLayerThumbnails();
+                }
 
-                // CRITICAL: Update composite buffer for remote engine
-                engine.compositeLayers(true, true);
-
+                // Mark for recomposition - RAF loop will handle compositing
                 needsRecompositionRef.current = true;
               }
             }
@@ -730,7 +829,7 @@ function App() {
               point: { x: message.x, y: message.y },
               brushSize: message.brushSize,
               brushType: message.brushType,
-              color: message.color
+              color: message.color,
             });
 
             // Check if this is the local user's drawing event
@@ -787,10 +886,12 @@ function App() {
                   message.color.a
                 );
 
-                // Update thumbnails and composite buffer for remote engine
-                engine.updateLayerThumbnails();
-                engine.compositeLayers(true, true);
+                // Update thumbnails for remote engine (throttled for Safari)
+                if (!isSafari.current || Math.random() < 0.3) {
+                  engine.updateLayerThumbnails();
+                }
 
+                // Mark for recomposition - RAF loop will handle compositing
                 needsRecompositionRef.current = true;
               }
             }
@@ -803,7 +904,7 @@ function App() {
               isLocalUser: message.userId === userIdRef.current,
               layer: message.layer,
               point: { x: message.x, y: message.y },
-              color: message.color
+              color: message.color,
             });
 
             // Check if this is the local user's drawing event
@@ -852,10 +953,12 @@ function App() {
                   message.color.a
                 );
 
-                // Update thumbnails and composite buffer for remote engine
-                engine.updateLayerThumbnails();
-                engine.compositeLayers(true, true);
+                // Update thumbnails for remote engine (throttled for Safari)
+                if (!isSafari.current || Math.random() < 0.3) {
+                  engine.updateLayerThumbnails();
+                }
 
+                // Mark for recomposition - RAF loop will handle compositing
                 needsRecompositionRef.current = true;
               }
             }
@@ -887,23 +990,14 @@ function App() {
           }
 
           case "joinResponse": {
-            console.log("JOIN_RESPONSE received:", {
-              userCount: message.userIds.length,
-              users: message.userIds.map((id: string) => id.substring(0, 8)),
-              isLocalUserIncluded: message.userIds.includes(userIdRef.current),
-              layerOrder: message.userIds.map((id: string, index: number) => 
-                `${id.substring(0, 8)} (joined ${index === 0 ? '1st' : index === 1 ? '2nd' : index === 2 ? '3rd' : `${index + 1}th`}, draws on ${index === 0 ? 'TOP' : 'bottom'} layer)`
-              )
-            });
-            
             // Store the server-provided user order
             userOrderRef.current = [...message.userIds];
-            
+
             // Initialize drawing engines for all users in the list
             message.userIds.forEach((userId: string) => {
               createUserEngine(userId);
             });
-            
+
             // Mark for recomposition to update layer order
             needsRecompositionRef.current = true;
             break;
@@ -964,7 +1058,13 @@ function App() {
         console.error("Failed to handle binary message:", error);
       }
     };
-  }, [getWebSocketUrl, createUserEngine, fetchAuthInfo, drawingEngine, handleLocalDrawingChange]);
+  }, [
+    getWebSocketUrl,
+    createUserEngine,
+    fetchAuthInfo,
+    drawingEngine,
+    handleLocalDrawingChange,
+  ]);
 
   // RAF-based compositing system for better performance
   const compositeAllUserLayers = useCallback(() => {
@@ -974,8 +1074,16 @@ function App() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear the canvas
-    ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    // Safari optimization: reduce compositing frequency for better performance
+    if (isSafari.current) {
+      // Clear the canvas more efficiently for Safari
+      ctx.globalCompositeOperation = 'copy';
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.globalCompositeOperation = 'source-over';
+    } else {
+      // Standard clear for other browsers
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    }
 
     // Create a combined array including all users
     const allUsers: Array<{
@@ -1005,17 +1113,17 @@ function App() {
     allUsers.sort((a, b) => {
       const indexA = userOrderRef.current.indexOf(a.userId);
       const indexB = userOrderRef.current.indexOf(b.userId);
-      
+
       // If both users are in the server order, sort by REVERSE order
       // Higher index (later join) should be drawn first (underneath)
       if (indexA !== -1 && indexB !== -1) {
         return indexB - indexA;
       }
-      
+
       // If only one is in server order, prioritize that one
       if (indexA !== -1) return -1;
       if (indexB !== -1) return 1;
-      
+
       // If neither is in server order, fall back to UUID comparison
       return a.userId.localeCompare(b.userId);
     });
@@ -1025,25 +1133,24 @@ function App() {
       const isLocalUser = userId === userIdRef.current;
 
       if (isLocalUser) {
-        // For local user, composite layers and create temporary canvas
+        // For local user, composite layers and use cached temporary canvas
         engine.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
 
-        // Create temporary canvas to draw composite buffer
-        const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = CANVAS_WIDTH;
-        tempCanvas.height = CANVAS_HEIGHT;
-        const tempCtx = tempCanvas.getContext("2d");
-        if (tempCtx) {
+        // Initialize cached canvas if needed
+        initTempCanvas();
+        
+        // Use cached temporary canvas
+        if (tempCtxRef.current && tempCanvasRef.current) {
           const compositeData = engine.compositeBuffer;
           const imageData = new ImageData(
             compositeData,
             CANVAS_WIDTH,
             CANVAS_HEIGHT
           );
-          tempCtx.putImageData(imageData, 0, 0);
+          tempCtxRef.current.putImageData(imageData, 0, 0);
 
-          // Draw temp canvas onto main canvas
-          ctx.drawImage(tempCanvas, 0, 0);
+          // Draw cached temp canvas onto main canvas
+          ctx.drawImage(tempCanvasRef.current, 0, 0);
         }
       } else if (canvas) {
         // For remote users, update their offscreen canvas first
@@ -1075,13 +1182,22 @@ function App() {
     compositeCallbackRef.current = compositeAllUserLayers;
   }, [compositeAllUserLayers]);
 
-  // RAF-based rendering loop
+  // RAF-based rendering loop with Safari optimization
   const rafId = useRef<number | null>(null);
+  const lastRenderTime = useRef<number>(0);
   const startRenderLoop = useCallback(() => {
-    const render = () => {
-      if (needsRecompositionRef.current) {
-        compositeAllUserLayers();
+    const render = (currentTime: number) => {
+      // Safari optimization: throttle rendering to 30fps instead of 60fps for better performance
+      const targetFPS = isSafari.current ? 30 : 60;
+      const targetInterval = 1000 / targetFPS;
+      
+      if (currentTime - lastRenderTime.current >= targetInterval) {
+        if (needsRecompositionRef.current) {
+          compositeAllUserLayers();
+        }
+        lastRenderTime.current = currentTime;
       }
+      
       rafId.current = requestAnimationFrame(render);
     };
     rafId.current = requestAnimationFrame(render);
