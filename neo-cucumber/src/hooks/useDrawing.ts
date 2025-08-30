@@ -2,12 +2,12 @@ import { useEffect, useRef, useCallback } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { useCanvasHistory } from "./useCanvasHistory";
 import { layerToPngBlob } from "../utils/canvasSnapshot";
-import { 
-  encodeSnapshot, 
-  encodeDrawLine, 
-  encodeDrawPoint, 
-  encodeFill, 
-  encodePointerUp 
+import {
+  encodeSnapshot,
+  encodeDrawLine,
+  encodeDrawPoint,
+  encodeFill,
+  encodePointerUp,
 } from "../utils/binaryProtocol";
 
 interface DrawingState {
@@ -34,13 +34,15 @@ export const useDrawing = (
   userIdRef?: React.RefObject<string>,
   onDrawingChange?: () => void,
   isCatchingUp: boolean = false,
-  connectionState: 'connecting' | 'connected' | 'disconnected' = 'connected'
+  connectionState: "connecting" | "connected" | "disconnected" = "connected"
 ) => {
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const drawingEngineRef = useRef<DrawingEngine | null>(null);
   const isInitializedRef = useRef(false);
   const onHistoryChangeRef = useRef(onHistoryChange);
-  const lastModifiedLayerRef = useRef<"foreground" | "background">("foreground");
+  const lastModifiedLayerRef = useRef<"foreground" | "background">(
+    "foreground"
+  );
   const isDrawingRef = useRef(false);
   const pendingSnapshotRequestRef = useRef(false);
   const history = useCanvasHistory(30);
@@ -83,14 +85,15 @@ export const useDrawing = (
       bgThumbnailRef.current || undefined
     );
 
-    // Save initial state to history
+    // Save initial blank state to history so first stroke can be undone
     if (
       drawingEngineRef.current.layers.foreground &&
       drawingEngineRef.current.layers.background
     ) {
       history.saveState(
         drawingEngineRef.current.layers.foreground,
-        drawingEngineRef.current.layers.background
+        drawingEngineRef.current.layers.background,
+        false // This is not a drawing action, just initial state
       );
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
     }
@@ -152,7 +155,7 @@ export const useDrawing = (
       if (controlsElement?.contains(target as Node)) return;
 
       // Disable drawing while catching up to stored messages or when disconnected
-      if (isCatchingUp || connectionState !== 'connected') return;
+      if (isCatchingUp || connectionState !== "connected") return;
 
       // Only handle drawing area interactions
       if (
@@ -178,8 +181,11 @@ export const useDrawing = (
       drawingStateRef.current.activePointerId = e.pointerId;
       app.setPointerCapture(e.pointerId);
 
-      if (e.button === 1 || (e.pointerType === "touch" && e.buttons === 0) || 
-          (e.button === 0 && drawingState.brushType === "pan")) {
+      if (
+        e.button === 1 ||
+        (e.pointerType === "touch" && e.buttons === 0) ||
+        (e.button === 0 && drawingState.brushType === "pan")
+      ) {
         // Middle mouse button, touch, or pan tool selected (for panning)
         drawingStateRef.current.isPanning = true;
         drawingStateRef.current.panStartX = e.clientX;
@@ -189,8 +195,8 @@ export const useDrawing = (
 
       if (
         (e.button === 0 ||
-        e.pointerType === "touch" ||
-        e.pointerType === "pen") &&
+          e.pointerType === "touch" ||
+          e.pointerType === "pen") &&
         drawingState.brushType !== "pan"
       ) {
         const coords = getCanvasCoordinates(e.clientX, e.clientY);
@@ -222,14 +228,21 @@ export const useDrawing = (
           lastModifiedLayerRef.current = drawingState.layerType;
 
           // Send fill event through WebSocket
-          if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
+          if (
+            wsRef?.current &&
+            wsRef.current.readyState === WebSocket.OPEN &&
+            userIdRef?.current
+          ) {
             try {
               const binaryMessage = encodeFill(
                 userIdRef.current,
                 drawingState.layerType,
                 Math.floor(coords.x),
                 Math.floor(coords.y),
-                r, g, b, drawingState.opacity
+                r,
+                g,
+                b,
+                drawingState.opacity
               );
               wsRef.current.send(binaryMessage);
             } catch (error) {
@@ -295,16 +308,24 @@ export const useDrawing = (
           onDrawingChangeRef.current?.();
 
           // Send single click drawing event through WebSocket
-          if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
+          if (
+            wsRef?.current &&
+            wsRef.current.readyState === WebSocket.OPEN &&
+            userIdRef?.current
+          ) {
             try {
               const binaryMessage = encodeDrawPoint(
                 userIdRef.current,
                 drawingState.layerType,
-                coords.x, coords.y,
+                coords.x,
+                coords.y,
                 drawingState.brushSize,
                 drawingState.brushType,
-                r, g, b, effectiveOpacity,
-                e.pointerType as 'mouse' | 'pen' | 'touch'
+                r,
+                g,
+                b,
+                effectiveOpacity,
+                e.pointerType as "mouse" | "pen" | "touch"
               );
               wsRef.current.send(binaryMessage);
             } catch (error) {
@@ -326,45 +347,39 @@ export const useDrawing = (
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
       // Disable drawing while catching up to stored messages or when disconnected
-      if (isCatchingUp || connectionState !== 'connected') return;
+      if (isCatchingUp || connectionState !== "connected") return;
 
       if (e.button === 1 || drawingStateRef.current.isPanning) {
         // Handle panning end - don't send WebSocket events for panning
         drawingStateRef.current.isPanning = false;
       } else {
         // Send pointerup event through WebSocket only for drawing operations
-        if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
+        if (
+          wsRef?.current &&
+          wsRef.current.readyState === WebSocket.OPEN &&
+          userIdRef?.current
+        ) {
           const coords = getCanvasCoordinates(e.clientX, e.clientY);
           try {
             const binaryMessage = encodePointerUp(
               userIdRef.current,
-              coords.x, coords.y,
+              coords.x,
+              coords.y,
               e.button,
-              e.pointerType as 'mouse' | 'pen' | 'touch'
+              e.pointerType as "mouse" | "pen" | "touch"
             );
             wsRef.current.send(binaryMessage);
           } catch (error) {
             console.error("Failed to send pointerup event:", error);
           }
         }
-        // Mark drawing as inactive for drawing operations
-        isDrawingRef.current = false;
-        
-        // Check for pending snapshot request
-        if (pendingSnapshotRequestRef.current) {
-          sendSnapshot();
-          pendingSnapshotRequestRef.current = false;
-        }
-      }
 
-      if (
-        (e.button === 0 ||
-          e.pointerType === "touch" ||
-          e.pointerType === "pen") &&
-        drawingStateRef.current.isDrawing
-      ) {
-        // Save state after stroke ends
+        // Save state after stroke ends (before marking as inactive)
         if (
+          (e.button === 0 ||
+            e.pointerType === "touch" ||
+            e.pointerType === "pen") &&
+          isDrawingRef.current &&
           drawingEngineRef.current &&
           drawingEngineRef.current.layers.foreground &&
           drawingEngineRef.current.layers.background
@@ -376,7 +391,14 @@ export const useDrawing = (
           onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
         }
 
-        drawingStateRef.current.isDrawing = false;
+        // Mark drawing as inactive for drawing operations
+        isDrawingRef.current = false;
+
+        // Check for pending snapshot request
+        if (pendingSnapshotRequestRef.current) {
+          sendSnapshot();
+          pendingSnapshotRequestRef.current = false;
+        }
       }
 
       // Release pointer capture
@@ -391,7 +413,11 @@ export const useDrawing = (
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
       // Disable drawing while catching up to stored messages or when disconnected (allow panning though)
-      if ((isCatchingUp || connectionState !== 'connected') && !drawingStateRef.current.isPanning) return;
+      if (
+        (isCatchingUp || connectionState !== "connected") &&
+        !drawingStateRef.current.isPanning
+      )
+        return;
 
       if (drawingStateRef.current.isPanning) {
         const deltaX = e.clientX - drawingStateRef.current.panStartX;
@@ -453,7 +479,11 @@ export const useDrawing = (
       lastModifiedLayerRef.current = drawingState.layerType;
 
       // Send drawLine event through WebSocket
-      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
+      if (
+        wsRef?.current &&
+        wsRef.current.readyState === WebSocket.OPEN &&
+        userIdRef?.current
+      ) {
         try {
           const binaryMessage = encodeDrawLine(
             userIdRef.current,
@@ -464,8 +494,11 @@ export const useDrawing = (
             drawingStateRef.current.currentY,
             drawingState.brushSize,
             drawingState.brushType,
-            r, g, b, effectiveOpacity,
-            e.pointerType as 'mouse' | 'pen' | 'touch'
+            r,
+            g,
+            b,
+            effectiveOpacity,
+            e.pointerType as "mouse" | "pen" | "touch"
           );
           wsRef.current.send(binaryMessage);
         } catch (error) {
@@ -551,12 +584,24 @@ export const useDrawing = (
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
 
       // Send snapshot over WebSocket
-      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
+      if (
+        wsRef?.current &&
+        wsRef.current.readyState === WebSocket.OPEN &&
+        userIdRef?.current
+      ) {
         try {
           const layerToSend = lastModifiedLayerRef.current;
           const layerData = drawingEngineRef.current.layers[layerToSend];
-          const pngBlob = await layerToPngBlob(layerData, canvasWidth, canvasHeight);
-          const binaryMessage = await encodeSnapshot(userIdRef.current, layerToSend, pngBlob);
+          const pngBlob = await layerToPngBlob(
+            layerData,
+            canvasWidth,
+            canvasHeight
+          );
+          const binaryMessage = await encodeSnapshot(
+            userIdRef.current,
+            layerToSend,
+            pngBlob
+          );
 
           wsRef.current.send(binaryMessage);
         } catch (error) {
@@ -584,12 +629,24 @@ export const useDrawing = (
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
 
       // Send snapshot over WebSocket
-      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
+      if (
+        wsRef?.current &&
+        wsRef.current.readyState === WebSocket.OPEN &&
+        userIdRef?.current
+      ) {
         try {
           const layerToSend = lastModifiedLayerRef.current;
           const layerData = drawingEngineRef.current.layers[layerToSend];
-          const pngBlob = await layerToPngBlob(layerData, canvasWidth, canvasHeight);
-          const binaryMessage = await encodeSnapshot(userIdRef.current, layerToSend, pngBlob);
+          const pngBlob = await layerToPngBlob(
+            layerData,
+            canvasWidth,
+            canvasHeight
+          );
+          const binaryMessage = await encodeSnapshot(
+            userIdRef.current,
+            layerToSend,
+            pngBlob
+          );
 
           wsRef.current.send(binaryMessage);
         } catch (error) {
@@ -631,7 +688,7 @@ export const useDrawing = (
     const engine = drawingEngineRef.current;
     const ws = wsRef?.current;
     const userId = userIdRef?.current;
-    
+
     if (!engine || !ws || ws.readyState !== WebSocket.OPEN || !userId) {
       return;
     }
@@ -643,7 +700,7 @@ export const useDrawing = (
         canvasWidth,
         canvasHeight
       );
-      const fgSnapshot = await encodeSnapshot(userId, 'foreground', fgPngBlob);
+      const fgSnapshot = await encodeSnapshot(userId, "foreground", fgPngBlob);
       ws.send(fgSnapshot);
 
       // Send background layer snapshot
@@ -652,7 +709,7 @@ export const useDrawing = (
         canvasWidth,
         canvasHeight
       );
-      const bgSnapshot = await encodeSnapshot(userId, 'background', bgPngBlob);
+      const bgSnapshot = await encodeSnapshot(userId, "background", bgPngBlob);
       ws.send(bgSnapshot);
     } catch (error) {
       console.error("Failed to send snapshots:", error);
@@ -660,15 +717,18 @@ export const useDrawing = (
   }, [canvasWidth, canvasHeight, wsRef, userIdRef]);
 
   // Handle snapshot request from server
-  const handleSnapshotRequest = useCallback((_timestamp: number) => {
-    if (isDrawingRef.current) {
-      // Defer if currently drawing
-      pendingSnapshotRequestRef.current = true;
-    } else {
-      // Send immediately if not drawing
-      sendSnapshot();
-    }
-  }, [sendSnapshot]);
+  const handleSnapshotRequest = useCallback(
+    (_timestamp: number) => {
+      if (isDrawingRef.current) {
+        // Defer if currently drawing
+        pendingSnapshotRequestRef.current = true;
+      } else {
+        // Send immediately if not drawing
+        sendSnapshot();
+      }
+    },
+    [sendSnapshot]
+  );
 
   // Expose snapshot request handler to window for App.tsx
   useEffect(() => {

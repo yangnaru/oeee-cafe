@@ -9,8 +9,9 @@ export interface CanvasState {
 export const useCanvasHistory = (maxHistorySize: number = 30) => {
   const historyRef = useRef<CanvasState[]>([]);
   const currentIndexRef = useRef(-1);
+  const hasDrawingActionsRef = useRef(false);
 
-  const saveState = useCallback((foreground: Uint8ClampedArray, background: Uint8ClampedArray) => {
+  const saveState = useCallback((foreground: Uint8ClampedArray, background: Uint8ClampedArray, isDrawingAction: boolean = true) => {
     const newState: CanvasState = {
       foreground: new Uint8ClampedArray(foreground),
       background: new Uint8ClampedArray(background),
@@ -24,6 +25,11 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
 
     // Add new state
     historyRef.current.push(newState);
+
+    // Track if this is a drawing action
+    if (isDrawingAction) {
+      hasDrawingActionsRef.current = true;
+    }
 
     // Limit history size
     if (historyRef.current.length > maxHistorySize) {
@@ -51,7 +57,8 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
   }, []);
 
   const canUndo = useCallback((): boolean => {
-    return currentIndexRef.current > 0;
+    // Can undo if we have drawing actions and current index > 0
+    return hasDrawingActionsRef.current && currentIndexRef.current > 0;
   }, []);
 
   const canRedo = useCallback((): boolean => {
@@ -70,6 +77,7 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
   const clearHistory = useCallback(() => {
     historyRef.current = [];
     currentIndexRef.current = -1;
+    hasDrawingActionsRef.current = false;
   }, []);
 
   return {
