@@ -100,10 +100,25 @@ const DEFAULT_PALETTE_COLORS = [
   "#fcece2",
 ];
 
-const CANVAS_WIDTH = 500;
-const CANVAS_HEIGHT = 500;
+// Function to get canvas dimensions from URL params and clean URL
+const getCanvasDimensions = () => {
+  const params = new URLSearchParams(window.location.search);
+  const width = parseInt(params.get("width") || "500");
+  const height = parseInt(params.get("height") || "500");
+
+  // Clean up URL if it has query parameters
+  if (window.location.search) {
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
+  return { width, height };
+};
 
 function App() {
+  // Get canvas dimensions from URL params and clean URL
+  const { width: CANVAS_WIDTH, height: CANVAS_HEIGHT } = getCanvasDimensions();
+
   const [selectedPaletteIndex, setSelectedPaletteIndex] = useState(1); // Start with black selected
   const [paletteColors, setPaletteColors] = useState(DEFAULT_PALETTE_COLORS);
 
@@ -128,7 +143,9 @@ function App() {
   const catchupTimeoutRef = useRef<number | null>(null);
 
   // Track connection state for reconnection logic
-  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const [connectionState, setConnectionState] = useState<
+    "connecting" | "connected" | "disconnected"
+  >("connecting");
   const shouldConnectRef = useRef(false);
 
   // Chat message handler
@@ -173,20 +190,20 @@ function App() {
     needsRecompositionRef.current = true;
   }, []);
 
-
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fgThumbnailRef = useRef<HTMLCanvasElement>(null);
   const bgThumbnailRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const userIdRef = useRef<string>(crypto.randomUUID());
+  const userIdRef = useRef<string>("");
   const localUserJoinTimeRef = useRef<number>(0);
 
   const updateBrushType = useCallback((type: BrushType) => {
     setDrawingState((prev) => {
       let newOpacity = prev.opacity;
       if (type === "halftone") newOpacity = 23;
-      else if (["solid", "eraser", "fill", "pan"].includes(type)) newOpacity = 255;
+      else if (["solid", "eraser", "fill", "pan"].includes(type))
+        newOpacity = 255;
 
       return { ...prev, brushType: type, opacity: newOpacity };
     });
@@ -383,11 +400,10 @@ function App() {
     connectionState
   );
 
-
   // Function to handle manual reconnection
   const handleManualReconnect = useCallback(() => {
     console.log("Manual reconnection triggered");
-    
+
     // Clear canvas states before reconnecting
     if (drawingEngine) {
       drawingEngine.layers.foreground.fill(0);
@@ -397,7 +413,7 @@ function App() {
     userEnginesRef.current.clear();
     localUserJoinTimeRef.current = 0;
     needsRecompositionRef.current = true;
-    
+
     // Reconnect immediately
     shouldConnectRef.current = true;
     connectWebSocket();
@@ -409,21 +425,24 @@ function App() {
     if (!canvas) return;
 
     // Create a temporary canvas for download to ensure we get the current state
-    const tempCanvas = document.createElement('canvas');
+    const tempCanvas = document.createElement("canvas");
     tempCanvas.width = CANVAS_WIDTH;
     tempCanvas.height = CANVAS_HEIGHT;
-    const tempCtx = tempCanvas.getContext('2d');
-    
+    const tempCtx = tempCanvas.getContext("2d");
+
     if (!tempCtx) return;
 
     // Copy the current canvas content
     tempCtx.drawImage(canvas, 0, 0);
-    
+
     // Create download link
-    const link = document.createElement('a');
-    link.download = `canvas-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
-    link.href = tempCanvas.toDataURL('image/png');
-    
+    const link = document.createElement("a");
+    link.download = `canvas-${new Date()
+      .toISOString()
+      .slice(0, 19)
+      .replace(/:/g, "-")}.png`;
+    link.href = tempCanvas.toDataURL("image/png");
+
     // Trigger download
     document.body.appendChild(link);
     link.click();
@@ -441,25 +460,55 @@ function App() {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
 
-    // Extract room ID from path (last UUID in path)
+    // Extract session UUID from path (/collaborate/{uuid})
     const pathSegments = window.location.pathname.split("/");
     const uuidPattern =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    let roomId = "00000000-0000-0000-0000-000000000000"; // default fallback (all zero uuid)
 
-    // Find the last UUID in the path
-    for (let i = pathSegments.length - 1; i >= 0; i--) {
-      if (uuidPattern.test(pathSegments[i])) {
-        roomId = pathSegments[i];
-        break;
+    if (
+      pathSegments[1] === "collaborate" &&
+      pathSegments[2] &&
+      uuidPattern.test(pathSegments[2])
+    ) {
+      const sessionId = pathSegments[2];
+
+      // Use different paths for dev vs prod
+      if (import.meta.env.DEV) {
+        // Development: use /api prefix which gets proxied
+        return `${protocol}//${host}/api/collaborate/${sessionId}/ws`;
+      } else {
+        // Production: direct path
+        return `${protocol}//${host}/collaborate/${sessionId}/ws`;
       }
     }
 
-    return `${protocol}//${host}/api/collaborate/${roomId}/ws`;
+    // Fallback - should not happen in normal usage
+    throw new Error("Invalid collaborative session URL");
   }, []);
 
   // Function to establish WebSocket connection
-  const connectWebSocket = useCallback(() => {
+  const fetchAuthInfo = useCallback(async (): Promise<void> => {
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Auth failed: ${response.status}`);
+      }
+      
+      const authInfo = await response.json();
+      userIdRef.current = authInfo.user_id;
+      console.log('Authenticated as:', authInfo.login_name, 'ID:', authInfo.user_id);
+    } catch (error) {
+      console.error('Failed to fetch auth info:', error);
+      // Fallback to random ID for development/testing
+      userIdRef.current = crypto.randomUUID();
+    }
+  }, []);
+
+  const connectWebSocket = useCallback(async () => {
     // Only connect if we should be connecting
     if (!shouldConnectRef.current && wsRef.current) {
       return;
@@ -471,13 +520,18 @@ function App() {
       wsRef.current = null;
     }
 
-    setConnectionState('connecting');
+    setConnectionState("connecting");
+    
+    // Fetch user ID if not already set
+    if (!userIdRef.current) {
+      await fetchAuthInfo();
+    }
     const ws = new WebSocket(getWebSocketUrl());
     wsRef.current = ws;
 
     ws.onopen = () => {
       console.log("WebSocket connected");
-      setConnectionState('connected');
+      setConnectionState("connected");
 
       // Send initial join message to establish user presence and layer order
       try {
@@ -557,12 +611,12 @@ function App() {
 
     ws.onerror = (event) => {
       console.error("WebSocket error:", event);
-      setConnectionState('disconnected');
+      setConnectionState("disconnected");
     };
 
     ws.onclose = (event) => {
       console.log("WebSocket closed:", event.code, event.reason);
-      setConnectionState('disconnected');
+      setConnectionState("disconnected");
       // No automatic reconnection - user must manually reconnect
     };
 
@@ -744,7 +798,7 @@ function App() {
         console.error("Failed to handle binary message:", error);
       }
     };
-  }, [getWebSocketUrl, createUserEngine]);
+  }, [getWebSocketUrl, createUserEngine, fetchAuthInfo]);
 
   // RAF-based compositing system for better performance
   const compositeAllUserLayers = useCallback(() => {
@@ -1015,22 +1069,22 @@ function App() {
               <div className="catching-up-message">LOADING...</div>
             </div>
           )}
-          {connectionState !== 'connected' && !isCatchingUp && (
+          {connectionState !== "connected" && !isCatchingUp && (
             <div className="connection-status-indicator">
-              {connectionState === 'disconnected' && (
+              {connectionState === "disconnected" && (
                 <>
                   <div className="disconnect-message">
                     Connection lost. Your work is saved locally.
                   </div>
                   <div className="disconnect-actions">
-                    <button 
-                      className="reconnect-btn" 
+                    <button
+                      className="reconnect-btn"
                       onClick={handleManualReconnect}
                     >
                       Reconnect
                     </button>
-                    <button 
-                      className="download-btn" 
+                    <button
+                      className="download-btn"
                       onClick={downloadCanvasAsPNG}
                     >
                       Download PNG
@@ -1038,7 +1092,7 @@ function App() {
                   </div>
                 </>
               )}
-              {connectionState === 'connecting' && (
+              {connectionState === "connecting" && (
                 <>
                   <div className="reconnecting-spinner">🥒</div>
                   <div>Connecting...</div>
@@ -1074,20 +1128,20 @@ function App() {
               </button>
             </div>
             <div id="brush-type-controls">
-              {(["solid", "halftone", "eraser", "fill", "pan"] as BrushType[]).map(
-                (type) => (
-                  <label key={type}>
-                    <input
-                      type="radio"
-                      name="brushType"
-                      value={type}
-                      checked={drawingState.brushType === type}
-                      onChange={() => updateBrushType(type)}
-                    />
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </label>
-                )
-              )}
+              {(
+                ["solid", "halftone", "eraser", "fill", "pan"] as BrushType[]
+              ).map((type) => (
+                <label key={type}>
+                  <input
+                    type="radio"
+                    name="brushType"
+                    value={type}
+                    checked={drawingState.brushType === type}
+                    onChange={() => updateBrushType(type)}
+                  />
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </label>
+              ))}
             </div>
             <div id="color-picker-container">
               <div id="color-palette">

@@ -1,9 +1,16 @@
 use crate::app_error::AppError;
+use crate::models::user::AuthSession;
+use crate::web::handlers::{create_base_ftl_context, get_bundle, ExtractAcceptLanguage};
 use crate::web::state::AppState;
-use axum::extract::{ws::Message, Path, State, WebSocketUpgrade};
-use axum::response::Response;
+use axum::extract::{ws::Message, Path, State, WebSocketUpgrade, Query};
+use axum::response::{Html, Response, Redirect, Json, IntoResponse};
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
+use hex;
+use minijinja::context;
+use serde::{Deserialize, Serialize};
+use sha256;
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -37,15 +44,227 @@ fn read_u64_le(bytes: &[u8], offset: usize) -> u64 {
     ])
 }
 
+// Structs for new lobby functionality
+#[derive(Deserialize)]
+pub struct CreateSessionRequest {
+    title: Option<String>,
+    width: i32,
+    height: i32,
+    is_public: bool,
+    community_id: Uuid,
+}
+
+#[derive(Serialize)]
+pub struct CreateSessionResponse {
+    session_id: String,
+    url: String,
+}
+
+#[derive(Serialize)]
+pub struct SessionWithCounts {
+    id: Uuid,
+    owner_login_name: String,
+    title: Option<String>,
+    width: i32,
+    height: i32,
+    created_at: chrono::NaiveDateTime,
+    participant_count: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct CommunityInfo {
+    id: Uuid,
+    name: String,
+}
+
+#[derive(Serialize)]
+pub struct AuthInfo {
+    user_id: String,
+    login_name: String,
+}
+
+// Auth endpoint for getting user info
+pub async fn get_auth_info(auth_session: AuthSession) -> Result<Json<AuthInfo>, AppError> {
+    let user = auth_session.user.ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
+    
+    Ok(Json(AuthInfo {
+        user_id: user.id.to_string(),
+        login_name: user.login_name,
+    }))
+}
+
+// Collaborative lobby page handler
+pub async fn collaborate_lobby(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+) -> Result<Html<String>, AppError> {
+    let user = auth_session.user.ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
+    
+    let db = state.config.connect_database().await?;
+    
+    // Get communities user can post to
+    let communities_data = sqlx::query!(
+        r#"
+        SELECT id, name FROM communities 
+        WHERE is_private = false OR owner_id = $1
+        ORDER BY name ASC
+        "#,
+        user.id
+    )
+    .fetch_all(&db)
+    .await?;
+
+    let communities: Vec<CommunityInfo> = communities_data.into_iter().map(|row| CommunityInfo {
+        id: row.id,
+        name: row.name,
+    }).collect();
+    
+    // Get active public sessions with participant counts
+    let active_sessions = sqlx::query_as!(
+        SessionWithCounts,
+        r#"
+        SELECT 
+            cs.id,
+            u.login_name as owner_login_name,
+            cs.title,
+            cs.width,
+            cs.height,
+            cs.created_at,
+            COALESCE(COUNT(csp.id) FILTER (WHERE csp.is_active = true), 0) as participant_count
+        FROM collaborative_sessions cs
+        JOIN users u ON cs.owner_id = u.id
+        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id 
+        WHERE cs.is_public = true AND cs.is_active = true
+        GROUP BY cs.id, u.login_name
+        ORDER BY cs.last_activity DESC
+        LIMIT 20
+        "#
+    )
+    .fetch_all(&db)
+    .await?;
+
+    let template = state.env.get_template("collaborate_lobby.jinja")?;
+    let user_preferred_language = user.preferred_language.clone();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    
+    let rendered = template.render(context! {
+        current_user => user,
+        active_sessions => active_sessions,
+        communities => communities,
+        canvas_sizes => vec![
+            ("500x500", "500×500 (Square)"),
+            ("800x600", "800×600 (Landscape)"),
+            ("600x800", "600×800 (Portrait)"),
+            ("1024x768", "1024×768 (Large)"),
+            ("320x320", "320×320 (Small)"),
+        ],
+        ..create_base_ftl_context(&bundle)
+    })?;
+    
+    Ok(Html(rendered))
+}
+
+// Create new session handler
+pub async fn create_collaborative_session(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Json(request): Json<CreateSessionRequest>,
+) -> Result<Json<CreateSessionResponse>, AppError> {
+    let user = auth_session.user.ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
+    
+    let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
+    
+    // Create new session
+    let session_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO collaborative_sessions 
+        (id, owner_id, title, width, height, is_public, community_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        "#,
+        session_id,
+        user.id,
+        request.title,
+        request.width,
+        request.height,
+        request.is_public,
+        request.community_id
+    )
+    .execute(&mut *tx)
+    .await?;
+    
+    tx.commit().await?;
+    
+    Ok(Json(CreateSessionResponse {
+        session_id: session_id.to_string(),
+        url: format!("/collaborate/{}?width={}&height={}", session_id, request.width, request.height),
+    }))
+}
+
+// Serve collaborative app handler
+pub async fn serve_collaborative_app(
+    Path(session_uuid): Path<Uuid>,
+    Query(params): Query<HashMap<String, String>>,
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<Response, AppError> {
+    // Just verify user is authenticated
+    let _user = auth_session.user.ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
+    
+    let db = state.config.connect_database().await?;
+    
+    // Get session - anyone with the link can access
+    let session = sqlx::query!(
+        r#"
+        SELECT width, height FROM collaborative_sessions
+        WHERE id = $1 AND is_active = true
+        "#,
+        session_uuid
+    )
+    .fetch_optional(&db)
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("Session not found"))?;
+    
+    // Check if we need to redirect with dimensions
+    let has_width = params.contains_key("width");
+    let has_height = params.contains_key("height");
+    
+    if !has_width || !has_height {
+        // Redirect with dimensions from database
+        let redirect_url = format!(
+            "/collaborate/{}?width={}&height={}", 
+            session_uuid, 
+            session.width, 
+            session.height
+        );
+        return Ok(Redirect::to(&redirect_url).into_response());
+    }
+    
+    // Serve the React app - it will parse dimensions and clean the URL
+    let html = std::fs::read_to_string("neo-cucumber/dist/index.html")
+        .map_err(|_| anyhow::anyhow!("Failed to load collaborative app"))?;
+    Ok(Html(html).into_response())
+}
+
 pub async fn websocket_collaborate_handler(
     Path(room_uuid): Path<Uuid>,
+    auth_session: AuthSession,
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
-    Ok(ws.on_upgrade(move |socket| handle_socket(socket, room_uuid, state)))
+    let user = auth_session.user.ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
+    Ok(ws.on_upgrade(move |socket| handle_socket(socket, room_uuid, state, user.id, user.login_name)))
 }
 
-async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, state: AppState) {
+async fn handle_socket(
+    socket: axum::extract::ws::WebSocket, 
+    room_uuid: Uuid, 
+    state: AppState,
+    user_id: Uuid,
+    user_login_name: String
+) {
     let (mut sender, mut receiver) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 
@@ -53,8 +272,77 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
     let connection_id = Uuid::new_v4().to_string();
 
     info!(
-        "New websocket connection {} joining room {}",
-        connection_id, room_uuid
+        "New websocket connection {} (user {}) joining room {}",
+        connection_id, user_login_name, room_uuid
+    );
+
+    // Track participant in database
+    let db = match state.config.connect_database().await {
+        Ok(db) => db,
+        Err(e) => {
+            error!("Failed to connect to database: {}", e);
+            return;
+        }
+    };
+
+    // Get session info and check if user is owner
+    let is_owner = match sqlx::query!(
+        r#"
+        SELECT owner_id, width, height, title FROM collaborative_sessions
+        WHERE id = $1 AND is_active = true
+        "#,
+        room_uuid
+    )
+    .fetch_optional(&db)
+    .await
+    {
+        Ok(Some(session)) => {
+            // Add/update participant in database
+            if let Err(e) = sqlx::query!(
+                r#"
+                INSERT INTO collaborative_sessions_participants 
+                (session_id, user_id, is_active)
+                VALUES ($1, $2, true)
+                ON CONFLICT (session_id, user_id) 
+                DO UPDATE SET is_active = true, left_at = NULL
+                "#,
+                room_uuid,
+                user_id
+            )
+            .execute(&db)
+            .await
+            {
+                error!("Failed to track participant: {}", e);
+            }
+
+            // Update session activity
+            if let Err(e) = sqlx::query!(
+                "UPDATE collaborative_sessions SET last_activity = NOW() WHERE id = $1",
+                room_uuid
+            )
+            .execute(&db)
+            .await
+            {
+                error!("Failed to update session activity: {}", e);
+            }
+
+            session.owner_id == user_id
+        }
+        Ok(None) => {
+            error!("Session {} not found", room_uuid);
+            return;
+        }
+        Err(e) => {
+            error!("Failed to get session info: {}", e);
+            return;
+        }
+    };
+
+    info!(
+        "User {} joined session {} as {}",
+        user_login_name,
+        room_uuid,
+        if is_owner { "owner" } else { "participant" }
     );
 
     // Add connection to room
@@ -228,6 +516,51 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
                                 }
                             }
                         }
+                        0x04 => {
+                            // SAVE message: [0x04][UUID:16][pngLength:4][pngData:variable]
+                            if is_owner && data.len() >= 21 {
+                                if let Ok(save_user) = bytes_to_uuid(&data[1..17]) {
+                                    if save_user == user_id {
+                                        let png_length = u32::from_le_bytes([
+                                            data[17], data[18], data[19], data[20]
+                                        ]) as usize;
+                                        
+                                        if data.len() >= 21 + png_length {
+                                            let png_data = &data[21..21 + png_length];
+                                            
+                                            info!(
+                                                "Processing save request from owner {} in session {}",
+                                                user_login_name, room_uuid
+                                            );
+                                            
+                                            // Handle save in background to avoid blocking WebSocket
+                                            let db_clone = db.clone();
+                                            let room_uuid_clone = room_uuid;
+                                            let user_id_clone = user_id;
+                                            let png_data_clone = png_data.to_vec();
+                                            let state_clone = state.clone();
+                                            
+                                            tokio::spawn(async move {
+                                                if let Err(e) = handle_save_request(
+                                                    db_clone,
+                                                    room_uuid_clone,
+                                                    user_id_clone,
+                                                    png_data_clone,
+                                                    state_clone,
+                                                ).await {
+                                                    error!("Failed to save collaborative drawing: {}", e);
+                                                }
+                                            });
+                                        }
+                                    }
+                                }
+                            } else if !is_owner {
+                                warn!(
+                                    "Non-owner {} attempted to save session {}",
+                                    user_login_name, room_uuid
+                                );
+                            }
+                        }
                         _ => {
                             debug!(
                                 "Unknown server message type: 0x{:02x} in room {}",
@@ -342,9 +675,25 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
 
     // Clean up when connection closes
     info!(
-        "Websocket connection {} leaving room {}",
-        connection_id, room_uuid
+        "Websocket connection {} (user {}) leaving room {}",
+        connection_id, user_login_name, room_uuid
     );
+
+    // Mark participant as inactive in database
+    if let Err(e) = sqlx::query!(
+        r#"
+        UPDATE collaborative_sessions_participants 
+        SET is_active = false, left_at = NOW()
+        WHERE session_id = $1 AND user_id = $2
+        "#,
+        room_uuid,
+        user_id
+    )
+    .execute(&db)
+    .await
+    {
+        error!("Failed to update participant on disconnect: {}", e);
+    }
 
     if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
         room.remove(&connection_id);
@@ -358,4 +707,147 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
     }
 
     outgoing_task.abort();
+}
+
+// Handle save request from session owner
+async fn handle_save_request(
+    db: sqlx::Pool<sqlx::Postgres>,
+    session_id: Uuid,
+    owner_id: Uuid,
+    png_data: Vec<u8>,
+    state: AppState,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Get session details and verify ownership
+    let session = sqlx::query!(
+        r#"
+        SELECT owner_id, title, width, height, community_id FROM collaborative_sessions
+        WHERE id = $1 AND is_active = true AND owner_id = $2
+        "#,
+        session_id,
+        owner_id
+    )
+    .fetch_optional(&db)
+    .await?
+    .ok_or("Session not found or not owned by user")?;
+
+    // Get participant list for metadata
+    let participants = sqlx::query!(
+        r#"
+        SELECT u.login_name, csp.contribution_count
+        FROM collaborative_sessions_participants csp
+        JOIN users u ON csp.user_id = u.id
+        WHERE csp.session_id = $1
+        ORDER BY csp.contribution_count DESC, csp.joined_at ASC
+        "#,
+        session_id
+    )
+    .fetch_all(&db)
+    .await?;
+
+    // Upload image to S3 (similar to existing draw handlers)
+    let image_sha256 = sha256::digest(&png_data);
+    
+    // Use the same S3 upload logic from draw.rs
+    let credentials = aws_sdk_s3::config::Credentials::new(
+        state.config.aws_access_key_id.clone(),
+        state.config.aws_secret_access_key.clone(),
+        None,
+        None,
+        "",
+    );
+    let credentials_provider = aws_sdk_s3::config::SharedCredentialsProvider::new(credentials);
+    let s3_config = aws_sdk_s3::Config::builder()
+        .endpoint_url(state.config.r2_endpoint_url.clone())
+        .region(aws_sdk_s3::config::Region::new(state.config.aws_region.clone()))
+        .credentials_provider(credentials_provider)
+        .behavior_version_latest()
+        .build();
+    let s3_client = aws_sdk_s3::Client::from_conf(s3_config);
+
+    // Upload to S3
+    let s3_key = format!(
+        "image/{}{}/{}.png",
+        image_sha256.chars().nth(0).unwrap(),
+        image_sha256.chars().nth(1).unwrap(),
+        image_sha256
+    );
+    
+    s3_client
+        .put_object()
+        .bucket(&state.config.aws_s3_bucket)
+        .key(&s3_key)
+        .checksum_sha256(&data_encoding::BASE64.encode(&hex::decode(&image_sha256)?))
+        .body(aws_sdk_s3::primitives::ByteStream::from(png_data))
+        .send()
+        .await?;
+
+    // Create description with participant info
+    let participant_names: Vec<String> = participants
+        .iter()
+        .map(|p| format!("{} ({})", p.login_name, p.contribution_count.unwrap_or(0)))
+        .collect();
+    
+    let _description = if participant_names.len() > 1 {
+        format!(
+            "Collaborative drawing with {} participants: {}",
+            participant_names.len(),
+            participant_names.join(", ")
+        )
+    } else {
+        "Collaborative drawing".to_string()
+    };
+
+    // Use the community selected when creating the session
+    let community_id = session.community_id;
+
+    // Create image record first
+    let image_id = Uuid::new_v4();
+    let mut tx = db.begin().await?;
+    
+    sqlx::query!(
+        r#"
+        INSERT INTO images (id, width, height, paint_duration, stroke_count, image_filename, replay_filename)
+        VALUES ($1, $2, $3, INTERVAL '0 seconds', 0, $4, $5)
+        "#,
+        image_id,
+        session.width,
+        session.height,
+        format!("{}.png", image_sha256),
+        format!("{}.pch", image_sha256), // Placeholder replay filename
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    // Create post
+    let post_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO posts (id, author_id, community_id, image_id, is_sensitive)
+        VALUES ($1, $2, $3, $4, false)
+        "#,
+        post_id,
+        owner_id,
+        community_id,
+        image_id,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    // Update session with saved post reference
+    sqlx::query!(
+        "UPDATE collaborative_sessions SET saved_post_id = $1 WHERE id = $2",
+        post_id,
+        session_id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    info!(
+        "Successfully saved collaborative drawing from session {} as post {}",
+        session_id, post_id
+    );
+
+    Ok(())
 }

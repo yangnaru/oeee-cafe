@@ -1,0 +1,238 @@
+{% extends "base.jinja" %}
+{% block title %}
+  {{ super() }} | Collaborative Drawing
+{% endblock title %}
+{% block content %}
+  <div class="center">
+    <h2>Collaborative Drawing Sessions</h2>
+    
+    <div class="create-session-section">
+      <h3>Create New Session</h3>
+      <form id="create-session-form" method="post" action="/collaborate">
+        <div class="form-group">
+          <label for="community">Community:</label>
+          <select id="community" name="community_id" required>
+            {% for community in communities %}
+              <option value="{{ community.id }}">{{ community.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="canvas-size">Canvas Size:</label>
+          <select id="canvas-size" name="canvas-size" required>
+            {% for size_value, size_label in canvas_sizes %}
+              <option value="{{ size_value }}">{{ size_label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="session-title">Session Title (optional):</label>
+          <input type="text" id="session-title" name="title" maxlength="100" placeholder="Enter a title for your session">
+        </div>
+        
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="is-public" name="is_public" checked>
+            Show in public lobby
+          </label>
+          <small>Uncheck to create a private session (link-only access)</small>
+        </div>
+        
+        <button type="submit" class="btn btn-primary">Create Session</button>
+      </form>
+    </div>
+
+    {% if active_sessions|length > 0 %}
+      <div class="active-sessions-section">
+        <h3>Active Public Sessions</h3>
+        <div class="sessions-grid">
+          {% for session in active_sessions %}
+            <div class="session-card">
+              <div class="session-header">
+                {% if session.title %}
+                  <h4>{{ session.title }}</h4>
+                {% else %}
+                  <h4>Untitled Session</h4>
+                {% endif %}
+                <small>by @{{ session.owner_login_name }}</small>
+              </div>
+              
+              <div class="session-info">
+                <div class="session-meta">
+                  <span class="canvas-size">{{ session.width }}×{{ session.height }}</span>
+                  <span class="participant-count">{{ session.participant_count }} participants</span>
+                </div>
+                <div class="session-time">
+                  Created {{ session.created_at|dateformat(format="short", tz="Asia/Seoul") }}
+                </div>
+              </div>
+              
+              <div class="session-actions">
+                <a href="/collaborate/{{ session.id }}?width={{ session.width }}&height={{ session.height }}" class="btn btn-primary">
+                  Join Session
+                </a>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="no-sessions">
+        <p>No active public sessions. Create one to get started!</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <style>
+    .create-session-section {
+      background: #f5f5f5;
+      padding: 2em;
+      margin-bottom: 2em;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+    
+    .form-group {
+      margin-bottom: 1em;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5em;
+      font-weight: bold;
+    }
+    
+    .form-group select, 
+    .form-group input[type="text"] {
+      width: 100%;
+      max-width: 300px;
+      padding: 0.5em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    
+    .form-group small {
+      display: block;
+      color: #666;
+      font-size: 0.85em;
+      margin-top: 0.25em;
+    }
+    
+    .btn {
+      display: inline-block;
+      padding: 0.5em 1em;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    
+    .btn-primary {
+      background-color: #007bff;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background-color: #0056b3;
+    }
+    
+    .sessions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1em;
+      margin-top: 1em;
+    }
+    
+    .session-card {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1em;
+    }
+    
+    .session-header h4 {
+      margin: 0 0 0.25em 0;
+      color: #333;
+    }
+    
+    .session-header small {
+      color: #666;
+    }
+    
+    .session-info {
+      margin: 1em 0;
+    }
+    
+    .session-meta {
+      display: flex;
+      gap: 1em;
+      margin-bottom: 0.5em;
+    }
+    
+    .session-meta span {
+      background: #e0e0e0;
+      padding: 0.25em 0.5em;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+    
+    .session-time {
+      color: #666;
+      font-size: 0.85em;
+    }
+    
+    .session-actions {
+      text-align: right;
+    }
+    
+    .no-sessions {
+      text-align: center;
+      padding: 2em;
+      color: #666;
+      font-style: italic;
+    }
+  </style>
+
+  <script>
+    document.getElementById('create-session-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(e.target);
+      const canvasSize = formData.get('canvas-size').split('x');
+      const width = parseInt(canvasSize[0]);
+      const height = parseInt(canvasSize[1]);
+      
+      const requestData = {
+        title: formData.get('title') || null,
+        width: width,
+        height: height,
+        is_public: formData.get('is_public') === 'on',
+        community_id: formData.get('community_id')
+      };
+      
+      try {
+        const response = await fetch('/collaborate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestData)
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          window.location.href = result.url;
+        } else {
+          alert('Failed to create session. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error creating session:', error);
+        alert('Failed to create session. Please check your connection and try again.');
+      }
+    });
+  </script>
+{% endblock content %}
