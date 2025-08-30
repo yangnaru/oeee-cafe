@@ -148,6 +148,9 @@ function App() {
   >("connecting");
   const shouldConnectRef = useRef(false);
 
+  // Track authentication state
+  const [authError, setAuthError] = useState(false);
+
   // Chat message handler
   const handleChatMessage = useCallback((_message: any) => {
     // Chat messages are handled entirely by the Chat component
@@ -404,6 +407,9 @@ function App() {
   const handleManualReconnect = useCallback(() => {
     console.log("Manual reconnection triggered");
 
+    // Clear auth error state
+    setAuthError(false);
+
     // Clear canvas states before reconnecting
     if (drawingEngine) {
       drawingEngine.layers.foreground.fill(0);
@@ -487,24 +493,30 @@ function App() {
   }, []);
 
   // Function to establish WebSocket connection
-  const fetchAuthInfo = useCallback(async (): Promise<void> => {
+  const fetchAuthInfo = useCallback(async (): Promise<boolean> => {
     try {
-      const response = await fetch('/api/auth', {
-        method: 'GET',
-        credentials: 'include',
+      const response = await fetch("/api/auth", {
+        method: "GET",
+        credentials: "include",
       });
-      
+
       if (!response.ok) {
         throw new Error(`Auth failed: ${response.status}`);
       }
-      
+
       const authInfo = await response.json();
       userIdRef.current = authInfo.user_id;
-      console.log('Authenticated as:', authInfo.login_name, 'ID:', authInfo.user_id);
+      console.log(
+        "Authenticated as:",
+        authInfo.login_name,
+        "ID:",
+        authInfo.user_id
+      );
+      return true;
     } catch (error) {
-      console.error('Failed to fetch auth info:', error);
-      // Fallback to random ID for development/testing
-      userIdRef.current = crypto.randomUUID();
+      console.error("Failed to fetch auth info:", error);
+      setAuthError(true);
+      return false;
     }
   }, []);
 
@@ -521,10 +533,14 @@ function App() {
     }
 
     setConnectionState("connecting");
-    
-    // Fetch user ID if not already set
+
+    // Fetch user ID if not already set - don't proceed if auth fails
     if (!userIdRef.current) {
-      await fetchAuthInfo();
+      const authSuccess = await fetchAuthInfo();
+      if (!authSuccess) {
+        setConnectionState("disconnected");
+        return;
+      }
     }
     const ws = new WebSocket(getWebSocketUrl());
     wsRef.current = ws;
@@ -944,7 +960,14 @@ function App() {
 
       // Enable connection and connect to WebSocket on canvas load
       shouldConnectRef.current = true;
-      connectWebSocket();
+      // Defer WebSocket connection until we have user authentication
+      const initConnection = async () => {
+        const authSuccess = await fetchAuthInfo();
+        if (authSuccess) {
+          connectWebSocket();
+        }
+      };
+      initConnection();
 
       // Clean up WebSocket connection when component unmounts
       return () => {
@@ -955,7 +978,7 @@ function App() {
         }
       };
     }
-  }, []);
+  }, [connectWebSocket, fetchAuthInfo]);
 
   // Add scroll wheel zoom functionality
   useEffect(() => {
@@ -1056,6 +1079,23 @@ function App() {
 
   return (
     <div className="drawing-session-container">
+      {authError && (
+        <div className="auth-error-dialog">
+          <div className="auth-error-content">
+            <h2>Authentication Failed</h2>
+            <p>
+              Unable to authenticate your session. Please return to the home
+              page to log in.
+            </p>
+            <button
+              onClick={() => (window.location.href = "/")}
+              className="auth-error-button"
+            >
+              Go to Home Page
+            </button>
+          </div>
+        </div>
+      )}
       <div className="drawing-area">
         <Chat
           wsRef={wsRef}
