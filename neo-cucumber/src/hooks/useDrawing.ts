@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { useCanvasHistory } from "./useCanvasHistory";
+import { compressLayer } from "../utils/canvasSnapshot";
 
 interface DrawingState {
   brushSize: number;
@@ -30,6 +31,7 @@ export const useDrawing = (
   const drawingEngineRef = useRef<DrawingEngine | null>(null);
   const isInitializedRef = useRef(false);
   const onHistoryChangeRef = useRef(onHistoryChange);
+  const lastModifiedLayerRef = useRef<"foreground" | "background">("foreground");
   const history = useCanvasHistory(30);
 
   // Update the ref when callback changes
@@ -197,6 +199,9 @@ export const useDrawing = (
             drawingState.opacity
           );
 
+          // Track which layer was modified
+          lastModifiedLayerRef.current = drawingState.layerType;
+
           // Send fill event through WebSocket
           if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
             const fillEventData = {
@@ -266,6 +271,9 @@ export const useDrawing = (
             b,
             effectiveOpacity
           );
+
+          // Track which layer was modified
+          lastModifiedLayerRef.current = drawingState.layerType;
 
           // Update thumbnails and composite
           drawingEngineRef.current.updateLayerThumbnails(
@@ -427,6 +435,9 @@ export const useDrawing = (
         effectiveOpacity
       );
 
+      // Track which layer was modified
+      lastModifiedLayerRef.current = drawingState.layerType;
+
       // Send drawLine event through WebSocket
       if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
         const drawEventData = {
@@ -532,8 +543,28 @@ export const useDrawing = (
       // Notify parent component that drawing has changed
       onDrawingChange?.();
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
+
+      // Send snapshot over WebSocket
+      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
+        try {
+          const layerToSend = lastModifiedLayerRef.current;
+          const layerData = drawingEngineRef.current.layers[layerToSend];
+          const snapshot = compressLayer(layerData, canvasWidth, canvasHeight);
+          
+          const snapshotMessage = {
+            type: "snapshot",
+            userId: userIdRef.current,
+            layer: layerToSend,
+            snapshot: snapshot
+          };
+
+          wsRef.current.send(JSON.stringify(snapshotMessage));
+        } catch (error) {
+          console.error("Failed to send undo snapshot:", error);
+        }
+      }
     }
-  }, [history]);
+  }, [history, canvasWidth, canvasHeight, wsRef, userIdRef]);
 
   // Redo function
   const handleRedo = useCallback(() => {
@@ -551,8 +582,28 @@ export const useDrawing = (
       // Notify parent component that drawing has changed
       onDrawingChange?.();
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
+
+      // Send snapshot over WebSocket
+      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
+        try {
+          const layerToSend = lastModifiedLayerRef.current;
+          const layerData = drawingEngineRef.current.layers[layerToSend];
+          const snapshot = compressLayer(layerData, canvasWidth, canvasHeight);
+          
+          const snapshotMessage = {
+            type: "snapshot",
+            userId: userIdRef.current,
+            layer: layerToSend,
+            snapshot: snapshot
+          };
+
+          wsRef.current.send(JSON.stringify(snapshotMessage));
+        } catch (error) {
+          console.error("Failed to send redo snapshot:", error);
+        }
+      }
     }
-  }, [history]);
+  }, [history, canvasWidth, canvasHeight, wsRef, userIdRef]);
 
   // Update canvas zoom when zoom level changes
   useEffect(() => {

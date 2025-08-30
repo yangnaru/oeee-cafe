@@ -7,6 +7,7 @@ import {
 } from "react";
 import { useDrawing } from "./hooks/useDrawing";
 import { DrawingEngine } from "./DrawingEngine";
+import { decompressLayer } from "./utils/canvasSnapshot";
 import "./App.css";
 
 const zoomMin = 0.5;
@@ -646,6 +647,31 @@ function App() {
               console.log(
                 `Received pointerup from user ${messageData.userId} at (${messageData.x}, ${messageData.y})`
               );
+            } else if (messageData.type === "snapshot") {
+              // Handle snapshot updates (undo/redo from other users)
+              const userEngine = userEnginesRef.current.get(messageData.userId);
+              if (userEngine && messageData.layer && messageData.snapshot) {
+                try {
+                  // Decompress the snapshot and update the user's layer
+                  decompressLayer(messageData.snapshot, CANVAS_WIDTH, CANVAS_HEIGHT)
+                    .then((layerData) => {
+                      const targetLayer = messageData.layer === "foreground"
+                        ? userEngine.engine.layers.foreground
+                        : userEngine.engine.layers.background;
+                      
+                      // Replace the layer data
+                      targetLayer.set(layerData);
+                      
+                      // Mark for recomposition
+                      needsRecompositionRef.current = true;
+                    })
+                    .catch((error) => {
+                      console.error("Failed to decompress snapshot:", error);
+                    });
+                } catch (error) {
+                  console.error("Failed to process snapshot:", error);
+                }
+              }
             }
           }
         } catch (error) {
