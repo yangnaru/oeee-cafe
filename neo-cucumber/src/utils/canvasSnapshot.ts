@@ -1,15 +1,15 @@
 /**
- * Utility functions for compressing and decompressing canvas layers
+ * Utility functions for compressing and decompressing canvas layers using PNG blobs
  */
 
 /**
- * Compress a canvas layer to a base64 PNG string
+ * Convert a canvas layer to a PNG Blob
  */
-export function compressLayer(
+export async function layerToPngBlob(
   layer: Uint8ClampedArray,
   width: number,
   height: number
-): string {
+): Promise<Blob> {
   // Create a temporary canvas
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -24,16 +24,23 @@ export function compressLayer(
   const imageData = new ImageData(layer, width, height);
   ctx.putImageData(imageData, 0, 0);
   
-  // Convert to base64 PNG (removes 'data:image/png;base64,' prefix for smaller payload)
-  const dataUrl = canvas.toDataURL('image/png');
-  return dataUrl.substring(22); // Remove 'data:image/png;base64,' prefix
+  // Convert to PNG blob
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+      } else {
+        reject(new Error('Failed to create PNG blob'));
+      }
+    }, 'image/png');
+  });
 }
 
 /**
- * Decompress a base64 PNG string back to a Uint8ClampedArray layer
+ * Convert PNG data (Uint8Array) back to a Uint8ClampedArray layer
  */
-export async function decompressLayer(
-  snapshot: string,
+export async function pngDataToLayer(
+  pngData: Uint8Array,
   width: number,
   height: number
 ): Promise<Uint8ClampedArray> {
@@ -64,10 +71,57 @@ export async function decompressLayer(
     };
     
     img.onerror = () => {
-      reject(new Error('Failed to load image from snapshot'));
+      reject(new Error('Failed to load image from PNG data'));
     };
     
-    // Load the image from base64 (add back the prefix)
-    img.src = `data:image/png;base64,${snapshot}`;
+    // Create blob URL from PNG data
+    const blob = new Blob([pngData], { type: 'image/png' });
+    const url = URL.createObjectURL(blob);
+    
+    img.onload = () => {
+      URL.revokeObjectURL(url); // Clean up
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'));
+        return;
+      }
+      
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, 0);
+      
+      const imageData = ctx.getImageData(0, 0, width, height);
+      resolve(imageData.data);
+    };
+    
+    img.src = url;
   });
+}
+
+// Legacy functions for backward compatibility (will be removed after migration)
+export async function compressLayer(
+  layer: Uint8ClampedArray,
+  width: number,
+  height: number
+): Promise<string> {
+  const blob = await layerToPngBlob(layer, width, height);
+  const arrayBuffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+export async function decompressLayer(
+  snapshot: string,
+  width: number,
+  height: number
+): Promise<Uint8ClampedArray> {
+  const binaryString = atob(snapshot);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return pngDataToLayer(bytes, width, height);
 }

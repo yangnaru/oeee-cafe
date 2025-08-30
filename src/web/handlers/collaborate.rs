@@ -4,10 +4,38 @@ use axum::extract::{ws::Message, Path, State, WebSocketUpgrade};
 use axum::response::Response;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
-use serde_json;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
+
+// Helper function to convert 16 bytes to UUID
+fn bytes_to_uuid(bytes: &[u8]) -> Result<Uuid, &'static str> {
+    if bytes.len() != 16 {
+        return Err("Invalid UUID byte length");
+    }
+    
+    let mut uuid_bytes = [0u8; 16];
+    uuid_bytes.copy_from_slice(bytes);
+    Ok(Uuid::from_bytes(uuid_bytes))
+}
+
+// Helper function to read little-endian u64 from bytes
+fn read_u64_le(bytes: &[u8], offset: usize) -> u64 {
+    if offset + 8 > bytes.len() {
+        return 0;
+    }
+    
+    u64::from_le_bytes([
+        bytes[offset],
+        bytes[offset + 1],
+        bytes[offset + 2],
+        bytes[offset + 3],
+        bytes[offset + 4],
+        bytes[offset + 5],
+        bytes[offset + 6],
+        bytes[offset + 7],
+    ])
+}
 
 pub async fn websocket_collaborate_handler(
     Path(room_uuid): Path<Uuid>,
@@ -64,65 +92,105 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
             }
         };
         
-        // Only process Binary and Text messages
-        if !matches!(msg, Message::Text(_) | Message::Binary(_)) {
+        // Only process Binary messages (no more JSON support)
+        if !matches!(msg, Message::Binary(_)) {
             continue;
         }
         
-        // Handle snapshot messages - filter history before storing
-        if let Message::Text(text) = &msg {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
-                if json["type"] == "snapshot" {
-                    if let (Some(snapshot_user), Some(snapshot_layer)) = 
-                        (json["userId"].as_str(), json["layer"].as_str()) {
-                        
-                        debug!("Processing snapshot from user {} for layer {} in room {}", 
-                               snapshot_user, snapshot_layer, room_uuid);
-                        
-                        // Filter existing history
-                        let mut history = state.message_history
-                            .entry(room_uuid)
-                            .or_insert_with(Vec::new);
-                        
-                        let initial_count = history.len();
-                        
-                        history.retain(|stored_msg| {
-                            if let Message::Text(stored_text) = stored_msg {
-                                if let Ok(stored_json) = serde_json::from_str::<serde_json::Value>(stored_text) {
-                                    let stored_user = stored_json["userId"].as_str();
-                                    let stored_type = stored_json["type"].as_str();
-                                    let stored_layer = stored_json["layer"].as_str();
-                                    
-                                    // Different user - always keep
-                                    if stored_user != Some(snapshot_user) {
-                                        return true;
-                                    }
-                                    
-                                    // Same user - check type and layer
-                                    match stored_type {
-                                        Some("pointerup") => false, // Remove all pointerup
-                                        Some("drawLine") | Some("drawPoint") | 
-                                        Some("fill") | Some("snapshot") => {
-                                            // Keep if different layer
-                                            stored_layer != Some(snapshot_layer)
-                                        }
-                                        _ => true // Keep other types (join, etc.)
-                                    }
-                                } else {
-                                    true // Keep if can't parse
+        // Handle server messages (< 0x10) - parse and handle specially
+        if let Message::Binary(data) = &msg {
+            if !data.is_empty() {
+                let msg_type = data[0];
+                
+                // Server messages (< 0x10) need special handling
+                if msg_type < 0x10 {
+                    match msg_type {
+                        0x01 => {
+                            // JOIN message: [0x01][UUID:16][timestamp:8]
+                            if data.len() >= 25 {
+                                if let Ok(user_uuid) = bytes_to_uuid(&data[1..17]) {
+                                    let timestamp = read_u64_le(data, 17);
+                                    debug!("JOIN message from user {} at {} in room {}", 
+                                           user_uuid, timestamp, room_uuid);
                                 }
-                            } else {
-                                true // Keep non-text messages
                             }
-                        });
-                        
-                        let removed_count = initial_count - history.len();
-                        if removed_count > 0 {
-                            debug!("Removed {} obsolete messages from history for user {} layer {} in room {}", 
-                                   removed_count, snapshot_user, snapshot_layer, room_uuid);
+                        }
+                        0x02 => {
+                            // SNAPSHOT message: [0x02][UUID:16][layer:1][pngLength:4][pngData:variable]
+                            if data.len() >= 22 {
+                                if let Ok(snapshot_user) = bytes_to_uuid(&data[1..17]) {
+                                    let snapshot_layer = data[17]; // 0=foreground, 1=background
+                                    
+                                    debug!("Processing snapshot from user {} for layer {} in room {}", 
+                                           snapshot_user, snapshot_layer, room_uuid);
+                                    
+                                    // Filter existing history
+                                    let mut history = state.message_history
+                                        .entry(room_uuid)
+                                        .or_insert_with(Vec::new);
+                                    
+                                    let initial_count = history.len();
+                                    
+                                    history.retain(|stored_msg| {
+                                        if let Message::Binary(stored_data) = stored_msg {
+                                            if stored_data.is_empty() {
+                                                return true;
+                                            }
+                                            
+                                            let stored_msg_type = stored_data[0];
+                                            
+                                            // Keep server messages (< 0x10) except snapshots
+                                            if stored_msg_type < 0x10 {
+                                                return stored_msg_type != 0x02; // Keep non-snapshot server messages
+                                            }
+                                            
+                                            // For client messages (>= 0x10), check user and layer
+                                            if stored_data.len() >= 17 {
+                                                if let Ok(stored_user) = bytes_to_uuid(&stored_data[1..17]) {
+                                                    // Different user - always keep
+                                                    if stored_user != snapshot_user {
+                                                        return true;
+                                                    }
+                                                    
+                                                    // Same user - check message type
+                                                    match stored_msg_type {
+                                                        0x13 => false, // Remove POINTER_UP
+                                                        0x10 | 0x11 | 0x12 => {
+                                                            // DRAW_LINE (39), DRAW_POINT (31), FILL (26) - check layer
+                                                            if stored_data.len() >= 18 {
+                                                                let stored_layer = stored_data[17];
+                                                                stored_layer != snapshot_layer // Keep if different layer
+                                                            } else {
+                                                                true // Keep if malformed
+                                                            }
+                                                        }
+                                                        _ => true // Keep other client messages
+                                                    }
+                                                } else {
+                                                    true // Keep if can't parse UUID
+                                                }
+                                            } else {
+                                                true // Keep if too short
+                                            }
+                                        } else {
+                                            true // Keep non-binary messages (shouldn't happen)
+                                        }
+                                    });
+                                    
+                                    let removed_count = initial_count - history.len();
+                                    if removed_count > 0 {
+                                        debug!("Removed {} obsolete messages from history for user {} layer {} in room {}", 
+                                               removed_count, snapshot_user, snapshot_layer, room_uuid);
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            debug!("Unknown server message type: 0x{:02x} in room {}", msg_type, room_uuid);
                         }
                     }
                 }
+                // Client messages (>= 0x10) are just broadcast, no special handling needed
             }
         }
         

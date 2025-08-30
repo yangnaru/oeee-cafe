@@ -1,7 +1,14 @@
 import { useEffect, useRef, useCallback } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { useCanvasHistory } from "./useCanvasHistory";
-import { compressLayer } from "../utils/canvasSnapshot";
+import { layerToPngBlob } from "../utils/canvasSnapshot";
+import { 
+  encodeSnapshot, 
+  encodeDrawLine, 
+  encodeDrawPoint, 
+  encodeFill, 
+  encodePointerUp 
+} from "../utils/binaryProtocol";
 
 interface DrawingState {
   brushSize: number;
@@ -203,24 +210,16 @@ export const useDrawing = (
           lastModifiedLayerRef.current = drawingState.layerType;
 
           // Send fill event through WebSocket
-          if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
-            const fillEventData = {
-              type: "fill",
-              userId: userIdRef?.current,
-              layer: drawingState.layerType,
-              x: Math.floor(coords.x),
-              y: Math.floor(coords.y),
-              color: {
-                r: r,
-                g: g,
-                b: b,
-                a: drawingState.opacity,
-              },
-              timestamp: Date.now(),
-            };
-
+          if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
             try {
-              wsRef.current.send(JSON.stringify(fillEventData));
+              const binaryMessage = encodeFill(
+                userIdRef.current,
+                drawingState.layerType,
+                Math.floor(coords.x),
+                Math.floor(coords.y),
+                r, g, b, drawingState.opacity
+              );
+              wsRef.current.send(binaryMessage);
             } catch (error) {
               console.error("Failed to send fill event:", error);
             }
@@ -284,27 +283,18 @@ export const useDrawing = (
           onDrawingChangeRef.current?.();
 
           // Send single click drawing event through WebSocket
-          if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
-            const drawEventData = {
-              type: "drawPoint",
-              userId: userIdRef?.current,
-              layer: drawingState.layerType,
-              x: coords.x,
-              y: coords.y,
-              brushSize: drawingState.brushSize,
-              brushType: drawingState.brushType,
-              pointerType: e.pointerType,
-              color: {
-                r: r,
-                g: g,
-                b: b,
-                a: effectiveOpacity,
-              },
-              timestamp: Date.now(),
-            };
-
+          if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
             try {
-              wsRef.current.send(JSON.stringify(drawEventData));
+              const binaryMessage = encodeDrawPoint(
+                userIdRef.current,
+                drawingState.layerType,
+                coords.x, coords.y,
+                drawingState.brushSize,
+                drawingState.brushType,
+                r, g, b, effectiveOpacity,
+                e.pointerType as 'mouse' | 'pen' | 'touch'
+              );
+              wsRef.current.send(binaryMessage);
             } catch (error) {
               console.error("Failed to send drawPoint event:", error);
             }
@@ -324,20 +314,16 @@ export const useDrawing = (
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
       // Send pointerup event through WebSocket
-      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
+      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
         const coords = getCanvasCoordinates(e.clientX, e.clientY);
-        const eventData = {
-          type: "pointerup",
-          userId: userIdRef?.current,
-          x: coords.x,
-          y: coords.y,
-          button: e.button,
-          pointerType: e.pointerType,
-          timestamp: Date.now(),
-        };
-
         try {
-          wsRef.current.send(JSON.stringify(eventData));
+          const binaryMessage = encodePointerUp(
+            userIdRef.current,
+            coords.x, coords.y,
+            e.button,
+            e.pointerType as 'mouse' | 'pen' | 'touch'
+          );
+          wsRef.current.send(binaryMessage);
         } catch (error) {
           console.error("Failed to send pointerup event:", error);
         }
@@ -439,29 +425,21 @@ export const useDrawing = (
       lastModifiedLayerRef.current = drawingState.layerType;
 
       // Send drawLine event through WebSocket
-      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
-        const drawEventData = {
-          type: "drawLine",
-          userId: userIdRef?.current,
-          layer: drawingState.layerType,
-          fromX: drawingStateRef.current.prevX,
-          fromY: drawingStateRef.current.prevY,
-          toX: drawingStateRef.current.currentX,
-          toY: drawingStateRef.current.currentY,
-          brushSize: drawingState.brushSize,
-          brushType: drawingState.brushType,
-          pointerType: e.pointerType,
-          color: {
-            r: r,
-            g: g,
-            b: b,
-            a: effectiveOpacity,
-          },
-          timestamp: Date.now(),
-        };
-
+      if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
         try {
-          wsRef.current.send(JSON.stringify(drawEventData));
+          const binaryMessage = encodeDrawLine(
+            userIdRef.current,
+            drawingState.layerType,
+            drawingStateRef.current.prevX,
+            drawingStateRef.current.prevY,
+            drawingStateRef.current.currentX,
+            drawingStateRef.current.currentY,
+            drawingState.brushSize,
+            drawingState.brushType,
+            r, g, b, effectiveOpacity,
+            e.pointerType as 'mouse' | 'pen' | 'touch'
+          );
+          wsRef.current.send(binaryMessage);
         } catch (error) {
           console.error("Failed to send drawLine event:", error);
         }
@@ -528,7 +506,7 @@ export const useDrawing = (
   }, [setupDrawingEvents]);
 
   // Undo function
-  const handleUndo = useCallback(() => {
+  const handleUndo = useCallback(async () => {
     const previousState = history.undo();
     if (previousState && contextRef.current && drawingEngineRef.current) {
       // Restore layer states
@@ -549,16 +527,10 @@ export const useDrawing = (
         try {
           const layerToSend = lastModifiedLayerRef.current;
           const layerData = drawingEngineRef.current.layers[layerToSend];
-          const snapshot = compressLayer(layerData, canvasWidth, canvasHeight);
-          
-          const snapshotMessage = {
-            type: "snapshot",
-            userId: userIdRef.current,
-            layer: layerToSend,
-            snapshot: snapshot
-          };
+          const pngBlob = await layerToPngBlob(layerData, canvasWidth, canvasHeight);
+          const binaryMessage = await encodeSnapshot(userIdRef.current, layerToSend, pngBlob);
 
-          wsRef.current.send(JSON.stringify(snapshotMessage));
+          wsRef.current.send(binaryMessage);
         } catch (error) {
           console.error("Failed to send undo snapshot:", error);
         }
@@ -567,7 +539,7 @@ export const useDrawing = (
   }, [history, canvasWidth, canvasHeight, wsRef, userIdRef]);
 
   // Redo function
-  const handleRedo = useCallback(() => {
+  const handleRedo = useCallback(async () => {
     const nextState = history.redo();
     if (nextState && contextRef.current && drawingEngineRef.current) {
       // Restore layer states
@@ -588,16 +560,10 @@ export const useDrawing = (
         try {
           const layerToSend = lastModifiedLayerRef.current;
           const layerData = drawingEngineRef.current.layers[layerToSend];
-          const snapshot = compressLayer(layerData, canvasWidth, canvasHeight);
-          
-          const snapshotMessage = {
-            type: "snapshot",
-            userId: userIdRef.current,
-            layer: layerToSend,
-            snapshot: snapshot
-          };
+          const pngBlob = await layerToPngBlob(layerData, canvasWidth, canvasHeight);
+          const binaryMessage = await encodeSnapshot(userIdRef.current, layerToSend, pngBlob);
 
-          wsRef.current.send(JSON.stringify(snapshotMessage));
+          wsRef.current.send(binaryMessage);
         } catch (error) {
           console.error("Failed to send redo snapshot:", error);
         }

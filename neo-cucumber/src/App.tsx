@@ -7,7 +7,8 @@ import {
 } from "react";
 import { useDrawing } from "./hooks/useDrawing";
 import { DrawingEngine } from "./DrawingEngine";
-import { decompressLayer } from "./utils/canvasSnapshot";
+import { pngDataToLayer } from "./utils/canvasSnapshot";
+import { encodeJoin, decodeMessage } from "./utils/binaryProtocol";
 import "./App.css";
 
 const zoomMin = 0.5;
@@ -516,14 +517,9 @@ function App() {
 
       ws.onopen = () => {
         // Send initial join message to establish user presence and layer order
-        const joinMessage = {
-          type: "join",
-          userId: userIdRef.current,
-          timestamp: Date.now(),
-        };
-
         try {
-          ws.send(JSON.stringify(joinMessage));
+          const binaryMessage = encodeJoin(userIdRef.current, Date.now());
+          ws.send(binaryMessage);
         } catch (error) {
           console.error("Failed to send join message:", error);
         }
@@ -539,143 +535,167 @@ function App() {
         }, 100); // 100ms should be enough for stored messages
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = async (event) => {
         try {
-          const messageData = JSON.parse(event.data);
-
-          // Check if message contains a userId
-          if (messageData.userId && typeof messageData.userId === "string") {
-            // Create drawing engine for new user if they don't exist
-            createUserEngine(messageData.userId);
-
-            // Handle different event types
-            if (messageData.type === "drawLine") {
-              // Apply drawing to user's engine directly (no React state update)
-              const userEngine = userEnginesRef.current.get(messageData.userId);
-              if (userEngine && messageData.color) {
-                const engine = userEngine.engine;
-                const targetLayer =
-                  messageData.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-
-                // Use the DrawingEngine's drawLine method
-                engine.drawLine(
-                  targetLayer,
-                  messageData.fromX,
-                  messageData.fromY,
-                  messageData.toX,
-                  messageData.toY,
-                  messageData.brushSize || 1,
-                  messageData.brushType || "solid",
-                  messageData.color.r || 0,
-                  messageData.color.g || 0,
-                  messageData.color.b || 0,
-                  messageData.color.a || 255
-                );
-
-                // Mark for recomposition instead of triggering React re-render
-                needsRecompositionRef.current = true;
-              }
-            } else if (messageData.type === "fill") {
-              // Apply fill operation to user's engine directly (no React state update)
-              const userEngine = userEnginesRef.current.get(messageData.userId);
-              if (userEngine && messageData.color) {
-                const engine = userEngine.engine;
-                const targetLayer =
-                  messageData.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-
-                // Use the DrawingEngine's doFloodFill method
-                engine.doFloodFill(
-                  targetLayer,
-                  messageData.x,
-                  messageData.y,
-                  messageData.color.r || 0,
-                  messageData.color.g || 0,
-                  messageData.color.b || 0,
-                  messageData.color.a || 255
-                );
-
-                // Mark for recomposition instead of triggering React re-render
-                needsRecompositionRef.current = true;
-              }
-            } else if (messageData.type === "drawPoint") {
-              // Apply single point drawing to user's engine directly (no React state update)
-              const userEngine = userEnginesRef.current.get(messageData.userId);
-              if (userEngine && messageData.color) {
-                const engine = userEngine.engine;
-                const targetLayer =
-                  messageData.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-
-                // Use the DrawingEngine's drawLine method with same start/end point
-                engine.drawLine(
-                  targetLayer,
-                  messageData.x,
-                  messageData.y,
-                  messageData.x,
-                  messageData.y,
-                  messageData.brushSize || 1,
-                  messageData.brushType || "solid",
-                  messageData.color.r || 0,
-                  messageData.color.g || 0,
-                  messageData.color.b || 0,
-                  messageData.color.a || 255
-                );
-
-                // Mark for recomposition instead of triggering React re-render
-                needsRecompositionRef.current = true;
-              }
-            } else if (messageData.type === "join") {
-              // Handle user join events for proper layer ordering
-              console.log(
-                `User ${messageData.userId} joined at ${messageData.timestamp}`
-              );
-
-              // Update the user's firstSeen timestamp if we have their engine
-              const userEngine = userEnginesRef.current.get(messageData.userId);
-              if (userEngine && messageData.timestamp) {
-                // Update firstSeen to match the server timestamp for consistent ordering
-                userEngine.firstSeen = messageData.timestamp;
-                needsRecompositionRef.current = true;
-              }
-            } else if (messageData.type === "pointerup") {
-              // Handle pointerup events (could be used for stroke completion, etc.)
-              console.log(
-                `Received pointerup from user ${messageData.userId} at (${messageData.x}, ${messageData.y})`
-              );
-            } else if (messageData.type === "snapshot") {
-              // Handle snapshot updates (undo/redo from other users)
-              const userEngine = userEnginesRef.current.get(messageData.userId);
-              if (userEngine && messageData.layer && messageData.snapshot) {
-                try {
-                  // Decompress the snapshot and update the user's layer
-                  decompressLayer(messageData.snapshot, CANVAS_WIDTH, CANVAS_HEIGHT)
-                    .then((layerData) => {
-                      const targetLayer = messageData.layer === "foreground"
-                        ? userEngine.engine.layers.foreground
-                        : userEngine.engine.layers.background;
-                      
-                      // Replace the layer data
-                      targetLayer.set(layerData);
-                      
-                      // Mark for recomposition
-                      needsRecompositionRef.current = true;
-                    })
-                    .catch((error) => {
-                      console.error("Failed to decompress snapshot:", error);
-                    });
-                } catch (error) {
-                  console.error("Failed to process snapshot:", error);
-                }
-              }
+          // Handle binary messages (can be ArrayBuffer or Blob)
+          if (event.data instanceof ArrayBuffer) {
+            const message = decodeMessage(event.data);
+            if (!message) {
+              return;
             }
+
+            // Create drawing engine for new user if they don't exist
+            createUserEngine(message.userId);
+
+            // Handle message types
+            await handleBinaryMessage(message);
+          } else if (event.data instanceof Blob) {
+            const arrayBuffer = await event.data.arrayBuffer();
+            const message = decodeMessage(arrayBuffer);
+            if (!message) {
+              return;
+            }
+
+            // Create drawing engine for new user if they don't exist
+            createUserEngine(message.userId);
+
+            // Handle message types
+            await handleBinaryMessage(message);
           }
         } catch (error) {
-          console.error("Failed to parse WebSocket message:", error);
+          console.error("Failed to decode WebSocket message:", error);
+        }
+      };
+
+      // Helper function to handle decoded binary messages
+      const handleBinaryMessage = async (message: any) => {
+        try {
+          // Handle different message types
+          switch (message.type) {
+              case 'drawLine': {
+                const userEngine = userEnginesRef.current.get(message.userId);
+                if (userEngine) {
+                  const engine = userEngine.engine;
+                  const targetLayer = message.layer === "foreground"
+                    ? engine.layers.foreground
+                    : engine.layers.background;
+                  
+                  engine.drawLine(
+                    targetLayer,
+                    message.fromX, message.fromY,
+                    message.toX, message.toY,
+                    message.brushSize,
+                    message.brushType,
+                    message.color.r,
+                    message.color.g,
+                    message.color.b,
+                    message.color.a
+                  );
+
+                  // Update thumbnails for the remote user's engine
+                  engine.updateLayerThumbnails();
+                  
+                  // CRITICAL: Update composite buffer for remote engine
+                  engine.compositeLayers(true, true);
+
+                  needsRecompositionRef.current = true;
+                }
+                break;
+              }
+
+              case 'drawPoint': {
+                const userEngine = userEnginesRef.current.get(message.userId);
+                if (userEngine) {
+                  const engine = userEngine.engine;
+                  const targetLayer = message.layer === "foreground"
+                    ? engine.layers.foreground
+                    : engine.layers.background;
+
+                  engine.drawLine(
+                    targetLayer,
+                    message.x, message.y,
+                    message.x, message.y,
+                    message.brushSize,
+                    message.brushType,
+                    message.color.r,
+                    message.color.g,
+                    message.color.b,
+                    message.color.a
+                  );
+
+                  // Update thumbnails and composite buffer for remote engine
+                  engine.updateLayerThumbnails();
+                  engine.compositeLayers(true, true);
+
+                  needsRecompositionRef.current = true;
+                }
+                break;
+              }
+
+              case 'fill': {
+                const userEngine = userEnginesRef.current.get(message.userId);
+                if (userEngine) {
+                  const engine = userEngine.engine;
+                  const targetLayer = message.layer === "foreground"
+                    ? engine.layers.foreground
+                    : engine.layers.background;
+
+                  engine.doFloodFill(
+                    targetLayer,
+                    message.x, message.y,
+                    message.color.r,
+                    message.color.g,
+                    message.color.b,
+                    message.color.a
+                  );
+
+                  // Update thumbnails and composite buffer for remote engine
+                  engine.updateLayerThumbnails();
+                  engine.compositeLayers(true, true);
+
+                  needsRecompositionRef.current = true;
+                }
+                break;
+              }
+
+              case 'join': {
+                const userEngine = userEnginesRef.current.get(message.userId);
+                if (userEngine) {
+                  userEngine.firstSeen = message.timestamp;
+                  needsRecompositionRef.current = true;
+                }
+                break;
+              }
+
+              case 'pointerup': {
+                break;
+              }
+
+              case 'snapshot': {
+                const userEngine = userEnginesRef.current.get(message.userId);
+                if (userEngine) {
+                  try {
+                    pngDataToLayer(message.pngData, CANVAS_WIDTH, CANVAS_HEIGHT)
+                      .then((layerData) => {
+                        const targetLayer = message.layer === "foreground"
+                          ? userEngine.engine.layers.foreground
+                          : userEngine.engine.layers.background;
+                        
+                        targetLayer.set(layerData);
+                        needsRecompositionRef.current = true;
+                      })
+                      .catch((error) => {
+                        console.error("Failed to decompress snapshot:", error);
+                      });
+                  } catch (error) {
+                    console.error("Failed to process snapshot:", error);
+                  }
+                }
+                break;
+              }
+            }
+        } catch (error) {
+          console.error("Failed to handle binary message:", error);
         }
       };
 
