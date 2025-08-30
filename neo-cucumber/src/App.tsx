@@ -165,6 +165,9 @@ function App() {
     >
   >(new Map());
 
+  // Track server-provided user order for layer compositing
+  const userOrderRef = useRef<string[]>([]);
+
   // Dirty flag to track when recomposition is needed
   const needsRecompositionRef = useRef(false);
 
@@ -417,7 +420,7 @@ function App() {
       drawingEngine.compositeLayers(true, true);
     }
     userEnginesRef.current.clear();
-    localUserJoinTimeRef.current = 0;
+    // Note: Keep localUserJoinTimeRef.current for historical purposes, but don't rely on it for ordering
     needsRecompositionRef.current = true;
 
     // Reconnect immediately
@@ -883,6 +886,29 @@ function App() {
             break;
           }
 
+          case "joinResponse": {
+            console.log("JOIN_RESPONSE received:", {
+              userCount: message.userIds.length,
+              users: message.userIds.map((id: string) => id.substring(0, 8)),
+              isLocalUserIncluded: message.userIds.includes(userIdRef.current),
+              layerOrder: message.userIds.map((id: string, index: number) => 
+                `${id.substring(0, 8)} (joined ${index === 0 ? '1st' : index === 1 ? '2nd' : index === 2 ? '3rd' : `${index + 1}th`}, draws on ${index === 0 ? 'TOP' : 'bottom'} layer)`
+              )
+            });
+            
+            // Store the server-provided user order
+            userOrderRef.current = [...message.userIds];
+            
+            // Initialize drawing engines for all users in the list
+            message.userIds.forEach((userId: string) => {
+              createUserEngine(userId);
+            });
+            
+            // Mark for recomposition to update layer order
+            needsRecompositionRef.current = true;
+            break;
+          }
+
           case "chat": {
             // Add chat message to chat component
             if ((window as any).addChatMessage) {
@@ -973,8 +999,26 @@ function App() {
       });
     }
 
-    // Sort users by firstSeen timestamp (later joiners first = lower layer order)
-    allUsers.sort((a, b) => b.firstSeen - a.firstSeen);
+    // Sort users by server-provided order (from JOIN_RESPONSE)
+    // Later users should be drawn first (underneath earlier users)
+    // This ensures first user to join appears on top, latest user appears on bottom
+    allUsers.sort((a, b) => {
+      const indexA = userOrderRef.current.indexOf(a.userId);
+      const indexB = userOrderRef.current.indexOf(b.userId);
+      
+      // If both users are in the server order, sort by REVERSE order
+      // Higher index (later join) should be drawn first (underneath)
+      if (indexA !== -1 && indexB !== -1) {
+        return indexB - indexA;
+      }
+      
+      // If only one is in server order, prioritize that one
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      
+      // If neither is in server order, fall back to UUID comparison
+      return a.userId.localeCompare(b.userId);
+    });
 
     // Composite each user's canvas onto the main canvas using Canvas API (much faster!)
     allUsers.forEach(({ userId, engine, canvas }) => {

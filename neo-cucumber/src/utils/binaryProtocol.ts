@@ -12,7 +12,9 @@ export const MSG_TYPE = {
   JOIN: 0x01,
   SNAPSHOT: 0x02,
   CHAT: 0x03,
+  SAVE: 0x04,
   SNAPSHOT_REQUEST: 0x05,
+  JOIN_RESPONSE: 0x06,
   
   // Client messages (>= 0x10) - server just broadcasts
   DRAW_LINE: 0x10,
@@ -289,6 +291,25 @@ export function encodeChat(
 }
 
 /**
+ * Encode JOIN_RESPONSE message (0x06)
+ * Format: [0x06][count:2][UUID1:16][UUID2:16]...[UUIDn:16]
+ */
+export function encodeJoinResponse(userIds: string[]): ArrayBuffer {
+  const buffer = new Uint8Array(3 + userIds.length * 16);
+  
+  buffer[0] = MSG_TYPE.JOIN_RESPONSE;
+  writeUint16LE(buffer, 1, userIds.length);
+  
+  let offset = 3;
+  for (const userId of userIds) {
+    buffer.set(uuidToBytes(userId), offset);
+    offset += 16;
+  }
+  
+  return buffer.buffer;
+}
+
+/**
  * Encode SNAPSHOT_REQUEST message (0x05)
  * Format: [0x05][timestamp:8]
  */
@@ -327,6 +348,11 @@ export interface JoinMessage {
   type: 'join';
   userId: string;
   timestamp: number;
+}
+
+export interface JoinResponseMessage {
+  type: 'joinResponse';
+  userIds: string[];
 }
 
 export interface SnapshotMessage {
@@ -389,6 +415,7 @@ export interface PointerUpMessage {
 
 export type DecodedMessage = 
   | JoinMessage 
+  | JoinResponseMessage
   | SnapshotMessage 
   | ChatMessage
   | SnapshotRequestMessage
@@ -415,7 +442,24 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         timestamp: readUint64LE(buffer, 17)
       };
       
-    case MSG_TYPE.CHAT:
+    case MSG_TYPE.JOIN_RESPONSE: {
+      if (buffer.length < 3) return null;
+      const userCount = readUint16LE(buffer, 1);
+      if (buffer.length < 3 + userCount * 16) return null;
+      
+      const userIds: string[] = [];
+      for (let i = 0; i < userCount; i++) {
+        const offset = 3 + i * 16;
+        userIds.push(bytesToUuid(buffer.slice(offset, offset + 16)));
+      }
+      
+      return {
+        type: 'joinResponse',
+        userIds: userIds
+      };
+    }
+      
+    case MSG_TYPE.CHAT: {
       if (buffer.length < 27) return null;
       const msgLength = readUint16LE(buffer, 25);
       if (buffer.length < 27 + msgLength) return null;
@@ -426,6 +470,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         timestamp: readUint64LE(buffer, 17),
         message: decoder.decode(buffer.slice(27, 27 + msgLength))
       };
+    }
       
     case MSG_TYPE.SNAPSHOT_REQUEST:
       if (buffer.length < 9) return null;
@@ -434,7 +479,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         timestamp: readUint64LE(buffer, 1)
       };
       
-    case MSG_TYPE.SNAPSHOT:
+    case MSG_TYPE.SNAPSHOT: {
       if (buffer.length < 22) return null;
       const pngLength = readUint32LE(buffer, 18);
       if (buffer.length < 22 + pngLength) return null;
@@ -444,6 +489,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         layer: buffer[17] === LAYER.FOREGROUND ? 'foreground' : 'background',
         pngData: buffer.slice(22, 22 + pngLength)
       };
+    }
       
     case MSG_TYPE.DRAW_LINE:
       if (buffer.length < 39) return null;

@@ -416,6 +416,73 @@ async fn handle_socket(
                                         "JOIN message from user {} at {} in room {}",
                                         user_uuid, timestamp, room_uuid
                                     );
+                                    
+                                    // Insert user into participants table with joined_at timestamp
+                                    if let Err(e) = sqlx::query!(
+                                        r#"
+                                        INSERT INTO collaborative_sessions_participants 
+                                        (session_id, user_id, joined_at, is_active)
+                                        VALUES ($1, $2, to_timestamp($3::bigint / 1000), true)
+                                        ON CONFLICT (session_id, user_id) 
+                                        DO UPDATE SET is_active = true, left_at = NULL
+                                        "#,
+                                        room_uuid,
+                                        user_uuid,
+                                        timestamp as i64
+                                    )
+                                    .execute(&db)
+                                    .await
+                                    {
+                                        error!("Failed to track JOIN participant: {}", e);
+                                    } else {
+                                        // Query all active participants ordered by joined_at
+                                        match sqlx::query!(
+                                            r#"
+                                            SELECT user_id FROM collaborative_sessions_participants
+                                            WHERE session_id = $1 AND is_active = true
+                                            ORDER BY joined_at ASC
+                                            "#,
+                                            room_uuid
+                                        )
+                                        .fetch_all(&db)
+                                        .await
+                                        {
+                                            Ok(participants) => {
+                                                // Create JOIN_RESPONSE message
+                                                let user_count = participants.len() as u16;
+                                                let mut response_data = vec![0x06u8]; // JOIN_RESPONSE (0x06)
+                                                
+                                                // Write user count (little-endian u16)
+                                                response_data.push((user_count & 0xff) as u8);
+                                                response_data.push(((user_count >> 8) & 0xff) as u8);
+                                                
+                                                // Write each user UUID (16 bytes each)
+                                                for participant in participants {
+                                                    let uuid_bytes = participant.user_id.as_bytes();
+                                                    response_data.extend_from_slice(uuid_bytes);
+                                                }
+                                                
+                                                // Broadcast JOIN_RESPONSE to all participants in the room
+                                                if let Some(room_connections) = state.collaboration_rooms.get(&room_uuid) {
+                                                    let join_response_msg = Message::Binary(response_data);
+                                                    for conn_ref in room_connections.iter() {
+                                                        let conn_id = conn_ref.key();
+                                                        let sender = conn_ref.value();
+                                                        if sender.send(join_response_msg.clone()).is_err() {
+                                                            debug!("Failed to send JOIN_RESPONSE to connection {}", conn_id);
+                                                        }
+                                                    }
+                                                    info!(
+                                                        "Broadcasted JOIN_RESPONSE with {} users to {} connections in room {}",
+                                                        user_count, room_connections.len(), room_uuid
+                                                    );
+                                                }
+                                            }
+                                            Err(e) => {
+                                                error!("Failed to query participants for JOIN_RESPONSE: {}", e);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
