@@ -646,7 +646,7 @@ export const useDrawing = (
   }, [canvasWidth, canvasHeight, wsRef, userIdRef]);
 
   // Handle snapshot request from server
-  const handleSnapshotRequest = useCallback((timestamp: number) => {
+  const handleSnapshotRequest = useCallback((_timestamp: number) => {
     if (isDrawingRef.current) {
       // Defer if currently drawing
       pendingSnapshotRequestRef.current = true;

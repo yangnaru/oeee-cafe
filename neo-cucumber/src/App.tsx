@@ -124,7 +124,7 @@ function App() {
   });
 
   // Chat message handler
-  const handleChatMessage = useCallback((message: any) => {
+  const handleChatMessage = useCallback((_message: any) => {
     // Chat messages are handled entirely by the Chat component
     // This callback is here for future extensions if needed
   }, []);
@@ -514,10 +514,36 @@ function App() {
         bgThumbnailRef.current
       );
 
+      // Function to get WebSocket URL dynamically
+      const getWebSocketUrl = () => {
+        // Option 1: Use environment variable if set
+        if (import.meta.env.VITE_WS_URL) {
+          return import.meta.env.VITE_WS_URL;
+        }
+
+        // Option 2: Build dynamically from current location
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const host = window.location.host;
+
+        // Extract room ID from path (last UUID in path)
+        const pathSegments = window.location.pathname.split("/");
+        const uuidPattern =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        let roomId = "00000000-0000-0000-0000-000000000000"; // default fallback (all zero uuid)
+
+        // Find the last UUID in the path
+        for (let i = pathSegments.length - 1; i >= 0; i--) {
+          if (uuidPattern.test(pathSegments[i])) {
+            roomId = pathSegments[i];
+            break;
+          }
+        }
+
+        return `${protocol}//${host}/api/collaborate/${roomId}/ws`;
+      };
+
       // Connect to WebSocket on canvas load
-      const ws = new WebSocket(
-        "wss://jihyeoks-macbook-air.tail2f2e3.ts.net/api/collaborate/1d57bd0d-be56-43d4-8b66-da739128fb22/ws"
-      );
+      const ws = new WebSocket(getWebSocketUrl());
 
       // Store WebSocket reference for use in other components
       wsRef.current = ws;
@@ -551,8 +577,10 @@ function App() {
               return;
             }
 
-            // Create drawing engine for new user if they don't exist
-            createUserEngine(message.userId);
+            // Create drawing engine for new user if they don't exist (skip for messages without userId)
+            if ("userId" in message && message.userId) {
+              createUserEngine(message.userId);
+            }
 
             // Handle message types
             await handleBinaryMessage(message);
@@ -563,8 +591,10 @@ function App() {
               return;
             }
 
-            // Create drawing engine for new user if they don't exist
-            createUserEngine(message.userId);
+            // Create drawing engine for new user if they don't exist (skip for messages without userId)
+            if ("userId" in message && message.userId) {
+              createUserEngine(message.userId);
+            }
 
             // Handle message types
             await handleBinaryMessage(message);
