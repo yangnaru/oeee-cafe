@@ -100,10 +100,12 @@ const DEFAULT_PALETTE_COLORS = [
   "#fcece2",
 ];
 
-
 function App() {
   // Canvas dimensions will be set when JOIN_RESPONSE is received
-  const [canvasDimensions, setCanvasDimensions] = useState<{width: number; height: number} | null>(null);
+  const [canvasDimensions, setCanvasDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const CANVAS_WIDTH = canvasDimensions?.width || 0;
   const CANVAS_HEIGHT = canvasDimensions?.height || 0;
 
@@ -167,7 +169,9 @@ function App() {
   const tempCtxRef = useRef<CanvasRenderingContext2D | null>(null);
 
   // Safari detection for performance optimizations
-  const isSafari = useRef(/^((?!chrome|android).)*safari/i.test(navigator.userAgent));
+  const isSafari = useRef(
+    /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+  );
 
   // Initialize cached temporary canvas for performance
   const initTempCanvas = useCallback(() => {
@@ -183,38 +187,41 @@ function App() {
   }, [CANVAS_WIDTH, CANVAS_HEIGHT]);
 
   // Function to create drawing engine for a new user
-  const createUserEngine = useCallback((userId: string, width?: number, height?: number) => {
-    // Check if user already exists
-    if (userEnginesRef.current.has(userId)) {
-      return;
-    }
+  const createUserEngine = useCallback(
+    (userId: string, width?: number, height?: number) => {
+      // Check if user already exists
+      if (userEnginesRef.current.has(userId)) {
+        return;
+      }
 
-    // Use server dimensions if provided, otherwise fall back to current canvas dimensions
-    const engineWidth = width || CANVAS_WIDTH;
-    const engineHeight = height || CANVAS_HEIGHT;
+      // Use server dimensions if provided, otherwise fall back to current canvas dimensions
+      const engineWidth = width || CANVAS_WIDTH;
+      const engineHeight = height || CANVAS_HEIGHT;
 
-    // Don't create engine if dimensions are not available yet
-    if (engineWidth <= 0 || engineHeight <= 0) {
-      return;
-    }
+      // Don't create engine if dimensions are not available yet
+      if (engineWidth <= 0 || engineHeight <= 0) {
+        return;
+      }
 
-    // Create new DrawingEngine for this user
-    const engine = new DrawingEngine(engineWidth, engineHeight);
-    const firstSeen = Date.now();
+      // Create new DrawingEngine for this user
+      const engine = new DrawingEngine(engineWidth, engineHeight);
+      const firstSeen = Date.now();
 
-    // Create offscreen canvas for this user
-    const canvas = document.createElement("canvas");
-    canvas.width = engineWidth;
-    canvas.height = engineHeight;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.imageSmoothingEnabled = false;
-      engine.initialize(ctx);
-    }
+      // Create offscreen canvas for this user
+      const canvas = document.createElement("canvas");
+      canvas.width = engineWidth;
+      canvas.height = engineHeight;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.imageSmoothingEnabled = false;
+        engine.initialize(ctx);
+      }
 
-    userEnginesRef.current.set(userId, { engine, firstSeen, canvas });
-    needsRecompositionRef.current = true;
-  }, [CANVAS_WIDTH, CANVAS_HEIGHT]);
+      userEnginesRef.current.set(userId, { engine, firstSeen, canvas });
+      needsRecompositionRef.current = true;
+    },
+    [CANVAS_WIDTH, CANVAS_HEIGHT]
+  );
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fgThumbnailRef = useRef<HTMLCanvasElement>(null);
@@ -411,7 +418,7 @@ function App() {
   // Use the drawing hook - pass safe defaults when dimensions are not available
   // Disable drawing until JOIN_RESPONSE is received
   const drawingDisabled = isCatchingUp || !joinResponseReceived;
-  
+
   const { undo, redo, drawingEngine } = useDrawing(
     canvasRef,
     appRef,
@@ -1002,14 +1009,17 @@ function App() {
               width: message.width,
               height: message.height,
               userCount: message.userIds.length,
-              users: message.userIds.map((id: string) => id.substring(0, 8))
+              users: message.userIds.map((id: string) => id.substring(0, 8)),
             });
-            
+
             // Only update canvas dimensions if they haven't been set yet
             if (!joinResponseReceived) {
-              setCanvasDimensions({ width: message.width, height: message.height });
+              setCanvasDimensions({
+                width: message.width,
+                height: message.height,
+              });
               setJoinResponseReceived(true);
-              
+
               // End catching up phase since we now have the essential JOIN_RESPONSE
               setIsCatchingUp(false);
               if (catchupTimeoutRef.current) {
@@ -1017,13 +1027,13 @@ function App() {
                 catchupTimeoutRef.current = null;
               }
               console.log("JOIN_RESPONSE received - ready for drawing");
-              
+
               // Reinitialize local drawing engine with server dimensions
               if (drawingEngine) {
                 drawingEngine.reinitialize(message.width, message.height);
               }
             }
-            
+
             // Store the server-provided user order
             userOrderRef.current = [...message.userIds];
 
@@ -1105,7 +1115,13 @@ function App() {
   // RAF-based compositing system for better performance
   const compositeAllUserLayers = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !needsRecompositionRef.current || CANVAS_WIDTH <= 0 || CANVAS_HEIGHT <= 0) return;
+    if (
+      !canvas ||
+      !needsRecompositionRef.current ||
+      CANVAS_WIDTH <= 0 ||
+      CANVAS_HEIGHT <= 0
+    )
+      return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -1113,9 +1129,9 @@ function App() {
     // Safari optimization: reduce compositing frequency for better performance
     if (isSafari.current) {
       // Clear the canvas more efficiently for Safari
-      ctx.globalCompositeOperation = 'copy';
+      ctx.globalCompositeOperation = "copy";
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalCompositeOperation = "source-over";
     } else {
       // Standard clear for other browsers
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -1174,7 +1190,7 @@ function App() {
 
         // Initialize cached canvas if needed
         initTempCanvas();
-        
+
         // Use cached temporary canvas
         if (tempCtxRef.current && tempCanvasRef.current) {
           const compositeData = engine.compositeBuffer;
@@ -1211,7 +1227,13 @@ function App() {
     });
 
     needsRecompositionRef.current = false;
-  }, [drawingEngine, drawingState.fgVisible, drawingState.bgVisible, CANVAS_WIDTH, CANVAS_HEIGHT]);
+  }, [
+    drawingEngine,
+    drawingState.fgVisible,
+    drawingState.bgVisible,
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT,
+  ]);
 
   // Set the compositing callback ref after compositeAllUserLayers is defined
   useEffect(() => {
@@ -1223,17 +1245,16 @@ function App() {
   const lastRenderTime = useRef<number>(0);
   const startRenderLoop = useCallback(() => {
     const render = (currentTime: number) => {
-      // Safari optimization: throttle rendering to 30fps instead of 60fps for better performance
-      const targetFPS = isSafari.current ? 30 : 60;
+      const targetFPS = 60;
       const targetInterval = 1000 / targetFPS;
-      
+
       if (currentTime - lastRenderTime.current >= targetInterval) {
         if (needsRecompositionRef.current) {
           compositeAllUserLayers();
         }
         lastRenderTime.current = currentTime;
       }
-      
+
       rafId.current = requestAnimationFrame(render);
     };
     rafId.current = requestAnimationFrame(render);
