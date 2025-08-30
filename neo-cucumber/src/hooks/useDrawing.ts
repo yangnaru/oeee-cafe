@@ -32,7 +32,8 @@ export const useDrawing = (
   canvasHeight: number = 500,
   wsRef?: React.RefObject<WebSocket | null>,
   userIdRef?: React.RefObject<string>,
-  onDrawingChange?: () => void
+  onDrawingChange?: () => void,
+  isCatchingUp: boolean = false
 ) => {
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const drawingEngineRef = useRef<DrawingEngine | null>(null);
@@ -148,6 +149,9 @@ export const useDrawing = (
 
       // Don't interfere with controls interaction
       if (controlsElement?.contains(target as Node)) return;
+
+      // Disable drawing while catching up to stored messages
+      if (isCatchingUp) return;
 
       // Only handle drawing area interactions
       if (
@@ -318,6 +322,9 @@ export const useDrawing = (
       // Only handle the active pointer
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
+      // Disable drawing while catching up to stored messages
+      if (isCatchingUp) return;
+
       // Send pointerup event through WebSocket
       if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
         const coords = getCanvasCoordinates(e.clientX, e.clientY);
@@ -379,6 +386,9 @@ export const useDrawing = (
     const handlePointerMove = (e: PointerEvent) => {
       // Only handle the active pointer
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
+
+      // Disable drawing while catching up to stored messages (allow panning though)
+      if (isCatchingUp && !drawingStateRef.current.isPanning) return;
 
       if (drawingStateRef.current.isPanning) {
         const deltaX = e.clientX - drawingStateRef.current.panStartX;

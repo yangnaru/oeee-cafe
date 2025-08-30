@@ -123,6 +123,10 @@ function App() {
     canRedo: false,
   });
 
+  // Track catching up state - when true, drawing should be disabled
+  const [isCatchingUp, setIsCatchingUp] = useState(true);
+  const catchupTimeoutRef = useRef<number | null>(null);
+
   // Chat message handler
   const handleChatMessage = useCallback((_message: any) => {
     // Chat messages are handled entirely by the Chat component
@@ -369,7 +373,8 @@ function App() {
     CANVAS_HEIGHT,
     wsRef,
     userIdRef,
-    handleLocalDrawingChange
+    handleLocalDrawingChange,
+    isCatchingUp
   );
 
   // RAF-based compositing system for better performance
@@ -557,6 +562,18 @@ function App() {
           console.error("Failed to send join message:", error);
         }
 
+        // Start catching up phase - drawing will be disabled
+        setIsCatchingUp(true);
+
+        // Set a timeout to end catching up phase if no more messages arrive
+        if (catchupTimeoutRef.current) {
+          clearTimeout(catchupTimeoutRef.current);
+        }
+        catchupTimeoutRef.current = window.setTimeout(() => {
+          setIsCatchingUp(false);
+          console.log("Catch-up phase completed");
+        }, 1000); // 1 second timeout for catch-up
+
         // Set join timestamp after a short delay to let stored messages arrive first
         setTimeout(() => {
           if (localUserJoinTimeRef.current === 0) {
@@ -570,6 +587,15 @@ function App() {
 
       ws.onmessage = async (event) => {
         try {
+          // Reset catch-up timeout on any message received
+          if (catchupTimeoutRef.current) {
+            clearTimeout(catchupTimeoutRef.current);
+            catchupTimeoutRef.current = window.setTimeout(() => {
+              setIsCatchingUp(false);
+              console.log("Catch-up phase completed");
+            }, 500); // 500ms timeout after last message
+          }
+
           // Handle binary messages (can be ArrayBuffer or Blob)
           if (event.data instanceof ArrayBuffer) {
             const message = decodeMessage(event.data);
@@ -910,6 +936,12 @@ function App() {
           onChatMessage={handleChatMessage}
         />
         <div id="app" ref={appRef}>
+          {isCatchingUp && (
+            <div className="catching-up-indicator">
+              <div className="catching-up-cucumber">🥒</div>
+              <div className="catching-up-message">LOADING...</div>
+            </div>
+          )}
           <canvas
             id="canvas"
             ref={canvasRef}
