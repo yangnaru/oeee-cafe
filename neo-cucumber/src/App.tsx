@@ -579,155 +579,175 @@ function App() {
         try {
           // Handle different message types
           switch (message.type) {
-              case 'drawLine': {
-                const userEngine = userEnginesRef.current.get(message.userId);
-                if (userEngine) {
-                  const engine = userEngine.engine;
-                  const targetLayer = message.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-                  
-                  engine.drawLine(
-                    targetLayer,
-                    message.fromX, message.fromY,
-                    message.toX, message.toY,
-                    message.brushSize,
-                    message.brushType,
-                    message.color.r,
-                    message.color.g,
-                    message.color.b,
-                    message.color.a
-                  );
-
-                  // Update thumbnails for the remote user's engine
-                  engine.updateLayerThumbnails();
-                  
-                  // CRITICAL: Update composite buffer for remote engine
-                  engine.compositeLayers(true, true);
-
-                  needsRecompositionRef.current = true;
-                }
-                break;
-              }
-
-              case 'drawPoint': {
-                const userEngine = userEnginesRef.current.get(message.userId);
-                if (userEngine) {
-                  const engine = userEngine.engine;
-                  const targetLayer = message.layer === "foreground"
+            case "drawLine": {
+              const userEngine = userEnginesRef.current.get(message.userId);
+              if (userEngine) {
+                const engine = userEngine.engine;
+                const targetLayer =
+                  message.layer === "foreground"
                     ? engine.layers.foreground
                     : engine.layers.background;
 
-                  engine.drawLine(
-                    targetLayer,
-                    message.x, message.y,
-                    message.x, message.y,
-                    message.brushSize,
-                    message.brushType,
-                    message.color.r,
-                    message.color.g,
-                    message.color.b,
-                    message.color.a
-                  );
+                engine.drawLine(
+                  targetLayer,
+                  message.fromX,
+                  message.fromY,
+                  message.toX,
+                  message.toY,
+                  message.brushSize,
+                  message.brushType,
+                  message.color.r,
+                  message.color.g,
+                  message.color.b,
+                  message.color.a
+                );
 
-                  // Update thumbnails and composite buffer for remote engine
-                  engine.updateLayerThumbnails();
-                  engine.compositeLayers(true, true);
+                // Update thumbnails for the remote user's engine
+                engine.updateLayerThumbnails();
 
-                  needsRecompositionRef.current = true;
-                }
-                break;
+                // CRITICAL: Update composite buffer for remote engine
+                engine.compositeLayers(true, true);
+
+                needsRecompositionRef.current = true;
               }
+              break;
+            }
 
-              case 'fill': {
-                const userEngine = userEnginesRef.current.get(message.userId);
-                if (userEngine) {
-                  const engine = userEngine.engine;
-                  const targetLayer = message.layer === "foreground"
+            case "drawPoint": {
+              const userEngine = userEnginesRef.current.get(message.userId);
+              if (userEngine) {
+                const engine = userEngine.engine;
+                const targetLayer =
+                  message.layer === "foreground"
                     ? engine.layers.foreground
                     : engine.layers.background;
 
-                  engine.doFloodFill(
-                    targetLayer,
-                    message.x, message.y,
-                    message.color.r,
-                    message.color.g,
-                    message.color.b,
-                    message.color.a
-                  );
+                engine.drawLine(
+                  targetLayer,
+                  message.x,
+                  message.y,
+                  message.x,
+                  message.y,
+                  message.brushSize,
+                  message.brushType,
+                  message.color.r,
+                  message.color.g,
+                  message.color.b,
+                  message.color.a
+                );
 
-                  // Update thumbnails and composite buffer for remote engine
-                  engine.updateLayerThumbnails();
-                  engine.compositeLayers(true, true);
+                // Update thumbnails and composite buffer for remote engine
+                engine.updateLayerThumbnails();
+                engine.compositeLayers(true, true);
 
-                  needsRecompositionRef.current = true;
-                }
-                break;
+                needsRecompositionRef.current = true;
+              }
+              break;
+            }
+
+            case "fill": {
+              const userEngine = userEnginesRef.current.get(message.userId);
+              if (userEngine) {
+                const engine = userEngine.engine;
+                const targetLayer =
+                  message.layer === "foreground"
+                    ? engine.layers.foreground
+                    : engine.layers.background;
+
+                engine.doFloodFill(
+                  targetLayer,
+                  message.x,
+                  message.y,
+                  message.color.r,
+                  message.color.g,
+                  message.color.b,
+                  message.color.a
+                );
+
+                // Update thumbnails and composite buffer for remote engine
+                engine.updateLayerThumbnails();
+                engine.compositeLayers(true, true);
+
+                needsRecompositionRef.current = true;
+              }
+              break;
+            }
+
+            case "join": {
+              const userEngine = userEnginesRef.current.get(message.userId);
+              if (userEngine) {
+                userEngine.firstSeen = message.timestamp;
+                needsRecompositionRef.current = true;
               }
 
-              case 'join': {
-                const userEngine = userEnginesRef.current.get(message.userId);
-                if (userEngine) {
-                  userEngine.firstSeen = message.timestamp;
-                  needsRecompositionRef.current = true;
-                }
-
-                // Add system message to chat when someone joins
-                if ((window as any).addChatMessage && message.userId !== userIdRef.current) {
-                  (window as any).addChatMessage({
-                    id: `join-${message.userId}-${message.timestamp}`,
-                    type: 'system',
-                    userId: 'system',
-                    username: 'System',
-                    message: `User ${message.userId.substring(0, 8)} joined`,
-                    timestamp: message.timestamp
-                  });
-                }
-                break;
+              // Add system message to chat when someone joins
+              if (
+                (window as any).addChatMessage &&
+                message.userId !== userIdRef.current
+              ) {
+                (window as any).addChatMessage({
+                  id: `join-${message.userId}-${message.timestamp}`,
+                  type: "system",
+                  userId: "system",
+                  username: "System",
+                  message: `User ${message.userId.substring(0, 8)} joined`,
+                  timestamp: message.timestamp,
+                });
               }
+              break;
+            }
 
-              case 'chat': {
-                // Add chat message to chat component
-                if ((window as any).addChatMessage) {
-                  (window as any).addChatMessage({
-                    id: `chat-${message.userId}-${message.timestamp}`,
-                    type: 'user',
-                    userId: message.userId,
-                    username: message.userId.substring(0, 8),
-                    message: message.message,
-                    timestamp: message.timestamp
-                  });
-                }
-                break;
+            case "chat": {
+              // Add chat message to chat component
+              if ((window as any).addChatMessage) {
+                (window as any).addChatMessage({
+                  id: `chat-${message.userId}-${message.timestamp}`,
+                  type: "user",
+                  userId: message.userId,
+                  username: message.userId.substring(0, 8),
+                  message: message.message,
+                  timestamp: message.timestamp,
+                });
               }
+              break;
+            }
 
-              case 'pointerup': {
-                break;
+            case "snapshotRequest": {
+              // Forward snapshot request to drawing hook
+              if ((window as any).handleSnapshotRequest) {
+                (window as any).handleSnapshotRequest(message.timestamp);
               }
+              break;
+            }
 
-              case 'snapshot': {
-                const userEngine = userEnginesRef.current.get(message.userId);
-                if (userEngine) {
-                  try {
-                    pngDataToLayer(message.pngData, CANVAS_WIDTH, CANVAS_HEIGHT)
-                      .then((layerData) => {
-                        const targetLayer = message.layer === "foreground"
+            case "pointerup": {
+              break;
+            }
+
+            case "snapshot": {
+              const userEngine = userEnginesRef.current.get(message.userId);
+              if (userEngine) {
+                try {
+                  pngDataToLayer(message.pngData, CANVAS_WIDTH, CANVAS_HEIGHT)
+                    .then((layerData) => {
+                      const targetLayer =
+                        message.layer === "foreground"
                           ? userEngine.engine.layers.foreground
                           : userEngine.engine.layers.background;
-                        
-                        targetLayer.set(layerData);
-                        needsRecompositionRef.current = true;
-                      })
-                      .catch((error) => {
-                        console.error("Failed to decompress snapshot:", error);
-                      });
-                  } catch (error) {
-                    console.error("Failed to process snapshot:", error);
-                  }
+
+                      targetLayer.set(layerData);
+                      needsRecompositionRef.current = true;
+                    })
+                    .catch((error) => {
+                      console.error("Failed to decompress snapshot:", error);
+                    });
+                } catch (error) {
+                  console.error("Failed to process snapshot:", error);
                 }
-                break;
               }
+              break;
             }
+          }
         } catch (error) {
           console.error("Failed to handle binary message:", error);
         }
@@ -854,7 +874,7 @@ function App() {
   return (
     <div className="drawing-session-container">
       <div className="drawing-area">
-        <Chat 
+        <Chat
           wsRef={wsRef}
           userId={userIdRef.current}
           onChatMessage={handleChatMessage}

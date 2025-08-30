@@ -39,6 +39,8 @@ export const useDrawing = (
   const isInitializedRef = useRef(false);
   const onHistoryChangeRef = useRef(onHistoryChange);
   const lastModifiedLayerRef = useRef<"foreground" | "background">("foreground");
+  const isDrawingRef = useRef(false);
+  const pendingSnapshotRequestRef = useRef(false);
   const history = useCanvasHistory(30);
 
   // Update the ref when callback changes
@@ -186,6 +188,9 @@ export const useDrawing = (
       ) {
         const coords = getCanvasCoordinates(e.clientX, e.clientY);
 
+        // Mark drawing as active
+        isDrawingRef.current = true;
+
         if (drawingState.brushType === "fill") {
           if (!drawingEngineRef.current) {
             return;
@@ -331,6 +336,15 @@ export const useDrawing = (
 
       if (e.button === 1 || drawingStateRef.current.isPanning) {
         drawingStateRef.current.isPanning = false;
+      } else {
+        // Mark drawing as inactive for drawing operations
+        isDrawingRef.current = false;
+        
+        // Check for pending snapshot request
+        if (pendingSnapshotRequestRef.current) {
+          sendSnapshot();
+          pendingSnapshotRequestRef.current = false;
+        }
       }
 
       if (
@@ -597,6 +611,58 @@ export const useDrawing = (
       }
     };
   }, []); // Empty dependency array - only runs on unmount
+
+  // Send snapshot of current canvas state
+  const sendSnapshot = useCallback(async () => {
+    const engine = drawingEngineRef.current;
+    const ws = wsRef?.current;
+    const userId = userIdRef?.current;
+    
+    if (!engine || !ws || ws.readyState !== WebSocket.OPEN || !userId) {
+      return;
+    }
+
+    try {
+      // Send foreground layer snapshot
+      const fgPngBlob = await layerToPngBlob(
+        engine.layers.foreground,
+        canvasWidth,
+        canvasHeight
+      );
+      const fgSnapshot = await encodeSnapshot(userId, 'foreground', fgPngBlob);
+      ws.send(fgSnapshot);
+
+      // Send background layer snapshot
+      const bgPngBlob = await layerToPngBlob(
+        engine.layers.background,
+        canvasWidth,
+        canvasHeight
+      );
+      const bgSnapshot = await encodeSnapshot(userId, 'background', bgPngBlob);
+      ws.send(bgSnapshot);
+    } catch (error) {
+      console.error("Failed to send snapshots:", error);
+    }
+  }, [canvasWidth, canvasHeight, wsRef, userIdRef]);
+
+  // Handle snapshot request from server
+  const handleSnapshotRequest = useCallback((timestamp: number) => {
+    if (isDrawingRef.current) {
+      // Defer if currently drawing
+      pendingSnapshotRequestRef.current = true;
+    } else {
+      // Send immediately if not drawing
+      sendSnapshot();
+    }
+  }, [sendSnapshot]);
+
+  // Expose snapshot request handler to window for App.tsx
+  useEffect(() => {
+    (window as any).handleSnapshotRequest = handleSnapshotRequest;
+    return () => {
+      delete (window as any).handleSnapshotRequest;
+    };
+  }, [handleSnapshotRequest]);
 
   return {
     context: contextRef.current,

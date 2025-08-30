@@ -12,6 +12,7 @@ export const MSG_TYPE = {
   JOIN: 0x01,
   SNAPSHOT: 0x02,
   CHAT: 0x03,
+  SNAPSHOT_REQUEST: 0x05,
   
   // Client messages (>= 0x10) - server just broadcasts
   DRAW_LINE: 0x10,
@@ -288,6 +289,17 @@ export function encodeChat(
 }
 
 /**
+ * Encode SNAPSHOT_REQUEST message (0x05)
+ * Format: [0x05][timestamp:8]
+ */
+export function encodeSnapshotRequest(timestamp: number): ArrayBuffer {
+  const buffer = new Uint8Array(9);
+  buffer[0] = MSG_TYPE.SNAPSHOT_REQUEST;
+  writeUint64LE(buffer, 1, timestamp);
+  return buffer.buffer;
+}
+
+/**
  * Encode POINTER_UP message (0x13)
  * Format: [0x13][UUID:16][x:2][y:2][button:1][pointerType:1]
  */
@@ -362,6 +374,11 @@ export interface ChatMessage {
   message: string;
 }
 
+export interface SnapshotRequestMessage {
+  type: 'snapshotRequest';
+  timestamp: number;
+}
+
 export interface PointerUpMessage {
   type: 'pointerup';
   userId: string;
@@ -374,6 +391,7 @@ export type DecodedMessage =
   | JoinMessage 
   | SnapshotMessage 
   | ChatMessage
+  | SnapshotRequestMessage
   | DrawLineMessage 
   | DrawPointMessage 
   | FillMessage 
@@ -407,6 +425,13 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         userId: bytesToUuid(buffer.slice(1, 17)),
         timestamp: readUint64LE(buffer, 17),
         message: decoder.decode(buffer.slice(27, 27 + msgLength))
+      };
+      
+    case MSG_TYPE.SNAPSHOT_REQUEST:
+      if (buffer.length < 9) return null;
+      return {
+        type: 'snapshotRequest',
+        timestamp: readUint64LE(buffer, 1)
       };
       
     case MSG_TYPE.SNAPSHOT:
