@@ -4,6 +4,7 @@ use axum::extract::{ws::Message, Path, State, WebSocketUpgrade};
 use axum::response::Response;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
+use serde_json;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -66,6 +67,63 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, room_uuid: Uuid, st
         // Only process Binary and Text messages
         if !matches!(msg, Message::Text(_) | Message::Binary(_)) {
             continue;
+        }
+        
+        // Handle snapshot messages - filter history before storing
+        if let Message::Text(text) = &msg {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
+                if json["type"] == "snapshot" {
+                    if let (Some(snapshot_user), Some(snapshot_layer)) = 
+                        (json["userId"].as_str(), json["layer"].as_str()) {
+                        
+                        debug!("Processing snapshot from user {} for layer {} in room {}", 
+                               snapshot_user, snapshot_layer, room_uuid);
+                        
+                        // Filter existing history
+                        let mut history = state.message_history
+                            .entry(room_uuid)
+                            .or_insert_with(Vec::new);
+                        
+                        let initial_count = history.len();
+                        
+                        history.retain(|stored_msg| {
+                            if let Message::Text(stored_text) = stored_msg {
+                                if let Ok(stored_json) = serde_json::from_str::<serde_json::Value>(stored_text) {
+                                    let stored_user = stored_json["userId"].as_str();
+                                    let stored_type = stored_json["type"].as_str();
+                                    let stored_layer = stored_json["layer"].as_str();
+                                    
+                                    // Different user - always keep
+                                    if stored_user != Some(snapshot_user) {
+                                        return true;
+                                    }
+                                    
+                                    // Same user - check type and layer
+                                    match stored_type {
+                                        Some("pointerup") => false, // Remove all pointerup
+                                        Some("drawLine") | Some("drawPoint") | 
+                                        Some("fill") | Some("snapshot") => {
+                                            // Keep if different layer
+                                            stored_layer != Some(snapshot_layer)
+                                        }
+                                        _ => true // Keep other types (join, etc.)
+                                    }
+                                } else {
+                                    true // Keep if can't parse
+                                }
+                            } else {
+                                true // Keep non-text messages
+                            }
+                        });
+                        
+                        let removed_count = initial_count - history.len();
+                        if removed_count > 0 {
+                            debug!("Removed {} obsolete messages from history for user {} layer {} in room {}", 
+                                   removed_count, snapshot_user, snapshot_layer, room_uuid);
+                        }
+                    }
+                }
+            }
         }
         
         // Store message in history
