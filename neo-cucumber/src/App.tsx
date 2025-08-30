@@ -642,15 +642,25 @@ function App() {
         // Handle different message types
         switch (message.type) {
           case "drawLine": {
-            const userEngine = userEnginesRef.current.get(message.userId);
-            if (userEngine) {
-              const engine = userEngine.engine;
+            console.log("Drawing event - drawLine:", {
+              userId: message.userId.substring(0, 8),
+              isLocalUser: message.userId === userIdRef.current,
+              layer: message.layer,
+              from: { x: message.fromX, y: message.fromY },
+              to: { x: message.toX, y: message.toY },
+              brushSize: message.brushSize,
+              brushType: message.brushType,
+              color: message.color
+            });
+            
+            // Check if this is the local user's drawing event
+            if (message.userId === userIdRef.current && drawingEngine) {
               const targetLayer =
                 message.layer === "foreground"
-                  ? engine.layers.foreground
-                  : engine.layers.background;
+                  ? drawingEngine.layers.foreground
+                  : drawingEngine.layers.background;
 
-              engine.drawLine(
+              drawingEngine.drawLine(
                 targetLayer,
                 message.fromX,
                 message.fromY,
@@ -664,27 +674,70 @@ function App() {
                 message.color.a
               );
 
-              // Update thumbnails for the remote user's engine
-              engine.updateLayerThumbnails();
+              // Update thumbnails for the local engine
+              drawingEngine.updateLayerThumbnails(
+                fgThumbnailRef.current?.getContext("2d") || undefined,
+                bgThumbnailRef.current?.getContext("2d") || undefined
+              );
 
-              // CRITICAL: Update composite buffer for remote engine
-              engine.compositeLayers(true, true);
-
+              // Notify parent component that drawing has changed
+              handleLocalDrawingChange();
               needsRecompositionRef.current = true;
+            } else {
+              // Handle remote user's drawing event
+              const userEngine = userEnginesRef.current.get(message.userId);
+              if (userEngine) {
+                const engine = userEngine.engine;
+                const targetLayer =
+                  message.layer === "foreground"
+                    ? engine.layers.foreground
+                    : engine.layers.background;
+
+                engine.drawLine(
+                  targetLayer,
+                  message.fromX,
+                  message.fromY,
+                  message.toX,
+                  message.toY,
+                  message.brushSize,
+                  message.brushType,
+                  message.color.r,
+                  message.color.g,
+                  message.color.b,
+                  message.color.a
+                );
+
+                // Update thumbnails for the remote user's engine
+                engine.updateLayerThumbnails();
+
+                // CRITICAL: Update composite buffer for remote engine
+                engine.compositeLayers(true, true);
+
+                needsRecompositionRef.current = true;
+              }
             }
             break;
           }
 
           case "drawPoint": {
-            const userEngine = userEnginesRef.current.get(message.userId);
-            if (userEngine) {
-              const engine = userEngine.engine;
+            console.log("Drawing event - drawPoint:", {
+              userId: message.userId.substring(0, 8),
+              isLocalUser: message.userId === userIdRef.current,
+              layer: message.layer,
+              point: { x: message.x, y: message.y },
+              brushSize: message.brushSize,
+              brushType: message.brushType,
+              color: message.color
+            });
+
+            // Check if this is the local user's drawing event
+            if (message.userId === userIdRef.current && drawingEngine) {
               const targetLayer =
                 message.layer === "foreground"
-                  ? engine.layers.foreground
-                  : engine.layers.background;
+                  ? drawingEngine.layers.foreground
+                  : drawingEngine.layers.background;
 
-              engine.drawLine(
+              drawingEngine.drawLine(
                 targetLayer,
                 message.x,
                 message.y,
@@ -698,25 +751,66 @@ function App() {
                 message.color.a
               );
 
-              // Update thumbnails and composite buffer for remote engine
-              engine.updateLayerThumbnails();
-              engine.compositeLayers(true, true);
+              // Update thumbnails for the local engine
+              drawingEngine.updateLayerThumbnails(
+                fgThumbnailRef.current?.getContext("2d") || undefined,
+                bgThumbnailRef.current?.getContext("2d") || undefined
+              );
 
+              // Notify parent component that drawing has changed
+              handleLocalDrawingChange();
               needsRecompositionRef.current = true;
+            } else {
+              // Handle remote user's drawing event
+              const userEngine = userEnginesRef.current.get(message.userId);
+              if (userEngine) {
+                const engine = userEngine.engine;
+                const targetLayer =
+                  message.layer === "foreground"
+                    ? engine.layers.foreground
+                    : engine.layers.background;
+
+                engine.drawLine(
+                  targetLayer,
+                  message.x,
+                  message.y,
+                  message.x,
+                  message.y,
+                  message.brushSize,
+                  message.brushType,
+                  message.color.r,
+                  message.color.g,
+                  message.color.b,
+                  message.color.a
+                );
+
+                // Update thumbnails and composite buffer for remote engine
+                engine.updateLayerThumbnails();
+                engine.compositeLayers(true, true);
+
+                needsRecompositionRef.current = true;
+              }
             }
             break;
           }
 
           case "fill": {
-            const userEngine = userEnginesRef.current.get(message.userId);
-            if (userEngine) {
-              const engine = userEngine.engine;
+            console.log("Drawing event - fill:", {
+              userId: message.userId.substring(0, 8),
+              isLocalUser: message.userId === userIdRef.current,
+              layer: message.layer,
+              point: { x: message.x, y: message.y },
+              color: message.color
+            });
+
+            // Check if this is the local user's drawing event
+            if (message.userId === userIdRef.current && drawingEngine) {
               const targetLayer =
                 message.layer === "foreground"
-                  ? engine.layers.foreground
-                  : engine.layers.background;
+                  ? drawingEngine.layers.foreground
+                  : drawingEngine.layers.background;
 
-              engine.doFloodFill(
+              drawingEngine.doFloodFill(
                 targetLayer,
                 message.x,
                 message.y,
@@ -726,11 +820,41 @@ function App() {
                 message.color.a
               );
 
-              // Update thumbnails and composite buffer for remote engine
-              engine.updateLayerThumbnails();
-              engine.compositeLayers(true, true);
+              // Update thumbnails for the local engine
+              drawingEngine.updateLayerThumbnails(
+                fgThumbnailRef.current?.getContext("2d") || undefined,
+                bgThumbnailRef.current?.getContext("2d") || undefined
+              );
 
+              // Notify parent component that drawing has changed
+              handleLocalDrawingChange();
               needsRecompositionRef.current = true;
+            } else {
+              // Handle remote user's drawing event
+              const userEngine = userEnginesRef.current.get(message.userId);
+              if (userEngine) {
+                const engine = userEngine.engine;
+                const targetLayer =
+                  message.layer === "foreground"
+                    ? engine.layers.foreground
+                    : engine.layers.background;
+
+                engine.doFloodFill(
+                  targetLayer,
+                  message.x,
+                  message.y,
+                  message.color.r,
+                  message.color.g,
+                  message.color.b,
+                  message.color.a
+                );
+
+                // Update thumbnails and composite buffer for remote engine
+                engine.updateLayerThumbnails();
+                engine.compositeLayers(true, true);
+
+                needsRecompositionRef.current = true;
+              }
             }
             break;
           }
@@ -814,7 +938,7 @@ function App() {
         console.error("Failed to handle binary message:", error);
       }
     };
-  }, [getWebSocketUrl, createUserEngine, fetchAuthInfo]);
+  }, [getWebSocketUrl, createUserEngine, fetchAuthInfo, drawingEngine, handleLocalDrawingChange]);
 
   // RAF-based compositing system for better performance
   const compositeAllUserLayers = useCallback(() => {
