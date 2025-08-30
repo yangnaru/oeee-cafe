@@ -33,7 +33,8 @@ export const useDrawing = (
   wsRef?: React.RefObject<WebSocket | null>,
   userIdRef?: React.RefObject<string>,
   onDrawingChange?: () => void,
-  isCatchingUp: boolean = false
+  isCatchingUp: boolean = false,
+  connectionState: 'connecting' | 'connected' | 'disconnected' = 'connected'
 ) => {
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const drawingEngineRef = useRef<DrawingEngine | null>(null);
@@ -150,8 +151,8 @@ export const useDrawing = (
       // Don't interfere with controls interaction
       if (controlsElement?.contains(target as Node)) return;
 
-      // Disable drawing while catching up to stored messages
-      if (isCatchingUp) return;
+      // Disable drawing while catching up to stored messages or when disconnected
+      if (isCatchingUp || connectionState !== 'connected') return;
 
       // Only handle drawing area interactions
       if (
@@ -322,8 +323,8 @@ export const useDrawing = (
       // Only handle the active pointer
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
-      // Disable drawing while catching up to stored messages
-      if (isCatchingUp) return;
+      // Disable drawing while catching up to stored messages or when disconnected
+      if (isCatchingUp || connectionState !== 'connected') return;
 
       // Send pointerup event through WebSocket
       if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN && userIdRef?.current) {
@@ -387,8 +388,8 @@ export const useDrawing = (
       // Only handle the active pointer
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
-      // Disable drawing while catching up to stored messages (allow panning though)
-      if (isCatchingUp && !drawingStateRef.current.isPanning) return;
+      // Disable drawing while catching up to stored messages or when disconnected (allow panning though)
+      if ((isCatchingUp || connectionState !== 'connected') && !drawingStateRef.current.isPanning) return;
 
       if (drawingStateRef.current.isPanning) {
         const deltaX = e.clientX - drawingStateRef.current.panStartX;

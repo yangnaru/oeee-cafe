@@ -127,6 +127,10 @@ function App() {
   const [isCatchingUp, setIsCatchingUp] = useState(true);
   const catchupTimeoutRef = useRef<number | null>(null);
 
+  // Track connection state for reconnection logic
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const shouldConnectRef = useRef(false);
+
   // Chat message handler
   const handleChatMessage = useCallback((_message: any) => {
     // Chat messages are handled entirely by the Chat component
@@ -168,6 +172,7 @@ function App() {
     userEnginesRef.current.set(userId, { engine, firstSeen, canvas });
     needsRecompositionRef.current = true;
   }, []);
+
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fgThumbnailRef = useRef<HTMLCanvasElement>(null);
@@ -374,8 +379,372 @@ function App() {
     wsRef,
     userIdRef,
     handleLocalDrawingChange,
-    isCatchingUp
+    isCatchingUp,
+    connectionState
   );
+
+
+  // Function to handle manual reconnection
+  const handleManualReconnect = useCallback(() => {
+    console.log("Manual reconnection triggered");
+    
+    // Clear canvas states before reconnecting
+    if (drawingEngine) {
+      drawingEngine.layers.foreground.fill(0);
+      drawingEngine.layers.background.fill(0);
+      drawingEngine.compositeLayers(true, true);
+    }
+    userEnginesRef.current.clear();
+    localUserJoinTimeRef.current = 0;
+    needsRecompositionRef.current = true;
+    
+    // Reconnect immediately
+    shouldConnectRef.current = true;
+    connectWebSocket();
+  }, [drawingEngine]);
+
+  // Function to download current canvas as PNG
+  const downloadCanvasAsPNG = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Create a temporary canvas for download to ensure we get the current state
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = CANVAS_WIDTH;
+    tempCanvas.height = CANVAS_HEIGHT;
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    if (!tempCtx) return;
+
+    // Copy the current canvas content
+    tempCtx.drawImage(canvas, 0, 0);
+    
+    // Create download link
+    const link = document.createElement('a');
+    link.download = `canvas-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
+    link.href = tempCanvas.toDataURL('image/png');
+    
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, []);
+
+  // Function to get WebSocket URL dynamically
+  const getWebSocketUrl = useCallback(() => {
+    // Option 1: Use environment variable if set
+    if (import.meta.env.VITE_WS_URL) {
+      return import.meta.env.VITE_WS_URL;
+    }
+
+    // Option 2: Build dynamically from current location
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.host;
+
+    // Extract room ID from path (last UUID in path)
+    const pathSegments = window.location.pathname.split("/");
+    const uuidPattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let roomId = "00000000-0000-0000-0000-000000000000"; // default fallback (all zero uuid)
+
+    // Find the last UUID in the path
+    for (let i = pathSegments.length - 1; i >= 0; i--) {
+      if (uuidPattern.test(pathSegments[i])) {
+        roomId = pathSegments[i];
+        break;
+      }
+    }
+
+    return `${protocol}//${host}/api/collaborate/${roomId}/ws`;
+  }, []);
+
+  // Function to establish WebSocket connection
+  const connectWebSocket = useCallback(() => {
+    // Only connect if we should be connecting
+    if (!shouldConnectRef.current && wsRef.current) {
+      return;
+    }
+
+    // Clean up any existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    setConnectionState('connecting');
+    const ws = new WebSocket(getWebSocketUrl());
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+      setConnectionState('connected');
+
+      // Send initial join message to establish user presence and layer order
+      try {
+        const binaryMessage = encodeJoin(userIdRef.current, Date.now());
+        ws.send(binaryMessage);
+      } catch (error) {
+        console.error("Failed to send join message:", error);
+      }
+
+      // Start catching up phase - drawing will be disabled
+      setIsCatchingUp(true);
+
+      // Set a timeout to end catching up phase if no more messages arrive
+      if (catchupTimeoutRef.current) {
+        clearTimeout(catchupTimeoutRef.current);
+      }
+      catchupTimeoutRef.current = window.setTimeout(() => {
+        setIsCatchingUp(false);
+        console.log("Catch-up phase completed");
+      }, 1000); // 1 second timeout for catch-up
+
+      // Set join timestamp after a short delay to let stored messages arrive first
+      setTimeout(() => {
+        if (localUserJoinTimeRef.current === 0) {
+          // Only set if not already set
+          localUserJoinTimeRef.current = Date.now();
+          // Trigger re-compositing with proper timestamp
+          needsRecompositionRef.current = true;
+        }
+      }, 100); // 100ms should be enough for stored messages
+    };
+
+    ws.onmessage = async (event) => {
+      try {
+        // Reset catch-up timeout on any message received
+        if (catchupTimeoutRef.current) {
+          clearTimeout(catchupTimeoutRef.current);
+          catchupTimeoutRef.current = window.setTimeout(() => {
+            setIsCatchingUp(false);
+            console.log("Catch-up phase completed");
+          }, 500); // 500ms timeout after last message
+        }
+
+        // Handle binary messages (can be ArrayBuffer or Blob)
+        if (event.data instanceof ArrayBuffer) {
+          const message = decodeMessage(event.data);
+          if (!message) {
+            return;
+          }
+
+          // Create drawing engine for new user if they don't exist (skip for messages without userId)
+          if ("userId" in message && message.userId) {
+            createUserEngine(message.userId);
+          }
+
+          // Handle message types
+          await handleBinaryMessage(message);
+        } else if (event.data instanceof Blob) {
+          const arrayBuffer = await event.data.arrayBuffer();
+          const message = decodeMessage(arrayBuffer);
+          if (!message) {
+            return;
+          }
+
+          // Create drawing engine for new user if they don't exist (skip for messages without userId)
+          if ("userId" in message && message.userId) {
+            createUserEngine(message.userId);
+          }
+
+          // Handle message types
+          await handleBinaryMessage(message);
+        }
+      } catch (error) {
+        console.error("Failed to decode WebSocket message:", error);
+      }
+    };
+
+    ws.onerror = (event) => {
+      console.error("WebSocket error:", event);
+      setConnectionState('disconnected');
+    };
+
+    ws.onclose = (event) => {
+      console.log("WebSocket closed:", event.code, event.reason);
+      setConnectionState('disconnected');
+      // No automatic reconnection - user must manually reconnect
+    };
+
+    // Helper function to handle decoded binary messages (moved inside connectWebSocket)
+    const handleBinaryMessage = async (message: any) => {
+      try {
+        // Handle different message types
+        switch (message.type) {
+          case "drawLine": {
+            const userEngine = userEnginesRef.current.get(message.userId);
+            if (userEngine) {
+              const engine = userEngine.engine;
+              const targetLayer =
+                message.layer === "foreground"
+                  ? engine.layers.foreground
+                  : engine.layers.background;
+
+              engine.drawLine(
+                targetLayer,
+                message.fromX,
+                message.fromY,
+                message.toX,
+                message.toY,
+                message.brushSize,
+                message.brushType,
+                message.color.r,
+                message.color.g,
+                message.color.b,
+                message.color.a
+              );
+
+              // Update thumbnails for the remote user's engine
+              engine.updateLayerThumbnails();
+
+              // CRITICAL: Update composite buffer for remote engine
+              engine.compositeLayers(true, true);
+
+              needsRecompositionRef.current = true;
+            }
+            break;
+          }
+
+          case "drawPoint": {
+            const userEngine = userEnginesRef.current.get(message.userId);
+            if (userEngine) {
+              const engine = userEngine.engine;
+              const targetLayer =
+                message.layer === "foreground"
+                  ? engine.layers.foreground
+                  : engine.layers.background;
+
+              engine.drawLine(
+                targetLayer,
+                message.x,
+                message.y,
+                message.x,
+                message.y,
+                message.brushSize,
+                message.brushType,
+                message.color.r,
+                message.color.g,
+                message.color.b,
+                message.color.a
+              );
+
+              // Update thumbnails and composite buffer for remote engine
+              engine.updateLayerThumbnails();
+              engine.compositeLayers(true, true);
+
+              needsRecompositionRef.current = true;
+            }
+            break;
+          }
+
+          case "fill": {
+            const userEngine = userEnginesRef.current.get(message.userId);
+            if (userEngine) {
+              const engine = userEngine.engine;
+              const targetLayer =
+                message.layer === "foreground"
+                  ? engine.layers.foreground
+                  : engine.layers.background;
+
+              engine.doFloodFill(
+                targetLayer,
+                message.x,
+                message.y,
+                message.color.r,
+                message.color.g,
+                message.color.b,
+                message.color.a
+              );
+
+              // Update thumbnails and composite buffer for remote engine
+              engine.updateLayerThumbnails();
+              engine.compositeLayers(true, true);
+
+              needsRecompositionRef.current = true;
+            }
+            break;
+          }
+
+          case "join": {
+            const userEngine = userEnginesRef.current.get(message.userId);
+            if (userEngine) {
+              userEngine.firstSeen = message.timestamp;
+              needsRecompositionRef.current = true;
+            }
+
+            // Add system message to chat when someone joins
+            if (
+              (window as any).addChatMessage &&
+              message.userId !== userIdRef.current
+            ) {
+              (window as any).addChatMessage({
+                id: `join-${message.userId}-${message.timestamp}`,
+                type: "system",
+                userId: "system",
+                username: "System",
+                message: `User ${message.userId.substring(0, 8)} joined`,
+                timestamp: message.timestamp,
+              });
+            }
+            break;
+          }
+
+          case "chat": {
+            // Add chat message to chat component
+            if ((window as any).addChatMessage) {
+              (window as any).addChatMessage({
+                id: `chat-${message.userId}-${message.timestamp}`,
+                type: "user",
+                userId: message.userId,
+                username: message.userId.substring(0, 8),
+                message: message.message,
+                timestamp: message.timestamp,
+              });
+            }
+            break;
+          }
+
+          case "snapshotRequest": {
+            // Forward snapshot request to drawing hook
+            if ((window as any).handleSnapshotRequest) {
+              (window as any).handleSnapshotRequest(message.timestamp);
+            }
+            break;
+          }
+
+          case "pointerup": {
+            break;
+          }
+
+          case "snapshot": {
+            const userEngine = userEnginesRef.current.get(message.userId);
+            if (userEngine) {
+              try {
+                pngDataToLayer(message.pngData, CANVAS_WIDTH, CANVAS_HEIGHT)
+                  .then((layerData) => {
+                    const targetLayer =
+                      message.layer === "foreground"
+                        ? userEngine.engine.layers.foreground
+                        : userEngine.engine.layers.background;
+
+                    targetLayer.set(layerData);
+                    needsRecompositionRef.current = true;
+                  })
+                  .catch((error) => {
+                    console.error("Failed to decompress snapshot:", error);
+                  });
+              } catch (error) {
+                console.error("Failed to process snapshot:", error);
+              }
+            }
+            break;
+          }
+        }
+      } catch (error) {
+        console.error("Failed to handle binary message:", error);
+      }
+    };
+  }, [getWebSocketUrl, createUserEngine]);
 
   // RAF-based compositing system for better performance
   const compositeAllUserLayers = useCallback(() => {
@@ -519,312 +888,16 @@ function App() {
         bgThumbnailRef.current
       );
 
-      // Function to get WebSocket URL dynamically
-      const getWebSocketUrl = () => {
-        // Option 1: Use environment variable if set
-        if (import.meta.env.VITE_WS_URL) {
-          return import.meta.env.VITE_WS_URL;
-        }
-
-        // Option 2: Build dynamically from current location
-        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const host = window.location.host;
-
-        // Extract room ID from path (last UUID in path)
-        const pathSegments = window.location.pathname.split("/");
-        const uuidPattern =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        let roomId = "00000000-0000-0000-0000-000000000000"; // default fallback (all zero uuid)
-
-        // Find the last UUID in the path
-        for (let i = pathSegments.length - 1; i >= 0; i--) {
-          if (uuidPattern.test(pathSegments[i])) {
-            roomId = pathSegments[i];
-            break;
-          }
-        }
-
-        return `${protocol}//${host}/api/collaborate/${roomId}/ws`;
-      };
-
-      // Connect to WebSocket on canvas load
-      const ws = new WebSocket(getWebSocketUrl());
-
-      // Store WebSocket reference for use in other components
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        // Send initial join message to establish user presence and layer order
-        try {
-          const binaryMessage = encodeJoin(userIdRef.current, Date.now());
-          ws.send(binaryMessage);
-        } catch (error) {
-          console.error("Failed to send join message:", error);
-        }
-
-        // Start catching up phase - drawing will be disabled
-        setIsCatchingUp(true);
-
-        // Set a timeout to end catching up phase if no more messages arrive
-        if (catchupTimeoutRef.current) {
-          clearTimeout(catchupTimeoutRef.current);
-        }
-        catchupTimeoutRef.current = window.setTimeout(() => {
-          setIsCatchingUp(false);
-          console.log("Catch-up phase completed");
-        }, 1000); // 1 second timeout for catch-up
-
-        // Set join timestamp after a short delay to let stored messages arrive first
-        setTimeout(() => {
-          if (localUserJoinTimeRef.current === 0) {
-            // Only set if not already set
-            localUserJoinTimeRef.current = Date.now();
-            // Trigger re-compositing with proper timestamp
-            needsRecompositionRef.current = true;
-          }
-        }, 100); // 100ms should be enough for stored messages
-      };
-
-      ws.onmessage = async (event) => {
-        try {
-          // Reset catch-up timeout on any message received
-          if (catchupTimeoutRef.current) {
-            clearTimeout(catchupTimeoutRef.current);
-            catchupTimeoutRef.current = window.setTimeout(() => {
-              setIsCatchingUp(false);
-              console.log("Catch-up phase completed");
-            }, 500); // 500ms timeout after last message
-          }
-
-          // Handle binary messages (can be ArrayBuffer or Blob)
-          if (event.data instanceof ArrayBuffer) {
-            const message = decodeMessage(event.data);
-            if (!message) {
-              return;
-            }
-
-            // Create drawing engine for new user if they don't exist (skip for messages without userId)
-            if ("userId" in message && message.userId) {
-              createUserEngine(message.userId);
-            }
-
-            // Handle message types
-            await handleBinaryMessage(message);
-          } else if (event.data instanceof Blob) {
-            const arrayBuffer = await event.data.arrayBuffer();
-            const message = decodeMessage(arrayBuffer);
-            if (!message) {
-              return;
-            }
-
-            // Create drawing engine for new user if they don't exist (skip for messages without userId)
-            if ("userId" in message && message.userId) {
-              createUserEngine(message.userId);
-            }
-
-            // Handle message types
-            await handleBinaryMessage(message);
-          }
-        } catch (error) {
-          console.error("Failed to decode WebSocket message:", error);
-        }
-      };
-
-      // Helper function to handle decoded binary messages
-      const handleBinaryMessage = async (message: any) => {
-        try {
-          // Handle different message types
-          switch (message.type) {
-            case "drawLine": {
-              const userEngine = userEnginesRef.current.get(message.userId);
-              if (userEngine) {
-                const engine = userEngine.engine;
-                const targetLayer =
-                  message.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-
-                engine.drawLine(
-                  targetLayer,
-                  message.fromX,
-                  message.fromY,
-                  message.toX,
-                  message.toY,
-                  message.brushSize,
-                  message.brushType,
-                  message.color.r,
-                  message.color.g,
-                  message.color.b,
-                  message.color.a
-                );
-
-                // Update thumbnails for the remote user's engine
-                engine.updateLayerThumbnails();
-
-                // CRITICAL: Update composite buffer for remote engine
-                engine.compositeLayers(true, true);
-
-                needsRecompositionRef.current = true;
-              }
-              break;
-            }
-
-            case "drawPoint": {
-              const userEngine = userEnginesRef.current.get(message.userId);
-              if (userEngine) {
-                const engine = userEngine.engine;
-                const targetLayer =
-                  message.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-
-                engine.drawLine(
-                  targetLayer,
-                  message.x,
-                  message.y,
-                  message.x,
-                  message.y,
-                  message.brushSize,
-                  message.brushType,
-                  message.color.r,
-                  message.color.g,
-                  message.color.b,
-                  message.color.a
-                );
-
-                // Update thumbnails and composite buffer for remote engine
-                engine.updateLayerThumbnails();
-                engine.compositeLayers(true, true);
-
-                needsRecompositionRef.current = true;
-              }
-              break;
-            }
-
-            case "fill": {
-              const userEngine = userEnginesRef.current.get(message.userId);
-              if (userEngine) {
-                const engine = userEngine.engine;
-                const targetLayer =
-                  message.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-
-                engine.doFloodFill(
-                  targetLayer,
-                  message.x,
-                  message.y,
-                  message.color.r,
-                  message.color.g,
-                  message.color.b,
-                  message.color.a
-                );
-
-                // Update thumbnails and composite buffer for remote engine
-                engine.updateLayerThumbnails();
-                engine.compositeLayers(true, true);
-
-                needsRecompositionRef.current = true;
-              }
-              break;
-            }
-
-            case "join": {
-              const userEngine = userEnginesRef.current.get(message.userId);
-              if (userEngine) {
-                userEngine.firstSeen = message.timestamp;
-                needsRecompositionRef.current = true;
-              }
-
-              // Add system message to chat when someone joins
-              if (
-                (window as any).addChatMessage &&
-                message.userId !== userIdRef.current
-              ) {
-                (window as any).addChatMessage({
-                  id: `join-${message.userId}-${message.timestamp}`,
-                  type: "system",
-                  userId: "system",
-                  username: "System",
-                  message: `User ${message.userId.substring(0, 8)} joined`,
-                  timestamp: message.timestamp,
-                });
-              }
-              break;
-            }
-
-            case "chat": {
-              // Add chat message to chat component
-              if ((window as any).addChatMessage) {
-                (window as any).addChatMessage({
-                  id: `chat-${message.userId}-${message.timestamp}`,
-                  type: "user",
-                  userId: message.userId,
-                  username: message.userId.substring(0, 8),
-                  message: message.message,
-                  timestamp: message.timestamp,
-                });
-              }
-              break;
-            }
-
-            case "snapshotRequest": {
-              // Forward snapshot request to drawing hook
-              if ((window as any).handleSnapshotRequest) {
-                (window as any).handleSnapshotRequest(message.timestamp);
-              }
-              break;
-            }
-
-            case "pointerup": {
-              break;
-            }
-
-            case "snapshot": {
-              const userEngine = userEnginesRef.current.get(message.userId);
-              if (userEngine) {
-                try {
-                  pngDataToLayer(message.pngData, CANVAS_WIDTH, CANVAS_HEIGHT)
-                    .then((layerData) => {
-                      const targetLayer =
-                        message.layer === "foreground"
-                          ? userEngine.engine.layers.foreground
-                          : userEngine.engine.layers.background;
-
-                      targetLayer.set(layerData);
-                      needsRecompositionRef.current = true;
-                    })
-                    .catch((error) => {
-                      console.error("Failed to decompress snapshot:", error);
-                    });
-                } catch (error) {
-                  console.error("Failed to process snapshot:", error);
-                }
-              }
-              break;
-            }
-          }
-        } catch (error) {
-          console.error("Failed to handle binary message:", error);
-        }
-      };
-
-      ws.onerror = (event) => {
-        console.error("WebSocket error:", event);
-      };
-
-      ws.onclose = (event) => {
-        console.log("WebSocket closed:", event);
-      };
+      // Enable connection and connect to WebSocket on canvas load
+      shouldConnectRef.current = true;
+      connectWebSocket();
 
       // Clean up WebSocket connection when component unmounts
       return () => {
-        wsRef.current = null;
-        if (
-          ws.readyState === WebSocket.OPEN ||
-          ws.readyState === WebSocket.CONNECTING
-        ) {
-          ws.close();
+        shouldConnectRef.current = false;
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
         }
       };
     }
@@ -940,6 +1013,37 @@ function App() {
             <div className="catching-up-indicator">
               <div className="catching-up-cucumber">🥒</div>
               <div className="catching-up-message">LOADING...</div>
+            </div>
+          )}
+          {connectionState !== 'connected' && !isCatchingUp && (
+            <div className="connection-status-indicator">
+              {connectionState === 'disconnected' && (
+                <>
+                  <div className="disconnect-message">
+                    Connection lost. Your work is saved locally.
+                  </div>
+                  <div className="disconnect-actions">
+                    <button 
+                      className="reconnect-btn" 
+                      onClick={handleManualReconnect}
+                    >
+                      Reconnect
+                    </button>
+                    <button 
+                      className="download-btn" 
+                      onClick={downloadCanvasAsPNG}
+                    >
+                      Download PNG
+                    </button>
+                  </div>
+                </>
+              )}
+              {connectionState === 'connecting' && (
+                <>
+                  <div className="reconnecting-spinner">🥒</div>
+                  <div>Connecting...</div>
+                </>
+              )}
             </div>
           )}
           <canvas

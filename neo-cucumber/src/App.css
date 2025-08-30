@@ -516,3 +516,61 @@ body {
     opacity: 1;
   }
 }
+
+/* Connection status indicator */
+.connection-status-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  background-color: var(--main-bg-color);
+  color: var(--main-text-color);
+  padding: 1.5em;
+  border: 2px solid var(--main-border-color);
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 320px;
+  font-family: Arial, Helvetica, sans-serif;
+  /* Match controls styling */
+  touch-action: auto;
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
+.disconnect-message {
+  font-size: 1em;
+  margin-bottom: 1.5em;
+  line-height: 1.4;
+  color: var(--main-text-color);
+}
+
+.disconnect-actions {
+  display: flex;
+  gap: 1em;
+  justify-content: center;
+}
+
+.reconnect-btn,
+.download-btn {
+  padding: 0.5em 1em;
+  border: 1px solid var(--main-border-color);
+  background-color: var(--main-bg-color);
+  color: var(--main-text-color);
+  cursor: pointer;
+  font-size: 14px;
+  font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.2s;
+}
+
+.reconnect-btn:hover,
+.download-btn:hover {
+  background-color: var(--main-highlight-color);
+  color: white;
+}
+
+.reconnecting-spinner {
+  font-size: 32px;
+  margin-bottom: 10px;
+  animation: spin 1.5s linear infinite;
+}
