@@ -92,6 +92,14 @@ pub struct SaveSessionResponse {
 }
 
 #[derive(Serialize)]
+pub struct SessionMetadataResponse {
+    title: Option<String>,
+    width: i32,
+    height: i32,
+    owner_id: Uuid,
+}
+
+#[derive(Serialize)]
 pub struct SessionWithCounts {
     id: Uuid,
     owner_login_name: String,
@@ -283,6 +291,38 @@ pub async fn save_collaborative_session(
     }))
 }
 
+// Get session metadata handler
+pub async fn get_session_metadata(
+    Path(session_uuid): Path<Uuid>,
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<Json<SessionMetadataResponse>, AppError> {
+    // Verify user is authenticated
+    let _user = auth_session.user.ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
+    
+    let db = state.config.connect_database().await?;
+    
+    // Get session metadata
+    let session = sqlx::query!(
+        r#"
+        SELECT title, width, height, owner_id 
+        FROM collaborative_sessions
+        WHERE id = $1 AND is_active = true
+        "#,
+        session_uuid
+    )
+    .fetch_optional(&db)
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("Session not found"))?;
+    
+    Ok(Json(SessionMetadataResponse {
+        title: session.title,
+        width: session.width,
+        height: session.height,
+        owner_id: session.owner_id,
+    }))
+}
+
 // Serve collaborative app handler
 pub async fn serve_collaborative_app(
     Path(session_uuid): Path<Uuid>,
@@ -457,23 +497,7 @@ async fn handle_socket(
         .insert(connection_id.clone(), tx.clone());
     debug!("Connection {} added to room {} successfully", connection_id, room_uuid);
 
-    // Send stored messages to new client
-    if let Some(history) = state.message_history.get(&room_uuid) {
-        for stored_msg in history.iter() {
-            if tx.send(stored_msg.clone()).is_err() {
-                warn!(
-                    "Failed to send stored message to new connection {}",
-                    connection_id
-                );
-                break;
-            }
-        }
-        debug!(
-            "Sent {} stored messages to new connection {}",
-            history.len(),
-            connection_id
-        );
-    }
+    // Note: Will send JOIN_RESPONSE and stored messages after outgoing task starts
 
     // Spawn task to handle outgoing messages
     let connection_id_clone = connection_id.clone();
@@ -494,6 +518,69 @@ async fn handle_socket(
         }
         warn!("Outgoing message task ended for connection {}", connection_id_clone);
     });
+
+    // Send JOIN_RESPONSE immediately upon connection (after outgoing task is ready)
+    debug!("Sending immediate JOIN_RESPONSE to connection {}", connection_id);
+    match sqlx::query!(
+        r#"
+        SELECT array_agg(csp.user_id ORDER BY csp.joined_at ASC) as user_ids
+        FROM collaborative_sessions cs
+        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id 
+        WHERE cs.id = $1 AND (csp.is_active = true OR csp.is_active IS NULL)
+        GROUP BY cs.id
+        "#,
+        room_uuid
+    )
+    .fetch_one(&db)
+    .await
+    {
+        Ok(session_data) => {
+            let user_ids = session_data.user_ids.unwrap_or_default();
+            let user_count = user_ids.len() as u16;
+            
+            // Send JOIN_RESPONSE with user list: [0x06][count:2][UUIDs...]
+            let mut join_response_data = vec![0x06u8]; // JOIN_RESPONSE (0x06)
+            join_response_data.push((user_count & 0xff) as u8);
+            join_response_data.push(((user_count >> 8) & 0xff) as u8);
+            
+            // Write each user UUID (16 bytes each)
+            for user_id in &user_ids {
+                let uuid_bytes = user_id.as_bytes();
+                join_response_data.extend_from_slice(uuid_bytes);
+            }
+            
+            let join_response_msg = Message::Binary(join_response_data);
+            if tx.send(join_response_msg).is_err() {
+                debug!("Failed to send immediate JOIN_RESPONSE to connection {}", connection_id);
+            } else {
+                info!(
+                    "Sent immediate JOIN_RESPONSE with {} users to connection {} in room {}",
+                    user_count, connection_id, room_uuid
+                );
+                
+                // Send stored messages (after JOIN_RESPONSE)
+                if let Some(history) = state.message_history.get(&room_uuid) {
+                    for stored_msg in history.iter() {
+                        if tx.send(stored_msg.clone()).is_err() {
+                            warn!(
+                                "Failed to send stored message to new connection {}",
+                                connection_id
+                            );
+                            break;
+                        }
+                    }
+                    debug!(
+                        "Sent {} stored messages to new connection {} (after JOIN_RESPONSE)",
+                        history.len(),
+                        connection_id
+                    );
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to query session data for immediate JOIN_RESPONSE: {}", e);
+        }
+    }
 
     // Handle incoming messages
     debug!("Starting message receive loop for connection {}", connection_id);
@@ -577,19 +664,13 @@ async fn handle_socket(
                                         .await
                                         {
                                             Ok(session_data) => {
-                                                let width = session_data.width as u16;
-                                                let height = session_data.height as u16;
+                                                let _width = session_data.width as u16;
+                                                let _height = session_data.height as u16;
                                                 let user_ids = session_data.user_ids.unwrap_or_default();
                                                 let user_count = user_ids.len() as u16;
                                                 
-                                                // Create JOIN_RESPONSE message: [0x06][width:2][height:2][count:2][UUIDs...]
+                                                // Create JOIN_RESPONSE message: [0x06][count:2][UUIDs...]
                                                 let mut response_data = vec![0x06u8]; // JOIN_RESPONSE (0x06)
-                                                
-                                                // Write dimensions (little-endian u16)
-                                                response_data.push((width & 0xff) as u8);
-                                                response_data.push(((width >> 8) & 0xff) as u8);
-                                                response_data.push((height & 0xff) as u8);
-                                                response_data.push(((height >> 8) & 0xff) as u8);
                                                 
                                                 // Write user count (little-endian u16)
                                                 response_data.push((user_count & 0xff) as u8);
@@ -612,8 +693,8 @@ async fn handle_socket(
                                                         }
                                                     }
                                                     info!(
-                                                        "Broadcasted JOIN_RESPONSE with {}×{} canvas and {} users to {} connections in room {}",
-                                                        width, height, user_count, room_connections.len(), room_uuid
+                                                        "Broadcasted JOIN_RESPONSE with {} users to {} connections in room {}",
+                                                        user_count, room_connections.len(), room_uuid
                                                     );
                                                 }
                                             }

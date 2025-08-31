@@ -291,19 +291,18 @@ export function encodeChat(
   return buffer.buffer;
 }
 
+
 /**
  * Encode JOIN_RESPONSE message (0x06)
- * Format: [0x06][width:2][height:2][count:2][UUID1:16][UUID2:16]...[UUIDn:16]
+ * Format: [0x06][count:2][UUID1:16][UUID2:16]...[UUIDn:16]
  */
-export function encodeJoinResponse(width: number, height: number, userIds: string[]): ArrayBuffer {
-  const buffer = new Uint8Array(7 + userIds.length * 16);
+export function encodeJoinResponse(userIds: string[]): ArrayBuffer {
+  const buffer = new Uint8Array(3 + userIds.length * 16);
   
   buffer[0] = MSG_TYPE.JOIN_RESPONSE;
-  writeUint16LE(buffer, 1, width);
-  writeUint16LE(buffer, 3, height);
-  writeUint16LE(buffer, 5, userIds.length);
+  writeUint16LE(buffer, 1, userIds.length);
   
-  let offset = 7;
+  let offset = 3;
   for (const userId of userIds) {
     buffer.set(uuidToBytes(userId), offset);
     offset += 16;
@@ -372,8 +371,6 @@ export interface JoinMessage {
 
 export interface JoinResponseMessage {
   type: 'joinResponse';
-  width: number;
-  height: number;
   userIds: string[];
 }
 
@@ -472,25 +469,22 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       };
       
     case MSG_TYPE.JOIN_RESPONSE: {
-      if (buffer.length < 7) return null; // Now needs width(2) + height(2) + count(2) + type(1)
-      const width = readUint16LE(buffer, 1);
-      const height = readUint16LE(buffer, 3);
-      const userCount = readUint16LE(buffer, 5);
-      if (buffer.length < 7 + userCount * 16) return null;
+      if (buffer.length < 3) return null; // Now needs count(2) + type(1)
+      const userCount = readUint16LE(buffer, 1);
+      if (buffer.length < 3 + userCount * 16) return null;
       
       const userIds: string[] = [];
       for (let i = 0; i < userCount; i++) {
-        const offset = 7 + i * 16;
+        const offset = 3 + i * 16;
         userIds.push(bytesToUuid(buffer.slice(offset, offset + 16)));
       }
       
       return {
         type: 'joinResponse',
-        width: width,
-        height: height,
         userIds: userIds
       };
     }
+
       
     case MSG_TYPE.CHAT: {
       if (buffer.length < 27) return null;

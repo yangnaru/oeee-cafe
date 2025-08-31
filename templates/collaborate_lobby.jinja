@@ -5,33 +5,29 @@
 {% block content %}
   <div class="center">
     <h2>{{ ftl_collaborate_title }}</h2>
-    
     <div class="create-session-section">
       <h3>{{ ftl_collaborate_create_session }}</h3>
       <form id="create-session-form" method="post" action="/collaborate">
         <p>
           <label for="community">{{ ftl_collaborate_community_label }}:</label>
           <select id="community" name="community_id" required>
-            {% for community in communities %}
-              <option value="{{ community.id }}">{{ community.name }}</option>
-            {% endfor %}
+            {% for community in communities %}<option value="{{ community.id }}">{{ community.name }}</option>{% endfor %}
           </select>
         </p>
-        
         <p>
           <label for="canvas-size">{{ ftl_collaborate_canvas_size_label }}:</label>
           <select id="canvas-size" name="canvas-size" required>
-            {% for size_value, size_label in canvas_sizes %}
-              <option value="{{ size_value }}">{{ size_label }}</option>
-            {% endfor %}
+            {% for size_value, size_label in canvas_sizes %}<option value="{{ size_value }}">{{ size_label }}</option>{% endfor %}
           </select>
         </p>
-        
         <p>
           <label for="session-title">{{ ftl_collaborate_session_title_label }}:</label>
-          <input type="text" id="session-title" name="title" maxlength="100" placeholder="{{ ftl_collaborate_session_title_placeholder }}">
+          <input type="text"
+                 id="session-title"
+                 name="title"
+                 maxlength="100"
+                 placeholder="{{ ftl_collaborate_session_title_placeholder }}">
         </p>
-        
         <p>
           <label for="is-public">
             <input type="checkbox" id="is-public" name="is_public" checked>
@@ -39,11 +35,9 @@
           </label>
         </p>
         <small>{{ ftl_collaborate_public_session_description }}</small>
-        
         <input type="submit" value="{{ ftl_collaborate_create_button }}">
       </form>
     </div>
-
     {% if active_sessions|length > 0 %}
       <div class="active-sessions-section">
         <h3>{{ ftl_collaborate_active_sessions }}</h3>
@@ -58,7 +52,6 @@
                 {% endif %}
                 <small>{{ ftl_collaborate_session_by }}{{ session.owner_login_name }}</small>
               </div>
-              
               <div class="session-info">
                 <div class="session-meta">
                   <span class="canvas-size">{{ session.width }}×{{ session.height }}</span>
@@ -72,11 +65,8 @@
                   <span class="session-time">{{ ftl_collaborate_session_created }} {{ session.created_at|dateformat(format="short", tz="Asia/Seoul") }}</span>
                 </div>
               </div>
-              
               <div class="session-actions">
-                <a href="/collaborate/{{ session.id }}?width={{ session.width }}&height={{ session.height }}">
-                  {{ ftl_collaborate_join_session }}
-                </a>
+                <a href="/collaborate/{{ session.id }}">{{ ftl_collaborate_join_session }}</a>
               </div>
             </div>
           {% endfor %}
@@ -88,7 +78,6 @@
       </div>
     {% endif %}
   </div>
-
   <style>
     /* Oeee Cafe style collaborative lobby */
     .create-session-section {
@@ -206,7 +195,6 @@
       border: 1px solid var(--main-border-color);
     }
   </style>
-
   <script>
     document.getElementById('create-session-form').addEventListener('submit', async function(e) {
       e.preventDefault();

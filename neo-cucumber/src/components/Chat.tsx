@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { encodeChat } from '../utils/binaryProtocol';
+import { useState, useEffect, useRef, useCallback } from "react";
+import { encodeChat } from "../utils/binaryProtocol";
 
 interface ChatMessage {
   id: string;
-  type: 'user' | 'system';
+  type: "user" | "system";
   userId: string;
   username: string;
   message: string;
@@ -18,14 +18,14 @@ interface ChatProps {
 
 export const Chat: React.FC<ChatProps> = ({ wsRef, userId, onChatMessage }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [isComposing, setIsComposing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
   useEffect(() => {
@@ -33,10 +33,13 @@ export const Chat: React.FC<ChatProps> = ({ wsRef, userId, onChatMessage }) => {
   }, [messages, scrollToBottom]);
 
   // Handle incoming chat messages
-  const addMessage = useCallback((message: ChatMessage) => {
-    setMessages(prev => [...prev, message]);
-    onChatMessage(message);
-  }, [onChatMessage]);
+  const addMessage = useCallback(
+    (message: ChatMessage) => {
+      setMessages((prev) => [...prev, message]);
+      onChatMessage(message);
+    },
+    [onChatMessage]
+  );
 
   // Expose addMessage to parent component
   useEffect(() => {
@@ -56,17 +59,17 @@ export const Chat: React.FC<ChatProps> = ({ wsRef, userId, onChatMessage }) => {
     try {
       const message = inputValue.trim();
       if (message.length > 500) {
-        alert('Message too long (max 500 characters)');
+        alert("Message too long (max 500 characters)");
         return;
       }
 
       const binaryMessage = encodeChat(userId, message, Date.now());
       ws.send(binaryMessage);
-      
-      setInputValue('');
+
+      setInputValue("");
       inputRef.current?.focus();
     } catch (error) {
-      console.error('Failed to send chat message:', error);
+      console.error("Failed to send chat message:", error);
     }
   }, [wsRef, userId, inputValue]);
 
@@ -80,18 +83,21 @@ export const Chat: React.FC<ChatProps> = ({ wsRef, userId, onChatMessage }) => {
   }, []);
 
   // Handle Enter key
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }, [sendMessage, isComposing]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey && !isComposing) {
+        e.preventDefault();
+        sendMessage();
+      }
+    },
+    [sendMessage, isComposing]
+  );
 
   // Format timestamp
   const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -105,8 +111,13 @@ export const Chat: React.FC<ChatProps> = ({ wsRef, userId, onChatMessage }) => {
       <h3>Chat</h3>
       <div id="chat-messages">
         {messages.map((msg) => (
-          <div key={msg.id} className={`chat-message ${msg.type === 'system' ? 'system-message' : ''}`}>
-            {msg.type === 'system' ? (
+          <div
+            key={msg.id}
+            className={`chat-message ${
+              msg.type === "system" ? "system-message" : ""
+            }`}
+          >
+            {msg.type === "system" ? (
               <div className="chat-text system-text">{msg.message}</div>
             ) : (
               <>

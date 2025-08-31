@@ -8,7 +8,11 @@ import {
 import { useDrawing } from "./hooks/useDrawing";
 import { DrawingEngine } from "./DrawingEngine";
 import { pngDataToLayer } from "./utils/canvasSnapshot";
-import { encodeJoin, encodeEndSession, decodeMessage } from "./utils/binaryProtocol";
+import {
+  encodeJoin,
+  encodeEndSession,
+  decodeMessage,
+} from "./utils/binaryProtocol";
 import { Chat } from "./components/Chat";
 import "./App.css";
 
@@ -131,7 +135,7 @@ function App() {
   // Track catching up state - when true, drawing should be disabled
   const [isCatchingUp, setIsCatchingUp] = useState(true);
   const catchupTimeoutRef = useRef<number | null>(null);
-  
+
   // Function to validate actual WebSocket connection state
   const isWebSocketConnected = useCallback(() => {
     return wsRef.current?.readyState === WebSocket.OPEN;
@@ -172,6 +176,9 @@ function App() {
   // Track server-provided user order for layer compositing
   const userOrderRef = useRef<string[]>([]);
 
+  // Track session owner ID from metadata
+  const sessionOwnerIdRef = useRef<string | null>(null);
+
   // Dirty flag to track when recomposition is needed
   const needsRecompositionRef = useRef(false);
 
@@ -211,6 +218,11 @@ function App() {
 
       // Don't create engine if dimensions are not available yet
       if (engineWidth <= 0 || engineHeight <= 0) {
+        console.log("Skipping user engine creation - dimensions not ready:", {
+          userId: userId.substring(0, 8),
+          engineWidth,
+          engineHeight,
+        });
         return;
       }
 
@@ -512,11 +524,11 @@ function App() {
 
     try {
       setIsSaving(true);
-      
+
       // Extract session ID from URL
       const pathSegments = window.location.pathname.split("/");
       const sessionId = pathSegments[2];
-      
+
       if (!sessionId) {
         throw new Error("Could not determine session ID");
       }
@@ -534,39 +546,51 @@ function App() {
           } else {
             reject(new Error("Failed to create blob from canvas"));
           }
-        }, 'image/png');
+        }, "image/png");
       });
 
       // Step 2: Send POST request to save
       const response = await fetch(`/collaborate/${sessionId}`, {
-        method: 'POST',
+        method: "POST",
         body: blob,
         headers: {
-          'Content-Type': 'image/png',
+          "Content-Type": "image/png",
         },
-        credentials: 'include',
+        credentials: "include",
       });
 
       if (response.ok) {
         const result = await response.json();
         console.log("Drawing saved successfully:", result);
-        
+
         // Step 3: Send END_SESSION message with actual post URL after successful save
-        const endSessionMsg = encodeEndSession(userIdRef.current, result.post_url);
+        const endSessionMsg = encodeEndSession(
+          userIdRef.current,
+          result.post_url
+        );
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(endSessionMsg);
-          console.log("END_SESSION message sent to all participants with post URL:", result.post_url);
+          console.log(
+            "END_SESSION message sent to all participants with post URL:",
+            result.post_url
+          );
         }
-        
+
         // Redirect owner to the post page to add description
         window.location.href = result.post_url;
       } else {
         const errorText = await response.text();
-        throw new Error(`Failed to save drawing: ${response.status} ${errorText}`);
+        throw new Error(
+          `Failed to save drawing: ${response.status} ${errorText}`
+        );
       }
     } catch (error) {
-      console.error('Save failed:', error);
-      alert(`Failed to save drawing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Save failed:", error);
+      alert(
+        `Failed to save drawing: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
       setIsSaving(false);
     }
   }, [isSessionOwner, isSaving, canvasDimensions]);
@@ -678,6 +702,61 @@ function App() {
     }
   }, []);
 
+  // Function to fetch session metadata (canvas dimensions, title, etc.)
+  const fetchSessionMetadata = useCallback(async (): Promise<boolean> => {
+    try {
+      // Extract session UUID from URL path (/collaborate/{uuid})
+      const pathSegments = window.location.pathname.split("/");
+      const sessionUuid = pathSegments[2];
+      
+      if (!sessionUuid || pathSegments[1] !== "collaborate") {
+        throw new Error("Invalid collaborative session URL");
+      }
+
+      console.log("Fetching session metadata for UUID:", sessionUuid);
+      const response = await fetch(`/collaborate/${sessionUuid}/meta`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        console.error("Session metadata request failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url,
+        });
+        throw new Error(`Failed to fetch session metadata: ${response.status} ${response.statusText}`);
+      }
+
+      const metadata = await response.json();
+      console.log("Session metadata fetched successfully:", metadata);
+      
+      // Set canvas dimensions immediately
+      setCanvasDimensions({
+        width: metadata.width,
+        height: metadata.height,
+      });
+      
+      // Reinitialize local drawing engine with correct dimensions
+      if (drawingEngine) {
+        drawingEngine.reinitialize(metadata.width, metadata.height);
+        console.log("Drawing engine reinitialized with dimensions:", metadata.width, "x", metadata.height);
+      }
+      
+      // Also store owner ID for session owner detection
+      sessionOwnerIdRef.current = metadata.owner_id;
+      
+      return true;
+    } catch (error) {
+      console.error("Failed to fetch session metadata:", {
+        error: error,
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      });
+      return false;
+    }
+  }, []);
+
   const connectWebSocket = useCallback(async () => {
     console.log("WebSocket connection attempt started:", {
       shouldConnect: shouldConnectRef.current,
@@ -694,11 +773,20 @@ function App() {
 
     // Clean up any existing connection only if it's not in CONNECTING or OPEN state
     if (wsRef.current) {
-      if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
-        console.log("WebSocket already connecting or connected, skipping new connection attempt");
+      if (
+        wsRef.current.readyState === WebSocket.OPEN ||
+        wsRef.current.readyState === WebSocket.CONNECTING
+      ) {
+        console.log(
+          "WebSocket already connecting or connected, skipping new connection attempt"
+        );
         return;
       } else {
-        console.log("Cleaning up existing WebSocket connection (state: " + wsRef.current.readyState + ")");
+        console.log(
+          "Cleaning up existing WebSocket connection (state: " +
+            wsRef.current.readyState +
+            ")"
+        );
         wsRef.current.close();
         wsRef.current = null;
       }
@@ -719,6 +807,17 @@ function App() {
       }
     } else {
       console.log("Using existing user ID:", userIdRef.current);
+    }
+
+    // Fetch session metadata (canvas dimensions, title, owner) - don't proceed if it fails
+    console.log("Fetching session metadata");
+    const metadataSuccess = await fetchSessionMetadata();
+    if (!metadataSuccess) {
+      console.error(
+        "Failed to fetch session metadata, cannot establish WebSocket connection"
+      );
+      setConnectionState("disconnected");
+      return;
     }
 
     try {
@@ -745,6 +844,8 @@ function App() {
       });
       setConnectionState("connected");
 
+      console.log("Waiting for immediate JOIN_RESPONSE from server...");
+
       // Send initial join message to establish user presence and layer order
       try {
         const binaryMessage = encodeJoin(userIdRef.current, Date.now());
@@ -763,10 +864,12 @@ function App() {
       catchupTimeoutRef.current = window.setTimeout(() => {
         setIsCatchingUp(false);
         console.log("Catch-up phase completed");
-        
+
         // Validate connection state after catch-up phase
         if (isWebSocketConnected() && connectionState !== "connected") {
-          console.log("WebSocket is actually connected, correcting connection state");
+          console.log(
+            "WebSocket is actually connected, correcting connection state"
+          );
           setConnectionState("connected");
         }
       }, 1000); // 1 second timeout for catch-up
@@ -790,10 +893,12 @@ function App() {
           catchupTimeoutRef.current = window.setTimeout(() => {
             setIsCatchingUp(false);
             console.log("Catch-up phase completed");
-            
+
             // Validate connection state after catch-up phase
             if (isWebSocketConnected() && connectionState !== "connected") {
-              console.log("WebSocket is actually connected, correcting connection state");
+              console.log(
+                "WebSocket is actually connected, correcting connection state"
+              );
               setConnectionState("connected");
             }
           }, 500); // 500ms timeout after last message
@@ -801,10 +906,18 @@ function App() {
 
         // Handle binary messages (can be ArrayBuffer or Blob)
         if (event.data instanceof ArrayBuffer) {
+          const rawData = new Uint8Array(event.data);
+          console.log(
+            "📦 Raw binary message received, length:",
+            rawData.length,
+            "first byte:",
+            rawData[0]
+          );
           const message = decodeMessage(event.data);
           if (!message) {
             return;
           }
+          console.log("📦 Decoded message type:", message.type);
 
           // Create drawing engine for new user if they don't exist (skip for messages without userId)
           if ("userId" in message && message.userId) {
@@ -842,13 +955,18 @@ function App() {
         userAgent: navigator.userAgent,
         connectionState: connectionState,
       });
-      
+
       // Only set as disconnected if the WebSocket is actually closed
       // WebSocket errors can be transient and don't always mean disconnection
-      if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+      if (
+        ws.readyState === WebSocket.CLOSED ||
+        ws.readyState === WebSocket.CLOSING
+      ) {
         setConnectionState("disconnected");
       } else {
-        console.log("WebSocket error occurred but connection is still open, not setting as disconnected");
+        console.log(
+          "WebSocket error occurred but connection is still open, not setting as disconnected"
+        );
       }
     };
 
@@ -872,6 +990,7 @@ function App() {
         // Handle different message types
         switch (message.type) {
           case "drawLine": {
+
             // Check if this is the local user's drawing event
             if (message.userId === userIdRef.current && drawingEngine) {
               const targetLayer =
@@ -904,7 +1023,12 @@ function App() {
               needsRecompositionRef.current = true;
             } else {
               // Handle remote user's drawing event
-              const userEngine = userEnginesRef.current.get(message.userId);
+              let userEngine = userEnginesRef.current.get(message.userId);
+              if (!userEngine) {
+                // Create engine for remote user if not exists
+                createUserEngine(message.userId, CANVAS_WIDTH, CANVAS_HEIGHT);
+                userEngine = userEnginesRef.current.get(message.userId);
+              }
               if (userEngine) {
                 const engine = userEngine.engine;
                 const targetLayer =
@@ -981,7 +1105,12 @@ function App() {
               needsRecompositionRef.current = true;
             } else {
               // Handle remote user's drawing event
-              const userEngine = userEnginesRef.current.get(message.userId);
+              let userEngine = userEnginesRef.current.get(message.userId);
+              if (!userEngine) {
+                // Create engine for remote user if not exists
+                createUserEngine(message.userId, CANVAS_WIDTH, CANVAS_HEIGHT);
+                userEngine = userEnginesRef.current.get(message.userId);
+              }
               if (userEngine) {
                 const engine = userEngine.engine;
                 const targetLayer =
@@ -1052,7 +1181,12 @@ function App() {
               needsRecompositionRef.current = true;
             } else {
               // Handle remote user's drawing event
-              const userEngine = userEnginesRef.current.get(message.userId);
+              let userEngine = userEnginesRef.current.get(message.userId);
+              if (!userEngine) {
+                // Create engine for remote user if not exists
+                createUserEngine(message.userId, CANVAS_WIDTH, CANVAS_HEIGHT);
+                userEngine = userEnginesRef.current.get(message.userId);
+              }
               if (userEngine) {
                 const engine = userEngine.engine;
                 const targetLayer =
@@ -1083,7 +1217,17 @@ function App() {
           }
 
           case "join": {
-            const userEngine = userEnginesRef.current.get(message.userId);
+            // Skip creating engine for local user (handled by useDrawing hook)
+            if (message.userId === userIdRef.current) {
+              break;
+            }
+
+            let userEngine = userEnginesRef.current.get(message.userId);
+            if (!userEngine) {
+              // Create engine for remote user who joined
+              createUserEngine(message.userId, CANVAS_WIDTH, CANVAS_HEIGHT);
+              userEngine = userEnginesRef.current.get(message.userId);
+            }
             if (userEngine) {
               userEngine.firstSeen = message.timestamp;
               needsRecompositionRef.current = true;
@@ -1106,47 +1250,39 @@ function App() {
             break;
           }
 
+
           case "joinResponse": {
-            console.log("JOIN_RESPONSE received:", {
-              width: message.width,
-              height: message.height,
+            console.log("🎯 JOIN_RESPONSE received:", {
               userCount: message.userIds.length,
               users: message.userIds.map((id: string) => id.substring(0, 8)),
             });
 
-            // Determine if current user is the session owner (first in the ordered list)
-            const isOwner = message.userIds.length > 0 && message.userIds[0] === userIdRef.current;
+            // Determine if current user is the session owner (using metadata)
+            const isOwner = sessionOwnerIdRef.current === userIdRef.current;
             setIsSessionOwner(isOwner);
-            console.log("Session ownership:", { isOwner, currentUser: userIdRef.current.substring(0, 8) });
+            console.log("Session ownership:", {
+              isOwner,
+              currentUser: userIdRef.current.substring(0, 8),
+              sessionOwner: sessionOwnerIdRef.current?.substring(0, 8),
+            });
 
-            // Only update canvas dimensions if they haven't been set yet
+            // Mark that we've received the join response (for UI state)
             if (!joinResponseReceived) {
-              setCanvasDimensions({
-                width: message.width,
-                height: message.height,
-              });
               setJoinResponseReceived(true);
-
-              // End catching up phase since we now have the essential JOIN_RESPONSE
-              setIsCatchingUp(false);
-              if (catchupTimeoutRef.current) {
-                clearTimeout(catchupTimeoutRef.current);
-                catchupTimeoutRef.current = null;
-              }
-              console.log("JOIN_RESPONSE received - ready for drawing");
-
-              // Reinitialize local drawing engine with server dimensions
-              if (drawingEngine) {
-                drawingEngine.reinitialize(message.width, message.height);
-              }
+              console.log("JOIN_RESPONSE received - user list established");
             }
 
             // Store the server-provided user order
             userOrderRef.current = [...message.userIds];
 
-            // Initialize drawing engines for all users in the list with server dimensions
+            // Initialize drawing engines for remote users only (exclude local user)
             message.userIds.forEach((userId: string) => {
-              createUserEngine(userId, message.width, message.height);
+              if (userId !== userIdRef.current) {
+                // Use current canvas dimensions if available
+                const width = canvasDimensions?.width || CANVAS_WIDTH;
+                const height = canvasDimensions?.height || CANVAS_HEIGHT;
+                createUserEngine(userId, width, height);
+              }
             });
 
             // Mark for recomposition to update layer order
@@ -1158,13 +1294,13 @@ function App() {
             console.log("END_SESSION received:", {
               userId: message.userId.substring(0, 8),
               postUrl: message.postUrl,
-              isFromOwner: message.userId !== userIdRef.current
+              isFromOwner: message.userId !== userIdRef.current,
             });
 
             if (message.userId !== userIdRef.current) {
               // Show notification to non-owners
               setSessionEnded(true);
-              
+
               // Redirect immediately to the post URL
               window.location.href = message.postUrl;
             }
@@ -1416,11 +1552,11 @@ function App() {
     if (initializationAttemptedRef.current) {
       return;
     }
-    
+
     // Mark that we've attempted initialization
     initializationAttemptedRef.current = true;
     shouldConnectRef.current = true;
-    
+
     // Defer WebSocket connection until we have user authentication
     const initConnection = async () => {
       const authSuccess = await fetchAuthInfo();
@@ -1434,7 +1570,9 @@ function App() {
     return () => {
       shouldConnectRef.current = false;
       if (wsRef.current) {
-        console.log("useEffect cleanup: Closing WebSocket connection due to component unmount");
+        console.log(
+          "useEffect cleanup: Closing WebSocket connection due to component unmount"
+        );
         wsRef.current.close();
         wsRef.current = null;
       }
@@ -1587,27 +1725,28 @@ function App() {
           )}
           {connectionState !== "connected" && !isCatchingUp && (
             <div className="connection-status-indicator">
-              {connectionState === "disconnected" && wsRef.current?.readyState === WebSocket.CLOSED && (
-                <>
-                  <div className="disconnect-message">
-                    Connection lost. Your work is saved locally.
-                  </div>
-                  <div className="disconnect-actions">
-                    <button
-                      className="reconnect-btn"
-                      onClick={handleManualReconnect}
-                    >
-                      Reconnect
-                    </button>
-                    <button
-                      className="download-btn"
-                      onClick={downloadCanvasAsPNG}
-                    >
-                      Download PNG
-                    </button>
-                  </div>
-                </>
-              )}
+              {connectionState === "disconnected" &&
+                wsRef.current?.readyState === WebSocket.CLOSED && (
+                  <>
+                    <div className="disconnect-message">
+                      Connection lost. Your work is saved locally.
+                    </div>
+                    <div className="disconnect-actions">
+                      <button
+                        className="reconnect-btn"
+                        onClick={handleManualReconnect}
+                      >
+                        Reconnect
+                      </button>
+                      <button
+                        className="download-btn"
+                        onClick={downloadCanvasAsPNG}
+                      >
+                        Download PNG
+                      </button>
+                    </div>
+                  </>
+                )}
               {connectionState === "connecting" && (
                 <>
                   <div className="reconnecting-spinner">🥒</div>
@@ -1840,13 +1979,13 @@ function App() {
                   onClick={saveCollaborativeDrawing}
                   disabled={isSaving || sessionEnded || !joinResponseReceived}
                   title={
-                    isSaving 
-                      ? "Saving drawing..." 
-                      : sessionEnded 
-                        ? "Session ended" 
-                        : !joinResponseReceived 
-                          ? "Loading..." 
-                          : "Save drawing to gallery"
+                    isSaving
+                      ? "Saving drawing..."
+                      : sessionEnded
+                      ? "Session ended"
+                      : !joinResponseReceived
+                      ? "Loading..."
+                      : "Save drawing to gallery"
                   }
                 >
                   {isSaving ? "Saving..." : "💾 Save to Gallery"}
@@ -1861,7 +2000,8 @@ function App() {
               <div className="session-ending-content">
                 <div className="session-ending-spinner">🥒</div>
                 <div className="session-ending-message">
-                  Session is ending. The drawing is being saved to the gallery...
+                  Session is ending. The drawing is being saved to the
+                  gallery...
                 </div>
                 <div className="session-ending-redirect">
                   You'll be redirected to the post page shortly.

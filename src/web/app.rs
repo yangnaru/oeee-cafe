@@ -11,7 +11,7 @@ use crate::web::handlers::activitypub::{
 };
 use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::collaborate::{
-    collaborate_lobby, create_collaborative_session, get_auth_info, save_collaborative_session, serve_collaborative_app, websocket_collaborate_handler
+    collaborate_lobby, create_collaborative_session, get_auth_info, get_session_metadata, save_collaborative_session, serve_collaborative_app, websocket_collaborate_handler
 };
 use crate::web::handlers::community::{
     communities, community, community_iframe, create_community_form, do_create_community,
@@ -198,6 +198,7 @@ impl App {
             .route("/posts/:id", get(redirect_post_to_login_name))
             .route("/collaborate", get(collaborate_lobby).post(create_collaborative_session))
             .route("/collaborate/:uuid", get(serve_collaborative_app).post(save_collaborative_session))
+            .route("/collaborate/:uuid/meta", get(get_session_metadata))
             .route("/collaborate/:uuid/ws", get(websocket_collaborate_handler))
             .route("/api/auth", get(get_auth_info))
             .route("/about", get(about))
