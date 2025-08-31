@@ -131,12 +131,18 @@ function App() {
   // Track catching up state - when true, drawing should be disabled
   const [isCatchingUp, setIsCatchingUp] = useState(true);
   const catchupTimeoutRef = useRef<number | null>(null);
+  
+  // Function to validate actual WebSocket connection state
+  const isWebSocketConnected = useCallback(() => {
+    return wsRef.current?.readyState === WebSocket.OPEN;
+  }, []);
 
   // Track connection state for reconnection logic
   const [connectionState, setConnectionState] = useState<
     "connecting" | "connected" | "disconnected"
-  >("connecting");
+  >("disconnected");
   const shouldConnectRef = useRef(false);
+  const initializationAttemptedRef = useRef(false);
 
   // Track authentication state
   const [authError, setAuthError] = useState(false);
@@ -686,11 +692,16 @@ function App() {
       return;
     }
 
-    // Clean up any existing connection
+    // Clean up any existing connection only if it's not in CONNECTING or OPEN state
     if (wsRef.current) {
-      console.log("Cleaning up existing WebSocket connection");
-      wsRef.current.close();
-      wsRef.current = null;
+      if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
+        console.log("WebSocket already connecting or connected, skipping new connection attempt");
+        return;
+      } else {
+        console.log("Cleaning up existing WebSocket connection (state: " + wsRef.current.readyState + ")");
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     }
 
     setConnectionState("connecting");
@@ -752,6 +763,12 @@ function App() {
       catchupTimeoutRef.current = window.setTimeout(() => {
         setIsCatchingUp(false);
         console.log("Catch-up phase completed");
+        
+        // Validate connection state after catch-up phase
+        if (isWebSocketConnected() && connectionState !== "connected") {
+          console.log("WebSocket is actually connected, correcting connection state");
+          setConnectionState("connected");
+        }
       }, 1000); // 1 second timeout for catch-up
 
       // Set join timestamp after a short delay to let stored messages arrive first
@@ -773,6 +790,12 @@ function App() {
           catchupTimeoutRef.current = window.setTimeout(() => {
             setIsCatchingUp(false);
             console.log("Catch-up phase completed");
+            
+            // Validate connection state after catch-up phase
+            if (isWebSocketConnected() && connectionState !== "connected") {
+              console.log("WebSocket is actually connected, correcting connection state");
+              setConnectionState("connected");
+            }
           }, 500); // 500ms timeout after last message
         }
 
@@ -819,7 +842,14 @@ function App() {
         userAgent: navigator.userAgent,
         connectionState: connectionState,
       });
-      setConnectionState("disconnected");
+      
+      // Only set as disconnected if the WebSocket is actually closed
+      // WebSocket errors can be transient and don't always mean disconnection
+      if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        setConnectionState("disconnected");
+      } else {
+        console.log("WebSocket error occurred but connection is still open, not setting as disconnected");
+      }
     };
 
     ws.onclose = (event) => {
@@ -1382,8 +1412,15 @@ function App() {
 
   // Initialize WebSocket connection on component mount
   useEffect(() => {
-    // Enable connection and connect to WebSocket
+    // Use a ref to track if initialization has already been attempted
+    if (initializationAttemptedRef.current) {
+      return;
+    }
+    
+    // Mark that we've attempted initialization
+    initializationAttemptedRef.current = true;
     shouldConnectRef.current = true;
+    
     // Defer WebSocket connection until we have user authentication
     const initConnection = async () => {
       const authSuccess = await fetchAuthInfo();
@@ -1397,11 +1434,12 @@ function App() {
     return () => {
       shouldConnectRef.current = false;
       if (wsRef.current) {
+        console.log("useEffect cleanup: Closing WebSocket connection due to component unmount");
         wsRef.current.close();
         wsRef.current = null;
       }
     };
-  }, [connectWebSocket, fetchAuthInfo]);
+  }, []); // Empty deps - functions are stable and we prevent re-runs with initializationAttemptedRef
 
   // Initialize canvas dimensions and thumbnails when dimensions are received
   useEffect(() => {
@@ -1549,7 +1587,7 @@ function App() {
           )}
           {connectionState !== "connected" && !isCatchingUp && (
             <div className="connection-status-indicator">
-              {connectionState === "disconnected" && (
+              {connectionState === "disconnected" && wsRef.current?.readyState === WebSocket.CLOSED && (
                 <>
                   <div className="disconnect-message">
                     Connection lost. Your work is saved locally.

@@ -45,6 +45,29 @@ fn read_u64_le(bytes: &[u8], offset: usize) -> u64 {
     ])
 }
 
+// Helper function to encode END_SESSION message
+fn encode_end_session_message(user_id_str: &str, post_url: &str) -> Vec<u8> {
+    let user_uuid = Uuid::parse_str(user_id_str).unwrap_or_default();
+    let post_url_bytes = post_url.as_bytes();
+    let url_length = post_url_bytes.len() as u16;
+    
+    let mut message = Vec::with_capacity(1 + 16 + 2 + post_url_bytes.len());
+    
+    // Message type: 0x07 (END_SESSION)
+    message.push(0x07);
+    
+    // UUID: 16 bytes
+    message.extend_from_slice(&user_uuid.as_bytes()[..]);
+    
+    // URL length: 2 bytes (little-endian)
+    message.extend_from_slice(&url_length.to_le_bytes());
+    
+    // URL: variable length
+    message.extend_from_slice(post_url_bytes);
+    
+    message
+}
+
 // Structs for new lobby functionality
 #[derive(Deserialize)]
 pub struct CreateSessionRequest {
@@ -143,7 +166,7 @@ pub async fn collaborate_lobby(
         FROM collaborative_sessions cs
         JOIN users u ON cs.owner_id = u.id
         LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id 
-        WHERE cs.is_public = true AND cs.is_active = true
+        WHERE cs.is_public = true AND cs.is_active = true AND cs.ended_at IS NULL
         GROUP BY cs.id, u.login_name
         ORDER BY cs.last_activity DESC
         LIMIT 20
@@ -317,12 +340,17 @@ async fn handle_socket(
         "New websocket connection {} (user {}) joining room {}",
         connection_id, user_login_name, room_uuid
     );
+    
+    debug!("Starting database connection for WebSocket {}", connection_id);
 
     // Track participant in database
     let db = match state.config.connect_database().await {
-        Ok(db) => db,
+        Ok(db) => {
+            debug!("Database connection successful for WebSocket {}", connection_id);
+            db
+        },
         Err(e) => {
-            error!("Failed to connect to database: {}", e);
+            error!("Failed to connect to database for WebSocket {}: {}", connection_id, e);
             return;
         }
     };
@@ -330,7 +358,7 @@ async fn handle_socket(
     // Get session info and check if user is owner
     let is_owner = match sqlx::query!(
         r#"
-        SELECT owner_id, width, height, title FROM collaborative_sessions
+        SELECT owner_id, width, height, title, ended_at FROM collaborative_sessions
         WHERE id = $1 AND is_active = true
         "#,
         room_uuid
@@ -339,6 +367,38 @@ async fn handle_socket(
     .await
     {
         Ok(Some(session)) => {
+            // Check if session has ended
+            if session.ended_at.is_some() {
+                info!("User {} attempted to join ended session {}", user_login_name, room_uuid);
+                
+                // Get the actual post URL if the session was saved
+                let post_url = if let Ok(post_info) = sqlx::query!(
+                    r#"
+                    SELECT p.id as post_id, u.login_name
+                    FROM collaborative_sessions cs
+                    JOIN posts p ON cs.saved_post_id = p.id  
+                    JOIN users u ON cs.owner_id = u.id
+                    WHERE cs.id = $1
+                    "#,
+                    room_uuid
+                ).fetch_optional(&db).await {
+                    if let Some(info) = post_info {
+                        format!("/@{}/{}", info.login_name, info.post_id)
+                    } else {
+                        "/collaborate".to_string() // Fallback to lobby
+                    }
+                } else {
+                    "/collaborate".to_string() // Fallback to lobby  
+                };
+                
+                // Send END_SESSION message to immediately redirect the user
+                let end_session_data = encode_end_session_message(&user_id.to_string(), &post_url);
+                if let Err(e) = sender.send(Message::Binary(end_session_data)).await {
+                    error!("Failed to send END_SESSION message: {}", e);
+                }
+                return;
+            }
+
             // Add/update participant in database
             if let Err(e) = sqlx::query!(
                 r#"
@@ -368,14 +428,15 @@ async fn handle_socket(
                 error!("Failed to update session activity: {}", e);
             }
 
+            debug!("Session {} found, user {} is owner: {}", room_uuid, user_login_name, session.owner_id == user_id);
             session.owner_id == user_id
         }
         Ok(None) => {
-            error!("Session {} not found", room_uuid);
+            error!("Session {} not found for WebSocket {}", room_uuid, connection_id);
             return;
         }
         Err(e) => {
-            error!("Failed to get session info: {}", e);
+            error!("Failed to get session info for WebSocket {}: {}", connection_id, e);
             return;
         }
     };
@@ -388,11 +449,13 @@ async fn handle_socket(
     );
 
     // Add connection to room
+    debug!("Adding connection {} to room {}", connection_id, room_uuid);
     state
         .collaboration_rooms
         .entry(room_uuid)
         .or_insert_with(DashMap::new)
         .insert(connection_id.clone(), tx.clone());
+    debug!("Connection {} added to room {} successfully", connection_id, room_uuid);
 
     // Send stored messages to new client
     if let Some(history) = state.message_history.get(&room_uuid) {
@@ -416,20 +479,31 @@ async fn handle_socket(
     let connection_id_clone = connection_id.clone();
     let outgoing_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
-            if sender.send(msg).await.is_err() {
-                warn!(
-                    "Failed to send message to connection {}",
-                    connection_id_clone
-                );
-                break;
+            match sender.send(msg).await {
+                Ok(_) => {
+                    debug!("Successfully sent message to connection {}", connection_id_clone);
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to send message to connection {}: {}",
+                        connection_id_clone, e
+                    );
+                    break;
+                }
             }
         }
+        warn!("Outgoing message task ended for connection {}", connection_id_clone);
     });
 
     // Handle incoming messages
+    debug!("Starting message receive loop for connection {}", connection_id);
     while let Some(msg) = receiver.next().await {
+        debug!("Received message from WebSocket for connection {}", connection_id);
         let msg = match msg {
-            Ok(msg) => msg,
+            Ok(msg) => {
+                debug!("Message successfully parsed for connection {}", connection_id);
+                msg
+            },
             Err(e) => {
                 error!("Websocket error for connection {}: {}", connection_id, e);
                 break;
@@ -438,13 +512,24 @@ async fn handle_socket(
 
         // Only process Binary messages (no more JSON support)
         if !matches!(msg, Message::Binary(_)) {
-            continue;
+            debug!("Received non-binary message from connection {}: {:?}", connection_id, msg);
+            match msg {
+                Message::Close(frame) => {
+                    info!("WebSocket close frame received from connection {}: {:?}", connection_id, frame);
+                    break; // Client initiated close
+                }
+                _ => {
+                    debug!("Skipping non-binary message type from connection {}", connection_id);
+                    continue;
+                }
+            }
         }
 
         // Handle server messages (< 0x10) - parse and handle specially
         if let Message::Binary(data) = &msg {
             if !data.is_empty() {
                 let msg_type = data[0];
+                debug!("Received binary message with type 0x{:02x} from connection {}", msg_type, connection_id);
 
                 // Server messages (< 0x10) need special handling
                 if msg_type < 0x10 {
@@ -836,7 +921,7 @@ async fn handle_socket(
 
     // Clean up when connection closes
     info!(
-        "Websocket connection {} (user {}) leaving room {}",
+        "Message receive loop ended for connection {} (user {}) leaving room {} - receiver returned None",
         connection_id, user_login_name, room_uuid
     );
 
@@ -995,9 +1080,9 @@ async fn handle_save_request(
     .execute(&mut *tx)
     .await?;
 
-    // Update session with saved post reference
+    // Update session with saved post reference and mark as ended
     sqlx::query!(
-        "UPDATE collaborative_sessions SET saved_post_id = $1 WHERE id = $2",
+        "UPDATE collaborative_sessions SET saved_post_id = $1, ended_at = NOW() WHERE id = $2",
         post_id,
         session_id
     )
