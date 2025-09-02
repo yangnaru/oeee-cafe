@@ -1,4 +1,5 @@
 use crate::app_error::AppError;
+use crate::models::community::get_communities_for_collaboration;
 use crate::models::user::AuthSession;
 use crate::models::user::Language;
 use crate::web::handlers::{create_base_ftl_context, get_bundle, ExtractAcceptLanguage};
@@ -248,24 +249,16 @@ pub async fn collaborate_lobby(
         .ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
 
     let db = state.config.connect_database().await?;
+    let mut tx = db.begin().await?;
 
-    // Get communities user can post to
-    let communities_data = sqlx::query!(
-        r#"
-        SELECT id, name FROM communities 
-        WHERE is_private = false OR owner_id = $1
-        ORDER BY name ASC
-        "#,
-        user.id
-    )
-    .fetch_all(&db)
-    .await?;
-
+    // Get communities user can post to using the helper function
+    let communities_data = get_communities_for_collaboration(&mut tx, user.id).await?;
+    
     let communities: Vec<CommunityInfo> = communities_data
         .into_iter()
-        .map(|row| CommunityInfo {
-            id: row.id,
-            name: row.name,
+        .map(|community| CommunityInfo {
+            id: community.id,
+            name: community.name,
         })
         .collect();
 
@@ -294,7 +287,7 @@ pub async fn collaborate_lobby(
         LIMIT 20
         "#
     )
-    .fetch_all(&db)
+    .fetch_all(&mut *tx)
     .await?;
 
     let template = state.env.get_template("collaborate_lobby.jinja")?;

@@ -431,3 +431,23 @@ pub async fn update_community_with_activity(
 
     Ok(community)
 }
+
+// Get communities a user can post to (public communities or private communities they own)
+pub async fn get_communities_for_collaboration(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<Vec<Community>> {
+    let q = query_as!(
+        Community,
+        r#"
+        SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, 
+               background_color, foreground_color
+        FROM communities 
+        WHERE is_private = false OR owner_id = $1
+        ORDER BY name ASC
+        "#,
+        user_id
+    );
+    
+    Ok(q.fetch_all(&mut **tx).await?)
+}
