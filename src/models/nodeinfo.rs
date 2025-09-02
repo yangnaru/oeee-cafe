@@ -38,13 +38,17 @@ pub async fn fetch_nodeinfo(host: &str) -> Result<Option<NodeInfo>> {
 
     // First, try to get the well-known nodeinfo
     let well_known_url = format!("https://{}/.well-known/nodeinfo", host);
-    
+
     let well_known_response = match client.get(&well_known_url).send().await {
         Ok(response) => {
             if response.status().is_success() {
                 response
             } else {
-                tracing::debug!("Well-known nodeinfo not found for {}: {}", host, response.status());
+                tracing::debug!(
+                    "Well-known nodeinfo not found for {}: {}",
+                    host,
+                    response.status()
+                );
                 return Ok(None);
             }
         }
@@ -89,12 +93,22 @@ pub async fn fetch_nodeinfo(host: &str) -> Result<Option<NodeInfo>> {
             if response.status().is_success() {
                 response
             } else {
-                tracing::debug!("Nodeinfo not found at {} for {}: {}", nodeinfo_url, host, response.status());
+                tracing::debug!(
+                    "Nodeinfo not found at {} for {}: {}",
+                    nodeinfo_url,
+                    host,
+                    response.status()
+                );
                 return Ok(None);
             }
         }
         Err(e) => {
-            tracing::debug!("Failed to fetch nodeinfo at {} for {}: {}", nodeinfo_url, host, e);
+            tracing::debug!(
+                "Failed to fetch nodeinfo at {} for {}: {}",
+                nodeinfo_url,
+                host,
+                e
+            );
             return Ok(None);
         }
     };

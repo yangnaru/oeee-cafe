@@ -14,6 +14,7 @@ timeline-empty = タイムラインが空です。 <a href="/communities">コミ
 
 home = ホーム
 draw = 描きましょう！
+collaborate = 一緒に描く
 drafts = 一時保管箱
 profile = プロフィール
 community = コミュニティ
@@ -49,6 +50,7 @@ post-published-at = 発行時刻
 post-duration = 所要時間
 post-replay = リプレイ
 post-author = 作家
+post-collaborative-participants = 共同お絵かき参加者
 post-title = タイトル
 post-no-title = 無題
 post-description = 内容
@@ -64,6 +66,26 @@ post-relay-enabled-notice = この画像は継続して描くことができま�
 allow-relay = リレー描画を許可
 sensitive = 敏感な内容
 draft-post = 一時保管された図
+
+# Collaborative drawing
+collaborate-title = 協調お絵かき セッション
+collaborate-create-session = 新しいセッションを作成
+collaborate-community-label = コミュニティ
+collaborate-canvas-size-label = キャンバス サイズ
+collaborate-session-title-label = セッション タイトル (任意)
+collaborate-session-title-placeholder = セッションのタイトルを入力してください
+collaborate-max-participants-label = 最大参加者数
+collaborate-participants = 人
+collaborate-public-session-label = 公開ロビーに表示
+collaborate-public-session-description = チェックを外すとプライベート セッション (リンクのみアクセス) になります
+collaborate-create-button = セッションを作成
+collaborate-active-sessions = アクティブな公開セッション
+collaborate-no-sessions = アクティブな公開セッションはありません。作成して始めましょう！
+collaborate-session-by = @
+collaborate-session-participants-singular = 1人の参加者
+collaborate-session-participants-plural = 人の参加者
+collaborate-session-created = 作成日時
+collaborate-join-session = セッションに参加
 
 welcome = { $name }さん、ようこそ！
 

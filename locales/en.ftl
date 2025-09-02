@@ -12,6 +12,7 @@ timeline-empty = Your timeline is empty. Discover and follow other people from <
 
 home = Home
 draw = Draw!
+collaborate = Collaborate
 drafts = Drafts
 profile = Profile
 community = Community
@@ -47,6 +48,7 @@ post-published-at = Published
 post-duration = Duration
 post-replay = Replay
 post-author = Author
+post-collaborative-participants = Collaborative drawing participants
 post-title = Title
 post-no-title = No title
 post-description = Description
@@ -62,6 +64,26 @@ post-relay-enabled-notice = You can continue drawing on this canvas. Click on th
 allow-relay = Allow relay posts
 sensitive = Sensitive
 draft-post = Draft post
+
+# Collaborative drawing
+collaborate-title = Collaborative Drawing Sessions
+collaborate-create-session = Create New Session
+collaborate-community-label = Community
+collaborate-canvas-size-label = Canvas Size
+collaborate-session-title-label = Session Title (optional)
+collaborate-session-title-placeholder = Enter a title for your session
+collaborate-max-participants-label = Max Participants
+collaborate-participants = participants
+collaborate-public-session-label = Show in public lobby
+collaborate-public-session-description = Uncheck to create a private session (link-only access)
+collaborate-create-button = Create Session
+collaborate-active-sessions = Active Public Sessions
+collaborate-no-sessions = No active public sessions. Create one to get started!
+collaborate-session-by = by @
+collaborate-session-participants-singular = 1 participant
+collaborate-session-participants-plural = participants
+collaborate-session-created = Created
+collaborate-join-session = Join Session
 
 welcome = Welcome, { $name }!
 

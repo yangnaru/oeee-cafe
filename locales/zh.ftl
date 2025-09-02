@@ -14,6 +14,7 @@ timeline-empty = 时间线是空的。在<a href="/communities">社区</a>中与
 
 home = 首页
 draw = 画画！
+collaborate = 协作画画
 drafts = 草稿箱
 profile = 个人资料
 community = 社区
@@ -49,6 +50,7 @@ post-published-at = 发布时间
 post-duration = 用时
 post-replay = 回放
 post-author = 作者
+post-collaborative-participants = 协作绘画参与者
 post-title = 标题
 post-no-title = 无题
 post-description = 描述
@@ -64,6 +66,26 @@ post-relay-enabled-notice = 这幅画可以接续创作。点击画作试试看�
 allow-relay = 允许接续创作
 sensitive = 敏感内容
 draft-post = 草稿作品
+
+# Collaborative drawing
+collaborate-title = 协作绘画会话
+collaborate-create-session = 创建新会话
+collaborate-community-label = 社区
+collaborate-canvas-size-label = 画布尺寸
+collaborate-session-title-label = 会话标题 (可选)
+collaborate-session-title-placeholder = 输入会话标题
+collaborate-max-participants-label = 最大参与者数
+collaborate-participants = 人
+collaborate-public-session-label = 显示在公共大厅
+collaborate-public-session-description = 取消选中创建私人会话 (仅链接访问)
+collaborate-create-button = 创建会话
+collaborate-active-sessions = 活跃的公共会话
+collaborate-no-sessions = 没有活跃的公共会话。创建一个开始吧！
+collaborate-session-by = 由 @
+collaborate-session-participants-singular = 1位参与者
+collaborate-session-participants-plural = 位参与者
+collaborate-session-created = 创建于
+collaborate-join-session = 加入会话
 
 welcome = 欢迎，{ $name }！
 

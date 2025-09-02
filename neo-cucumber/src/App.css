@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --main-bg-color: white;
+    --main-text-color: black;
+    --main-nav-bg-color: #c4ee62;
+    --main-border-color: #3c6712;
+    --main-highlight-color: #ef842d;
+    --main-anchor-color: black;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --main-bg-color: #2c2c2c;
+    --main-text-color: #e0e0e0;
+    --main-nav-bg-color: #2c2c2c;
+    --main-border-color: #5a5a5a;
+    --main-highlight-color: #ff8c00;
+    --main-anchor-color: #e0e0e0;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  /* iOS Safari viewport fix */
+  height: 100vh;
+  height: 100dvh; /* Use dynamic viewport height when supported */
+}
+
+body {
+  background-color: var(--main-bg-color);
+  color: var(--main-text-color);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Custom component styles that need specific CSS properties */
+.canvas-bg {
+  image-rendering: pixelated;
+}
+
+
+/* Animation keyframes */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Animation utilities */
+.animate-spin-slow {
+  animation: spin 2s linear infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Touch interaction utilities */
+.touch-auto {
+  touch-action: auto;
+}
+
+.touch-none {
+  touch-action: none;
+}
+
+.select-none {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Color utilities using CSS custom properties */
+.bg-main-bg {
+  background-color: var(--main-bg-color);
+}
+
+.bg-main {
+  background-color: var(--main-bg-color);
+}
+
+.text-main {
+  color: var(--main-text-color);
+}
+
+.border-main {
+  border-color: var(--main-border-color);
+}
+
+.text-highlight {
+  color: var(--main-highlight-color);
+}
+
+.bg-highlight {
+  background-color: var(--main-highlight-color);
+}
+
+/* iOS Safari viewport height fix */
+.app-container {
+  height: 100vh; /* Fallback */
+  height: 100dvh; /* Dynamic viewport height for modern browsers */
+  /* Prevent iOS Safari from bouncing/scrolling */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+/* Backdrop blur utility for older browsers */
+.backdrop-blur-sm {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}

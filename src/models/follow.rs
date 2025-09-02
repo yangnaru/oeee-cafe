@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, Postgres, Transaction};
 use uuid::Uuid;
 
-
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Follow {
     pub follower_actor_id: Uuid,
@@ -167,7 +166,7 @@ pub async fn create_follow_by_actor_ids(
             )
             .fetch_one(&mut **tx)
             .await?;
-            
+
             Ok(Follow {
                 follower_actor_id: existing.follower_actor_id,
                 following_actor_id: existing.following_actor_id,
@@ -236,5 +235,8 @@ pub async fn get_follower_shared_inboxes_for_actor(
     .fetch_all(&mut **tx)
     .await?;
 
-    Ok(inboxes.into_iter().map(|row| row.shared_inbox_url).collect())
+    Ok(inboxes
+        .into_iter()
+        .map(|row| row.shared_inbox_url)
+        .collect())
 }

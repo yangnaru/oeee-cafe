@@ -25,6 +25,7 @@
         </p>
       </fieldset>
       <input type="submit" value="{{ ftl_sign_up }}" />
+      {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
     </form>
   </div>
 {% endblock content %}

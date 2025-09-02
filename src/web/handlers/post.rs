@@ -27,7 +27,7 @@ use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
 use minijinja::context;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{handler_404, ExtractAcceptLanguage};
@@ -388,6 +388,29 @@ pub async fn post_view(
             .unwrap_or_default(),
         None => 0,
     };
+
+    // Get collaborative session participants if this post is from a collaborative session
+    let collaborative_participants: Vec<CollaborativeParticipant> = sqlx::query!(
+        r#"
+        SELECT u.login_name, u.display_name
+        FROM collaborative_sessions cs
+        JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
+        JOIN users u ON csp.user_id = u.id
+        WHERE cs.saved_post_id = $1
+        ORDER BY csp.joined_at ASC
+        "#,
+        uuid
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|row| CollaborativeParticipant {
+        login_name: row.login_name,
+        display_name: row.display_name,
+    })
+    .collect();
+
     tx.commit().await?;
 
     let community_id = community_id.to_string();
@@ -434,6 +457,7 @@ pub async fn post_view(
                 base_url => state.config.base_url.clone(),
                 domain => state.config.domain.clone(),
                 comments,
+                collaborative_participants,
                 ..create_base_ftl_context(&bundle)
             })
             .unwrap();
@@ -741,6 +765,12 @@ pub async fn draft_posts(
 pub struct CreateCommentForm {
     pub post_id: String,
     pub content: String,
+}
+
+#[derive(Serialize)]
+pub struct CollaborativeParticipant {
+    pub login_name: String,
+    pub display_name: String,
 }
 
 pub async fn do_create_comment(
@@ -1067,20 +1097,22 @@ pub async fn hx_delete_post(
     .unwrap();
     let image = find_image_by_id(&mut tx, image_id).await?;
 
-    let keys = [
-        format!(
+    let mut keys = vec![format!(
+        "image/{}{}/{}",
+        image.image_filename.chars().next().unwrap(),
+        image.image_filename.chars().nth(1).unwrap(),
+        image.image_filename
+    )];
+
+    // Only add replay file to deletion if it exists
+    if let Some(ref replay_filename) = image.replay_filename {
+        keys.push(format!(
             "replay/{}{}/{}",
-            image.replay_filename.chars().next().unwrap(),
-            image.replay_filename.chars().nth(1).unwrap(),
-            image.replay_filename
-        ),
-        format!(
-            "image/{}{}/{}",
-            image.image_filename.chars().next().unwrap(),
-            image.image_filename.chars().nth(1).unwrap(),
-            image.image_filename
-        ),
-    ];
+            replay_filename.chars().next().unwrap(),
+            replay_filename.chars().nth(1).unwrap(),
+            replay_filename
+        ));
+    }
 
     let credentials: AwsCredentials = AwsCredentials::new(
         state.config.aws_access_key_id.clone(),
@@ -1201,6 +1233,29 @@ pub async fn post_view_by_login_name(
             .unwrap_or_default(),
         None => 0,
     };
+
+    // Get collaborative session participants if this post is from a collaborative session
+    let collaborative_participants: Vec<CollaborativeParticipant> = sqlx::query!(
+        r#"
+        SELECT u.login_name, u.display_name
+        FROM collaborative_sessions cs
+        JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
+        JOIN users u ON csp.user_id = u.id
+        WHERE cs.saved_post_id = $1
+        ORDER BY csp.joined_at ASC
+        "#,
+        uuid
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|row| CollaborativeParticipant {
+        login_name: row.login_name,
+        display_name: row.display_name,
+    })
+    .collect();
+
     tx.commit().await?;
 
     let community_id = community_id.to_string();
@@ -1247,6 +1302,7 @@ pub async fn post_view_by_login_name(
                 base_url => state.config.base_url.clone(),
                 domain => state.config.domain.clone(),
                 comments,
+                collaborative_participants,
                 ..create_base_ftl_context(&bundle)
             })
             .unwrap();
@@ -1388,7 +1444,7 @@ pub async fn post_relay_view_by_login_name(
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("draw_post_neo.jinja").unwrap();
-    
+
     let community_id = Uuid::parse_str(
         post.clone()
             .unwrap()
@@ -1405,7 +1461,7 @@ pub async fn post_relay_view_by_login_name(
             .unwrap_or_default(),
         None => 0,
     };
-    
+
     let user_preferred_language = auth_session
         .user
         .clone()

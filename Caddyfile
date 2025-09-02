@@ -1,0 +1,5 @@
+:80 {
+  @vite `!method('POST') && path('/collaborate/*') && !path('/collaborate/*/ws')`
+  reverse_proxy @vite localhost:5173
+  reverse_proxy localhost:3000
+}

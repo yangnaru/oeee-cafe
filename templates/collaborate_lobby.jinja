@@ -1,0 +1,248 @@
+{% extends "base.jinja" %}
+{% block title %}
+  {{ super() }} | {{ ftl_collaborate_title }}
+{% endblock title %}
+{% block content %}
+  <div class="center">
+    <h2>{{ ftl_collaborate_title }}</h2>
+    <div class="create-session-section">
+      <h3>{{ ftl_collaborate_create_session }}</h3>
+      <form id="create-session-form" method="post" action="/collaborate">
+        <p>
+          <label for="community">{{ ftl_collaborate_community_label }}:</label>
+          <select id="community" name="community_id" required>
+            {% for community in communities %}<option value="{{ community.id }}">{{ community.name }}</option>{% endfor %}
+          </select>
+        </p>
+        <p>
+          <label for="canvas-size">{{ ftl_collaborate_canvas_size_label }}:</label>
+          <select id="canvas-size" name="canvas-size" required>
+            {% for size_value, size_label in canvas_sizes %}<option value="{{ size_value }}">{{ size_label }}</option>{% endfor %}
+          </select>
+        </p>
+        <p>
+          <label for="session-title">{{ ftl_collaborate_session_title_label }}:</label>
+          <input type="text"
+                 id="session-title"
+                 name="title"
+                 maxlength="100"
+                 placeholder="{{ ftl_collaborate_session_title_placeholder }}">
+        </p>
+        <p>
+          <label for="max-participants">{{ ftl_collaborate_max_participants_label }}:</label>
+          <select id="max-participants" name="max_participants" required>
+            <option value="2">2 {{ ftl_collaborate_participants }}</option>
+            <option value="4" selected>4 {{ ftl_collaborate_participants }}</option>
+            <option value="6">6 {{ ftl_collaborate_participants }}</option>
+            <option value="8">8 {{ ftl_collaborate_participants }}</option>
+          </select>
+        </p>
+        <p>
+          <label for="is-public">
+            <input type="checkbox" id="is-public" name="is_public" checked>
+            {{ ftl_collaborate_public_session_label }}
+          </label>
+        </p>
+        <small>{{ ftl_collaborate_public_session_description }}</small>
+        <input type="submit" value="{{ ftl_collaborate_create_button }}">
+      </form>
+    </div>
+    {% if active_sessions|length > 0 %}
+      <div class="active-sessions-section">
+        <h3>{{ ftl_collaborate_active_sessions }}</h3>
+        <div class="sessions-grid">
+          {% for session in active_sessions %}
+            <div class="session-card">
+              <div class="session-header">
+                {% if session.title %}
+                  <h4>{{ session.title }}</h4>
+                {% else %}
+                  <h4>{{ ftl_post_no_title }}</h4>
+                {% endif %}
+                <small>
+                  <a href="/@{{ session.owner_login_name }}">@{{ session.owner_login_name }}</a>
+                </small>
+              </div>
+              <div class="session-info">
+                <div class="session-meta">
+                  <span class="canvas-size">{{ session.width }}×{{ session.height }}</span>
+                  <span class="participant-count">
+                    {% if session.participant_count == 1 %}
+                      {{ ftl_collaborate_session_participants_singular }}
+                    {% else %}
+                      {{ session.participant_count }}{{ ftl_collaborate_session_participants_plural }}
+                    {% endif %}
+                  </span>
+                  <span class="session-time">{{ ftl_collaborate_session_created }} {{ session.created_at|dateformat(format="short", tz="Asia/Seoul") }}</span>
+                </div>
+              </div>
+              <div class="session-actions">
+                <a href="/collaborate/{{ session.id }}">{{ ftl_collaborate_join_session }}</a>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="no-sessions">
+        <p>{{ ftl_collaborate_no_sessions }}</p>
+      </div>
+    {% endif %}
+  </div>
+  <style>
+    /* Oeee Cafe style collaborative lobby */
+    .create-session-section {
+      background-color: var(--main-nav-bg-color);
+      border: 1px solid var(--main-border-color);
+      padding: 8px;
+      margin-bottom: 8px;
+    }
+    
+    .create-session-section h3 {
+      margin: 0 0 8px 0;
+    }
+    
+    .create-session-section p {
+      margin: 8px 0;
+    }
+    
+    .create-session-section label {
+      font-weight: normal;
+    }
+    
+    .create-session-section select,
+    .create-session-section input[type="text"] {
+      font-family: inherit;
+      font-size: inherit;
+    }
+    
+    .create-session-section small {
+      font-size: 0.9em;
+      color: var(--main-text-color);
+      opacity: 0.7;
+    }
+    
+    .create-session-section input[type="submit"] {
+      margin-top: 8px;
+    }
+    
+    .active-sessions-section {
+      margin-top: 8px;
+    }
+    
+    .active-sessions-section h3 {
+      padding: 8px;
+      background-color: var(--main-nav-bg-color);
+      border: 1px solid var(--main-border-color);
+      margin: 0 0 8px 0;
+    }
+    
+    .sessions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 8px;
+    }
+    
+    .session-card {
+      border: 1px solid var(--main-border-color);
+      padding: 8px;
+      background-color: var(--main-bg-color);
+    }
+    
+    .session-header h4 {
+      margin: 0 0 4px 0;
+      color: var(--main-text-color);
+    }
+    
+    .session-header small {
+      color: var(--main-text-color);
+      opacity: 0.7;
+    }
+    
+    .session-info {
+      margin: 8px 0;
+    }
+    
+    .session-meta {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+    }
+    
+    .session-meta span {
+      background-color: var(--main-nav-bg-color);
+      border: 1px solid var(--main-border-color);
+      padding: 2px 4px;
+      font-size: 0.9em;
+    }
+    
+    .session-actions {
+      text-align: right;
+    }
+    
+    .session-actions input[type="submit"],
+    .session-actions a {
+      background-color: var(--main-nav-bg-color);
+      border: 1px solid var(--main-border-color);
+      color: var(--main-text-color);
+      padding: 4px 8px;
+      text-decoration: none;
+      display: inline-block;
+      cursor: pointer;
+    }
+    
+    .session-actions input[type="submit"]:hover,
+    .session-actions a:hover {
+      background-color: var(--main-border-color);
+    }
+    
+    .no-sessions {
+      text-align: center;
+      padding: 16px;
+      color: var(--main-text-color);
+      opacity: 0.7;
+      font-style: italic;
+      border: 1px solid var(--main-border-color);
+    }
+  </style>
+  <script>
+    document.getElementById('create-session-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(e.target);
+      const canvasSize = formData.get('canvas-size').split('x');
+      const width = parseInt(canvasSize[0]);
+      const height = parseInt(canvasSize[1]);
+      
+      const requestData = {
+        title: formData.get('title') || null,
+        width: width,
+        height: height,
+        is_public: formData.get('is_public') === 'on',
+        community_id: formData.get('community_id'),
+        max_participants: parseInt(formData.get('max_participants'))
+      };
+      
+      try {
+        const response = await fetch('/collaborate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestData)
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          window.location.href = result.url;
+        } else {
+          alert('Failed to create session. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error creating session:', error);
+        alert('Failed to create session. Please check your connection and try again.');
+      }
+    });
+  </script>
+{% endblock content %}

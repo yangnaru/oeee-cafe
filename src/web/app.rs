@@ -6,10 +6,15 @@ use crate::web::handlers::account::{
     verify_email_verification_code,
 };
 use crate::web::handlers::activitypub::{
-    activitypub_get_community, activitypub_get_post, activitypub_get_user, activitypub_post_community_inbox,
-    activitypub_post_user_inbox, activitypub_webfinger,
+    activitypub_get_community, activitypub_get_post, activitypub_get_user,
+    activitypub_post_community_inbox, activitypub_post_user_inbox, activitypub_webfinger,
 };
 use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
+use crate::web::handlers::collaborate::{
+    collaborate_lobby, create_collaborative_session, get_auth_info, get_collaboration_meta,
+    save_collaborative_session, serve_collaborative_app, websocket_collaborate_handler,
+};
+use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
     communities, community, community_iframe, create_community_form, do_create_community,
     hx_do_edit_community, hx_edit_community,
@@ -23,7 +28,8 @@ use crate::web::handlers::notifications::list_notifications;
 use crate::web::handlers::post::{
     do_create_comment, do_post_edit_community, draft_posts, hx_delete_post, hx_do_edit_post,
     hx_edit_post, post_edit_community, post_publish, post_publish_form, post_relay_view,
-    post_relay_view_by_login_name, post_replay_view, post_replay_view_by_login_name, post_view_by_login_name, redirect_post_to_login_name,
+    post_relay_view_by_login_name, post_replay_view, post_replay_view_by_login_name,
+    post_view_by_login_name, redirect_post_to_login_name,
 };
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
@@ -78,6 +84,8 @@ impl App {
                 .continuously_delete_expired(tokio::time::Duration::from_secs(60)),
         );
 
+        let cleanup_task = tokio::task::spawn(cleanup_collaborative_sessions(self.state.clone()));
+
         let session_layer = SessionManagerLayer::new(session_store)
             .with_secure(self.state.config.env == "production")
             .with_same_site(SameSite::Lax)
@@ -91,6 +99,10 @@ impl App {
             .nest_service("/static/tegaki/css", ServeDir::new("tegaki/css"))
             .nest_service("/static/tegaki/js", ServeDir::new("tegaki/js"))
             .nest_service("/static/tegaki/lib", ServeDir::new("tegaki/lib"))
+            .nest_service(
+                "/collaborate/assets",
+                ServeDir::new("neo-cucumber/dist/assets"),
+            )
             .nest_service("/static", ServeDir::new("static"));
 
         let protected_router = Router::new()
@@ -189,9 +201,26 @@ impl App {
             .route("/@:login_name/settings", get(profile_settings))
             .route("/@:login_name/guestbook", get(guestbook))
             .route("/@:login_name/:post_id", get(post_view_by_login_name))
-            .route("/@:login_name/:post_id/replay", get(post_replay_view_by_login_name))
-            .route("/@:login_name/:post_id/relay", get(post_relay_view_by_login_name))
+            .route(
+                "/@:login_name/:post_id/replay",
+                get(post_replay_view_by_login_name),
+            )
+            .route(
+                "/@:login_name/:post_id/relay",
+                get(post_relay_view_by_login_name),
+            )
             .route("/posts/:id", get(redirect_post_to_login_name))
+            .route(
+                "/collaborate",
+                get(collaborate_lobby).post(create_collaborative_session),
+            )
+            .route(
+                "/collaborate/:uuid",
+                get(serve_collaborative_app).post(save_collaborative_session),
+            )
+            .route("/collaborate/:uuid/ws", get(websocket_collaborate_handler))
+            .route("/api/auth", get(get_auth_info))
+            .route("/collaboration/:uuid/meta", get(get_collaboration_meta))
             .route("/about", get(about))
             .route("/signup", get(signup))
             .route("/signup", post(do_signup))
@@ -210,18 +239,25 @@ impl App {
         let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
         tracing::info!("listening on {}", addr);
 
-        // Ensure we use a shutdown signal to abort the deletion task.
+        // Ensure we use a shutdown signal to abort the background tasks.
         axum::serve(listener, app.into_make_service())
-            .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle()))
+            .with_graceful_shutdown(shutdown_signal(
+                deletion_task.abort_handle(),
+                cleanup_task.abort_handle(),
+            ))
             .await?;
 
         deletion_task.await??;
+        cleanup_task.await?;
 
         Ok(())
     }
 }
 
-async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
+async fn shutdown_signal(
+    deletion_task_abort_handle: AbortHandle,
+    cleanup_task_abort_handle: AbortHandle,
+) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -240,7 +276,13 @@ async fn shutdown_signal(deletion_task_abort_handle: AbortHandle) {
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => { deletion_task_abort_handle.abort() },
-        _ = terminate => { deletion_task_abort_handle.abort() },
+        _ = ctrl_c => {
+            deletion_task_abort_handle.abort();
+            cleanup_task_abort_handle.abort();
+        },
+        _ = terminate => {
+            deletion_task_abort_handle.abort();
+            cleanup_task_abort_handle.abort();
+        },
     }
 }

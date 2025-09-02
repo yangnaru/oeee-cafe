@@ -33,6 +33,8 @@ pub mod about;
 pub mod account;
 pub mod activitypub;
 pub mod auth;
+pub mod collaborate;
+pub mod collaborate_cleanup;
 pub mod community;
 pub mod draw;
 pub mod home;
@@ -106,6 +108,7 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
 
         ftl_home => bundle.format_pattern(bundle.get_message("home").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_draw => bundle.format_pattern(bundle.get_message("draw").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate => bundle.format_pattern(bundle.get_message("collaborate").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_drafts => bundle.format_pattern(bundle.get_message("drafts").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_profile => bundle.format_pattern(bundle.get_message("profile").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_community => bundle.format_pattern(bundle.get_message("community").unwrap().value().unwrap(), None, &mut vec![]),
@@ -139,6 +142,7 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_post_duration => bundle.format_pattern(bundle.get_message("post-duration").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_replay => bundle.format_pattern(bundle.get_message("post-replay").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_author => bundle.format_pattern(bundle.get_message("post-author").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_post_collaborative_participants => bundle.format_pattern(bundle.get_message("post-collaborative-participants").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_title => bundle.format_pattern(bundle.get_message("post-title").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_no_title => bundle.format_pattern(bundle.get_message("post-no-title").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_post_description => bundle.format_pattern(bundle.get_message("post-description").unwrap().value().unwrap(), None, &mut vec![]),
@@ -156,6 +160,26 @@ fn create_base_ftl_context(bundle: &FluentBundle<&FluentResource, IntlLangMemoiz
         ftl_draft_post => bundle.format_pattern(bundle.get_message("draft-post").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_sensitive => bundle.format_pattern(bundle.get_message("sensitive").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_allow_relay => bundle.format_pattern(bundle.get_message("allow-relay").unwrap().value().unwrap(), None, &mut vec![]),
+
+        // Collaborative drawing
+        ftl_collaborate_title => bundle.format_pattern(bundle.get_message("collaborate-title").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_create_session => bundle.format_pattern(bundle.get_message("collaborate-create-session").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_community_label => bundle.format_pattern(bundle.get_message("collaborate-community-label").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_canvas_size_label => bundle.format_pattern(bundle.get_message("collaborate-canvas-size-label").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_session_title_label => bundle.format_pattern(bundle.get_message("collaborate-session-title-label").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_session_title_placeholder => bundle.format_pattern(bundle.get_message("collaborate-session-title-placeholder").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_max_participants_label => bundle.format_pattern(bundle.get_message("collaborate-max-participants-label").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_participants => bundle.format_pattern(bundle.get_message("collaborate-participants").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_public_session_label => bundle.format_pattern(bundle.get_message("collaborate-public-session-label").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_public_session_description => bundle.format_pattern(bundle.get_message("collaborate-public-session-description").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_create_button => bundle.format_pattern(bundle.get_message("collaborate-create-button").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_active_sessions => bundle.format_pattern(bundle.get_message("collaborate-active-sessions").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_no_sessions => bundle.format_pattern(bundle.get_message("collaborate-no-sessions").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_session_by => bundle.format_pattern(bundle.get_message("collaborate-session-by").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_session_participants_singular => bundle.format_pattern(bundle.get_message("collaborate-session-participants-singular").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_session_participants_plural => bundle.format_pattern(bundle.get_message("collaborate-session-participants-plural").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_session_created => bundle.format_pattern(bundle.get_message("collaborate-session-created").unwrap().value().unwrap(), None, &mut vec![]),
+        ftl_collaborate_join_session => bundle.format_pattern(bundle.get_message("collaborate-join-session").unwrap().value().unwrap(), None, &mut vec![]),
 
         ftl_latest_active_communities => bundle.format_pattern(bundle.get_message("latest-active-communities").unwrap().value().unwrap(), None, &mut vec![]),
         ftl_posts_from_public_communities => bundle.format_pattern(bundle.get_message("posts-from-public-communities").unwrap().value().unwrap(), None, &mut vec![]),

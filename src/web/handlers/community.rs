@@ -124,7 +124,7 @@ pub async fn community(
                 ("image_filename".to_string(), post.image_filename.to_string()),
                 ("image_width".to_string(), post.image_width.to_string()),
                 ("image_height".to_string(), post.image_height.to_string()),
-                ("replay_filename".to_string(), post.replay_filename.to_string()),
+                ("replay_filename".to_string(), post.replay_filename.clone().unwrap_or_default()),
                 ("created_at".to_string(), post.created_at.to_string()),
                 ("updated_at".to_string(), post.updated_at.to_string()),
                 ])
@@ -194,7 +194,7 @@ pub async fn community_iframe(
                 ("image_filename".to_string(), post.image_filename.to_string()),
                 ("image_width".to_string(), post.image_width.to_string()),
                 ("image_height".to_string(), post.image_height.to_string()),
-                ("replay_filename".to_string(), post.replay_filename.to_string()),
+                ("replay_filename".to_string(), post.replay_filename.clone().unwrap_or_default()),
                 ("created_at".to_string(), post.created_at.to_string()),
                 ("updated_at".to_string(), post.updated_at.to_string()),
             ])

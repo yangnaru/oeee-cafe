@@ -384,7 +384,8 @@ pub async fn update_community(
             community_draft.name.clone(),
             community_draft.description.clone(),
             config,
-        ).await;
+        )
+        .await;
     }
 
     Ok(Community {
@@ -408,20 +409,25 @@ pub async fn update_community_with_activity(
     config: &crate::AppConfig,
     state: Option<&crate::web::state::AppState>,
 ) -> Result<Community> {
-    
     // First update the community
     let community = update_community(tx, id, community_draft, Some(config)).await?;
-    
+
     // If state is provided, send ActivityPub Update activity
     if let Some(state) = state {
         // Get the updated actor
         if let Some(updated_actor) = super::actor::Actor::find_by_community_id(tx, id).await? {
             // Send Update activity - don't fail if this fails
-            if let Err(e) = crate::web::handlers::activitypub::send_update_activity(&updated_actor, state).await {
-                tracing::warn!("Failed to send Update activity for community {}: {:?}", id, e);
+            if let Err(e) =
+                crate::web::handlers::activitypub::send_update_activity(&updated_actor, state).await
+            {
+                tracing::warn!(
+                    "Failed to send Update activity for community {}: {:?}",
+                    id,
+                    e
+                );
             }
         }
     }
-    
+
     Ok(community)
 }

@@ -1,0 +1,268 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2025-09-01 09:48+0900\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: zh\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#: src/components/Chat.tsx:244
+msgid "(you)"
+msgstr "(您)"
+
+#: src/components/SessionExpiredModal.tsx:110
+msgid "💾 Download PNG"
+msgstr "💾 下载 PNG"
+
+#: src/components/SessionExpiredModal.tsx:120
+msgid "💾 Save as PNG"
+msgstr "💾 保存为 PNG"
+
+#: src/components/SessionExpiredModal.tsx:97
+#: src/components/ToolboxPanel.tsx:429
+msgid "💾 Save to Gallery"
+msgstr "💾 保存到画廊"
+
+#: src/components/ToolboxPanel.tsx:426
+msgid "💾 Saving..."
+msgstr "💾 保存中..."
+
+#: src/components/SessionExpiredModal.tsx:111
+msgid "📄 Download PNG"
+msgstr "📄 下载 PNG"
+
+#: src/components/SessionExpiredModal.tsx:97
+msgid "🔄 Saving..."
+msgstr "🔄 保存中..."
+
+#: src/App.tsx:1699
+msgid "Authentication Failed"
+msgstr "验证失败"
+
+#: src/components/SessionHeader.tsx:52
+msgid "by"
+msgstr "作者:"
+
+#: src/components/Chat.tsx:166
+#~ msgid "Chat"
+#~ msgstr "聊天"
+
+#: src/components/SessionHeader.tsx:67
+msgid "Connected"
+msgstr "已连接"
+
+#: src/components/SessionHeader.tsx:73
+msgid "Connecting"
+msgstr "连接中"
+
+#: src/App.tsx:1816
+msgid "Connecting..."
+msgstr "连接中..."
+
+#: src/App.tsx:1792
+msgid "Connection lost. Your work is saved locally."
+msgstr "连接丢失。您的作品已本地保存。"
+
+#: src/components/ColorPalette.tsx:58
+msgid "Custom color picker"
+msgstr "自定义色彩选择器"
+
+#: src/components/ColorPalette.tsx:54
+msgid "Custom color picker - edits selected palette color"
+msgstr "自定义色彩选择器 - 编辑选中的调色板颜色"
+
+#: src/components/SessionHeader.tsx:79
+msgid "Disconnected"
+msgstr "已断开"
+
+#: src/App.tsx:1807
+msgid "Download PNG"
+msgstr "下载 PNG"
+
+#. placeholder {0}: selectedPaletteIndex + 1
+#: src/components/ColorPalette.tsx:57
+msgid "Edit palette color {0}"
+msgstr "编辑调色板颜色 {0}"
+
+#: src/App.tsx:1915
+#~ msgid "Eraser"
+#~ msgstr "橡皮擦"
+
+#: src/components/SessionExpiredModal.tsx:48
+msgid "Failed to save session. Please try downloading as PNG instead."
+msgstr "保存会话失败。请尝试下载为 PNG。"
+
+#: src/App.tsx:1917
+#~ msgid "Fill"
+#~ msgstr "填充"
+
+#: src/App.tsx:1711
+#: src/App.tsx:1735
+msgid "Go to Lobby"
+msgstr "去大厅"
+
+#: src/App.tsx:1913
+#~ msgid "Halftone"
+#~ msgstr "半调"
+
+#: src/App.tsx:1669
+msgid "Initialization Failed"
+msgstr "初始化失败"
+
+#: src/App.tsx:1689
+msgid "Initializing collaboration session..."
+msgstr "正在初始化协作会话..."
+
+#: src/components/ToolboxPanel.tsx:351
+msgid "Left click to select layer, right click to toggle visibility"
+msgstr "左键选择图层，右键切换可见性"
+
+#: src/components/SessionHeader.tsx:85
+msgid "Loading"
+msgstr "加载中"
+
+#: src/App.tsx:1686
+msgid "Loading..."
+msgstr "加载中..."
+
+#: src/App.tsx:1783
+msgid "LOADING..."
+msgstr "加载中..."
+
+#: src/App.tsx:791
+msgid "Oeee Cafe"
+msgstr "黄瓜咖啡馆"
+
+#: src/components/ToolboxPanel.tsx:259
+#~ msgid "Opacity"
+#~ msgstr "不透明度"
+
+#. placeholder {0}: index + 1
+#: src/components/ColorPalette.tsx:44
+msgid "Palette color {0}"
+msgstr "调色板颜色 {0}"
+
+#. placeholder {0}: index + 1
+#: src/components/ColorPalette.tsx:41
+msgid "Palette color {0} (selected - edit with color picker below)"
+msgstr "调色板颜色 {0} (已选中 - 使用下方色彩选择器编辑)"
+
+#: src/App.tsx:1919
+#~ msgid "Pan"
+#~ msgstr "平移"
+
+#: src/components/Chat.tsx:220
+msgid "Participants"
+msgstr "参与者"
+
+#: src/App.tsx:1801
+msgid "Reconnect"
+msgstr "重新连接"
+
+#: src/App.tsx:1895
+#~ msgid "Redo"
+#~ msgstr "重做"
+
+#: src/App.tsx:2119
+#~ msgid "Reset"
+#~ msgstr "重置"
+
+#: src/App.tsx:1676
+#: src/App.tsx:1741
+msgid "Retry"
+msgstr "重试"
+
+#: src/components/SessionExpiredModal.tsx:128
+msgid "Return to Lobby"
+msgstr "返回大厅"
+
+#: src/components/ToolboxPanel.tsx:420
+#: src/components/ToolboxPanel.tsx:421
+msgid "Save drawing to gallery"
+msgstr "保存绘画到画廊"
+
+#: src/components/ToolboxPanel.tsx:391
+#~ msgid "Saving..."
+#~ msgstr "保存中..."
+
+#: src/components/Chat.tsx:321
+msgid "Send"
+msgstr "发送"
+
+#: src/components/SessionExpiredModal.tsx:74
+msgid "Session Expired"
+msgstr "会话过期"
+
+#: src/App.tsx:1721
+msgid "Session Full"
+msgstr "会话已满"
+
+#: src/App.tsx:1864
+msgid "Session is ending. The drawing is being saved to the gallery..."
+msgstr "会话即将结束。正在保存绘画到画廊..."
+
+#: src/components/SessionHeader.tsx:62
+msgid "Share"
+msgstr "分享"
+
+#: src/components/ToolboxPanel.tsx:378
+msgid "Show/hide background layer"
+msgstr "显示/隐藏背景图层"
+
+#: src/components/ToolboxPanel.tsx:377
+msgid "Show/hide foreground layer"
+msgstr "显示/隐藏前景图层"
+
+#: src/components/ToolboxPanel.tsx:240
+#~ msgid "Size"
+#~ msgstr "大小"
+
+#: src/App.tsx:1911
+#~ msgid "Solid"
+#~ msgstr "实心"
+
+#: src/components/SessionExpiredModal.tsx:80
+msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
+msgstr "由于无活动，此协作会话已结束。作为所有者，您可以将其保存到画廊或下载为 PNG。"
+
+#: src/components/SessionExpiredModal.tsx:79
+msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
+msgstr "由于无活动，此协作会话已结束。会话已保存到画廊，但您可以将其下载为 PNG。"
+
+#: src/components/SessionExpiredModal.tsx:81
+msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
+msgstr "由于无活动，此协作会话已结束。您可以在离开前将您的作品保存为 PNG。"
+
+#: src/components/SessionExpiredModal.tsx:44
+msgid "This session has already been saved. You can only download it as a PNG."
+msgstr "此会话已保存。您只能将其下载为 PNG。"
+
+#. placeholder {0}: roomFullError.currentUserCount
+#. placeholder {1}: roomFullError.maxUsers
+#. placeholder {2}: roomFullError.maxUsers
+#: src/App.tsx:1724
+msgid "This session is full ({0}/{1} users). Only the first {2} users can join a session."
+msgstr "此会话已满（{0}/{1} 用户）。只有前 {2} 位用户可以加入会话。"
+
+#: src/components/Chat.tsx:312
+msgid "Type a message..."
+msgstr "输入消息..."
+
+#: src/App.tsx:1702
+msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
+msgstr "无法验证您的会话。会话不存在或已过期。请返回大厅。"
+
+#: src/App.tsx:1887
+#~ msgid "Undo"
+#~ msgstr "撤销"
+
+#: src/App.tsx:1870
+msgid "You'll be redirected to the post page shortly."
+msgstr "您将稍后被重定向到帖子页面。"

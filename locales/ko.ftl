@@ -14,6 +14,7 @@ timeline-empty = 타임라인이 비어 있습니다. <a href="/communities">커
 
 home = 홈
 draw = 그리기!
+collaborate = 함께 그리기
 drafts = 임시 보관함
 profile = 프로필
 community = 커뮤니티
@@ -49,6 +50,7 @@ post-published-at = 발행 시각
 post-duration = 소요 시간
 post-replay = 리플레이
 post-author = 그린이
+post-collaborative-participants = 함께 그리기 참가자
 post-title = 제목
 post-no-title = 무제
 post-description = 내용
@@ -64,6 +66,26 @@ post-relay-enabled-notice = 이 그림은 이어 그릴수 있습니다. 그림�
 allow-relay = 릴레이 그림 허용
 sensitive = 민감한 내용
 draft-post = 임시 보관된 그림
+
+# Collaborative drawing
+collaborate-title = 함께 그리기 세션
+collaborate-create-session = 새 세션 만들기
+collaborate-community-label = 커뮤니티
+collaborate-canvas-size-label = 캔버스 크기
+collaborate-session-title-label = 세션 제목 (선택사항)
+collaborate-session-title-placeholder = 세션 제목을 입력하세요
+collaborate-max-participants-label = 최대 참가자 수
+collaborate-participants = 명
+collaborate-public-session-label = 공개 로비에 표시
+collaborate-public-session-description = 체크를 해제하면 비공개 세션 (링크로만 접근)이 됩니다
+collaborate-create-button = 세션 생성
+collaborate-active-sessions = 활성 공개 세션
+collaborate-no-sessions = 활성 공개 세션이 없습니다. 새로 만들어 시작하세요!
+collaborate-session-by = @
+collaborate-session-participants-singular = 참가자 1명
+collaborate-session-participants-plural = 명의 참가자
+collaborate-session-created = 생성됨
+collaborate-join-session = 세션 참가
 
 welcome = { $name }님, 환영합니다!
 

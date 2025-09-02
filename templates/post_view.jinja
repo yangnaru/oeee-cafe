@@ -35,7 +35,9 @@
         <p>{{ ftl_post_published_at }}: {{ post.published_at }}</p>
         <p>
           {{ ftl_post_duration }}: {{ post.paint_duration }}
-          <a href="/@{{ post.login_name }}/{{ post_id }}/replay">{{ ftl_post_replay }}</a>
+          {% if post.replay_filename %}
+            <a href="/@{{ post.login_name }}/{{ post_id }}/replay">{{ ftl_post_replay }}</a>
+          {% endif %}
         </p>
         <p>HIT: {{ post.viewer_count }}</p>
         <p>
@@ -67,6 +69,20 @@
           <p>
             {{ ftl_post_author }}: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted fediverse-handle">@{{ post.login_name }}@{{ domain }}</span>
           </p>
+          {% if collaborative_participants %}
+            <div class="collaborative-participants">
+              <p>
+                <strong>{{ ftl_post_collaborative_participants }}:</strong>
+              </p>
+              <ul>
+                {% for participant in collaborative_participants %}
+                  <li>
+                    <a href="/@{{ participant.login_name }}">@{{ participant.display_name }}</a>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
           {% block post_edit_block %}
             <div hx-target="this" hx-swap="outerHTML">
               <p>
@@ -79,7 +95,8 @@
                 {% if parent_post_id %}<a href="/@{{ parent_post_author_login_name }}/{{ parent_post_id }}">↵</a>{% endif %}
               </p>
               <p>
-                {{ ftl_post_description }}: <div class="post-content">{{ post.content|markdown|safe }}</div>
+                {{ ftl_post_description }}:
+                <div class="post-content">{{ post.content|markdown|safe }}</div>
               </p>
               {% if current_user.id == post.author_id %}
                 <div class="post-menu">

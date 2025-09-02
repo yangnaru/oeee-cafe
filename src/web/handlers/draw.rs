@@ -202,13 +202,10 @@ pub async fn draw_finish(
                 .unwrap();
         } else if name == "tool" {
             tool = std::str::from_utf8(data.as_ref()).unwrap().to_string();
-        } else if name == "parent_post_id"
-            && !data.is_empty() {
-                parent_post_id = Some(
-                    Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap())
-                        .unwrap(),
-                );
-            }
+        } else if name == "parent_post_id" && !data.is_empty() {
+            parent_post_id =
+                Some(Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap()).unwrap());
+        }
     }
     let start = SystemTime::now();
     let since_the_epoch = start
@@ -273,7 +270,7 @@ pub async fn draw_finish(
         width,
         height,
         image_filename: format!("{}.png", image_sha256),
-        replay_filename,
+        replay_filename: Some(replay_filename),
         tool: tool_enum,
         parent_post_id,
     };
@@ -397,7 +394,7 @@ pub async fn banner_draw_finish(
         width,
         height,
         image_filename: format!("{}.png", image_sha256),
-        replay_filename: format!("{}.pch", replay_sha256),
+        replay_filename: Some(format!("{}.pch", replay_sha256)),
     };
 
     let db = state.config.connect_database().await?;

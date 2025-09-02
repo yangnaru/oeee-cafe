@@ -1,0 +1,438 @@
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
+import { ToolSelector } from "./ToolSelector";
+import { ColorPalette } from "./ColorPalette";
+
+type BrushType = "solid" | "halftone" | "eraser" | "fill" | "pan";
+type LayerType = "foreground" | "background";
+
+interface DrawingState {
+  brushSize: number;
+  opacity: number;
+  color: string;
+  brushType: BrushType;
+  layerType: LayerType;
+  zoomLevel: number;
+  fgVisible: boolean;
+  bgVisible: boolean;
+  pendingPanDeltaX?: number;
+  pendingPanDeltaY?: number;
+}
+
+interface HistoryState {
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+interface ToolboxPanelProps {
+  drawingState: DrawingState;
+  historyState: HistoryState;
+  paletteColors: string[];
+  selectedPaletteIndex: number;
+  currentZoom: number;
+  isOwner: boolean;
+  isSaving: boolean;
+  sessionEnded: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
+  onUpdateBrushType: (type: BrushType) => void;
+  onUpdateDrawingState: React.Dispatch<React.SetStateAction<DrawingState>>;
+  onUpdateColor: (color: string) => void;
+  onColorPickerChange: (color: string) => void;
+  onSetSelectedPaletteIndex: (index: number) => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onZoomReset: () => void;
+  onSaveCollaborativeDrawing: () => void;
+}
+
+export const ToolboxPanel: React.FC<ToolboxPanelProps> = ({
+  drawingState,
+  historyState,
+  paletteColors,
+  selectedPaletteIndex,
+  currentZoom,
+  isOwner,
+  isSaving,
+  sessionEnded,
+  onUndo,
+  onRedo,
+  onUpdateBrushType,
+  onUpdateDrawingState,
+  onUpdateColor,
+  onColorPickerChange,
+  onSetSelectedPaletteIndex,
+  onZoomIn,
+  onZoomOut,
+  onZoomReset,
+  onSaveCollaborativeDrawing,
+}) => {
+  const { t } = useLingui();
+
+  // Dragging state
+  const [position, setPosition] = useState({
+    x: 288 + 16, // Chat width (288px = w-72) + 16px padding to match chat's p-4
+    y: 70, // Same distance from header as chat (80px to match top positioning)
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!panelRef.current) return;
+
+    const rect = panelRef.current.getBoundingClientRect();
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+    setIsDragging(true);
+  }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!panelRef.current) return;
+
+    const touch = e.touches[0];
+    const rect = panelRef.current.getBoundingClientRect();
+    setDragOffset({
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    });
+    setIsDragging(true);
+    e.preventDefault(); // Prevent scrolling
+  }, []);
+
+  const updatePosition = useCallback(
+    (clientX: number, clientY: number) => {
+      const newX = clientX - dragOffset.x;
+      const newY = clientY - dragOffset.y;
+
+      // Keep panel within viewport bounds
+      const maxX = window.innerWidth;
+      const maxY = window.innerHeight;
+
+      setPosition({
+        x: Math.max(0, Math.min(newX, maxX)),
+        y: Math.max(0, Math.min(newY, maxY)),
+      });
+    },
+    [dragOffset]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging) return;
+      updatePosition(e.clientX, e.clientY);
+    },
+    [isDragging, updatePosition]
+  );
+
+  const handleTouchMove = useCallback(
+    (e: TouchEvent) => {
+      if (!isDragging) return;
+      const touch = e.touches[0];
+      updatePosition(touch.clientX, touch.clientY);
+      e.preventDefault(); // Prevent scrolling
+    },
+    [isDragging, updatePosition]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Handle window resize to keep panel in bounds
+  const handleResize = useCallback(() => {
+    setPosition((prevPosition) => {
+      const panelWidth = 250; // Approximate panel width
+      const panelHeight = 600; // Approximate panel height
+
+      const maxX = window.innerWidth - panelWidth;
+      const maxY = window.innerHeight - panelHeight;
+
+      return {
+        x: Math.max(0, Math.min(prevPosition.x, maxX)),
+        y: Math.max(70, Math.min(prevPosition.y, maxY)), // Keep below header
+      };
+    });
+  }, []);
+
+  // Add window resize listener
+  useEffect(() => {
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [handleResize]);
+
+  // Add global mouse and touch event listeners
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("touchmove", handleTouchMove, {
+        passive: false,
+      });
+      document.addEventListener("touchend", handleTouchEnd);
+      document.body.style.cursor = "grabbing";
+      document.body.style.userSelect = "none";
+    } else {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [
+    isDragging,
+    handleMouseMove,
+    handleMouseUp,
+    handleTouchMove,
+    handleTouchEnd,
+  ]);
+
+  return (
+    <div
+      ref={panelRef}
+      className="fixed flex flex-col border border-main bg-main touch-auto select-auto shadow-lg"
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+      }}
+    >
+      {/* Drag handle */}
+      <div
+        className="flex items-center justify-center p-2 bg-main border-b border-main cursor-grab active:cursor-grabbing hover:bg-gray-100 touch-none"
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
+      >
+        <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
+        <div className="w-1 h-1 bg-gray-400 rounded-full ml-1"></div>
+        <div className="w-1 h-1 bg-gray-400 rounded-full ml-1"></div>
+      </div>
+
+      <div className="p-2 flex flex-col gap-1">
+        {/* Undo/Redo buttons */}
+        <div className="flex flex-row gap-1">
+          <button
+            type="button"
+            onClick={onUndo}
+            disabled={!historyState.canUndo}
+            className="px-3 py-1 border border-main bg-main text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white"
+          >
+            ⏪
+          </button>
+          <button
+            type="button"
+            onClick={onRedo}
+            disabled={!historyState.canRedo}
+            className="px-3 py-1 border border-main bg-main text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white"
+          >
+            ⏩
+          </button>
+        </div>
+
+        <div className="flex flex-row gap-4">
+          {/* Color palette and picker */}
+          <ColorPalette
+            paletteColors={paletteColors}
+            selectedPaletteIndex={selectedPaletteIndex}
+            currentColor={drawingState.color}
+            onSetSelectedPaletteIndex={onSetSelectedPaletteIndex}
+            onUpdateColor={onUpdateColor}
+            onColorPickerChange={onColorPickerChange}
+          />
+
+          {/* Tool selection */}
+          <ToolSelector
+            brushType={drawingState.brushType}
+            onUpdateBrushType={onUpdateBrushType}
+          />
+        </div>
+
+        <div className="p-2 flex flex-col gap-4">
+          {/* Brush size */}
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-row gap-1 items-center">
+              ⚖️
+              <span className="text-sm text-main tabular-nums">
+                {drawingState.brushSize} / 30
+              </span>
+            </div>
+            <label className="flex flex-row gap-1 justify-between">
+              <input
+                type="range"
+                min="1"
+                max="30"
+                value={drawingState.brushSize}
+                onChange={(e) =>
+                  onUpdateDrawingState((prev) => ({
+                    ...prev,
+                    brushSize: parseInt(e.target.value),
+                  }))
+                }
+              />
+            </label>
+          </div>
+
+          {/* Opacity */}
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-row gap-1 items-center">
+              🪟
+              <span className="text-sm text-main tabular-nums">
+                {drawingState.opacity} / 255
+              </span>
+            </div>
+            <label className="flex flex-row gap-1 items-center">
+              <input
+                type="range"
+                min="1"
+                max="255"
+                value={drawingState.opacity}
+                onChange={(e) =>
+                  onUpdateDrawingState((prev) => ({
+                    ...prev,
+                    opacity: parseInt(e.target.value),
+                  }))
+                }
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Layer selection */}
+        <div className="flex flex-row gap-2">
+          {(["foreground", "background"] as LayerType[]).map((layer) => (
+            <label
+              key={layer}
+              className="flex items-center gap-2 p-1 border border-main bg-main"
+            >
+              <input
+                type="radio"
+                name="layerType"
+                value={layer}
+                checked={drawingState.layerType === layer}
+                onChange={() =>
+                  onUpdateDrawingState((prev) => ({
+                    ...prev,
+                    layerType: layer,
+                  }))
+                }
+              />
+              <span
+                className="text-sm"
+                onContextMenu={(e) => {
+                  e.preventDefault(); // Prevent browser context menu
+                  // Toggle layer visibility
+                  if (layer === "foreground") {
+                    onUpdateDrawingState((prev) => ({
+                      ...prev,
+                      fgVisible: !prev.fgVisible,
+                    }));
+                  } else {
+                    onUpdateDrawingState((prev) => ({
+                      ...prev,
+                      bgVisible: !prev.bgVisible,
+                    }));
+                  }
+                }}
+                title={t`Left click to select layer, right click to toggle visibility`}
+              >
+                {layer === "foreground" ? "FG" : "BG"}
+              </span>
+              <input
+                type="checkbox"
+                checked={
+                  layer === "foreground"
+                    ? drawingState.fgVisible
+                    : drawingState.bgVisible
+                }
+                onChange={(e) => {
+                  if (layer === "foreground") {
+                    onUpdateDrawingState((prev) => ({
+                      ...prev,
+                      fgVisible: e.target.checked,
+                    }));
+                  } else {
+                    onUpdateDrawingState((prev) => ({
+                      ...prev,
+                      bgVisible: e.target.checked,
+                    }));
+                  }
+                }}
+                title={
+                  layer === "foreground"
+                    ? t`Show/hide foreground layer`
+                    : t`Show/hide background layer`
+                }
+              />
+            </label>
+          ))}
+        </div>
+
+        {/* Zoom controls */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onZoomOut}
+              className="px-2 py-1 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
+            >
+              🔍
+            </button>
+            <span
+              className="px-2 py-1 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white w-15 tabular-nums text-center"
+              onClick={onZoomReset}
+            >
+              {Math.round(currentZoom * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={onZoomIn}
+              className="px-2 py-1 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
+            >
+              🔎
+            </button>
+          </div>
+        </div>
+
+        {/* Save button - only show for session owner */}
+        {isOwner && (
+          <div className="flex">
+            <button
+              type="button"
+              onClick={onSaveCollaborativeDrawing}
+              disabled={isSaving || sessionEnded}
+              title={
+                isSaving
+                  ? t`Save drawing to gallery`
+                  : t`Save drawing to gallery`
+              }
+              className="px-3 py-1 border border-main bg-main text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white"
+            >
+              {isSaving ? (
+                <Trans>💾 Saving...</Trans>
+              ) : (
+                <>
+                  <Trans>💾 Save to Gallery</Trans>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
