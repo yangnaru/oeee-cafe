@@ -8,12 +8,7 @@
     <div class="create-session-section">
       <h3>{{ ftl_collaborate_create_session }}</h3>
       <form id="create-session-form" method="post" action="/collaborate">
-        <p>
-          <label for="community">{{ ftl_collaborate_community_label }}:</label>
-          <select id="community" name="community_id" required>
-            {% for community in communities %}<option value="{{ community.id }}">{{ community.name }}</option>{% endfor %}
-          </select>
-        </p>
+        <input type="hidden" name="community_id" value="{{ default_community_id }}">
         <p>
           <label for="canvas-size">{{ ftl_collaborate_canvas_size_label }}:</label>
           <select id="canvas-size" name="canvas-size" required>
@@ -220,7 +215,6 @@
         width: width,
         height: height,
         is_public: formData.get('is_public') === 'on',
-        community_id: formData.get('community_id'),
         max_participants: parseInt(formData.get('max_participants'))
       };
       

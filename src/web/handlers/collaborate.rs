@@ -1,5 +1,4 @@
 use crate::app_error::AppError;
-use crate::models::community::get_communities_for_collaboration;
 use crate::models::user::AuthSession;
 use crate::models::user::Language;
 use crate::web::handlers::{create_base_ftl_context, get_bundle, ExtractAcceptLanguage};
@@ -61,7 +60,6 @@ pub struct CreateSessionRequest {
     width: i32,
     height: i32,
     is_public: bool,
-    community_id: Uuid,
     max_participants: i32,
 }
 
@@ -87,12 +85,6 @@ pub struct SessionWithCounts {
     height: i32,
     created_at: chrono::NaiveDateTime,
     participant_count: Option<i64>,
-}
-
-#[derive(Serialize)]
-pub struct CommunityInfo {
-    id: Uuid,
-    name: String,
 }
 
 #[derive(Serialize)]
@@ -251,17 +243,6 @@ pub async fn collaborate_lobby(
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
 
-    // Get communities user can post to using the helper function
-    let communities_data = get_communities_for_collaboration(&mut tx, user.id).await?;
-    
-    let communities: Vec<CommunityInfo> = communities_data
-        .into_iter()
-        .map(|community| CommunityInfo {
-            id: community.id,
-            name: community.name,
-        })
-        .collect();
-
     // Get active public sessions with participant counts (excluding full sessions)
     let active_sessions = sqlx::query_as!(
         SessionWithCounts,
@@ -297,7 +278,7 @@ pub async fn collaborate_lobby(
     let rendered = template.render(context! {
         current_user => user,
         active_sessions => active_sessions,
-        communities => communities,
+        default_community_id => state.config.default_community_id,
         canvas_sizes => vec![
             ("300x300", "300×300"),
             ("1024x768", "1024×768"),
@@ -335,7 +316,7 @@ pub async fn create_collaborative_session(
         request.width,
         request.height,
         request.is_public,
-        request.community_id,
+        state.config.default_community_id.parse::<Uuid>()?,
         request.max_participants
     )
     .execute(&mut *tx)
