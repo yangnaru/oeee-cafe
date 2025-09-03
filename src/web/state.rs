@@ -12,6 +12,7 @@ pub type CollaborationRooms =
 pub type MessageHistory = Arc<DashMap<Uuid, Vec<Message>>>;
 pub type LastActivityCache = Arc<DashMap<Uuid, Instant>>;
 pub type SnapshotRequestTracker = Arc<DashMap<String, bool>>;
+pub type ConnectionUserMapping = Arc<DashMap<String, Uuid>>;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -21,4 +22,5 @@ pub struct AppState {
     pub message_history: MessageHistory,
     pub last_activity_cache: LastActivityCache,
     pub snapshot_request_tracker: SnapshotRequestTracker,
+    pub connection_user_mapping: ConnectionUserMapping,
 }

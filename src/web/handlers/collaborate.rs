@@ -528,6 +528,11 @@ async fn handle_socket(
         .entry(room_uuid)
         .or_insert_with(DashMap::new)
         .insert(connection_id.clone(), tx.clone());
+    
+    // Add connection-to-user mapping
+    state
+        .connection_user_mapping
+        .insert(connection_id.clone(), user_id);
 
     // Send stored messages to new client
     if let Some(history) = state.message_history.get(&room_uuid) {
@@ -980,8 +985,7 @@ async fn handle_socket(
                     .unwrap_or(false) == false;
 
                 if should_send_snapshot {
-                    // Send snapshot request to all connections, but include the target user ID
-                    // so only that specific user will respond
+                    // Send snapshot request only to the specific user who exceeded the threshold
                     if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
                         // Create snapshot request message with target user ID: [0x05][target_user_id:16][timestamp:8]
                         let mut request_buffer = vec![0x05u8];
@@ -995,11 +999,15 @@ async fn handle_socket(
                         let snapshot_request_msg = Message::Binary(request_buffer);
                         let mut sent_count = 0;
 
-                        // Broadcast to all connections in the room
+                        // Send only to connections belonging to the user who exceeded the threshold
                         for conn_ref in room.iter() {
-                            let (_, sender) = conn_ref.pair();
-                            if sender.send(snapshot_request_msg.clone()).is_ok() {
-                                sent_count += 1;
+                            let (connection_id, sender) = conn_ref.pair();
+                            if let Some(conn_user_id) = state.connection_user_mapping.get(connection_id) {
+                                if *conn_user_id == *user_id_to_request {
+                                    if sender.send(snapshot_request_msg.clone()).is_ok() {
+                                        sent_count += 1;
+                                    }
+                                }
                             }
                         }
 
@@ -1118,6 +1126,8 @@ async fn handle_socket(
 
     if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
         room.remove(&connection_id);
+        // Remove connection-to-user mapping
+        state.connection_user_mapping.remove(&connection_id);
 
         // Remove empty rooms
         if room.is_empty() {
