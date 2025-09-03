@@ -11,7 +11,7 @@ pub type CollaborationRooms =
     Arc<DashMap<Uuid, DashMap<String, tokio::sync::mpsc::UnboundedSender<Message>>>>;
 pub type MessageHistory = Arc<DashMap<Uuid, Vec<Message>>>;
 pub type LastActivityCache = Arc<DashMap<Uuid, Instant>>;
-pub type SnapshotRequestTracker = Arc<DashMap<Uuid, bool>>;
+pub type SnapshotRequestTracker = Arc<DashMap<String, bool>>;
 
 #[derive(Clone)]
 pub struct AppState {

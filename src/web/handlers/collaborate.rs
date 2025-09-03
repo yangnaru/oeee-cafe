@@ -779,8 +779,9 @@ async fn handle_socket(
                                                removed_count, snapshot_user, snapshot_layer, room_uuid);
                                     }
 
-                                    // Reset snapshot request tracker since we received a snapshot
-                                    state.snapshot_request_tracker.insert(room_uuid, false);
+                                    // Reset snapshot request tracker for this specific user since we received their snapshot
+                                    let user_snapshot_key = format!("{}:{}", room_uuid, snapshot_user);
+                                    state.snapshot_request_tracker.insert(user_snapshot_key, false);
                                 }
                             }
                         }
@@ -827,57 +828,6 @@ async fn handle_socket(
                                         }
                                     }
                                 }
-                            }
-                        }
-                        0x04 => {
-                            // SAVE message: [0x04][UUID:16][pngLength:4][pngData:variable]
-                            if is_owner && data.len() >= 21 {
-                                if let Ok(save_user) = bytes_to_uuid(&data[1..17]) {
-                                    if save_user == user_id {
-                                        let png_length = u32::from_le_bytes([
-                                            data[17], data[18], data[19], data[20],
-                                        ])
-                                            as usize;
-
-                                        if data.len() >= 21 + png_length {
-                                            let png_data = &data[21..21 + png_length];
-
-                                            info!(
-                                                "Processing save request from owner {} in session {}",
-                                                user_login_name, room_uuid
-                                            );
-
-                                            // Handle save in background to avoid blocking WebSocket
-                                            let db_clone = db.clone();
-                                            let room_uuid_clone = room_uuid;
-                                            let user_id_clone = user_id;
-                                            let png_data_clone = png_data.to_vec();
-                                            let state_clone = state.clone();
-
-                                            tokio::spawn(async move {
-                                                if let Err(e) = handle_save_request(
-                                                    db_clone,
-                                                    room_uuid_clone,
-                                                    user_id_clone,
-                                                    png_data_clone,
-                                                    state_clone,
-                                                )
-                                                .await
-                                                {
-                                                    error!(
-                                                        "Failed to save collaborative drawing: {}",
-                                                        e
-                                                    );
-                                                }
-                                            });
-                                        }
-                                    }
-                                }
-                            } else if !is_owner {
-                                warn!(
-                                    "Non-owner {} attempted to save session {}",
-                                    user_login_name, room_uuid
-                                );
                             }
                         }
                         0x07 => {
@@ -958,9 +908,9 @@ async fn handle_socket(
                 .entry(room_uuid)
                 .or_insert_with(Vec::new);
 
-            // Don't store chat messages in history - they're not persistent
+            // Don't store chat messages and JOIN messages in history - they're not persistent
             let should_store = if let Message::Binary(data) = &msg {
-                !data.is_empty() && data[0] != 0x03 // Skip CHAT messages (0x03)
+                !data.is_empty() && data[0] != 0x03 && data[0] != 0x01 // Skip CHAT (0x03) and JOIN (0x01) messages
             } else {
                 true // Store other message types
             };
@@ -983,48 +933,86 @@ async fn handle_socket(
             (history.len(), total_bytes)
         };
 
+        // Count messages per user in current history for logging and threshold checking
+        use std::collections::HashMap;
+        let mut user_message_counts: HashMap<Uuid, usize> = HashMap::new();
+        
+        if let Some(history) = state.message_history.get(&room_uuid) {
+            for stored_msg in history.iter() {
+                if let Message::Binary(stored_data) = stored_msg {
+                    if stored_data.len() >= 17 {
+                        let msg_type = stored_data[0];
+                        // Count client messages (>= 0x10) and some server messages that have user UUIDs
+                        if msg_type >= 0x10
+                            || (msg_type < 0x10
+                                && msg_type != 0x05
+                                && msg_type != 0x06
+                                && msg_type != 0x09)
+                        {
+                            if let Ok(msg_user_id) = bytes_to_uuid(&stored_data[1..17]) {
+                                *user_message_counts.entry(msg_user_id).or_insert(0) += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         let history_mb = history_bytes as f64 / 1_048_576.0;
         debug!(
-            "Received message from connection {} in room {} (history: {} messages, {:.2} MB)",
-            connection_id, room_uuid, history_count, history_mb
+            "Received message from connection {} in room {} (history: {} messages, {:.2} MB, user {}: {} messages)",
+            connection_id, room_uuid, history_count, history_mb, user_id, 
+            user_message_counts.get(&user_id).unwrap_or(&0)
         );
 
-        // Check if history exceeds threshold and request snapshot
-        const MAX_HISTORY_MESSAGES: usize = 500;
-        const MAX_HISTORY_MB: f64 = 5.0;
+        // Track per-user message counts and request snapshots when individual users exceed threshold
+        const MAX_USER_MESSAGES: usize = 100;
 
-        if history_count > MAX_HISTORY_MESSAGES || history_mb > MAX_HISTORY_MB {
-            // Check if snapshot request was already sent for this room
-            let should_send_snapshot = state
-                .snapshot_request_tracker
-                .entry(room_uuid)
-                .or_insert(false)
-                .value()
-                == &false;
+        // Check if any user exceeds the threshold and send snapshot request to that user
+        for (user_id_to_request, &message_count) in user_message_counts.iter() {
+            if message_count > MAX_USER_MESSAGES {
+                // Check if snapshot request was already sent for this user in this room
+                let snapshot_key = format!("{}:{}", room_uuid, user_id_to_request);
+                let should_send_snapshot = state
+                    .snapshot_request_tracker
+                    .get(&snapshot_key)
+                    .map(|entry| *entry.value())
+                    .unwrap_or(false) == false;
 
-            if should_send_snapshot {
-                // Find longest-connected user (first in the room)
-                if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
-                    if let Some(first_connection) = room.iter().next() {
-                        let (_, tx) = first_connection.pair();
-
-                        // Create snapshot request message: [0x05][timestamp:8]
+                if should_send_snapshot {
+                    // Send snapshot request to all connections, but include the target user ID
+                    // so only that specific user will respond
+                    if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
+                        // Create snapshot request message with target user ID: [0x05][target_user_id:16][timestamp:8]
                         let mut request_buffer = vec![0x05u8];
+                        request_buffer.extend_from_slice(user_id_to_request.as_bytes()); // 16 bytes
                         let timestamp = std::time::SystemTime::now()
                             .duration_since(std::time::UNIX_EPOCH)
                             .unwrap()
                             .as_millis() as u64;
-                        request_buffer.extend_from_slice(&timestamp.to_le_bytes());
+                        request_buffer.extend_from_slice(&timestamp.to_le_bytes()); // 8 bytes
 
-                        if tx.send(Message::Binary(request_buffer)).is_ok() {
-                            // Mark that snapshot request has been sent for this room
-                            state.snapshot_request_tracker.insert(room_uuid, true);
+                        let snapshot_request_msg = Message::Binary(request_buffer);
+                        let mut sent_count = 0;
+
+                        // Broadcast to all connections in the room
+                        for conn_ref in room.iter() {
+                            let (_, sender) = conn_ref.pair();
+                            if sender.send(snapshot_request_msg.clone()).is_ok() {
+                                sent_count += 1;
+                            }
+                        }
+
+                        if sent_count > 0 {
+                            // Mark that snapshot request has been sent for this user in this room
+                            state.snapshot_request_tracker.insert(snapshot_key.clone(), true);
                             debug!(
-                                "Sent snapshot request to longest-connected user in room {}",
-                                room_uuid
+                                "Sent snapshot request to {} connections targeting user {} with {} messages in room {}",
+                                sent_count, user_id_to_request, message_count, room_uuid
                             );
                         }
                     }
+                    break; // Only send one snapshot request at a time
                 }
             }
         }
@@ -1135,8 +1123,23 @@ async fn handle_socket(
         if room.is_empty() {
             drop(room);
             state.collaboration_rooms.remove(&room_uuid);
-            // Clean up snapshot request tracker for this room
-            state.snapshot_request_tracker.remove(&room_uuid);
+            // Clean up snapshot request tracker entries for this room (remove all user:room entries)
+            let room_prefix = format!("{}:", room_uuid);
+            let keys_to_remove: Vec<String> = state.snapshot_request_tracker
+                .iter()
+                .filter_map(|entry| {
+                    let key = entry.key();
+                    if key.starts_with(&room_prefix) {
+                        Some(key.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            for key in keys_to_remove {
+                state.snapshot_request_tracker.remove(&key);
+            }
             debug!("Removed empty room {}", room_uuid);
         }
     }

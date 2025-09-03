@@ -1,6 +1,6 @@
 /**
  * Binary WebSocket protocol for efficient collaborative drawing
- * 
+ *
  * Message Types:
  * - 0x00-0x0F: Server messages (parsed by server)
  * - 0x10+: Client messages (broadcast only)
@@ -12,13 +12,12 @@ export const MSG_TYPE = {
   JOIN: 0x01,
   SNAPSHOT: 0x02,
   CHAT: 0x03,
-  // SAVE: 0x04, // Removed - now handled via HTTP POST
   SNAPSHOT_REQUEST: 0x05,
   JOIN_RESPONSE: 0x06,
   END_SESSION: 0x07,
   SESSION_EXPIRED: 0x08,
   LEAVE: 0x09,
-  
+
   // Client messages (>= 0x10) - server just broadcasts
   DRAW_LINE: 0x10,
   DRAW_POINT: 0x11,
@@ -50,7 +49,7 @@ export const POINTER_TYPE = {
  * Convert UUID string to 16-byte array
  */
 export function uuidToBytes(uuid: string): Uint8Array {
-  const hex = uuid.replace(/-/g, '');
+  const hex = uuid.replace(/-/g, "");
   const bytes = new Uint8Array(16);
   for (let i = 0; i < 16; i++) {
     bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
@@ -63,22 +62,26 @@ export function uuidToBytes(uuid: string): Uint8Array {
  */
 export function bytesToUuid(bytes: Uint8Array): string {
   const hex = Array.from(bytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-  
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
   return [
     hex.slice(0, 8),
     hex.slice(8, 12),
     hex.slice(12, 16),
     hex.slice(16, 20),
-    hex.slice(20, 32)
-  ].join('-');
+    hex.slice(20, 32),
+  ].join("-");
 }
 
 /**
  * Write little-endian uint16 to buffer
  */
-function writeUint16LE(buffer: Uint8Array, offset: number, value: number): void {
+function writeUint16LE(
+  buffer: Uint8Array,
+  offset: number,
+  value: number
+): void {
   buffer[offset] = value & 0xff;
   buffer[offset + 1] = (value >> 8) & 0xff;
 }
@@ -95,7 +98,11 @@ function writeInt16LE(buffer: Uint8Array, offset: number, value: number): void {
 /**
  * Write little-endian uint32 to buffer
  */
-function writeUint32LE(buffer: Uint8Array, offset: number, value: number): void {
+function writeUint32LE(
+  buffer: Uint8Array,
+  offset: number,
+  value: number
+): void {
   buffer[offset] = value & 0xff;
   buffer[offset + 1] = (value >> 8) & 0xff;
   buffer[offset + 2] = (value >> 16) & 0xff;
@@ -105,7 +112,11 @@ function writeUint32LE(buffer: Uint8Array, offset: number, value: number): void 
 /**
  * Write little-endian uint64 to buffer
  */
-function writeUint64LE(buffer: Uint8Array, offset: number, value: number): void {
+function writeUint64LE(
+  buffer: Uint8Array,
+  offset: number,
+  value: number
+): void {
   writeUint32LE(buffer, offset, value & 0xffffffff);
   writeUint32LE(buffer, offset + 4, Math.floor(value / 0x100000000));
 }
@@ -129,10 +140,12 @@ function readInt16LE(buffer: Uint8Array, offset: number): number {
  * Read little-endian uint32 from buffer
  */
 function readUint32LE(buffer: Uint8Array, offset: number): number {
-  return buffer[offset] | 
-         (buffer[offset + 1] << 8) | 
-         (buffer[offset + 2] << 16) | 
-         (buffer[offset + 3] << 24);
+  return (
+    buffer[offset] |
+    (buffer[offset + 1] << 8) |
+    (buffer[offset + 2] << 16) |
+    (buffer[offset + 3] << 24)
+  );
 }
 
 /**
@@ -141,7 +154,7 @@ function readUint32LE(buffer: Uint8Array, offset: number): number {
 function readUint64LE(buffer: Uint8Array, offset: number): number {
   const low = readUint32LE(buffer, offset);
   const high = readUint32LE(buffer, offset + 4);
-  return low + (high * 0x100000000);
+  return low + high * 0x100000000;
 }
 
 /**
@@ -161,19 +174,19 @@ export function encodeJoin(userId: string, timestamp: number): ArrayBuffer {
  * Format: [0x02][UUID:16][layer:1][pngLength:4][pngData:variable]
  */
 export async function encodeSnapshot(
-  userId: string, 
-  layer: 'foreground' | 'background', 
+  userId: string,
+  layer: "foreground" | "background",
   pngBlob: Blob
 ): Promise<ArrayBuffer> {
   const pngBytes = new Uint8Array(await pngBlob.arrayBuffer());
   const buffer = new Uint8Array(22 + pngBytes.length);
-  
+
   buffer[0] = MSG_TYPE.SNAPSHOT;
   buffer.set(uuidToBytes(userId), 1);
-  buffer[17] = layer === 'foreground' ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[17] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
   writeUint32LE(buffer, 18, pngBytes.length);
   buffer.set(pngBytes, 22);
-  
+
   return buffer.buffer;
 }
 
@@ -183,33 +196,46 @@ export async function encodeSnapshot(
  */
 export function encodeDrawLine(
   userId: string,
-  layer: 'foreground' | 'background',
-  fromX: number, fromY: number,
-  toX: number, toY: number,
+  layer: "foreground" | "background",
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
   brushSize: number,
-  brushType: 'solid' | 'halftone' | 'eraser',
-  r: number, g: number, b: number, a: number,
-  pointerType: 'mouse' | 'pen' | 'touch'
+  brushType: "solid" | "halftone" | "eraser",
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  pointerType: "mouse" | "pen" | "touch"
 ): ArrayBuffer {
   const buffer = new Uint8Array(39);
-  
+
   buffer[0] = MSG_TYPE.DRAW_LINE;
   buffer.set(uuidToBytes(userId), 1);
-  buffer[17] = layer === 'foreground' ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[17] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
   writeInt16LE(buffer, 18, Math.round(fromX));
   writeInt16LE(buffer, 20, Math.round(fromY));
   writeInt16LE(buffer, 22, Math.round(toX));
   writeInt16LE(buffer, 24, Math.round(toY));
   buffer[26] = brushSize;
-  buffer[27] = brushType === 'solid' ? BRUSH_TYPE.SOLID : 
-               brushType === 'halftone' ? BRUSH_TYPE.HALFTONE : BRUSH_TYPE.ERASER;
+  buffer[27] =
+    brushType === "solid"
+      ? BRUSH_TYPE.SOLID
+      : brushType === "halftone"
+      ? BRUSH_TYPE.HALFTONE
+      : BRUSH_TYPE.ERASER;
   buffer[28] = r;
   buffer[29] = g;
   buffer[30] = b;
   buffer[31] = a;
-  buffer[32] = pointerType === 'mouse' ? POINTER_TYPE.MOUSE :
-               pointerType === 'pen' ? POINTER_TYPE.PEN : POINTER_TYPE.TOUCH;
-  
+  buffer[32] =
+    pointerType === "mouse"
+      ? POINTER_TYPE.MOUSE
+      : pointerType === "pen"
+      ? POINTER_TYPE.PEN
+      : POINTER_TYPE.TOUCH;
+
   return buffer.buffer;
 }
 
@@ -219,30 +245,42 @@ export function encodeDrawLine(
  */
 export function encodeDrawPoint(
   userId: string,
-  layer: 'foreground' | 'background',
-  x: number, y: number,
+  layer: "foreground" | "background",
+  x: number,
+  y: number,
   brushSize: number,
-  brushType: 'solid' | 'halftone' | 'eraser',
-  r: number, g: number, b: number, a: number,
-  pointerType: 'mouse' | 'pen' | 'touch'
+  brushType: "solid" | "halftone" | "eraser",
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+  pointerType: "mouse" | "pen" | "touch"
 ): ArrayBuffer {
   const buffer = new Uint8Array(31);
-  
+
   buffer[0] = MSG_TYPE.DRAW_POINT;
   buffer.set(uuidToBytes(userId), 1);
-  buffer[17] = layer === 'foreground' ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[17] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
   writeInt16LE(buffer, 18, Math.round(x));
   writeInt16LE(buffer, 20, Math.round(y));
   buffer[22] = brushSize;
-  buffer[23] = brushType === 'solid' ? BRUSH_TYPE.SOLID : 
-               brushType === 'halftone' ? BRUSH_TYPE.HALFTONE : BRUSH_TYPE.ERASER;
+  buffer[23] =
+    brushType === "solid"
+      ? BRUSH_TYPE.SOLID
+      : brushType === "halftone"
+      ? BRUSH_TYPE.HALFTONE
+      : BRUSH_TYPE.ERASER;
   buffer[24] = r;
   buffer[25] = g;
   buffer[26] = b;
   buffer[27] = a;
-  buffer[28] = pointerType === 'mouse' ? POINTER_TYPE.MOUSE :
-               pointerType === 'pen' ? POINTER_TYPE.PEN : POINTER_TYPE.TOUCH;
-  
+  buffer[28] =
+    pointerType === "mouse"
+      ? POINTER_TYPE.MOUSE
+      : pointerType === "pen"
+      ? POINTER_TYPE.PEN
+      : POINTER_TYPE.TOUCH;
+
   return buffer.buffer;
 }
 
@@ -252,22 +290,26 @@ export function encodeDrawPoint(
  */
 export function encodeFill(
   userId: string,
-  layer: 'foreground' | 'background',
-  x: number, y: number,
-  r: number, g: number, b: number, a: number
+  layer: "foreground" | "background",
+  x: number,
+  y: number,
+  r: number,
+  g: number,
+  b: number,
+  a: number
 ): ArrayBuffer {
   const buffer = new Uint8Array(26);
-  
+
   buffer[0] = MSG_TYPE.FILL;
   buffer.set(uuidToBytes(userId), 1);
-  buffer[17] = layer === 'foreground' ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[17] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
   writeInt16LE(buffer, 18, Math.round(x));
   writeInt16LE(buffer, 20, Math.round(y));
   buffer[22] = r;
   buffer[23] = g;
   buffer[24] = b;
   buffer[25] = a;
-  
+
   return buffer.buffer;
 }
 
@@ -283,13 +325,13 @@ export function encodeChat(
   const encoder = new TextEncoder();
   const msgBytes = encoder.encode(message);
   const buffer = new Uint8Array(27 + msgBytes.length);
-  
+
   buffer[0] = MSG_TYPE.CHAT;
   buffer.set(uuidToBytes(userId), 1);
   writeUint64LE(buffer, 17, timestamp);
   writeUint16LE(buffer, 25, msgBytes.length);
   buffer.set(msgBytes, 27);
-  
+
   return buffer.buffer;
 }
 
@@ -299,16 +341,16 @@ export function encodeChat(
  */
 export function encodeJoinResponse(userIds: string[]): ArrayBuffer {
   const buffer = new Uint8Array(3 + userIds.length * 16);
-  
+
   buffer[0] = MSG_TYPE.JOIN_RESPONSE;
   writeUint16LE(buffer, 1, userIds.length);
-  
+
   let offset = 3;
   for (const userId of userIds) {
     buffer.set(uuidToBytes(userId), offset);
     offset += 16;
   }
-  
+
   return buffer.buffer;
 }
 
@@ -331,12 +373,12 @@ export function encodeEndSession(userId: string, postUrl: string): ArrayBuffer {
   const encoder = new TextEncoder();
   const urlBytes = encoder.encode(postUrl);
   const buffer = new Uint8Array(19 + urlBytes.length);
-  
+
   buffer[0] = MSG_TYPE.END_SESSION;
   buffer.set(uuidToBytes(userId), 1);
   writeUint16LE(buffer, 17, urlBytes.length);
   buffer.set(urlBytes, 19);
-  
+
   return buffer.buffer;
 }
 
@@ -346,76 +388,85 @@ export function encodeEndSession(userId: string, postUrl: string): ArrayBuffer {
  */
 export function encodePointerUp(
   userId: string,
-  x: number, y: number,
+  x: number,
+  y: number,
   button: number,
-  pointerType: 'mouse' | 'pen' | 'touch'
+  pointerType: "mouse" | "pen" | "touch"
 ): ArrayBuffer {
   const buffer = new Uint8Array(23);
-  
+
   buffer[0] = MSG_TYPE.POINTER_UP;
   buffer.set(uuidToBytes(userId), 1);
   writeInt16LE(buffer, 17, Math.round(x));
   writeInt16LE(buffer, 19, Math.round(y));
   buffer[21] = button;
-  buffer[22] = pointerType === 'mouse' ? POINTER_TYPE.MOUSE :
-               pointerType === 'pen' ? POINTER_TYPE.PEN : POINTER_TYPE.TOUCH;
-  
+  buffer[22] =
+    pointerType === "mouse"
+      ? POINTER_TYPE.MOUSE
+      : pointerType === "pen"
+      ? POINTER_TYPE.PEN
+      : POINTER_TYPE.TOUCH;
+
   return buffer.buffer;
 }
 
 // Decoded message types
 export interface JoinMessage {
-  type: 'join';
+  type: "join";
   userId: string;
   username: string;
   timestamp: number;
 }
 
 export interface JoinResponseMessage {
-  type: 'joinResponse';
+  type: "joinResponse";
   userIds: string[];
 }
 
 export interface SnapshotMessage {
-  type: 'snapshot';
+  type: "snapshot";
   userId: string;
-  layer: 'foreground' | 'background';
+  layer: "foreground" | "background";
   pngData: Uint8Array;
 }
 
 export interface DrawLineMessage {
-  type: 'drawLine';
+  type: "drawLine";
   userId: string;
-  layer: 'foreground' | 'background';
-  fromX: number; fromY: number;
-  toX: number; toY: number;
+  layer: "foreground" | "background";
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
   brushSize: number;
-  brushType: 'solid' | 'halftone' | 'eraser';
+  brushType: "solid" | "halftone" | "eraser";
   color: { r: number; g: number; b: number; a: number };
-  pointerType: 'mouse' | 'pen' | 'touch';
+  pointerType: "mouse" | "pen" | "touch";
 }
 
 export interface DrawPointMessage {
-  type: 'drawPoint';
+  type: "drawPoint";
   userId: string;
-  layer: 'foreground' | 'background';
-  x: number; y: number;
+  layer: "foreground" | "background";
+  x: number;
+  y: number;
   brushSize: number;
-  brushType: 'solid' | 'halftone' | 'eraser';
+  brushType: "solid" | "halftone" | "eraser";
   color: { r: number; g: number; b: number; a: number };
-  pointerType: 'mouse' | 'pen' | 'touch';
+  pointerType: "mouse" | "pen" | "touch";
 }
 
 export interface FillMessage {
-  type: 'fill';
+  type: "fill";
   userId: string;
-  layer: 'foreground' | 'background';
-  x: number; y: number;
+  layer: "foreground" | "background";
+  x: number;
+  y: number;
   color: { r: number; g: number; b: number; a: number };
 }
 
 export interface ChatMessage {
-  type: 'chat';
+  type: "chat";
   userId: string;
   username: string;
   timestamp: number;
@@ -423,45 +474,46 @@ export interface ChatMessage {
 }
 
 export interface SnapshotRequestMessage {
-  type: 'snapshotRequest';
+  type: "snapshotRequest";
   timestamp: number;
 }
 
 export interface PointerUpMessage {
-  type: 'pointerup';
+  type: "pointerup";
   userId: string;
-  x: number; y: number;
+  x: number;
+  y: number;
   button: number;
-  pointerType: 'mouse' | 'pen' | 'touch';
+  pointerType: "mouse" | "pen" | "touch";
 }
 
 export interface EndSessionMessage {
-  type: 'endSession';
+  type: "endSession";
   userId: string;
   postUrl: string;
 }
 
 export interface SessionExpiredMessage {
-  type: 'sessionExpired';
+  type: "sessionExpired";
   sessionId: string;
 }
 
 export interface LeaveMessage {
-  type: 'leave';
+  type: "leave";
   userId: string;
   username: string;
   timestamp: number;
 }
 
-export type DecodedMessage = 
-  | JoinMessage 
+export type DecodedMessage =
+  | JoinMessage
   | JoinResponseMessage
-  | SnapshotMessage 
+  | SnapshotMessage
   | ChatMessage
   | SnapshotRequestMessage
-  | DrawLineMessage 
-  | DrawPointMessage 
-  | FillMessage 
+  | DrawLineMessage
+  | DrawPointMessage
+  | FillMessage
   | PointerUpMessage
   | EndSessionMessage
   | SessionExpiredMessage
@@ -473,7 +525,7 @@ export type DecodedMessage =
  */
 export function decodeSnapshot(data: ArrayBuffer): SnapshotMessage | null {
   const message = decodeMessage(data);
-  if (message && message.type === 'snapshot') {
+  if (message && message.type === "snapshot") {
     return message as SnapshotMessage;
   }
   return null;
@@ -485,172 +537,196 @@ export function decodeSnapshot(data: ArrayBuffer): SnapshotMessage | null {
 export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
   const buffer = new Uint8Array(data);
   if (buffer.length === 0) return null;
-  
+
   const msgType = buffer[0];
-  
+
   switch (msgType) {
     case MSG_TYPE.JOIN:
       // Format: [0x01][UUID:16][timestamp:8][usernameLength:2][username:variable]
       if (buffer.length < 27) return null; // Minimum: 1 + 16 + 8 + 2 + 0
-      
+
       const joinUsernameLength = readUint16LE(buffer, 25);
       if (buffer.length < 27 + joinUsernameLength) return null;
-      
+
       const joinDecoder = new TextDecoder();
       return {
-        type: 'join',
+        type: "join",
         userId: bytesToUuid(buffer.slice(1, 17)),
         timestamp: readUint64LE(buffer, 17),
-        username: joinDecoder.decode(buffer.slice(27, 27 + joinUsernameLength))
+        username: joinDecoder.decode(buffer.slice(27, 27 + joinUsernameLength)),
       };
-      
+
     case MSG_TYPE.JOIN_RESPONSE: {
       if (buffer.length < 3) return null;
       const userCount = readUint16LE(buffer, 1);
       if (buffer.length < 3 + userCount * 16) return null;
-      
+
       const userIds: string[] = [];
       for (let i = 0; i < userCount; i++) {
         const offset = 3 + i * 16;
         userIds.push(bytesToUuid(buffer.slice(offset, offset + 16)));
       }
-      
+
       return {
-        type: 'joinResponse',
-        userIds: userIds
+        type: "joinResponse",
+        userIds: userIds,
       };
     }
-      
+
     case MSG_TYPE.CHAT: {
       // Format: [0x03][UUID:16][timestamp:8][usernameLength:2][username:variable][msgLength:2][msgData:variable]
       if (buffer.length < 29) return null; // Minimum: 1 + 16 + 8 + 2 + 0 + 2 + 0
-      
+
       const usernameLength = readUint16LE(buffer, 25);
       if (buffer.length < 29 + usernameLength) return null;
-      
+
       const msgLength = readUint16LE(buffer, 27 + usernameLength);
       if (buffer.length < 29 + usernameLength + msgLength) return null;
-      
+
       const decoder = new TextDecoder();
       return {
-        type: 'chat',
+        type: "chat",
         userId: bytesToUuid(buffer.slice(1, 17)),
         timestamp: readUint64LE(buffer, 17),
         username: decoder.decode(buffer.slice(27, 27 + usernameLength)),
-        message: decoder.decode(buffer.slice(29 + usernameLength, 29 + usernameLength + msgLength))
+        message: decoder.decode(
+          buffer.slice(29 + usernameLength, 29 + usernameLength + msgLength)
+        ),
       };
     }
-      
+
     case MSG_TYPE.SNAPSHOT_REQUEST:
       if (buffer.length < 9) return null;
       return {
-        type: 'snapshotRequest',
-        timestamp: readUint64LE(buffer, 1)
+        type: "snapshotRequest",
+        timestamp: readUint64LE(buffer, 1),
       };
-      
+
     case MSG_TYPE.SNAPSHOT: {
       if (buffer.length < 22) return null;
       const pngLength = readUint32LE(buffer, 18);
       if (buffer.length < 22 + pngLength) return null;
       return {
-        type: 'snapshot',
+        type: "snapshot",
         userId: bytesToUuid(buffer.slice(1, 17)),
-        layer: buffer[17] === LAYER.FOREGROUND ? 'foreground' : 'background',
-        pngData: buffer.slice(22, 22 + pngLength)
+        layer: buffer[17] === LAYER.FOREGROUND ? "foreground" : "background",
+        pngData: buffer.slice(22, 22 + pngLength),
       };
     }
-      
+
     case MSG_TYPE.DRAW_LINE:
       if (buffer.length < 39) return null;
       return {
-        type: 'drawLine',
+        type: "drawLine",
         userId: bytesToUuid(buffer.slice(1, 17)),
-        layer: buffer[17] === LAYER.FOREGROUND ? 'foreground' : 'background',
+        layer: buffer[17] === LAYER.FOREGROUND ? "foreground" : "background",
         fromX: readInt16LE(buffer, 18),
         fromY: readInt16LE(buffer, 20),
         toX: readInt16LE(buffer, 22),
         toY: readInt16LE(buffer, 24),
         brushSize: buffer[26],
-        brushType: buffer[27] === BRUSH_TYPE.SOLID ? 'solid' :
-                   buffer[27] === BRUSH_TYPE.HALFTONE ? 'halftone' : 'eraser',
+        brushType:
+          buffer[27] === BRUSH_TYPE.SOLID
+            ? "solid"
+            : buffer[27] === BRUSH_TYPE.HALFTONE
+            ? "halftone"
+            : "eraser",
         color: { r: buffer[28], g: buffer[29], b: buffer[30], a: buffer[31] },
-        pointerType: buffer[32] === POINTER_TYPE.MOUSE ? 'mouse' :
-                     buffer[32] === POINTER_TYPE.PEN ? 'pen' : 'touch'
+        pointerType:
+          buffer[32] === POINTER_TYPE.MOUSE
+            ? "mouse"
+            : buffer[32] === POINTER_TYPE.PEN
+            ? "pen"
+            : "touch",
       };
-      
+
     case MSG_TYPE.DRAW_POINT:
       if (buffer.length < 31) return null;
       return {
-        type: 'drawPoint',
+        type: "drawPoint",
         userId: bytesToUuid(buffer.slice(1, 17)),
-        layer: buffer[17] === LAYER.FOREGROUND ? 'foreground' : 'background',
+        layer: buffer[17] === LAYER.FOREGROUND ? "foreground" : "background",
         x: readInt16LE(buffer, 18),
         y: readInt16LE(buffer, 20),
         brushSize: buffer[22],
-        brushType: buffer[23] === BRUSH_TYPE.SOLID ? 'solid' :
-                   buffer[23] === BRUSH_TYPE.HALFTONE ? 'halftone' : 'eraser',
+        brushType:
+          buffer[23] === BRUSH_TYPE.SOLID
+            ? "solid"
+            : buffer[23] === BRUSH_TYPE.HALFTONE
+            ? "halftone"
+            : "eraser",
         color: { r: buffer[24], g: buffer[25], b: buffer[26], a: buffer[27] },
-        pointerType: buffer[28] === POINTER_TYPE.MOUSE ? 'mouse' :
-                     buffer[28] === POINTER_TYPE.PEN ? 'pen' : 'touch'
+        pointerType:
+          buffer[28] === POINTER_TYPE.MOUSE
+            ? "mouse"
+            : buffer[28] === POINTER_TYPE.PEN
+            ? "pen"
+            : "touch",
       };
-      
+
     case MSG_TYPE.FILL:
       if (buffer.length < 26) return null;
       return {
-        type: 'fill',
+        type: "fill",
         userId: bytesToUuid(buffer.slice(1, 17)),
-        layer: buffer[17] === LAYER.FOREGROUND ? 'foreground' : 'background',
+        layer: buffer[17] === LAYER.FOREGROUND ? "foreground" : "background",
         x: readInt16LE(buffer, 18),
         y: readInt16LE(buffer, 20),
-        color: { r: buffer[22], g: buffer[23], b: buffer[24], a: buffer[25] }
+        color: { r: buffer[22], g: buffer[23], b: buffer[24], a: buffer[25] },
       };
-      
+
     case MSG_TYPE.POINTER_UP:
       if (buffer.length < 23) return null;
       return {
-        type: 'pointerup',
+        type: "pointerup",
         userId: bytesToUuid(buffer.slice(1, 17)),
         x: readInt16LE(buffer, 17),
         y: readInt16LE(buffer, 19),
         button: buffer[21],
-        pointerType: buffer[22] === POINTER_TYPE.MOUSE ? 'mouse' :
-                     buffer[22] === POINTER_TYPE.PEN ? 'pen' : 'touch'
+        pointerType:
+          buffer[22] === POINTER_TYPE.MOUSE
+            ? "mouse"
+            : buffer[22] === POINTER_TYPE.PEN
+            ? "pen"
+            : "touch",
       };
-      
+
     case MSG_TYPE.END_SESSION: {
       if (buffer.length < 19) return null;
       const urlLength = readUint16LE(buffer, 17);
       if (buffer.length < 19 + urlLength) return null;
       const decoder = new TextDecoder();
       return {
-        type: 'endSession',
+        type: "endSession",
         userId: bytesToUuid(buffer.slice(1, 17)),
-        postUrl: decoder.decode(buffer.slice(19, 19 + urlLength))
+        postUrl: decoder.decode(buffer.slice(19, 19 + urlLength)),
       };
     }
-    
+
     case MSG_TYPE.SESSION_EXPIRED:
       if (buffer.length < 17) return null;
       return {
-        type: 'sessionExpired',
-        sessionId: bytesToUuid(buffer.slice(1, 17))
+        type: "sessionExpired",
+        sessionId: bytesToUuid(buffer.slice(1, 17)),
       };
-    
+
     case MSG_TYPE.LEAVE:
       // Format: [0x09][UUID:16][timestamp:8][usernameLength:2][username:variable]
       if (buffer.length < 27) return null; // Minimum: 1 + 16 + 8 + 2 + 0
-      
+
       const leaveUsernameLength = readUint16LE(buffer, 25);
       if (buffer.length < 27 + leaveUsernameLength) return null;
-      
+
       const leaveDecoder = new TextDecoder();
       return {
-        type: 'leave',
+        type: "leave",
         userId: bytesToUuid(buffer.slice(1, 17)),
         timestamp: readUint64LE(buffer, 17),
-        username: leaveDecoder.decode(buffer.slice(27, 27 + leaveUsernameLength))
+        username: leaveDecoder.decode(
+          buffer.slice(27, 27 + leaveUsernameLength)
+        ),
       };
-      
+
     default:
       return null;
   }
