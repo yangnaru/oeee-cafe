@@ -7,6 +7,7 @@
 
 default_job = "check"
 env.CARGO_TERM_COLOR = "always"
+env.DATABASE_URL = "postgres://localhost/oeee_cafe"
 
 [jobs.check]
 command = ["cargo", "check"]
@@ -87,7 +88,7 @@ background = true
 # long running programs (uncomment it if you need it)
 [jobs.run-long]
 command = [
-    "cargo", "run",
+    "cargo", "run", "--", "config/dev.toml"
     # put launch parameters for your program behind a `--` separator
 ]
 need_stdout = true
