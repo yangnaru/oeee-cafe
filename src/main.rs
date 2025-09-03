@@ -66,6 +66,7 @@ fn main() {
                 collaboration_rooms: Arc::new(DashMap::new()),
                 message_history: Arc::new(DashMap::new()),
                 last_activity_cache: Arc::new(DashMap::new()),
+                snapshot_request_tracker: Arc::new(DashMap::new()),
             };
 
             App::new(state).await.unwrap().serve().await.unwrap()

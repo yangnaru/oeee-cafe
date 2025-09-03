@@ -474,7 +474,10 @@ async fn handle_socket(
                 .unwrap_or(0);
 
                 if active_user_count >= session.max_participants as i64 {
-                    info!("User {} rejected from session {} (full: {} users)", user_login_name, room_uuid, active_user_count);
+                    info!(
+                        "User {} rejected from session {} (full: {} users)",
+                        user_login_name, room_uuid, active_user_count
+                    );
                     return;
                 }
             }
@@ -717,10 +720,16 @@ async fn handle_socket(
                                                 // For SNAPSHOT messages (0x02), check if they're from the same user and layer
                                                 if stored_msg_type == 0x02 {
                                                     if stored_data.len() >= 18 {
-                                                        if let Ok(stored_snapshot_user) = bytes_to_uuid(&stored_data[1..17]) {
-                                                            let stored_snapshot_layer = stored_data[17];
+                                                        if let Ok(stored_snapshot_user) =
+                                                            bytes_to_uuid(&stored_data[1..17])
+                                                        {
+                                                            let stored_snapshot_layer =
+                                                                stored_data[17];
                                                             // Remove if same user and same layer
-                                                            return !(stored_snapshot_user == snapshot_user && stored_snapshot_layer == snapshot_layer);
+                                                            return !(stored_snapshot_user
+                                                                == snapshot_user
+                                                                && stored_snapshot_layer
+                                                                    == snapshot_layer);
                                                         }
                                                     }
                                                     return true; // Keep if we can't parse
@@ -769,6 +778,9 @@ async fn handle_socket(
                                         debug!("Removed {} obsolete messages from history for user {} layer {} in room {}", 
                                                removed_count, snapshot_user, snapshot_layer, room_uuid);
                                     }
+
+                                    // Reset snapshot request tracker since we received a snapshot
+                                    state.snapshot_request_tracker.insert(room_uuid, false);
                                 }
                             }
                         }
@@ -978,28 +990,40 @@ async fn handle_socket(
         );
 
         // Check if history exceeds threshold and request snapshot
-        const MAX_HISTORY_MESSAGES: usize = 1000;
+        const MAX_HISTORY_MESSAGES: usize = 500;
         const MAX_HISTORY_MB: f64 = 5.0;
 
         if history_count > MAX_HISTORY_MESSAGES || history_mb > MAX_HISTORY_MB {
-            // Find longest-connected user (first in the room)
-            if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
-                if let Some(first_connection) = room.iter().next() {
-                    let (_, tx) = first_connection.pair();
+            // Check if snapshot request was already sent for this room
+            let should_send_snapshot = state
+                .snapshot_request_tracker
+                .entry(room_uuid)
+                .or_insert(false)
+                .value()
+                == &false;
 
-                    // Create snapshot request message: [0x05][timestamp:8]
-                    let mut request_buffer = vec![0x05u8];
-                    let timestamp = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_millis() as u64;
-                    request_buffer.extend_from_slice(&timestamp.to_le_bytes());
+            if should_send_snapshot {
+                // Find longest-connected user (first in the room)
+                if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
+                    if let Some(first_connection) = room.iter().next() {
+                        let (_, tx) = first_connection.pair();
 
-                    if tx.send(Message::Binary(request_buffer)).is_ok() {
-                        debug!(
-                            "Sent snapshot request to longest-connected user in room {}",
-                            room_uuid
-                        );
+                        // Create snapshot request message: [0x05][timestamp:8]
+                        let mut request_buffer = vec![0x05u8];
+                        let timestamp = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis() as u64;
+                        request_buffer.extend_from_slice(&timestamp.to_le_bytes());
+
+                        if tx.send(Message::Binary(request_buffer)).is_ok() {
+                            // Mark that snapshot request has been sent for this room
+                            state.snapshot_request_tracker.insert(room_uuid, true);
+                            debug!(
+                                "Sent snapshot request to longest-connected user in room {}",
+                                room_uuid
+                            );
+                        }
                     }
                 }
             }
@@ -1111,6 +1135,8 @@ async fn handle_socket(
         if room.is_empty() {
             drop(room);
             state.collaboration_rooms.remove(&room_uuid);
+            // Clean up snapshot request tracker for this room
+            state.snapshot_request_tracker.remove(&room_uuid);
             debug!("Removed empty room {}", room_uuid);
         }
     }
