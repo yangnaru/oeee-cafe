@@ -522,6 +522,34 @@ async fn handle_socket(
         if is_owner { "owner" } else { "participant" }
     );
 
+    // Disconnect any existing connections for this user in this room
+    if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
+        let mut connections_to_remove = Vec::new();
+        
+        // Find existing connections for this user
+        for conn_ref in room.iter() {
+            let (existing_conn_id, existing_tx) = conn_ref.pair();
+            if let Some(existing_user_id) = state.connection_user_mapping.get(existing_conn_id) {
+                if *existing_user_id == user_id {
+                    info!(
+                        "Disconnecting older connection {} for user {} in room {} (new connection: {})",
+                        existing_conn_id, user_login_name, room_uuid, connection_id
+                    );
+                    
+                    // Send close message to the older connection
+                    let _ = existing_tx.send(Message::Close(None));
+                    connections_to_remove.push(existing_conn_id.clone());
+                }
+            }
+        }
+        
+        // Remove the old connections
+        for old_conn_id in connections_to_remove {
+            room.remove(&old_conn_id);
+            state.connection_user_mapping.remove(&old_conn_id);
+        }
+    }
+
     // Add connection to room
     state
         .collaboration_rooms
