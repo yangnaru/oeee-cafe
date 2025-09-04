@@ -9,6 +9,7 @@ export default tseslint.config([
   globalIgnores(['dist']),
   {
     files: ['**/*.{ts,tsx}'],
+    ignores: ['src/locales/**'],
     extends: [
       js.configs.recommended,
       tseslint.configs.recommended,
