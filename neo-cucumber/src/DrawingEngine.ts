@@ -5,6 +5,12 @@ export class DrawingEngine {
   public compositeBuffer: Uint8ClampedArray;
   public canvas: HTMLCanvasElement | null = null;
 
+  // Offscreen canvases for hardware-accelerated compositing
+  public layerCanvases: { [key: string]: HTMLCanvasElement } = {};
+  public layerContexts: { [key: string]: CanvasRenderingContext2D } = {};
+  public compositeCanvas: HTMLCanvasElement | null = null;
+  public compositeContext: CanvasRenderingContext2D | null = null;
+
   private brush: { [key: number]: Uint8Array } = {};
   private tone: { [key: string]: Uint8Array } = {};
   private aerr = 0;
@@ -28,8 +34,35 @@ export class DrawingEngine {
 
     this.compositeBuffer = new Uint8ClampedArray(width * height * 4);
 
+    // Initialize offscreen canvases for hardware acceleration
+    this.initializeOffscreenCanvases();
+
     this.initializeBrushes();
     this.initializeTones();
+  }
+
+  private initializeOffscreenCanvases() {
+    // Create offscreen canvases for each layer
+    ['background', 'foreground'].forEach(layerName => {
+      const canvas = document.createElement('canvas');
+      canvas.width = this.imageWidth;
+      canvas.height = this.imageHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.imageSmoothingEnabled = false;
+        this.layerCanvases[layerName] = canvas;
+        this.layerContexts[layerName] = ctx;
+      }
+    });
+
+    // Create composite canvas for final blending
+    this.compositeCanvas = document.createElement('canvas');
+    this.compositeCanvas.width = this.imageWidth;
+    this.compositeCanvas.height = this.imageHeight;
+    this.compositeContext = this.compositeCanvas.getContext('2d');
+    if (this.compositeContext) {
+      this.compositeContext.imageSmoothingEnabled = false;
+    }
   }
 
   private initializeBrushes() {
@@ -166,6 +199,59 @@ export class DrawingEngine {
         this.compositeBuffer[i + 3] = 0;
       }
     }
+  }
+
+  // Get individual layer canvas for hardware compositing
+  public getLayerCanvas(layerName: 'foreground' | 'background'): HTMLCanvasElement | null {
+    // Update the offscreen canvas with current layer data
+    const layerData = this.layers[layerName];
+    const context = this.layerContexts[layerName];
+    const canvas = this.layerCanvases[layerName];
+
+    if (!context || !canvas || !layerData) {
+      return null;
+    }
+
+    // Push current layer data to canvas
+    const imageData = new ImageData(layerData, this.imageWidth, this.imageHeight);
+    context.putImageData(imageData, 0, 0);
+
+    return canvas;
+  }
+
+  // Get raw layer data without compositing (for compatibility)
+  public getLayerData(layerName: 'foreground' | 'background'): Uint8ClampedArray {
+    return this.layers[layerName];
+  }
+
+  // Hardware-accelerated compositing using Canvas API
+  public compositeLayersHardware(fgVisible: boolean = true, bgVisible: boolean = true): HTMLCanvasElement | null {
+    if (!this.compositeContext || !this.compositeCanvas) {
+      return null;
+    }
+
+    // Clear the composite canvas
+    this.compositeContext.clearRect(0, 0, this.imageWidth, this.imageHeight);
+
+    // Composite background layer first
+    if (bgVisible) {
+      const bgCanvas = this.getLayerCanvas('background');
+      if (bgCanvas) {
+        this.compositeContext.drawImage(bgCanvas, 0, 0);
+      }
+    }
+
+    // Composite foreground layer on top
+    if (fgVisible) {
+      const fgCanvas = this.getLayerCanvas('foreground');
+      if (fgCanvas) {
+        // Use normal alpha compositing for foreground
+        this.compositeContext.globalCompositeOperation = 'source-over';
+        this.compositeContext.drawImage(fgCanvas, 0, 0);
+      }
+    }
+
+    return this.compositeCanvas;
   }
 
 
@@ -414,7 +500,7 @@ export class DrawingEngine {
       }
 
       const point = stack.pop()!;
-      let px = point.x;
+      const px = point.x;
       const py = point.y;
       let x0 = px;
       let x1 = px;
@@ -477,8 +563,8 @@ export class DrawingEngine {
   ) {
     const r0 = Math.floor(d / 2);
 
-    let x = x0 - r0;
-    let y = y0 - r0;
+    const x = x0 - r0;
+    const y = y0 - r0;
 
     const shape = this.brush[d];
     let shapeIndex = 0;
@@ -608,5 +694,11 @@ export class DrawingEngine {
     this.layers.background = new Uint8ClampedArray(0);
     this.layers.foreground = new Uint8ClampedArray(0);
     this.compositeBuffer = new Uint8ClampedArray(0);
+
+    // Clean up offscreen canvases
+    this.layerCanvases = {};
+    this.layerContexts = {};
+    this.compositeCanvas = null;
+    this.compositeContext = null;
   }
 }

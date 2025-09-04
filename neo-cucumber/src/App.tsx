@@ -247,27 +247,10 @@ function App() {
   // Dirty flag to track when recomposition is needed
   const needsRecompositionRef = useRef(false);
 
-  // Cached temporary canvas for local user compositing (performance optimization for Safari)
-  const tempCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const tempCtxRef = useRef<CanvasRenderingContext2D | null>(null);
-
   // Safari detection for performance optimizations
   const isSafari = useRef(
     /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
   );
-
-  // Initialize cached temporary canvas for performance
-  const initTempCanvas = useCallback(() => {
-    if (!tempCanvasRef.current && CANVAS_WIDTH && CANVAS_HEIGHT) {
-      tempCanvasRef.current = document.createElement("canvas");
-      tempCanvasRef.current.width = CANVAS_WIDTH;
-      tempCanvasRef.current.height = CANVAS_HEIGHT;
-      tempCtxRef.current = tempCanvasRef.current.getContext("2d");
-      if (tempCtxRef.current) {
-        tempCtxRef.current.imageSmoothingEnabled = false;
-      }
-    }
-  }, [CANVAS_WIDTH, CANVAS_HEIGHT]);
 
   // Function to create drawing engine for a new user
   const createUserEngine = useCallback(
@@ -1410,7 +1393,7 @@ function App() {
     }
 
     // Sort users by server-provided order (from JOIN_RESPONSE)
-    // Later users should be drawn first (underneath earlier users)
+    // Earlier users should be drawn last (on top of later users)
     // This ensures first user to join appears on top, latest user appears on bottom
     allUsers.sort((a, b) => {
       const indexA = userOrderRef.current.indexOf(a.userId);
@@ -1430,50 +1413,29 @@ function App() {
       return a.userId.localeCompare(b.userId);
     });
 
-    // Composite each user's canvas onto the main canvas using Canvas API (much faster!)
+    // Hardware-accelerated compositing: Composite each user's canvas onto the main canvas
     allUsers.forEach(({ userId, engine, canvas }) => {
       const isLocalUser = userId === userIdRef.current;
 
       if (isLocalUser) {
-        // For local user, composite layers and use cached temporary canvas
-        engine.compositeLayers(drawingState.fgVisible, drawingState.bgVisible);
-
-        // Initialize cached canvas if needed
-        initTempCanvas();
-
-        // Use cached temporary canvas
-        if (
-          tempCtxRef.current &&
-          tempCanvasRef.current &&
-          CANVAS_WIDTH &&
-          CANVAS_HEIGHT
-        ) {
-          const compositeData = engine.compositeBuffer;
-          const imageData = new ImageData(
-            compositeData,
-            CANVAS_WIDTH,
-            CANVAS_HEIGHT
-          );
-          tempCtxRef.current.putImageData(imageData, 0, 0);
-
-          // Draw cached temp canvas onto main canvas
-          ctx.drawImage(tempCanvasRef.current, 0, 0);
+        // For local user, use hardware-accelerated compositing
+        const compositeCanvas = engine.compositeLayersHardware(
+          drawingState.fgVisible,
+          drawingState.bgVisible
+        );
+        if (compositeCanvas) {
+          ctx.drawImage(compositeCanvas, 0, 0);
         }
       } else if (canvas && CANVAS_WIDTH && CANVAS_HEIGHT) {
-        // For remote users, update their offscreen canvas first
-        const userCtx = canvas.getContext("2d");
-        if (userCtx) {
-          userCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-          engine.compositeLayers(true, true); // Always show both layers for remote users
-
-          // Get the composite data and draw to user's offscreen canvas
-          const compositeData = engine.compositeBuffer;
-          const imageData = new ImageData(
-            compositeData,
-            CANVAS_WIDTH,
-            CANVAS_HEIGHT
-          );
-          userCtx.putImageData(imageData, 0, 0);
+        // For remote users, use hardware-accelerated compositing (always show both layers)
+        const compositeCanvas = engine.compositeLayersHardware(true, true);
+        if (compositeCanvas) {
+          // Update the user's stored canvas with the composite result
+          const userCtx = canvas.getContext("2d");
+          if (userCtx) {
+            userCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            userCtx.drawImage(compositeCanvas, 0, 0);
+          }
 
           // Draw user's canvas onto main canvas
           ctx.drawImage(canvas, 0, 0);
@@ -1482,7 +1444,13 @@ function App() {
     });
 
     needsRecompositionRef.current = false;
-  }, [drawingEngine, drawingState.fgVisible, drawingState.bgVisible]);
+  }, [
+    drawingEngine,
+    drawingState.fgVisible,
+    drawingState.bgVisible,
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT,
+  ]);
 
   // Set the compositing callback ref after compositeAllUserLayers is defined
   useEffect(() => {
