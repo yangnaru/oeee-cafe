@@ -43,11 +43,11 @@ export class DrawingEngine {
 
   private initializeOffscreenCanvases() {
     // Create offscreen canvases for each layer
-    ['background', 'foreground'].forEach(layerName => {
-      const canvas = document.createElement('canvas');
+    ["background", "foreground"].forEach((layerName) => {
+      const canvas = document.createElement("canvas");
       canvas.width = this.imageWidth;
       canvas.height = this.imageHeight;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.imageSmoothingEnabled = false;
         this.layerCanvases[layerName] = canvas;
@@ -56,10 +56,10 @@ export class DrawingEngine {
     });
 
     // Create composite canvas for final blending
-    this.compositeCanvas = document.createElement('canvas');
+    this.compositeCanvas = document.createElement("canvas");
     this.compositeCanvas.width = this.imageWidth;
     this.compositeCanvas.height = this.imageHeight;
-    this.compositeContext = this.compositeCanvas.getContext('2d');
+    this.compositeContext = this.compositeCanvas.getContext("2d");
     if (this.compositeContext) {
       this.compositeContext.imageSmoothingEnabled = false;
     }
@@ -202,7 +202,9 @@ export class DrawingEngine {
   }
 
   // Get individual layer canvas for hardware compositing
-  public getLayerCanvas(layerName: 'foreground' | 'background'): HTMLCanvasElement | null {
+  public getLayerCanvas(
+    layerName: "foreground" | "background"
+  ): HTMLCanvasElement | null {
     // Update the offscreen canvas with current layer data
     const layerData = this.layers[layerName];
     const context = this.layerContexts[layerName];
@@ -213,19 +215,21 @@ export class DrawingEngine {
     }
 
     // Push current layer data to canvas
-    const imageData = new ImageData(layerData, this.imageWidth, this.imageHeight);
+    const imageData = new ImageData(
+      layerData,
+      this.imageWidth,
+      this.imageHeight
+    );
     context.putImageData(imageData, 0, 0);
 
     return canvas;
   }
 
-  // Get raw layer data without compositing (for compatibility)
-  public getLayerData(layerName: 'foreground' | 'background'): Uint8ClampedArray {
-    return this.layers[layerName];
-  }
-
   // Hardware-accelerated compositing using Canvas API
-  public compositeLayersHardware(fgVisible: boolean = true, bgVisible: boolean = true): HTMLCanvasElement | null {
+  public compositeLayersHardware(
+    fgVisible: boolean = true,
+    bgVisible: boolean = true
+  ): HTMLCanvasElement | null {
     if (!this.compositeContext || !this.compositeCanvas) {
       return null;
     }
@@ -235,7 +239,7 @@ export class DrawingEngine {
 
     // Composite background layer first
     if (bgVisible) {
-      const bgCanvas = this.getLayerCanvas('background');
+      const bgCanvas = this.getLayerCanvas("background");
       if (bgCanvas) {
         this.compositeContext.drawImage(bgCanvas, 0, 0);
       }
@@ -243,17 +247,16 @@ export class DrawingEngine {
 
     // Composite foreground layer on top
     if (fgVisible) {
-      const fgCanvas = this.getLayerCanvas('foreground');
+      const fgCanvas = this.getLayerCanvas("foreground");
       if (fgCanvas) {
         // Use normal alpha compositing for foreground
-        this.compositeContext.globalCompositeOperation = 'source-over';
+        this.compositeContext.globalCompositeOperation = "source-over";
         this.compositeContext.drawImage(fgCanvas, 0, 0);
       }
     }
 
     return this.compositeCanvas;
   }
-
 
   // Pan offset management
   public updatePanOffset(
@@ -668,9 +671,7 @@ export class DrawingEngine {
     ];
   }
 
-  public initialize(
-    ctx?: CanvasRenderingContext2D
-  ) {
+  public initialize(ctx?: CanvasRenderingContext2D) {
     // Store the canvas reference
     if (ctx) {
       this.canvas = ctx.canvas;

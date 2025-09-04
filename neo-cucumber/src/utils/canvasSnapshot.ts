@@ -11,28 +11,28 @@ export async function layerToPngBlob(
   height: number
 ): Promise<Blob> {
   // Create a temporary canvas
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  
+  const ctx = canvas.getContext("2d");
+
   if (!ctx) {
-    throw new Error('Failed to get canvas context');
+    throw new Error("Failed to get canvas context");
   }
-  
+
   // Create ImageData from the layer
   const imageData = new ImageData(layer, width, height);
   ctx.putImageData(imageData, 0, 0);
-  
+
   // Convert to PNG blob
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob) {
         resolve(blob);
       } else {
-        reject(new Error('Failed to create PNG blob'));
+        reject(new Error("Failed to create PNG blob"));
       }
-    }, 'image/png');
+    }, "image/png");
   });
 }
 
@@ -46,82 +46,57 @@ export async function pngDataToLayer(
 ): Promise<Uint8ClampedArray> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    
+
     img.onload = () => {
       // Create a temporary canvas to extract pixel data
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      
+      const ctx = canvas.getContext("2d");
+
       if (!ctx) {
-        reject(new Error('Failed to get canvas context'));
+        reject(new Error("Failed to get canvas context"));
         return;
       }
-      
+
       // Disable image smoothing to preserve pixel-perfect data
       ctx.imageSmoothingEnabled = false;
-      
+
       // Draw the image onto the canvas
       ctx.drawImage(img, 0, 0);
-      
+
       // Extract the pixel data
       const imageData = ctx.getImageData(0, 0, width, height);
       resolve(imageData.data);
     };
-    
+
     img.onerror = () => {
-      reject(new Error('Failed to load image from PNG data'));
+      reject(new Error("Failed to load image from PNG data"));
     };
-    
+
     // Create blob URL from PNG data
-    const blob = new Blob([pngData], { type: 'image/png' });
+    const blob = new Blob([pngData], { type: "image/png" });
     const url = URL.createObjectURL(blob);
-    
+
     img.onload = () => {
       URL.revokeObjectURL(url); // Clean up
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      
+      const ctx = canvas.getContext("2d");
+
       if (!ctx) {
-        reject(new Error('Failed to get canvas context'));
+        reject(new Error("Failed to get canvas context"));
         return;
       }
-      
+
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, 0, 0);
-      
+
       const imageData = ctx.getImageData(0, 0, width, height);
       resolve(imageData.data);
     };
-    
+
     img.src = url;
   });
-}
-
-// Legacy functions for backward compatibility (will be removed after migration)
-export async function compressLayer(
-  layer: Uint8ClampedArray,
-  width: number,
-  height: number
-): Promise<string> {
-  const blob = await layerToPngBlob(layer, width, height);
-  const arrayBuffer = await blob.arrayBuffer();
-  const bytes = new Uint8Array(arrayBuffer);
-  return btoa(String.fromCharCode(...bytes));
-}
-
-export async function decompressLayer(
-  snapshot: string,
-  width: number,
-  height: number
-): Promise<Uint8ClampedArray> {
-  const binaryString = atob(snapshot);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return pngDataToLayer(bytes, width, height);
 }
