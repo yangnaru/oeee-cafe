@@ -635,12 +635,13 @@ async fn handle_socket(
                                     {
                                         error!("Failed to track JOIN participant: {}", e);
                                     } else {
-                                        // Query all active participants ordered by joined_at
+                                        // Query all active participants with their usernames ordered by joined_at
                                         match sqlx::query!(
                                             r#"
-                                            SELECT user_id FROM collaborative_sessions_participants
-                                            WHERE session_id = $1 AND is_active = true
-                                            ORDER BY joined_at ASC
+                                            SELECT csp.user_id, u.login_name FROM collaborative_sessions_participants csp
+                                            JOIN users u ON csp.user_id = u.id
+                                            WHERE csp.session_id = $1 AND csp.is_active = true
+                                            ORDER BY csp.joined_at ASC
                                             "#,
                                             room_uuid
                                         )
@@ -658,7 +659,7 @@ async fn handle_socket(
                                                     .push(((user_count >> 8) & 0xff) as u8);
 
                                                 // Write each user UUID (16 bytes each)
-                                                for participant in participants {
+                                                for participant in &participants {
                                                     let uuid_bytes = participant.user_id.as_bytes();
                                                     response_data.extend_from_slice(uuid_bytes);
                                                 }
@@ -683,6 +684,38 @@ async fn handle_socket(
                                                         "Broadcasted JOIN_RESPONSE with {} users to {} connections in room {}",
                                                         user_count, room_connections.len(), room_uuid
                                                     );
+
+                                                    // Send individual JOIN messages for all existing participants to the new user
+                                                    // This helps the new user see who's already in the session
+                                                    for participant in &participants {
+                                                        if participant.user_id != user_id {
+                                                            // Create JOIN message for this participant
+                                                            // Format: [0x01][UUID:16][timestamp:8][usernameLength:2][username:variable]
+                                                            
+                                                            // We'll use current timestamp since we don't store original join timestamps
+                                                            let current_timestamp = std::time::SystemTime::now()
+                                                                .duration_since(std::time::UNIX_EPOCH)
+                                                                .unwrap()
+                                                                .as_millis() as u64;
+                                                            
+                                                            // Use the actual login name from the database
+                                                            let participant_name = participant.login_name.clone();
+                                                            let username_bytes = participant_name.as_bytes();
+                                                            let username_len = username_bytes.len() as u16;
+
+                                                            let mut join_msg = Vec::new();
+                                                            join_msg.push(0x01u8); // JOIN type
+                                                            join_msg.extend_from_slice(participant.user_id.as_bytes()); // 16 bytes
+                                                            join_msg.extend_from_slice(&current_timestamp.to_le_bytes()); // 8 bytes
+                                                            join_msg.extend_from_slice(&username_len.to_le_bytes()); // 2 bytes
+                                                            join_msg.extend_from_slice(username_bytes); // variable
+
+                                                            let participant_join_msg = Message::Binary(join_msg);
+                                                            if let Err(e) = tx.send(participant_join_msg) {
+                                                                debug!("Failed to send JOIN message for participant {} to new user: {}", participant.user_id, e);
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                             Err(e) => {
