@@ -541,7 +541,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
   const msgType = buffer[0];
 
   switch (msgType) {
-    case MSG_TYPE.JOIN:
+    case MSG_TYPE.JOIN: {
       // Format: [0x01][UUID:16][timestamp:8][usernameLength:2][username:variable]
       if (buffer.length < 27) return null; // Minimum: 1 + 16 + 8 + 2 + 0
 
@@ -555,6 +555,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         timestamp: readUint64LE(buffer, 17),
         username: joinDecoder.decode(buffer.slice(27, 27 + joinUsernameLength)),
       };
+    }
 
     case MSG_TYPE.JOIN_RESPONSE: {
       if (buffer.length < 3) return null;
@@ -710,7 +711,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         sessionId: bytesToUuid(buffer.slice(1, 17)),
       };
 
-    case MSG_TYPE.LEAVE:
+    case MSG_TYPE.LEAVE: {
       // Format: [0x09][UUID:16][timestamp:8][usernameLength:2][username:variable]
       if (buffer.length < 27) return null; // Minimum: 1 + 16 + 8 + 2 + 0
 
@@ -726,6 +727,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
           buffer.slice(27, 27 + leaveUsernameLength)
         ),
       };
+    }
 
     default:
       return null;

@@ -10,7 +10,7 @@ i18n.load({
 });
 i18n.activate("en");
 
-const DefaultI18n = ({ children }: { children: React.ReactNode }) => (
+export const DefaultI18n = ({ children }: { children: React.ReactNode }) => (
   <span>{children}</span>
 );
 

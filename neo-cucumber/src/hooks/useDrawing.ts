@@ -766,7 +766,7 @@ export const useDrawing = (
 
   // Handle snapshot request from server
   const handleSnapshotRequest = useCallback(
-    (_timestamp: number) => {
+    () => {
       if (isDrawingRef.current) {
         // Defer if currently drawing
         pendingSnapshotRequestRef.current = true;

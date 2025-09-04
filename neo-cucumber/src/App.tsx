@@ -228,7 +228,7 @@ function App() {
   const [isChatMinimized, setIsChatMinimized] = useState(false);
 
   // Chat message handler
-  const handleChatMessage = useCallback((_message: any) => {
+  const handleChatMessage = useCallback(() => {
     // Chat messages are handled entirely by the Chat component
     // This callback is here for future extensions if needed
   }, []);
@@ -675,9 +675,7 @@ function App() {
       uuidPattern.test(pathSegments[2])
     ) {
       const sessionId = pathSegments[2];
-      let wsUrl;
-
-      wsUrl = `${protocol}//${host}/collaborate/${sessionId}/ws`;
+      const wsUrl = `${protocol}//${host}/collaborate/${sessionId}/ws`;
 
       console.log("Generated WebSocket URL:", wsUrl);
       return wsUrl;
