@@ -47,6 +47,19 @@ body {
   image-rendering: pixelated;
 }
 
+/* Canvas container for multi-layer rendering */
+.canvas-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-container canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  image-rendering: pixelated;
+}
+
 
 /* Animation keyframes */
 @keyframes spin {

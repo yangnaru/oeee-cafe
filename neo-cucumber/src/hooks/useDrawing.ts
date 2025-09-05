@@ -32,7 +32,8 @@ export const useDrawing = (
   userIdRef?: React.RefObject<string>,
   onDrawingChange?: () => void,
   isCatchingUp: boolean = false,
-  connectionState: "connecting" | "connected" | "disconnected" = "connected"
+  connectionState: "connecting" | "connected" | "disconnected" = "connected",
+  containerRef?: React.RefObject<HTMLDivElement | null>
 ) => {
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const drawingEngineRef = useRef<DrawingEngine | null>(null);
@@ -75,7 +76,7 @@ export const useDrawing = (
       drawingEngineRef.current.layers.foreground &&
       drawingEngineRef.current.layers.background
     ) {
-      history.saveState(
+      history.saveBothLayers(
         drawingEngineRef.current.layers.foreground,
         drawingEngineRef.current.layers.background,
         false, // This is not a drawing action, just initial state
@@ -104,6 +105,11 @@ export const useDrawing = (
     panStartY: 0,
     activePointerId: null as number | null,
   });
+
+  // Throttling refs for pointer move events
+  const lastPointerMoveTime = useRef(0);
+  const POINTER_MOVE_THROTTLE_MS = 12; // ~83 FPS for smooth drawing
+  const MIN_MOVE_DISTANCE = 1.5; // pixels - minimum movement to process
 
   // Refs to access current values in event handlers without causing re-renders
   const currentDrawingStateRef = useRef(drawingState);
@@ -136,17 +142,25 @@ export const useDrawing = (
       const rect = canvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
 
-      // Calculate the scale between canvas internal coordinates and displayed size
-      const cssScaleX = canvas.width / rect.width;
-      const cssScaleY = canvas.height / rect.height;
-
+      // Calculate base canvas dimensions (without zoom)
+      const baseCanvasWidth = canvas.width;
+      const baseCanvasHeight = canvas.height;
+      
       // Convert screen coordinates to canvas coordinates
-      // The CSS transform (pan) is already included in rect.left/rect.top,
-      // so we don't need to manually account for it here
-      const x = (clientX - rect.left) * cssScaleX;
-      const y = (clientY - rect.top) * cssScaleY;
+      // rect already includes all transforms (zoom + pan), so we just need to calculate the ratio
+      const screenX = clientX - rect.left;
+      const screenY = clientY - rect.top;
+      
+      // Convert from screen space to canvas space
+      // The rect dimensions include zoom, so we can directly calculate the ratio
+      const x = (screenX / rect.width) * baseCanvasWidth;
+      const y = (screenY / rect.height) * baseCanvasHeight;
 
-      return { x: Math.round(x), y: Math.round(y) };
+      // Clamp coordinates to canvas bounds
+      const clampedX = Math.max(0, Math.min(baseCanvasWidth - 1, Math.round(x)));
+      const clampedY = Math.max(0, Math.min(baseCanvasHeight - 1, Math.round(y)));
+
+      return { x: clampedX, y: clampedY };
     };
 
     const handlePointerDown = (e: PointerEvent) => {
@@ -268,8 +282,8 @@ export const useDrawing = (
             drawingEngineRef.current.layers.background
           ) {
             history.saveState(
-              drawingEngineRef.current.layers.foreground,
-              drawingEngineRef.current.layers.background,
+              currentDrawingStateRef.current.layerType,
+              drawingEngineRef.current.layers[currentDrawingStateRef.current.layerType],
               true,  // This is a drawing action
               false  // This is not a content snapshot
             );
@@ -406,8 +420,8 @@ export const useDrawing = (
           drawingEngineRef.current.layers.background
         ) {
           history.saveState(
-            drawingEngineRef.current.layers.foreground,
-            drawingEngineRef.current.layers.background,
+            lastModifiedLayerRef.current,
+            drawingEngineRef.current.layers[lastModifiedLayerRef.current],
             true,  // This is a drawing action
             false  // This is not a content snapshot
           );
@@ -480,7 +494,8 @@ export const useDrawing = (
           drawingEngineRef.current.updatePanOffset(
             deltaX,
             deltaY,
-            canvasRef.current || undefined
+            containerRef?.current || canvasRef.current || undefined,
+            zoomLevel ? zoomLevel / 100 : undefined
           );
         }
 
@@ -496,9 +511,30 @@ export const useDrawing = (
       )
         return;
 
+      // Hybrid throttling: time-based + distance-based
+      const now = Date.now();
+      const coords = getCanvasCoordinates(e.clientX, e.clientY);
+
+      // Time throttling check
+      if (now - lastPointerMoveTime.current < POINTER_MOVE_THROTTLE_MS) {
+        return; // Skip this event - too soon since last processed event
+      }
+
+      // Distance throttling check - calculate movement distance
+      const dx = coords.x - drawingStateRef.current.currentX;
+      const dy = coords.y - drawingStateRef.current.currentY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < MIN_MOVE_DISTANCE) {
+        return; // Skip this event - movement too small
+      }
+
+      // Update throttling timestamp
+      lastPointerMoveTime.current = now;
+
+      // Update drawing state with new coordinates (coords already calculated above)
       drawingStateRef.current.prevX = drawingStateRef.current.currentX;
       drawingStateRef.current.prevY = drawingStateRef.current.currentY;
-      const coords = getCanvasCoordinates(e.clientX, e.clientY);
       drawingStateRef.current.currentX = coords.x;
       drawingStateRef.current.currentY = coords.y;
 
@@ -622,16 +658,18 @@ export const useDrawing = (
   const handleUndo = useCallback(async () => {
     const previousState = history.undo();
     if (previousState && contextRef.current && drawingEngineRef.current) {
-      // Restore layer states
-      drawingEngineRef.current.layers.foreground.set(previousState.foreground);
-      drawingEngineRef.current.layers.background.set(previousState.background);
+      // Restore the specific layer that was undone
+      drawingEngineRef.current.layers[previousState.layer].set(previousState.data);
+
+      // Update DOM canvases to show the restored state
+      drawingEngineRef.current.updateAllDOMCanvases();
 
       // Update display
       // Notify parent component that drawing has changed
       onDrawingChange?.();
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
 
-      // Send snapshot over WebSocket
+      // Send snapshot over WebSocket - use the layer from history, not lastModifiedLayerRef
       if (
         wsRef?.current &&
         wsRef.current.readyState === WebSocket.OPEN &&
@@ -640,16 +678,14 @@ export const useDrawing = (
         canvasHeight
       ) {
         try {
-          const layerToSend = lastModifiedLayerRef.current;
-          const layerData = drawingEngineRef.current.layers[layerToSend];
           const pngBlob = await layerToPngBlob(
-            layerData,
+            previousState.data,
             canvasWidth,
             canvasHeight
           );
           const binaryMessage = await encodeSnapshot(
             userIdRef.current,
-            layerToSend,
+            previousState.layer, // Use the layer from history, not lastModifiedLayerRef
             pngBlob
           );
 
@@ -659,22 +695,24 @@ export const useDrawing = (
         }
       }
     }
-  }, [history, canvasWidth, canvasHeight, wsRef, userIdRef]);
+  }, [history, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange]);
 
   // Redo function
   const handleRedo = useCallback(async () => {
     const nextState = history.redo();
     if (nextState && contextRef.current && drawingEngineRef.current) {
-      // Restore layer states
-      drawingEngineRef.current.layers.foreground.set(nextState.foreground);
-      drawingEngineRef.current.layers.background.set(nextState.background);
+      // Restore the specific layer that was redone
+      drawingEngineRef.current.layers[nextState.layer].set(nextState.data);
+
+      // Update DOM canvases to show the restored state
+      drawingEngineRef.current.updateAllDOMCanvases();
 
       // Update display
       // Notify parent component that drawing has changed
       onDrawingChange?.();
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
 
-      // Send snapshot over WebSocket
+      // Send snapshot over WebSocket - use the layer from history, not lastModifiedLayerRef
       if (
         wsRef?.current &&
         wsRef.current.readyState === WebSocket.OPEN &&
@@ -683,16 +721,14 @@ export const useDrawing = (
         canvasHeight
       ) {
         try {
-          const layerToSend = lastModifiedLayerRef.current;
-          const layerData = drawingEngineRef.current.layers[layerToSend];
           const pngBlob = await layerToPngBlob(
-            layerData,
+            nextState.data,
             canvasWidth,
             canvasHeight
           );
           const binaryMessage = await encodeSnapshot(
             userIdRef.current,
-            layerToSend,
+            nextState.layer, // Use the layer from history, not lastModifiedLayerRef
             pngBlob
           );
 
@@ -702,22 +738,17 @@ export const useDrawing = (
         }
       }
     }
-  }, [history, canvasWidth, canvasHeight, wsRef, userIdRef]);
+  }, [history, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange]);
 
   // Update canvas zoom when zoom level changes
   useEffect(() => {
     if (canvasRef.current && zoomLevel && canvasWidth && canvasHeight) {
       const canvas = canvasRef.current;
-      const zoom = zoomLevel / 100; // Convert percentage to decimal
 
-      // The drawing engine doesn't need zoom state since React handles sizing
-
-      // Use React-provided canvas dimensions instead of DOM properties
-      const displayWidth = canvasWidth * zoom;
-      const displayHeight = canvasHeight * zoom;
-
-      canvas.style.width = `${displayWidth}px`;
-      canvas.style.height = `${displayHeight}px`;
+      // Don't apply zoom to individual canvas - the container handles zoom via CSS transform
+      // Just ensure the canvas has the base dimensions
+      canvas.style.width = `${canvasWidth}px`;
+      canvas.style.height = `${canvasHeight}px`;
     }
   }, [zoomLevel, canvasRef, canvasWidth, canvasHeight]);
 
@@ -787,14 +818,25 @@ export const useDrawing = (
   }, [handleSnapshotRequest]);
 
   // Function to add snapshot to history (for when we receive our own snapshot after page refresh)
-  const addSnapshotToHistory = useCallback(() => {
+  const addSnapshotToHistory = useCallback((layer?: "foreground" | "background") => {
     if (drawingEngineRef.current?.layers.foreground && drawingEngineRef.current?.layers.background) {
-      history.saveState(
-        drawingEngineRef.current.layers.foreground,
-        drawingEngineRef.current.layers.background,
-        false, // Not a drawing action, just a received snapshot
-        true   // This is a content snapshot that should be protected from undo
-      );
+      if (layer) {
+        // Add specific layer snapshot to history
+        history.saveState(
+          layer,
+          drawingEngineRef.current.layers[layer],
+          false, // Not a drawing action, just a received snapshot
+          true   // This is a content snapshot that should be protected from undo
+        );
+      } else {
+        // Add both layers (for initial page load scenarios)
+        history.saveBothLayers(
+          drawingEngineRef.current.layers.foreground,
+          drawingEngineRef.current.layers.background,
+          false, // Not a drawing action, just a received snapshot
+          true   // This is a content snapshot that should be protected from undo
+        );
+      }
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
     }
   }, [history]);

@@ -11,6 +11,10 @@ export class DrawingEngine {
   public compositeCanvas: HTMLCanvasElement | null = null;
   public compositeContext: CanvasRenderingContext2D | null = null;
 
+  // DOM canvases for direct rendering
+  public domCanvases: { [key: string]: HTMLCanvasElement } = {};
+  public domContexts: { [key: string]: CanvasRenderingContext2D } = {};
+
   private brush: { [key: number]: Uint8Array } = {};
   private tone: { [key: string]: Uint8Array } = {};
   private aerr = 0;
@@ -55,14 +59,6 @@ export class DrawingEngine {
       }
     });
 
-    // Create composite canvas for final blending
-    this.compositeCanvas = document.createElement("canvas");
-    this.compositeCanvas.width = this.imageWidth;
-    this.compositeCanvas.height = this.imageHeight;
-    this.compositeContext = this.compositeCanvas.getContext("2d");
-    if (this.compositeContext) {
-      this.compositeContext.imageSmoothingEnabled = false;
-    }
   }
 
   private initializeBrushes() {
@@ -225,71 +221,93 @@ export class DrawingEngine {
     return canvas;
   }
 
-  // Hardware-accelerated compositing using Canvas API
-  public compositeLayersHardware(
-    fgVisible: boolean = true,
-    bgVisible: boolean = true
-  ): HTMLCanvasElement | null {
-    if (!this.compositeContext || !this.compositeCanvas) {
-      return null;
+  // Get individual layer canvas for direct rendering
+  public getLayerCanvasForRendering(layerName: "foreground" | "background"): HTMLCanvasElement | null {
+    return this.layerCanvases[layerName] || null;
+  }
+
+  // Attach DOM canvases for direct updating
+  public attachDOMCanvases(
+    backgroundCanvas: HTMLCanvasElement,
+    foregroundCanvas: HTMLCanvasElement
+  ) {
+    this.domCanvases.background = backgroundCanvas;
+    this.domCanvases.foreground = foregroundCanvas;
+
+    const bgCtx = backgroundCanvas.getContext("2d");
+    const fgCtx = foregroundCanvas.getContext("2d");
+
+    if (bgCtx) {
+      bgCtx.imageSmoothingEnabled = false;
+      this.domContexts.background = bgCtx;
     }
 
-    // Clear the composite canvas
-    this.compositeContext.clearRect(0, 0, this.imageWidth, this.imageHeight);
-
-    // Composite background layer first
-    if (bgVisible) {
-      const bgCanvas = this.getLayerCanvas("background");
-      if (bgCanvas) {
-        this.compositeContext.drawImage(bgCanvas, 0, 0);
-      }
+    if (fgCtx) {
+      fgCtx.imageSmoothingEnabled = false;
+      this.domContexts.foreground = fgCtx;
     }
+  }
 
-    // Composite foreground layer on top
-    if (fgVisible) {
-      const fgCanvas = this.getLayerCanvas("foreground");
-      if (fgCanvas) {
-        // Use normal alpha compositing for foreground
-        this.compositeContext.globalCompositeOperation = "source-over";
-        this.compositeContext.drawImage(fgCanvas, 0, 0);
-      }
+  // Update DOM canvas for a specific layer
+  private updateDOMCanvas(layerName: "foreground" | "background") {
+    const domCtx = this.domContexts[layerName];
+    const layerData = this.layers[layerName];
+
+    if (domCtx && layerData) {
+      const imageData = new ImageData(
+        layerData,
+        this.imageWidth,
+        this.imageHeight
+      );
+      domCtx.putImageData(imageData, 0, 0);
     }
+  }
 
-    return this.compositeCanvas;
+  // Update all attached DOM canvases
+  public updateAllDOMCanvases() {
+    this.updateDOMCanvas("background");
+    this.updateDOMCanvas("foreground");
   }
 
   // Pan offset management
   public updatePanOffset(
     deltaX: number,
     deltaY: number,
-    canvas?: HTMLCanvasElement
+    canvas?: HTMLCanvasElement | HTMLDivElement,
+    zoomScale?: number
   ) {
     this.panOffsetX += deltaX;
     this.panOffsetY += deltaY;
-    this.updateCanvasPan(canvas);
+    this.updateCanvasPan(canvas, zoomScale);
   }
 
   public adjustPanForZoom(
     deltaX: number,
     deltaY: number,
-    canvas?: HTMLCanvasElement
+    canvas?: HTMLCanvasElement | HTMLDivElement,
+    zoomScale?: number
   ) {
     this.panOffsetX += deltaX;
     this.panOffsetY += deltaY;
-    this.updateCanvasPan(canvas);
+    this.updateCanvasPan(canvas, zoomScale);
   }
 
-  public resetPan(canvas?: HTMLCanvasElement) {
+  public resetPan(canvas?: HTMLCanvasElement | HTMLDivElement, zoomScale?: number) {
     this.panOffsetX = 0;
     this.panOffsetY = 0;
-    this.updateCanvasPan(canvas);
+    this.updateCanvasPan(canvas, zoomScale);
   }
 
-  private updateCanvasPan(canvas?: HTMLCanvasElement) {
+  private updateCanvasPan(canvas?: HTMLCanvasElement | HTMLDivElement, zoomScale?: number) {
     if (!canvas) return;
 
-    // Only update the transform, let React handle the width/height
-    canvas.style.transform = `translate(${this.panOffsetX}px, ${this.panOffsetY}px)`;
+    // Combine scale and translate transforms
+    const scaleTransform = zoomScale ? `scale(${zoomScale})` : '';
+    const translateTransform = `translate(${this.panOffsetX}px, ${this.panOffsetY}px)`;
+    
+    canvas.style.transform = scaleTransform 
+      ? `${scaleTransform} ${translateTransform}` 
+      : translateTransform;
   }
 
   public drawPoint(
@@ -418,6 +436,10 @@ export class DrawingEngine {
         [px, py],
       ];
     }
+
+    // Update DOM canvas if layer is attached
+    const layerName = ctx === this.layers.background ? "background" : "foreground";
+    this.updateDOMCanvas(layerName);
   }
 
   // Helper function to fill a horizontal line with direct replacement
@@ -552,6 +574,10 @@ export class DrawingEngine {
         this.scanLine(x0, x1, py - 1, stack);
       }
     }
+
+    // Update DOM canvas if layer is attached
+    const layerName = ctx === this.layers.background ? "background" : "foreground";
+    this.updateDOMCanvas(layerName);
   }
 
   private drawTone(
@@ -669,6 +695,10 @@ export class DrawingEngine {
       [x0, y0],
       [x1, y1],
     ];
+
+    // Update DOM canvas if layer is attached
+    const layerName = ctx === this.layers.background ? "background" : "foreground";
+    this.updateDOMCanvas(layerName);
   }
 
   public initialize(ctx?: CanvasRenderingContext2D) {
