@@ -604,7 +604,13 @@ function App() {
   }, []);
 
   // Use the drawing hook with local user canvas
-  const { undo, redo, drawingEngine, addSnapshotToHistory, markDrawingComplete } = useDrawing(
+  const {
+    undo,
+    redo,
+    drawingEngine,
+    addSnapshotToHistory,
+    markDrawingComplete,
+  } = useDrawing(
     localUserCanvasRef,
     appRef,
     drawingState,
@@ -678,7 +684,7 @@ function App() {
     });
 
     return tempCanvas;
-  }, [CANVAS_WIDTH, CANVAS_HEIGHT]);
+  }, [CANVAS_WIDTH, CANVAS_HEIGHT, canvasMeta]);
 
   // Function to download current canvas as PNG
   const downloadCanvasAsPNG = useCallback(() => {
@@ -783,7 +789,7 @@ function App() {
       );
       setIsSaving(false);
     }
-  }, [isSaving]);
+  }, [isSaving, compositeCanvasesForExport]);
 
   // Function to get WebSocket URL dynamically
   const getWebSocketUrl = useCallback(() => {
@@ -890,6 +896,7 @@ function App() {
       // Step 3: Fetch collaboration metadata
       console.log("Fetching collaboration metadata");
       const meta = await fetchCollaborationMeta(sessionId);
+      setCanvasMeta(meta);
       console.log("Collaboration meta received:", meta);
 
       // Check if session has been saved and redirect if so
@@ -914,8 +921,6 @@ function App() {
         });
         return false;
       }
-
-      setCanvasMeta(meta);
 
       // Update document title
       const sessionTitle =
