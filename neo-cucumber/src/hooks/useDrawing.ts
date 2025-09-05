@@ -289,6 +289,9 @@ export const useDrawing = (
             );
             onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
           }
+
+          // Mark fill operation as complete to prevent double-saving in pointerup
+          isDrawingRef.current = false;
         } else {
           if (!drawingEngineRef.current) {
             return;

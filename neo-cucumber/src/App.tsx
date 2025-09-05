@@ -1289,6 +1289,11 @@ function App() {
                 message.color.a
               );
 
+              // Queue DOM canvases for batched update for local drawing
+              drawingEngine.queueLayerUpdate(
+                message.layer as "foreground" | "background"
+              );
+
               // Notify parent component that drawing has changed
               handleLocalDrawingChange();
             } else {
