@@ -844,6 +844,11 @@ export const useDrawing = (
     }
   }, [history]);
 
+  // Function to mark drawing operation as complete (prevent double-saving in pointerup)
+  const markDrawingComplete = useCallback(() => {
+    isDrawingRef.current = false;
+  }, []);
+
   return {
     context: contextRef.current,
     drawingEngine: drawingEngineRef.current,
@@ -854,5 +859,6 @@ export const useDrawing = (
     canRedo: history.canRedo,
     getHistoryInfo: history.getHistoryInfo,
     addSnapshotToHistory,
+    markDrawingComplete,
   };
 };

@@ -604,7 +604,7 @@ function App() {
   }, []);
 
   // Use the drawing hook with local user canvas
-  const { undo, redo, drawingEngine, addSnapshotToHistory } = useDrawing(
+  const { undo, redo, drawingEngine, addSnapshotToHistory, markDrawingComplete } = useDrawing(
     localUserCanvasRef,
     appRef,
     drawingState,
@@ -1161,6 +1161,14 @@ function App() {
                 message.color.a
               );
 
+              // Queue DOM canvases for batched update for local drawing
+              drawingEngine.queueLayerUpdate(
+                message.layer as "foreground" | "background"
+              );
+
+              // Mark drawing operation as complete to prevent double-saving in pointerup
+              markDrawingComplete();
+
               // Notify parent component that drawing has changed
               handleLocalDrawingChange();
             } else {
@@ -1227,6 +1235,14 @@ function App() {
                 message.color.b,
                 message.color.a
               );
+
+              // Queue DOM canvases for batched update for local drawing
+              drawingEngine.queueLayerUpdate(
+                message.layer as "foreground" | "background"
+              );
+
+              // Mark drawing operation as complete to prevent double-saving in pointerup
+              markDrawingComplete();
 
               // Notify parent component that drawing has changed
               handleLocalDrawingChange();
