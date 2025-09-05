@@ -1,4 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import { Icon } from "@iconify/react";
 
 interface SessionExpiredModalProps {
   isOpen: boolean;
@@ -69,7 +70,14 @@ export const SessionExpiredModal: React.FC<SessionExpiredModalProps> = ({
         className="bg-main text-main p-8 rounded-xl border-2 border-main text-center max-w-md shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-5xl mb-2">⚠️</div>
+        <div className="text-5xl mb-2">
+          <Icon
+            icon="material-symbols:warning"
+            width={48}
+            height={48}
+            className="text-yellow-500"
+          />
+        </div>
         <div className="text-2xl font-bold mb-2 text-highlight">
           <Trans>Session Expired</Trans>
         </div>
@@ -89,12 +97,31 @@ export const SessionExpiredModal: React.FC<SessionExpiredModalProps> = ({
                   disabled={isSaving}
                   type="button"
                   className={`py-3 px-6 bg-highlight text-white border border-highlight rounded-md text-base font-sans pointer-events-auto relative z-[9999999] transition-opacity ${
-                    isSaving 
-                      ? "opacity-70 cursor-not-allowed" 
+                    isSaving
+                      ? "opacity-70 cursor-not-allowed"
                       : "cursor-pointer hover:bg-orange-600"
                   }`}
                 >
-                  {isSaving ? t`🔄 Saving...` : t`💾 Save to Gallery`}
+                  {isSaving ? (
+                    <span className="flex items-center gap-2">
+                      <Icon
+                        icon="material-symbols:refresh"
+                        width={16}
+                        height={16}
+                        className="animate-spin"
+                      />
+                      <Trans>Saving...</Trans>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Icon
+                        icon="material-symbols:save"
+                        width={16}
+                        height={16}
+                      />
+                      <Trans>Save to Gallery</Trans>
+                    </span>
+                  )}
                 </button>
               )}
               <button
@@ -106,9 +133,14 @@ export const SessionExpiredModal: React.FC<SessionExpiredModalProps> = ({
                     : "bg-main text-main border border-main hover:bg-highlight hover:text-white"
                 }`}
               >
-                {canvasMeta?.savedPostId
-                  ? t`💾 Download PNG`
-                  : t`📄 Download PNG`}
+                <span className="flex items-center gap-2">
+                  <Icon
+                    icon="material-symbols:download"
+                    width={16}
+                    height={16}
+                  />
+                  <Trans>Download PNG</Trans>
+                </span>
               </button>
             </>
           ) : (
@@ -117,7 +149,10 @@ export const SessionExpiredModal: React.FC<SessionExpiredModalProps> = ({
               type="button"
               className="py-3 px-6 bg-highlight text-white border border-highlight rounded-md text-base font-sans pointer-events-auto relative z-[9999999] cursor-pointer hover:bg-orange-600"
             >
-              <Trans>💾 Save as PNG</Trans>
+              <span className="flex items-center gap-2">
+                <Icon icon="material-symbols:save" width={16} height={16} />
+                <Trans>Save as PNG</Trans>
+              </span>
             </button>
           )}
           <button

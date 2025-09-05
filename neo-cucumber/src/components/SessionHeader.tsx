@@ -1,4 +1,5 @@
 import { Trans } from "@lingui/react/macro";
+import { Icon } from "@iconify/react";
 
 interface CollaborationMeta {
   title: string;
@@ -24,15 +25,20 @@ export const SessionHeader = ({
 }: SessionHeaderProps) => {
   const handleShare = () => {
     if (navigator.share) {
-      navigator.share({
-        title: canvasMeta.title,
-        url: window.location.href
-      }).catch(console.error);
+      navigator
+        .share({
+          title: canvasMeta.title,
+          url: window.location.href,
+        })
+        .catch(console.error);
     } else {
-      navigator.clipboard.writeText(window.location.href).then(() => {
-        // Could show a toast notification here
-        console.log('URL copied to clipboard');
-      }).catch(console.error);
+      navigator.clipboard
+        .writeText(window.location.href)
+        .then(() => {
+          // Could show a toast notification here
+          console.log("URL copied to clipboard");
+        })
+        .catch(console.error);
     }
   };
 
@@ -45,9 +51,7 @@ export const SessionHeader = ({
         >
           🥒
         </a>
-        <h1 className="text-xl font-bold text-main m-0">
-          {canvasMeta.title}
-        </h1>
+        <h1 className="text-xl font-bold text-main m-0">{canvasMeta.title}</h1>
         <div className="text-sm text-main opacity-70">
           <Trans>by</Trans> @{canvasMeta.ownerLoginName}
         </div>
@@ -58,7 +62,7 @@ export const SessionHeader = ({
           className="flex items-center gap-1 px-2 py-1 rounded hover:bg-main hover:bg-opacity-20 transition-colors text-main opacity-70 hover:opacity-100"
           title="Share this session"
         >
-          <span>📤</span>
+          <Icon icon="material-symbols:upload" width={16} height={16} />
           <Trans>Share</Trans>
         </button>
         {connectionState === "connected" && !isCatchingUp && (

@@ -1,4 +1,5 @@
 import React from "react";
+import { Icon } from "@iconify/react";
 
 type BrushType = "solid" | "halftone" | "eraser" | "fill" | "pan";
 
@@ -11,20 +12,20 @@ export const ToolSelector: React.FC<ToolSelectorProps> = ({
   brushType,
   onUpdateBrushType,
 }) => {
-  const getToolEmoji = (toolType: BrushType): string => {
+  const getToolIcon = (toolType: BrushType): string => {
     switch (toolType) {
       case "solid":
-        return "🖌️";
+        return "material-symbols:brush";
       case "halftone":
-        return "🖍️";
+        return "material-symbols:shower";
       case "eraser":
-        return "🧹";
+        return "material-symbols:ink-eraser";
       case "fill":
-        return "🪣";
+        return "material-symbols:format-color-fill";
       case "pan":
-        return "🤚";
+        return "material-symbols:pan-tool";
       default:
-        return "🔧";
+        return "material-symbols:settings";
     }
   };
 
@@ -48,7 +49,7 @@ export const ToolSelector: React.FC<ToolSelectorProps> = ({
                   : "border-main bg-main text-main hover:border-highlight hover:bg-highlight hover:text-white"
               }`}
             >
-              {getToolEmoji(type)}
+              <Icon icon={getToolIcon(type)} width={20} height={20} />
             </div>
           </label>
         )

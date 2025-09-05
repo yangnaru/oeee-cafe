@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
+import { Icon } from "@iconify/react";
 import { ToolSelector } from "./ToolSelector";
 import { ColorPalette } from "./ColorPalette";
 
@@ -232,7 +233,7 @@ export const ToolboxPanel: React.FC<ToolboxPanelProps> = ({
             disabled={!historyState.canUndo}
             className="px-3 py-1 border border-main bg-main text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white"
           >
-            ⏪
+            <Icon icon="material-symbols:undo" width={16} height={16} />
           </button>
           <button
             type="button"
@@ -240,7 +241,7 @@ export const ToolboxPanel: React.FC<ToolboxPanelProps> = ({
             disabled={!historyState.canRedo}
             className="px-3 py-1 border border-main bg-main text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white"
           >
-            ⏩
+            <Icon icon="material-symbols:redo" width={16} height={16} />
           </button>
         </div>
 
@@ -266,7 +267,11 @@ export const ToolboxPanel: React.FC<ToolboxPanelProps> = ({
           {/* Brush size */}
           <div className="flex flex-col gap-1">
             <div className="flex flex-row gap-1 items-center">
-              ⚖️
+              <Icon
+                icon="material-symbols:line-weight"
+                width={16}
+                height={16}
+              />
               <span className="text-sm text-main tabular-nums">
                 {drawingState.brushSize} / 30
               </span>
@@ -290,7 +295,7 @@ export const ToolboxPanel: React.FC<ToolboxPanelProps> = ({
           {/* Opacity */}
           <div className="flex flex-col gap-1">
             <div className="flex flex-row gap-1 items-center">
-              🪟
+              <Icon icon="material-symbols:opacity" width={16} height={16} />
               <span className="text-sm text-main tabular-nums">
                 {drawingState.opacity} / 255
               </span>
@@ -390,7 +395,7 @@ export const ToolboxPanel: React.FC<ToolboxPanelProps> = ({
               onClick={onZoomOut}
               className="px-2 py-1 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
             >
-              🔍
+              <Icon icon="material-symbols:zoom-out" width={16} height={16} />
             </button>
             <span
               className="px-2 py-1 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white w-15 tabular-nums text-center"
@@ -403,7 +408,7 @@ export const ToolboxPanel: React.FC<ToolboxPanelProps> = ({
               onClick={onZoomIn}
               className="px-2 py-1 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
             >
-              🔎
+              <Icon icon="material-symbols:zoom-in" width={16} height={16} />
             </button>
           </div>
         </div>
@@ -423,11 +428,20 @@ export const ToolboxPanel: React.FC<ToolboxPanelProps> = ({
               className="px-3 py-1 border border-main bg-main text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white"
             >
               {isSaving ? (
-                <Trans>💾 Saving...</Trans>
+                <span className="flex items-center gap-2">
+                  <Icon
+                    icon="material-symbols:refresh"
+                    width={16}
+                    height={16}
+                    className="animate-spin"
+                  />
+                  <Trans>Saving...</Trans>
+                </span>
               ) : (
-                <>
-                  <Trans>💾 Save to Gallery</Trans>
-                </>
+                <span className="flex items-center gap-2">
+                  <Icon icon="material-symbols:save" width={16} height={16} />
+                  <Trans>Save to Gallery</Trans>
+                </span>
               )}
             </button>
           </div>

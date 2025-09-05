@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { encodeChat } from "../utils/binaryProtocol";
 import { Trans, useLingui } from "@lingui/react/macro";
+import { Icon } from "@iconify/react";
 
 interface ChatMessage {
   id: string;
@@ -204,7 +205,7 @@ export const Chat: React.FC<ChatProps> = ({
         isMinimized ? "h-12" : "h-full"
       } flex flex-col gap-4 p-4 touch-auto select-auto`}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center flex-row">
         <button
           onClick={() => {
             const newMinimized = !isMinimized;
@@ -214,13 +215,13 @@ export const Chat: React.FC<ChatProps> = ({
           className="p-1 text-main hover:text-highlight cursor-pointer text-sm"
           title={isMinimized ? "Maximize chat" : "Minimize chat"}
         >
-          💬{" "}
-          {!isMinimized && (
-            <>
-              <Trans>Participants</Trans> ({participants.size})
-            </>
-          )}
+          <Icon icon="material-symbols:chat" width={16} height={16} />{" "}
         </button>
+        {!isMinimized && (
+          <p>
+            <Trans>Participants</Trans> ({participants.size})
+          </p>
+        )}
       </div>
       {!isMinimized && (
         <>

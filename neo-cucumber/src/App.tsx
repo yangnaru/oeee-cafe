@@ -244,8 +244,6 @@ function App() {
   // Track server-provided user order for layer compositing
   const userOrderRef = useRef<string[]>([]);
 
-
-
   // Function to create DOM canvas elements for a user (foreground and background)
   const createUserCanvasElements = useCallback(
     (userId: string, insertionIndex: number) => {
@@ -302,7 +300,7 @@ function App() {
       // Later users (higher index in userOrderRef) should appear below (lower z-index)
       const userIndex = userOrderRef.current.indexOf(userId);
       const baseZIndex = userIndex !== -1 ? 1000 - userIndex * 10 : 100; // Higher index = lower z-index
-      
+
       // Background layer gets base z-index, foreground gets +1
       bgCanvas.style.zIndex = baseZIndex.toString();
       fgCanvas.style.zIndex = (baseZIndex + 1).toString();
@@ -347,28 +345,38 @@ function App() {
       // Create DOM canvases for this user and attach to container (only if they don't exist)
       const existingBgCanvas = userCanvasRefs.current.get(`${userId}-bg`);
       const existingFgCanvas = userCanvasRefs.current.get(`${userId}-fg`);
-      
+
       let canvasElements = null;
       if (!existingBgCanvas || !existingFgCanvas) {
         canvasElements = createUserCanvasElements(userId, 0);
       } else {
-        canvasElements = { bgCanvas: existingBgCanvas, fgCanvas: existingFgCanvas };
+        canvasElements = {
+          bgCanvas: existingBgCanvas,
+          fgCanvas: existingFgCanvas,
+        };
       }
-      
+
       if (canvasElements) {
         // Attach DOM canvases to the drawing engine
-        engine.attachDOMCanvases(canvasElements.bgCanvas, canvasElements.fgCanvas);
-        
+        engine.attachDOMCanvases(
+          canvasElements.bgCanvas,
+          canvasElements.fgCanvas
+        );
+
         // Update DOM canvases to show any existing content (immediate for initialization)
         engine.updateAllDOMCanvasesImmediate();
-        
+
         // Set up layer visibility - only apply local user settings to local user
         const isLocalUser = userId === userIdRef.current;
-        canvasElements.bgCanvas.style.display = isLocalUser 
-          ? (drawingState.bgVisible ? "block" : "none") 
+        canvasElements.bgCanvas.style.display = isLocalUser
+          ? drawingState.bgVisible
+            ? "block"
+            : "none"
           : "block"; // Remote users' layers always visible
-        canvasElements.fgCanvas.style.display = isLocalUser 
-          ? (drawingState.fgVisible ? "block" : "none") 
+        canvasElements.fgCanvas.style.display = isLocalUser
+          ? drawingState.fgVisible
+            ? "block"
+            : "none"
           : "block"; // Remote users' layers always visible
       }
 
@@ -390,10 +398,10 @@ function App() {
   // Function to update z-indices for all existing canvases based on current user order
   const updateCanvasZIndices = useCallback(() => {
     userCanvasRefs.current.forEach((canvas, key) => {
-      const userId = key.replace(/-(bg|fg)$/, '');
-      const isBackground = key.endsWith('-bg');
+      const userId = key.replace(/-(bg|fg)$/, "");
+      const isBackground = key.endsWith("-bg");
       const userIndex = userOrderRef.current.indexOf(userId);
-      
+
       if (userIndex !== -1) {
         const baseZIndex = 1000 - userIndex * 10;
         canvas.style.zIndex = (baseZIndex + (isBackground ? 0 : 1)).toString();
@@ -588,7 +596,6 @@ function App() {
     },
     []
   );
-
 
   // Callback to trigger unified compositing when local drawing changes
   const handleLocalDrawingChange = useCallback(() => {
@@ -1181,7 +1188,9 @@ function App() {
                 );
 
                 // Queue DOM canvases for batched update for remote drawing
-                engine.queueLayerUpdate(message.layer as "foreground" | "background");
+                engine.queueLayerUpdate(
+                  message.layer as "foreground" | "background"
+                );
               }
             }
             break;
@@ -1246,7 +1255,9 @@ function App() {
                 );
 
                 // Queue DOM canvases for batched update for remote drawing
-                engine.queueLayerUpdate(message.layer as "foreground" | "background");
+                engine.queueLayerUpdate(
+                  message.layer as "foreground" | "background"
+                );
               }
             }
             break;
@@ -1301,7 +1312,9 @@ function App() {
                 );
 
                 // Queue DOM canvases for batched update for remote drawing
-                engine.queueLayerUpdate(message.layer as "foreground" | "background");
+                engine.queueLayerUpdate(
+                  message.layer as "foreground" | "background"
+                );
               }
             }
             break;
@@ -1338,7 +1351,7 @@ function App() {
             message.userIds.forEach((userId: string) => {
               createUserEngine(userId);
             });
-            
+
             // Update z-indices for all existing canvases now that we have proper user order
             updateCanvasZIndices();
             break;
@@ -1448,7 +1461,9 @@ function App() {
                 addSnapshotToHistory(message.layer);
 
                 // Queue DOM canvases for batched update for local snapshots
-                drawingEngine.queueLayerUpdate(message.layer as "foreground" | "background");
+                drawingEngine.queueLayerUpdate(
+                  message.layer as "foreground" | "background"
+                );
 
                 // Notify parent component that drawing has changed
                 handleLocalDrawingChange();
@@ -1462,9 +1477,11 @@ function App() {
                       : userEngine.engine.layers.background;
 
                   targetLayer.set(layerData);
-                  
+
                   // Queue DOM canvases for batched update for remote snapshots
-                  userEngine.engine.queueLayerUpdate(message.layer as "foreground" | "background");
+                  userEngine.engine.queueLayerUpdate(
+                    message.layer as "foreground" | "background"
+                  );
                 }
               }
             } catch (error) {
@@ -1485,8 +1502,6 @@ function App() {
     handleLocalDrawingChange,
     updateCanvasZIndices,
   ]);
-
-
 
   const handleZoomReset = useCallback(() => {
     const resetIndex = zoomLevels.findIndex((level) => level >= 1.0);
@@ -1602,7 +1617,7 @@ function App() {
     if (localUserId) {
       const localBgCanvas = userCanvasRefs.current.get(`${localUserId}-bg`);
       const localFgCanvas = userCanvasRefs.current.get(`${localUserId}-fg`);
-      
+
       if (localBgCanvas) {
         localBgCanvas.style.display = drawingState.bgVisible ? "block" : "none";
       }
@@ -1619,24 +1634,34 @@ function App() {
       const localUserId = userIdRef.current;
       const existingBgCanvas = userCanvasRefs.current.get(`${localUserId}-bg`);
       const existingFgCanvas = userCanvasRefs.current.get(`${localUserId}-fg`);
-      
+
       let canvasElements = null;
       if (!existingBgCanvas || !existingFgCanvas) {
         canvasElements = createUserCanvasElements(localUserId, 0);
       } else {
-        canvasElements = { bgCanvas: existingBgCanvas, fgCanvas: existingFgCanvas };
+        canvasElements = {
+          bgCanvas: existingBgCanvas,
+          fgCanvas: existingFgCanvas,
+        };
       }
-      
+
       if (canvasElements) {
         // Attach DOM canvases to the local drawing engine
-        drawingEngine.attachDOMCanvases(canvasElements.bgCanvas, canvasElements.fgCanvas);
-        
+        drawingEngine.attachDOMCanvases(
+          canvasElements.bgCanvas,
+          canvasElements.fgCanvas
+        );
+
         // Update DOM canvases to show any existing content (immediate for initialization)
         drawingEngine.updateAllDOMCanvasesImmediate();
-        
+
         // Set up initial layer visibility for local user
-        canvasElements.bgCanvas.style.display = drawingState.bgVisible ? "block" : "none";
-        canvasElements.fgCanvas.style.display = drawingState.fgVisible ? "block" : "none";
+        canvasElements.bgCanvas.style.display = drawingState.bgVisible
+          ? "block"
+          : "none";
+        canvasElements.fgCanvas.style.display = drawingState.fgVisible
+          ? "block"
+          : "none";
       }
     }
   }, [drawingEngine, createUserCanvasElements]); // Removed layer visibility from dependencies
@@ -1836,7 +1861,7 @@ function App() {
                   )}
                   {connectionState === "connecting" && (
                     <>
-                      <div className="text-3xl mb-3 animate-spin">🥒</div>
+                      <div className="text-3xl mb-3 animate-spin">🥒 </div>
                       <div>
                         <Trans>Connecting...</Trans>
                       </div>
@@ -1864,10 +1889,10 @@ function App() {
                     width={CANVAS_WIDTH}
                     height={CANVAS_HEIGHT}
                     className="absolute top-0 left-0 pointer-events-auto canvas-bg"
-                    style={{ 
-                      opacity: 0, 
+                    style={{
+                      opacity: 0,
                       width: `${CANVAS_WIDTH}px`,
-                      height: `${CANVAS_HEIGHT}px`
+                      height: `${CANVAS_HEIGHT}px`,
                     }}
                     onPointerDown={() =>
                       console.log("Interaction canvas pointer down")
@@ -1903,7 +1928,7 @@ function App() {
             {sessionEnded && (
               <div className="fixed inset-0 w-screen h-screen bg-black bg-opacity-80 flex items-center justify-center z-[99999] pointer-events-auto">
                 <div className="bg-main text-main p-8 rounded-xl border-2 border-main text-center max-w-md shadow-2xl">
-                  <div className="text-5xl mb-2 animate-spin">🥒</div>
+                  <div className="text-5xl mb-2 animate-spin">🥒 </div>
                   <div className="text-lg mb-4 leading-relaxed">
                     <Trans>
                       Session is ending. The drawing is being saved to the

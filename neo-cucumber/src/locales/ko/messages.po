@@ -13,40 +13,40 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/components/Chat.tsx:244
+#: src/components/Chat.tsx:245
 msgid "(you)"
 msgstr "(나)"
 
 #: src/components/SessionExpiredModal.tsx:110
-msgid "💾 Download PNG"
-msgstr "💾 PNG 다운로드"
+#~ msgid "💾 Download PNG"
+#~ msgstr "💾 PNG 다운로드"
 
 #: src/components/SessionExpiredModal.tsx:120
-msgid "💾 Save as PNG"
-msgstr "💾 PNG로 저장"
+#~ msgid "💾 Save as PNG"
+#~ msgstr "💾 PNG로 저장"
 
 #: src/components/SessionExpiredModal.tsx:97
 #: src/components/ToolboxPanel.tsx:429
-msgid "💾 Save to Gallery"
-msgstr "💾 갤러리에 저장"
+#~ msgid "💾 Save to Gallery"
+#~ msgstr "💾 갤러리에 저장"
 
 #: src/components/ToolboxPanel.tsx:426
-msgid "💾 Saving..."
-msgstr "💾 저장 중..."
+#~ msgid "💾 Saving..."
+#~ msgstr "💾 저장 중..."
 
 #: src/components/SessionExpiredModal.tsx:111
-msgid "📄 Download PNG"
-msgstr "📄 PNG 다운로드"
+#~ msgid "📄 Download PNG"
+#~ msgstr "📄 PNG 다운로드"
 
 #: src/components/SessionExpiredModal.tsx:97
-msgid "🔄 Saving..."
-msgstr "🔄 저장 중..."
+#~ msgid "🔄 Saving..."
+#~ msgstr "🔄 저장 중..."
 
-#: src/App.tsx:1699
+#: src/App.tsx:1725
 msgid "Authentication Failed"
 msgstr "인증 실패"
 
-#: src/components/SessionHeader.tsx:52
+#: src/components/SessionHeader.tsx:53
 msgid "by"
 msgstr "작성자:"
 
@@ -54,19 +54,19 @@ msgstr "작성자:"
 #~ msgid "Chat"
 #~ msgstr "채팅"
 
-#: src/components/SessionHeader.tsx:67
+#: src/components/SessionHeader.tsx:68
 msgid "Connected"
 msgstr "연결됨"
 
-#: src/components/SessionHeader.tsx:73
+#: src/components/SessionHeader.tsx:74
 msgid "Connecting"
 msgstr "연결 중"
 
-#: src/App.tsx:1816
+#: src/App.tsx:1846
 msgid "Connecting..."
 msgstr "연결 중..."
 
-#: src/App.tsx:1792
+#: src/App.tsx:1820
 msgid "Connection lost. Your work is saved locally."
 msgstr "연결이 끊어졌습니다. 작업이 로컬에 저장되었습니다."
 
@@ -78,11 +78,12 @@ msgstr "사용자 정의 색상 선택기"
 msgid "Custom color picker - edits selected palette color"
 msgstr "사용자 정의 색상 선택기 - 선택된 팔레트 색상 편집"
 
-#: src/components/SessionHeader.tsx:79
+#: src/components/SessionHeader.tsx:80
 msgid "Disconnected"
 msgstr "연결 끊어짐"
 
-#: src/App.tsx:1807
+#: src/App.tsx:1835
+#: src/components/SessionExpiredModal.tsx:124
 msgid "Download PNG"
 msgstr "PNG 다운로드"
 
@@ -95,7 +96,7 @@ msgstr "팔레트 색상 {0} 편집"
 #~ msgid "Eraser"
 #~ msgstr "지우개"
 
-#: src/components/SessionExpiredModal.tsx:48
+#: src/components/SessionExpiredModal.tsx:49
 msgid "Failed to save session. Please try downloading as PNG instead."
 msgstr "세션 저장에 실패했습니다. 대신 PNG로 다운로드해 보세요."
 
@@ -103,8 +104,8 @@ msgstr "세션 저장에 실패했습니다. 대신 PNG로 다운로드해 보�
 #~ msgid "Fill"
 #~ msgstr "채우기"
 
-#: src/App.tsx:1711
-#: src/App.tsx:1735
+#: src/App.tsx:1737
+#: src/App.tsx:1761
 msgid "Go to Lobby"
 msgstr "로비로 가기"
 
@@ -112,31 +113,31 @@ msgstr "로비로 가기"
 #~ msgid "Halftone"
 #~ msgstr "하프톤"
 
-#: src/App.tsx:1669
+#: src/App.tsx:1695
 msgid "Initialization Failed"
 msgstr "초기화 실패"
 
-#: src/App.tsx:1689
+#: src/App.tsx:1715
 msgid "Initializing collaboration session..."
 msgstr "협업 세션 초기화 중..."
 
-#: src/components/ToolboxPanel.tsx:351
+#: src/components/ToolboxPanel.tsx:352
 msgid "Left click to select layer, right click to toggle visibility"
 msgstr "왼쪽 클릭으로 레이어 선택, 오른쪽 클릭으로 표시 전환"
 
-#: src/components/SessionHeader.tsx:85
+#: src/components/SessionHeader.tsx:86
 msgid "Loading"
 msgstr "로딩 중"
 
-#: src/App.tsx:1686
+#: src/App.tsx:1712
 msgid "Loading..."
 msgstr "로딩 중..."
 
-#: src/App.tsx:1783
+#: src/App.tsx:1811
 msgid "LOADING..."
 msgstr "로딩 중..."
 
-#: src/App.tsx:791
+#: src/App.tsx:917
 msgid "Oeee Cafe"
 msgstr "오이카페"
 
@@ -158,11 +159,11 @@ msgstr "팔레트 색상 {0} (선택됨 - 아래 색상 선택기로 편집)"
 #~ msgid "Pan"
 #~ msgstr "이동"
 
-#: src/components/Chat.tsx:220
+#: src/components/Chat.tsx:221
 msgid "Participants"
 msgstr "참여자"
 
-#: src/App.tsx:1801
+#: src/App.tsx:1829
 msgid "Reconnect"
 msgstr "재연결"
 
@@ -174,49 +175,59 @@ msgstr "재연결"
 #~ msgid "Reset"
 #~ msgstr "초기화"
 
-#: src/App.tsx:1676
-#: src/App.tsx:1741
+#: src/App.tsx:1702
+#: src/App.tsx:1767
 msgid "Retry"
 msgstr "다시 시도"
 
-#: src/components/SessionExpiredModal.tsx:128
+#: src/components/SessionExpiredModal.tsx:145
 msgid "Return to Lobby"
 msgstr "로비로 돌아가기"
 
-#: src/components/ToolboxPanel.tsx:420
+#: src/components/SessionExpiredModal.tsx:136
+msgid "Save as PNG"
+msgstr ""
+
 #: src/components/ToolboxPanel.tsx:421
+#: src/components/ToolboxPanel.tsx:422
 msgid "Save drawing to gallery"
 msgstr "그림을 갤러리에 저장"
 
-#: src/components/ToolboxPanel.tsx:391
-#~ msgid "Saving..."
-#~ msgstr "저장 중..."
+#: src/components/SessionExpiredModal.tsx:108
+#: src/components/ToolboxPanel.tsx:434
+msgid "Save to Gallery"
+msgstr ""
 
-#: src/components/Chat.tsx:321
+#: src/components/SessionExpiredModal.tsx:103
+#: src/components/ToolboxPanel.tsx:429
+msgid "Saving..."
+msgstr "저장 중..."
+
+#: src/components/Chat.tsx:322
 msgid "Send"
 msgstr "전송"
 
-#: src/components/SessionExpiredModal.tsx:74
+#: src/components/SessionExpiredModal.tsx:77
 msgid "Session Expired"
 msgstr "세션 만료"
 
-#: src/App.tsx:1721
+#: src/App.tsx:1747
 msgid "Session Full"
 msgstr "세션 만석"
 
-#: src/App.tsx:1864
+#: src/App.tsx:1915
 msgid "Session is ending. The drawing is being saved to the gallery..."
 msgstr "세션이 종료됩니다. 그림을 갤러리에 저장 중..."
 
-#: src/components/SessionHeader.tsx:62
+#: src/components/SessionHeader.tsx:63
 msgid "Share"
 msgstr "공유"
 
-#: src/components/ToolboxPanel.tsx:378
+#: src/components/ToolboxPanel.tsx:379
 msgid "Show/hide background layer"
 msgstr "배경 레이어 표시/숨기기"
 
-#: src/components/ToolboxPanel.tsx:377
+#: src/components/ToolboxPanel.tsx:378
 msgid "Show/hide foreground layer"
 msgstr "전경 레이어 표시/숨기기"
 
@@ -228,34 +239,34 @@ msgstr "전경 레이어 표시/숨기기"
 #~ msgid "Solid"
 #~ msgstr "실선"
 
-#: src/components/SessionExpiredModal.tsx:80
+#: src/components/SessionExpiredModal.tsx:83
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
 msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 소유자로서 갤러리에 저장하거나 PNG로 다운로드할 수 있습니다."
 
-#: src/components/SessionExpiredModal.tsx:79
+#: src/components/SessionExpiredModal.tsx:82
 msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
 msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 세션이 이미 갤러리에 저장되었지만 PNG로 다운로드할 수 있습니다."
 
-#: src/components/SessionExpiredModal.tsx:81
+#: src/components/SessionExpiredModal.tsx:84
 msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 떠나기 전에 작업을 PNG로 로컬에 저장할 수 있습니다."
 
-#: src/components/SessionExpiredModal.tsx:44
+#: src/components/SessionExpiredModal.tsx:45
 msgid "This session has already been saved. You can only download it as a PNG."
 msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 수 있습니다."
 
 #. placeholder {0}: roomFullError.currentUserCount
 #. placeholder {1}: roomFullError.maxUsers
 #. placeholder {2}: roomFullError.maxUsers
-#: src/App.tsx:1724
+#: src/App.tsx:1750
 msgid "This session is full ({0}/{1} users). Only the first {2} users can join a session."
 msgstr "이 세션이 가득참 ({0}/{1} 사용자). 처음 {2}명의 사용자만 세션에 참여할 수 있습니다."
 
-#: src/components/Chat.tsx:312
+#: src/components/Chat.tsx:313
 msgid "Type a message..."
 msgstr "메시지 입력..."
 
-#: src/App.tsx:1702
+#: src/App.tsx:1728
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "세션을 인증할 수 없습니다. 세션이 존재하지 않거나 만료되었습니다. 로비로 돌아가 주세요."
 
@@ -263,6 +274,6 @@ msgstr "세션을 인증할 수 없습니다. 세션이 존재하지 않거나 �
 #~ msgid "Undo"
 #~ msgstr "실행 취소"
 
-#: src/App.tsx:1870
+#: src/App.tsx:1921
 msgid "You'll be redirected to the post page shortly."
 msgstr "곧 게시물 페이지로 리디렉션됩니다."
