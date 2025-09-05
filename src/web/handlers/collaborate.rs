@@ -522,13 +522,24 @@ async fn handle_socket(
         if is_owner { "owner" } else { "participant" }
     );
 
+    // Add connection-to-user mapping FIRST to avoid race conditions
+    state
+        .connection_user_mapping
+        .insert(connection_id.clone(), user_id);
+
     // Disconnect any existing connections for this user in this room
     if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
         let mut connections_to_remove = Vec::new();
         
-        // Find existing connections for this user
+        // Find existing connections for this user (excluding the new connection)
         for conn_ref in room.iter() {
             let (existing_conn_id, existing_tx) = conn_ref.pair();
+            
+            // Skip the new connection_id to avoid disconnecting ourselves
+            if *existing_conn_id == connection_id {
+                continue;
+            }
+            
             if let Some(existing_user_id) = state.connection_user_mapping.get(existing_conn_id) {
                 if *existing_user_id == user_id {
                     info!(
@@ -547,6 +558,10 @@ async fn handle_socket(
         for old_conn_id in connections_to_remove {
             room.remove(&old_conn_id);
             state.connection_user_mapping.remove(&old_conn_id);
+            debug!(
+                "Removed duplicate connection {} for user {} in room {}",
+                old_conn_id, user_login_name, room_uuid
+            );
         }
     }
 
@@ -556,11 +571,6 @@ async fn handle_socket(
         .entry(room_uuid)
         .or_insert_with(DashMap::new)
         .insert(connection_id.clone(), tx.clone());
-    
-    // Add connection-to-user mapping
-    state
-        .connection_user_mapping
-        .insert(connection_id.clone(), user_id);
 
     // Send stored messages to new client
     if let Some(history) = state.message_history.get(&room_uuid) {
