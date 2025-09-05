@@ -15,6 +15,11 @@ export class DrawingEngine {
   public domCanvases: { [key: string]: HTMLCanvasElement } = {};
   public domContexts: { [key: string]: CanvasRenderingContext2D } = {};
 
+  // Batched update system
+  private pendingUpdates = new Set<"foreground" | "background">();
+  private updateScheduled = false;
+  private rafId: number | null = null;
+
   private brush: { [key: number]: Uint8Array } = {};
   private tone: { [key: string]: Uint8Array } = {};
   private aerr = 0;
@@ -269,6 +274,55 @@ export class DrawingEngine {
     this.updateDOMCanvas("foreground");
   }
 
+  // Batched update methods
+  private scheduleBatchedUpdate() {
+    if (!this.updateScheduled) {
+      this.updateScheduled = true;
+      this.rafId = requestAnimationFrame(() => this.processBatchedUpdates());
+    }
+  }
+
+  private processBatchedUpdates() {
+    // Process all pending updates
+    for (const layerName of this.pendingUpdates) {
+      this.updateDOMCanvas(layerName);
+    }
+    
+    // Clear pending updates
+    this.pendingUpdates.clear();
+    this.updateScheduled = false;
+    this.rafId = null;
+  }
+
+  // Queue a layer for batched update
+  public queueLayerUpdate(layerName: "foreground" | "background") {
+    this.pendingUpdates.add(layerName);
+    this.scheduleBatchedUpdate();
+  }
+
+  // Force immediate update of all pending layers
+  public flushBatchedUpdates() {
+    if (this.updateScheduled && this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.processBatchedUpdates();
+    }
+  }
+
+  // For critical operations that need immediate rendering (like initialization)
+  public updateAllDOMCanvasesImmediate() {
+    // Cancel any pending batched update and clear queue
+    if (this.updateScheduled && this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+      this.updateScheduled = false;
+    }
+    this.pendingUpdates.clear();
+    
+    // Immediate update
+    this.updateDOMCanvas("background");
+    this.updateDOMCanvas("foreground");
+  }
+
   // Pan offset management
   public updatePanOffset(
     deltaX: number,
@@ -437,9 +491,9 @@ export class DrawingEngine {
       ];
     }
 
-    // Update DOM canvas if layer is attached
+    // Queue DOM canvas update if layer is attached
     const layerName = ctx === this.layers.background ? "background" : "foreground";
-    this.updateDOMCanvas(layerName);
+    this.queueLayerUpdate(layerName);
   }
 
   // Helper function to fill a horizontal line with direct replacement
@@ -575,9 +629,9 @@ export class DrawingEngine {
       }
     }
 
-    // Update DOM canvas if layer is attached
+    // Queue DOM canvas update if layer is attached
     const layerName = ctx === this.layers.background ? "background" : "foreground";
-    this.updateDOMCanvas(layerName);
+    this.queueLayerUpdate(layerName);
   }
 
   private drawTone(
@@ -696,9 +750,9 @@ export class DrawingEngine {
       [x1, y1],
     ];
 
-    // Update DOM canvas if layer is attached
+    // Queue DOM canvas update if layer is attached
     const layerName = ctx === this.layers.background ? "background" : "foreground";
-    this.updateDOMCanvas(layerName);
+    this.queueLayerUpdate(layerName);
   }
 
   public initialize(ctx?: CanvasRenderingContext2D) {
@@ -721,6 +775,12 @@ export class DrawingEngine {
   }
 
   public dispose() {
+    // Cancel any pending animation frame
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+
     // Clean up resources if needed
     this.layers.background = new Uint8ClampedArray(0);
     this.layers.foreground = new Uint8ClampedArray(0);
@@ -731,5 +791,9 @@ export class DrawingEngine {
     this.layerContexts = {};
     this.compositeCanvas = null;
     this.compositeContext = null;
+
+    // Reset batched update state
+    this.pendingUpdates.clear();
+    this.updateScheduled = false;
   }
 }

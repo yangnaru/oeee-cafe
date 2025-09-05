@@ -359,8 +359,8 @@ function App() {
         // Attach DOM canvases to the drawing engine
         engine.attachDOMCanvases(canvasElements.bgCanvas, canvasElements.fgCanvas);
         
-        // Update DOM canvases to show any existing content
-        engine.updateAllDOMCanvases();
+        // Update DOM canvases to show any existing content (immediate for initialization)
+        engine.updateAllDOMCanvasesImmediate();
         
         // Set up layer visibility - only apply local user settings to local user
         const isLocalUser = userId === userIdRef.current;
@@ -1180,8 +1180,8 @@ function App() {
                   message.color.a
                 );
 
-                // Ensure DOM canvases are updated for remote drawing
-                engine.updateAllDOMCanvases();
+                // Queue DOM canvases for batched update for remote drawing
+                engine.queueLayerUpdate(message.layer as "foreground" | "background");
               }
             }
             break;
@@ -1245,8 +1245,8 @@ function App() {
                   message.color.a
                 );
 
-                // Ensure DOM canvases are updated for remote drawing
-                engine.updateAllDOMCanvases();
+                // Queue DOM canvases for batched update for remote drawing
+                engine.queueLayerUpdate(message.layer as "foreground" | "background");
               }
             }
             break;
@@ -1300,8 +1300,8 @@ function App() {
                   message.color.a
                 );
 
-                // Ensure DOM canvases are updated for remote drawing
-                engine.updateAllDOMCanvases();
+                // Queue DOM canvases for batched update for remote drawing
+                engine.queueLayerUpdate(message.layer as "foreground" | "background");
               }
             }
             break;
@@ -1447,8 +1447,8 @@ function App() {
                 // Add received snapshot to undo history (useful when refreshing the page)
                 addSnapshotToHistory(message.layer);
 
-                // Ensure DOM canvases are updated for local snapshots
-                drawingEngine.updateAllDOMCanvases();
+                // Queue DOM canvases for batched update for local snapshots
+                drawingEngine.queueLayerUpdate(message.layer as "foreground" | "background");
 
                 // Notify parent component that drawing has changed
                 handleLocalDrawingChange();
@@ -1463,8 +1463,8 @@ function App() {
 
                   targetLayer.set(layerData);
                   
-                  // Ensure DOM canvases are updated for remote snapshots
-                  userEngine.engine.updateAllDOMCanvases();
+                  // Queue DOM canvases for batched update for remote snapshots
+                  userEngine.engine.queueLayerUpdate(message.layer as "foreground" | "background");
                 }
               }
             } catch (error) {
@@ -1631,8 +1631,8 @@ function App() {
         // Attach DOM canvases to the local drawing engine
         drawingEngine.attachDOMCanvases(canvasElements.bgCanvas, canvasElements.fgCanvas);
         
-        // Update DOM canvases to show any existing content
-        drawingEngine.updateAllDOMCanvases();
+        // Update DOM canvases to show any existing content (immediate for initialization)
+        drawingEngine.updateAllDOMCanvasesImmediate();
         
         // Set up initial layer visibility for local user
         canvasElements.bgCanvas.style.display = drawingState.bgVisible ? "block" : "none";

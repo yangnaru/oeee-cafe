@@ -661,8 +661,8 @@ export const useDrawing = (
       // Restore the specific layer that was undone
       drawingEngineRef.current.layers[previousState.layer].set(previousState.data);
 
-      // Update DOM canvases to show the restored state
-      drawingEngineRef.current.updateAllDOMCanvases();
+      // Queue DOM canvases for batched update to show the restored state
+      drawingEngineRef.current.queueLayerUpdate(previousState.layer);
 
       // Update display
       // Notify parent component that drawing has changed
@@ -704,8 +704,8 @@ export const useDrawing = (
       // Restore the specific layer that was redone
       drawingEngineRef.current.layers[nextState.layer].set(nextState.data);
 
-      // Update DOM canvases to show the restored state
-      drawingEngineRef.current.updateAllDOMCanvases();
+      // Queue DOM canvases for batched update to show the restored state
+      drawingEngineRef.current.queueLayerUpdate(nextState.layer);
 
       // Update display
       // Notify parent component that drawing has changed
