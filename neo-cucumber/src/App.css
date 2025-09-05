@@ -51,6 +51,12 @@ body {
 .canvas-container {
   position: relative;
   overflow: hidden;
+  /* Mobile Safari specific fixes */
+  -webkit-transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  -webkit-perspective: 1000;
+  /* Ensure dimensions are respected */
+  box-sizing: border-box;
 }
 
 .canvas-container canvas {

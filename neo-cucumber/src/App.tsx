@@ -1828,7 +1828,7 @@ function App() {
           {/* Main Content Area */}
           <div className="flex-1 relative overflow-hidden">
             <div
-              className="flex gap-4 flex-row w-full h-full bg-main items-center justify-center"
+              className="flex gap-4 flex-row w-full h-full bg-main justify-center"
               ref={appRef}
             >
               {isCatchingUp && (
@@ -1883,8 +1883,13 @@ function App() {
                       : "cursor-crosshair"
                   }`}
                   style={{
-                    width: CANVAS_WIDTH,
-                    height: CANVAS_HEIGHT,
+                    width: `${CANVAS_WIDTH}px`,
+                    height: `${CANVAS_HEIGHT}px`,
+                    minWidth: `${CANVAS_WIDTH}px`,
+                    minHeight: `${CANVAS_HEIGHT}px`,
+                    maxWidth: `${CANVAS_WIDTH}px`,
+                    maxHeight: `${CANVAS_HEIGHT}px`,
+                    flexShrink: 0,
                   }}
                 >
                   {/* Local user interaction canvas for drawing events - positioned last in DOM to be on top */}
