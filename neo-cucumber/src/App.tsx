@@ -627,29 +627,9 @@ function App() {
   );
 
   // Function to handle manual reconnection
-  const handleManualReconnect = useCallback(async () => {
-    console.log("Manual reconnection triggered");
-
-    // Clear auth error state
-    setAuthError(false);
-
-    // Clear canvas states before reconnecting
-    if (drawingEngine) {
-      drawingEngine.layers.foreground.fill(0);
-      drawingEngine.layers.background.fill(0);
-      drawingEngine.compositeLayers(true, true);
-    }
-    userEnginesRef.current.clear();
-    // Note: Keep localUserJoinTimeRef.current for historical purposes, but don't rely on it for ordering
-
-    // Re-initialize the app before reconnecting
-    const initialized = await initializeApp();
-    if (initialized) {
-      // Reconnect after successful initialization
-      shouldConnectRef.current = true;
-      connectWebSocket();
-    }
-  }, [drawingEngine]);
+  const handleManualReconnect = useCallback(() => {
+    window.location.reload();
+  }, []);
 
   // Function to composite all canvases for export only
   const compositeCanvasesForExport = useCallback(() => {
