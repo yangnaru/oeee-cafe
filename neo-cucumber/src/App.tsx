@@ -1869,7 +1869,7 @@ function App() {
           {/* Main Content Area */}
           <div className="flex-1 relative overflow-hidden">
             <div
-              className="flex gap-4 flex-row w-full h-full bg-main justify-center"
+              className="flex gap-4 flex-row w-full h-full bg-main justify-center items-center"
               ref={appRef}
             >
               {isCatchingUp && (
