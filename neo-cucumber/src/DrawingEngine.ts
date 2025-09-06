@@ -1,3 +1,5 @@
+import { initializeBrushes, initializeTones } from "./constants/drawing";
+
 export class DrawingEngine {
   public imageWidth: number;
   public imageHeight: number;
@@ -46,8 +48,8 @@ export class DrawingEngine {
     // Initialize offscreen canvases for hardware acceleration
     this.initializeOffscreenCanvases();
 
-    this.initializeBrushes();
-    this.initializeTones();
+    this.brush = initializeBrushes();
+    this.tone = initializeTones();
   }
 
   private initializeOffscreenCanvases() {
@@ -66,54 +68,6 @@ export class DrawingEngine {
 
   }
 
-  private initializeBrushes() {
-    // init brush
-    for (let r = 1; r <= 30; r++) {
-      this.brush[r] = new Uint8Array(r * r);
-      const mask = this.brush[r];
-      let index = 0;
-      for (let x = 0; x < r; x++) {
-        for (let y = 0; y < r; y++) {
-          const xx = x + 0.5 - r / 2.0;
-          const yy = y + 0.5 - r / 2.0;
-          mask[index++] = xx * xx + yy * yy <= (r * r) / 4 ? 1 : 0;
-        }
-      }
-    }
-    this.brush[3][0] = 0;
-    this.brush[3][2] = 0;
-    this.brush[3][6] = 0;
-    this.brush[3][8] = 0;
-
-    this.brush[5][1] = 0;
-    this.brush[5][3] = 0;
-    this.brush[5][5] = 0;
-    this.brush[5][9] = 0;
-    this.brush[5][15] = 0;
-    this.brush[5][19] = 0;
-    this.brush[5][21] = 0;
-    this.brush[5][23] = 0;
-  }
-
-  private initializeTones() {
-    // init tone
-    // Initialize tone patterns similar to Neo.Painter
-    const tonePattern = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-    const toneData: Uint8Array[] = [];
-
-    for (let i = 0; i < 16; i++) {
-      const arr = new Uint8Array(16);
-      for (let j = 0; j < 16; j++) {
-        arr[j] = i >= tonePattern[j] ? 1 : 0;
-      }
-      toneData.push(arr);
-    }
-
-    // Optionally, fill the `tone` object for compatibility
-    for (let i = 0; i < 16; i++) {
-      this.tone[i] = toneData[i];
-    }
-  }
 
   // Function to get tone data based on alpha value
   private getToneData(alpha: number): Uint8Array {
