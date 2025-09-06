@@ -8,6 +8,12 @@ When creating SQLx migrations, use the command `sqlx migrate add`.
 
 ## neo-cucumber (`./neo-cucumber`)
 
+Always run and check linting:
+
+```bash
+pnpm run lint
+```
+
 When extracting and compiling Lingui locales, use these commands:
 
 ```bash
