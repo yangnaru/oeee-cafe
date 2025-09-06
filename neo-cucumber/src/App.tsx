@@ -179,8 +179,6 @@ function App() {
   );
 
   // Canvas dimensions - only available when meta is loaded
-  const CANVAS_WIDTH = canvasMeta?.width;
-  const CANVAS_HEIGHT = canvasMeta?.height;
 
   const [selectedPaletteIndex, setSelectedPaletteIndex] = useState(1); // Start with black selected
   const [paletteColors, setPaletteColors] = useState(DEFAULT_PALETTE_COLORS);
@@ -249,23 +247,23 @@ function App() {
     (userId: string, insertionIndex: number) => {
       console.log("createUserCanvasElements called for:", userId, {
         containerExists: !!canvasContainerRef.current,
-        canvasWidth: CANVAS_WIDTH,
-        canvasHeight: CANVAS_HEIGHT,
+        canvasWidth: canvasMeta?.width,
+        canvasHeight: canvasMeta?.height,
       });
 
-      if (!canvasContainerRef.current || !CANVAS_WIDTH || !CANVAS_HEIGHT) {
+      if (!canvasContainerRef.current || !canvasMeta?.width || !canvasMeta?.height) {
         console.log("Cannot create canvases - missing requirements");
         return null;
       }
 
       // Create background canvas
       const bgCanvas = document.createElement("canvas");
-      bgCanvas.width = CANVAS_WIDTH;
-      bgCanvas.height = CANVAS_HEIGHT;
+      bgCanvas.width = canvasMeta.width;
+      bgCanvas.height = canvasMeta.height;
       bgCanvas.className = "absolute top-0 left-0 canvas-bg";
       bgCanvas.style.pointerEvents = "none"; // Background never handles events
-      bgCanvas.style.width = `${CANVAS_WIDTH}px`; // Set base dimensions - container handles zoom
-      bgCanvas.style.height = `${CANVAS_HEIGHT}px`;
+      bgCanvas.style.width = `${canvasMeta.width}px`; // Set base dimensions - container handles zoom
+      bgCanvas.style.height = `${canvasMeta.height}px`;
       bgCanvas.id = `bg-${userId}`;
 
       const bgCtx = bgCanvas.getContext("2d");
@@ -275,12 +273,12 @@ function App() {
 
       // Create foreground canvas
       const fgCanvas = document.createElement("canvas");
-      fgCanvas.width = CANVAS_WIDTH;
-      fgCanvas.height = CANVAS_HEIGHT;
+      fgCanvas.width = canvasMeta.width;
+      fgCanvas.height = canvasMeta.height;
       fgCanvas.className = "absolute top-0 left-0 canvas-bg";
       fgCanvas.style.pointerEvents = "none"; // Events handled by interaction canvas
-      fgCanvas.style.width = `${CANVAS_WIDTH}px`; // Set base dimensions - container handles zoom
-      fgCanvas.style.height = `${CANVAS_HEIGHT}px`;
+      fgCanvas.style.width = `${canvasMeta.width}px`; // Set base dimensions - container handles zoom
+      fgCanvas.style.height = `${canvasMeta.height}px`;
       fgCanvas.id = `fg-${userId}`;
 
       const fgCtx = fgCanvas.getContext("2d");
@@ -322,14 +320,14 @@ function App() {
 
       return { bgCanvas, fgCanvas };
     },
-    [CANVAS_WIDTH, CANVAS_HEIGHT]
+    [canvasMeta?.width, canvasMeta?.height]
   );
 
   // Function to create drawing engine for a new user
   const createUserEngine = useCallback(
     (userId: string) => {
       // Only create user engines when canvas dimensions are available
-      if (!CANVAS_WIDTH || !CANVAS_HEIGHT) {
+      if (!canvasMeta?.width || !canvasMeta?.height) {
         return;
       }
 
@@ -339,7 +337,7 @@ function App() {
       }
 
       // Create new DrawingEngine for this user
-      const engine = new DrawingEngine(CANVAS_WIDTH, CANVAS_HEIGHT);
+      const engine = new DrawingEngine(canvasMeta.width, canvasMeta.height);
       const firstSeen = Date.now();
 
       // Create DOM canvases for this user and attach to container (only if they don't exist)
@@ -382,8 +380,8 @@ function App() {
 
       // Create offscreen canvas for this user (still needed for drawing operations)
       const canvas = document.createElement("canvas");
-      canvas.width = CANVAS_WIDTH;
-      canvas.height = CANVAS_HEIGHT;
+      canvas.width = canvasMeta.width;
+      canvas.height = canvasMeta.height;
       const ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.imageSmoothingEnabled = false;
@@ -392,7 +390,7 @@ function App() {
 
       userEnginesRef.current.set(userId, { engine, firstSeen, canvas });
     },
-    [CANVAS_WIDTH, CANVAS_HEIGHT, createUserCanvasElements]
+    [canvasMeta?.width, canvasMeta?.height, createUserCanvasElements]
   );
 
   // Function to update z-indices for all existing canvases based on current user order
@@ -616,8 +614,8 @@ function App() {
     drawingState,
     handleHistoryChange,
     Math.round(currentZoom * 100),
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT,
+    canvasMeta?.width,
+    canvasMeta?.height,
     wsRef,
     userIdRef,
     handleLocalDrawingChange,
@@ -633,12 +631,12 @@ function App() {
 
   // Function to composite all canvases for export only
   const compositeCanvasesForExport = useCallback(() => {
-    if (!CANVAS_WIDTH || !CANVAS_HEIGHT) return null;
+    if (!canvasMeta?.width || !canvasMeta?.height) return null;
 
     // Create a temporary canvas for compositing
     const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = CANVAS_WIDTH;
-    tempCanvas.height = CANVAS_HEIGHT;
+    tempCanvas.width = canvasMeta.width;
+    tempCanvas.height = canvasMeta.height;
     const tempCtx = tempCanvas.getContext("2d");
 
     if (!tempCtx) return null;
@@ -664,11 +662,11 @@ function App() {
     });
 
     return tempCanvas;
-  }, [CANVAS_WIDTH, CANVAS_HEIGHT, canvasMeta]);
+  }, [canvasMeta?.width, canvasMeta?.height, canvasMeta]);
 
   // Function to download current canvas as PNG
   const downloadCanvasAsPNG = useCallback(() => {
-    if (!CANVAS_WIDTH || !CANVAS_HEIGHT) return;
+    if (!canvasMeta?.width || !canvasMeta?.height) return;
 
     try {
       // Use the composite function to create a single canvas with all layers
@@ -1440,7 +1438,7 @@ function App() {
 
           case "snapshot": {
             console.log("Drawing event - snapshot", message);
-            if (!CANVAS_WIDTH || !CANVAS_HEIGHT) {
+            if (!canvasMeta?.width || !canvasMeta?.height) {
               console.warn(
                 "Canvas dimensions not available for snapshot processing"
               );
@@ -1449,8 +1447,8 @@ function App() {
             try {
               const layerData = await pngDataToLayer(
                 message.pngData,
-                CANVAS_WIDTH,
-                CANVAS_HEIGHT
+                canvasMeta.width,
+                canvasMeta.height
               );
 
               // Check if this snapshot is for the local user
@@ -1546,15 +1544,15 @@ function App() {
     if (
       canvasContainerRef.current &&
       canvasMeta &&
-      CANVAS_WIDTH &&
-      CANVAS_HEIGHT
+      canvasMeta?.width &&
+      canvasMeta?.height
     ) {
       // Connect to WebSocket now that everything is initialized
       if (shouldConnectRef.current) {
         connectWebSocket();
       }
     }
-  }, [canvasMeta, CANVAS_WIDTH, CANVAS_HEIGHT, connectWebSocket]);
+  }, [canvasMeta, canvasMeta?.width, canvasMeta?.height, connectWebSocket]);
 
   // Add scroll wheel zoom functionality
   useEffect(() => {
@@ -1686,10 +1684,10 @@ function App() {
 
   // Force drawing system initialization when local canvas is ready
   useEffect(() => {
-    if (localUserCanvasRef.current && CANVAS_WIDTH && CANVAS_HEIGHT) {
+    if (localUserCanvasRef.current && canvasMeta?.width && canvasMeta?.height) {
       // The useDrawing hook should pick this up and initialize
     }
-  }, [CANVAS_WIDTH, CANVAS_HEIGHT]);
+  }, [canvasMeta?.width, canvasMeta?.height]);
 
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
@@ -1875,7 +1873,7 @@ function App() {
                   )}
                 </div>
               )}
-              {CANVAS_WIDTH && CANVAS_HEIGHT && (
+              {canvasMeta?.width && canvasMeta?.height && (
                 <div
                   ref={canvasContainerRef}
                   className={`relative mx-auto border border-main bg-white touch-none select-none canvas-container ${
@@ -1884,12 +1882,12 @@ function App() {
                       : "cursor-crosshair"
                   }`}
                   style={{
-                    width: `${CANVAS_WIDTH}px`,
-                    height: `${CANVAS_HEIGHT}px`,
-                    minWidth: `${CANVAS_WIDTH}px`,
-                    minHeight: `${CANVAS_HEIGHT}px`,
-                    maxWidth: `${CANVAS_WIDTH}px`,
-                    maxHeight: `${CANVAS_HEIGHT}px`,
+                    width: `${canvasMeta.width}px`,
+                    height: `${canvasMeta.height}px`,
+                    minWidth: `${canvasMeta.width}px`,
+                    minHeight: `${canvasMeta.height}px`,
+                    maxWidth: `${canvasMeta.width}px`,
+                    maxHeight: `${canvasMeta.height}px`,
                     flexShrink: 0,
                   }}
                 >
@@ -1897,13 +1895,13 @@ function App() {
                   <canvas
                     id="canvas"
                     ref={localUserCanvasRef}
-                    width={CANVAS_WIDTH}
-                    height={CANVAS_HEIGHT}
+                    width={canvasMeta.width}
+                    height={canvasMeta.height}
                     className="absolute top-0 left-0 pointer-events-auto canvas-bg"
                     style={{
                       opacity: 0,
-                      width: `${CANVAS_WIDTH}px`,
-                      height: `${CANVAS_HEIGHT}px`,
+                      width: `${canvasMeta.width}px`,
+                      height: `${canvasMeta.height}px`,
                     }}
                     onPointerDown={() =>
                       console.log("Interaction canvas pointer down")
