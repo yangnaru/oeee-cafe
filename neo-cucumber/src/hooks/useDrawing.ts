@@ -282,6 +282,7 @@ export const useDrawing = (
             drawingEngineRef.current.layers.foreground &&
             drawingEngineRef.current.layers.background
           ) {
+            console.log(`Saving fill operation state for ${currentDrawingStateRef.current.layerType} layer`);
             history.saveState(
               currentDrawingStateRef.current.layerType,
               drawingEngineRef.current.layers[currentDrawingStateRef.current.layerType],
@@ -423,6 +424,7 @@ export const useDrawing = (
           drawingEngineRef.current.layers.foreground &&
           drawingEngineRef.current.layers.background
         ) {
+          console.log(`Saving drawing stroke state for ${lastModifiedLayerRef.current} layer (pointer up)`);
           history.saveState(
             lastModifiedLayerRef.current,
             drawingEngineRef.current.layers[lastModifiedLayerRef.current],
@@ -660,8 +662,10 @@ export const useDrawing = (
 
   // Undo function
   const handleUndo = useCallback(async () => {
+    console.log(`Attempting undo - can undo: ${history.canUndo()}`);
     const previousState = history.undo();
     if (previousState && contextRef.current && drawingEngineRef.current) {
+      console.log(`Undoing to previous ${previousState.layer} layer state (timestamp: ${previousState.timestamp})`);
       // Restore the specific layer that was undone
       drawingEngineRef.current.layers[previousState.layer].set(previousState.data);
 
@@ -698,13 +702,17 @@ export const useDrawing = (
           console.error("Failed to send undo snapshot:", error);
         }
       }
+    } else {
+      console.log("Undo failed - no previous state or missing components");
     }
   }, [history, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange]);
 
   // Redo function
   const handleRedo = useCallback(async () => {
+    console.log(`Attempting redo - can redo: ${history.canRedo()}`);
     const nextState = history.redo();
     if (nextState && contextRef.current && drawingEngineRef.current) {
+      console.log(`Redoing to next ${nextState.layer} layer state (timestamp: ${nextState.timestamp})`);
       // Restore the specific layer that was redone
       drawingEngineRef.current.layers[nextState.layer].set(nextState.data);
 
@@ -741,6 +749,8 @@ export const useDrawing = (
           console.error("Failed to send redo snapshot:", error);
         }
       }
+    } else {
+      console.log("Redo failed - no next state or missing components");
     }
   }, [history, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange]);
 

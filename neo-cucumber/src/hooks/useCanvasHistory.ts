@@ -21,7 +21,32 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
     background: null,
   });
 
+  // Helper function to compare two Uint8ClampedArray for equality
+  const arraysEqual = useCallback((a: Uint8ClampedArray, b: Uint8ClampedArray): boolean => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }, []);
+
   const saveState = useCallback((layer: "foreground" | "background", data: Uint8ClampedArray, isDrawingAction: boolean = true, isContentSnapshot: boolean = false) => {
+    // Check for duplicate data - compare with the most recent state for this layer
+    if (historyRef.current.length > 0) {
+      // Find the most recent state for this layer (search backwards)
+      for (let i = historyRef.current.length - 1; i >= 0; i--) {
+        const recentState = historyRef.current[i];
+        if (recentState.layer === layer) {
+          // If the data is identical to the most recent state, skip saving
+          if (arraysEqual(data, recentState.data)) {
+            console.log(`Skipping duplicate ${layer} layer state save`);
+            return;
+          }
+          break; // Found the most recent state for this layer, no need to check further
+        }
+      }
+    }
+
     const newState: CanvasState = {
       layer,
       data: new Uint8ClampedArray(data),
@@ -39,6 +64,7 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
 
     // Add new state
     historyRef.current.push(newState);
+    console.log(`Saved ${layer} layer state to history (index: ${historyRef.current.length - 1}, drawing action: ${isDrawingAction}, content snapshot: ${isContentSnapshot})`);
 
     // Track if this is a drawing action
     if (isDrawingAction) {
@@ -52,7 +78,7 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
     } else {
       currentIndexRef.current = historyRef.current.length - 1;
     }
-  }, [maxHistorySize]);
+  }, [maxHistorySize, arraysEqual]);
 
   // Helper method to save both layers (for initial state)
   const saveBothLayers = useCallback((foreground: Uint8ClampedArray, background: Uint8ClampedArray, isDrawingAction: boolean = true, isContentSnapshot: boolean = false) => {
