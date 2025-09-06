@@ -2,11 +2,15 @@
 
 ## Main Rust server (`./src`)
 
+Don't try to run the development server. Just run `cargo check` if you need to check if the code compiles.
+
 When running cargo commands, use the environment variable `DATABASE_URL=postgresql:///oeee_cafe`.
 
 When creating SQLx migrations, use the command `sqlx migrate add`.
 
 ## neo-cucumber (`./neo-cucumber`)
+
+Don't try to run the development server. Just run `pnpm run build` if you need to check if the code compiles.
 
 Always run and check linting:
 
