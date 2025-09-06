@@ -187,6 +187,12 @@ function App() {
   const [participants, setParticipants] = useState<Map<string, Participant>>(
     new Map()
   );
+  const participantsRef = useRef(participants);
+
+  // Keep participantsRef in sync with participants state
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
 
   // Canvas dimensions - only available when meta is loaded
 
@@ -1419,7 +1425,7 @@ function App() {
                 );
 
                 // Show cursor at the end position of the line
-                const participant = participants.get(message.userId);
+                const participant = participantsRef.current.get(message.userId);
                 const username = participant?.username || userEngine.username;
                 createOrUpdateCursor(
                   message.userId,
@@ -1507,7 +1513,7 @@ function App() {
                 );
 
                 // Show cursor at the drawing point
-                const participant = participants.get(message.userId);
+                const participant = participantsRef.current.get(message.userId);
                 const username = participant?.username || userEngine.username;
                 createOrUpdateCursor(
                   message.userId,
@@ -1582,7 +1588,7 @@ function App() {
                 );
 
                 // Show cursor at the fill point
-                const participant = participants.get(message.userId);
+                const participant = participantsRef.current.get(message.userId);
                 const username = participant?.username || userEngine.username;
                 createOrUpdateCursor(
                   message.userId,
