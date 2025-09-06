@@ -230,11 +230,33 @@ function App() {
   const [sessionEnded, setSessionEnded] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [isChatMinimized, setIsChatMinimized] = useState(false);
+  
+  // Store reference to chat's addMessage function
+  const chatAddMessageRef = useRef<((message: {
+    id: string;
+    type: "join" | "leave" | "user";
+    userId: string;
+    username: string;
+    message: string;
+    timestamp: number;
+  }) => void) | null>(null);
 
   // Chat message handler
   const handleChatMessage = useCallback(() => {
     // Chat messages are handled entirely by the Chat component
     // This callback is here for future extensions if needed
+  }, []);
+
+  // Callback to receive addMessage function from Chat component
+  const handleChatAddMessage = useCallback((addMessageFn: (message: {
+    id: string;
+    type: "join" | "leave" | "user";
+    userId: string;
+    username: string;
+    message: string;
+    timestamp: number;
+  }) => void) => {
+    chatAddMessageRef.current = addMessageFn;
   }, []);
 
   // Track user IDs and their drawing engines (using ref to avoid re-renders)
@@ -605,6 +627,7 @@ function App() {
     drawingEngine,
     addSnapshotToHistory,
     markDrawingComplete,
+    handleSnapshotRequest,
   } = useDrawing(
     localUserCanvasRef,
     appRef,
@@ -626,6 +649,12 @@ function App() {
   useEffect(() => {
     drawingEngineRef.current = drawingEngine;
   }, [drawingEngine]);
+
+  // Keep handleSnapshotRequest ref in sync to avoid circular dependencies
+  const handleSnapshotRequestRef = useRef(handleSnapshotRequest);
+  useEffect(() => {
+    handleSnapshotRequestRef.current = handleSnapshotRequest;
+  }, [handleSnapshotRequest]);
 
   // Keep connectWebSocket ref to avoid circular dependencies in useEffect (defined after connectWebSocket)
 
@@ -1336,10 +1365,10 @@ function App() {
 
             // Add join message to chat when someone joins
             if (
-              window.addChatMessage &&
+              chatAddMessageRef.current &&
               message.userId !== userIdRef.current
             ) {
-              window.addChatMessage({
+              chatAddMessageRef.current({
                 id: `join-${message.userId}-${message.timestamp}`,
                 type: "join",
                 userId: message.userId,
@@ -1400,8 +1429,8 @@ function App() {
             });
 
             // Add leave message to chat when someone leaves
-            if (window.addChatMessage) {
-              window.addChatMessage({
+            if (chatAddMessageRef.current) {
+              chatAddMessageRef.current({
                 id: `leave-${message.userId}-${message.timestamp}`,
                 type: "leave",
                 userId: message.userId,
@@ -1415,8 +1444,8 @@ function App() {
 
           case "chat": {
             // Add chat message to chat component
-            if (window.addChatMessage) {
-              window.addChatMessage({
+            if (chatAddMessageRef.current) {
+              chatAddMessageRef.current({
                 id: `chat-${message.userId}-${message.timestamp}`,
                 type: "user",
                 userId: message.userId,
@@ -1430,8 +1459,8 @@ function App() {
 
           case "snapshotRequest": {
             // Forward snapshot request to drawing hook
-            if (window.handleSnapshotRequest) {
-              window.handleSnapshotRequest(message.timestamp);
+            if (handleSnapshotRequestRef.current) {
+              handleSnapshotRequestRef.current();
             }
             break;
           }
@@ -1833,6 +1862,7 @@ function App() {
               username={userLoginNameRef.current}
               onChatMessage={handleChatMessage}
               onMinimizedChange={setIsChatMinimized}
+              onAddMessage={handleChatAddMessage}
             />
           </div>
 

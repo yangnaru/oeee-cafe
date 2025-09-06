@@ -24,6 +24,14 @@ interface ChatProps {
   username: string;
   onChatMessage: (message: ChatMessage) => void;
   onMinimizedChange?: (isMinimized: boolean) => void;
+  onAddMessage?: (addMessageFn: (message: {
+    id: string;
+    type: "join" | "leave" | "user";
+    userId: string;
+    username: string;
+    message: string;
+    timestamp: number;
+  }) => void) => void;
 }
 
 export const Chat: React.FC<ChatProps> = ({
@@ -32,6 +40,7 @@ export const Chat: React.FC<ChatProps> = ({
   username,
   onChatMessage,
   onMinimizedChange,
+  onAddMessage,
 }) => {
   const { t } = useLingui();
 
@@ -95,13 +104,12 @@ export const Chat: React.FC<ChatProps> = ({
     [onChatMessage, addParticipant, removeParticipant]
   );
 
-  // Expose addMessage to parent component
+  // Expose addMessage to parent component via callback
   useEffect(() => {
-    window.addChatMessage = addMessage;
-    return () => {
-      delete window.addChatMessage;
-    };
-  }, [addMessage]);
+    if (onAddMessage) {
+      onAddMessage(addMessage);
+    }
+  }, [onAddMessage, addMessage]);
 
   // Add current user to participants when component mounts
   useEffect(() => {

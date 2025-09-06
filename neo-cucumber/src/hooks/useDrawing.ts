@@ -818,13 +818,7 @@ export const useDrawing = (
     [sendSnapshot]
   );
 
-  // Expose snapshot request handler to window for App.tsx
-  useEffect(() => {
-    window.handleSnapshotRequest = handleSnapshotRequest;
-    return () => {
-      delete window.handleSnapshotRequest;
-    };
-  }, [handleSnapshotRequest]);
+  // handleSnapshotRequest is now returned directly from the hook
 
   // Function to add snapshot to history (for when we receive our own snapshot after page refresh)
   const addSnapshotToHistory = useCallback((layer?: "foreground" | "background") => {
@@ -866,5 +860,6 @@ export const useDrawing = (
     getHistoryInfo: history.getHistoryInfo,
     addSnapshotToHistory,
     markDrawingComplete,
+    handleSnapshotRequest,
   };
 };
