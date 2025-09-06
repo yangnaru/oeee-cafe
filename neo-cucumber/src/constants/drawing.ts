@@ -1,0 +1,16 @@
+export const DEFAULT_PALETTE_COLORS = [
+  "#ffffff",
+  "#000000",
+  "#888888",
+  "#b47575",
+  "#c096c0",
+  "#fa9696",
+  "#8080ff",
+  "#ffb6ff",
+  "#e7e58d",
+  "#25c7c9",
+  "#99cb7b",
+  "#e7962d",
+  "#f9ddcf",
+  "#fcece2",
+];

@@ -16,6 +16,8 @@ import { RoomFullModal } from "./components/modals/RoomFullModal";
 import { ConnectionStatusModal } from "./components/modals/ConnectionStatusModal";
 import { SessionEndingModal } from "./components/modals/SessionEndingModal";
 import { SessionHeader } from "./components/SessionHeader";
+import { type BrushType, type DrawingState, type CollaborationMeta, type Participant } from "./types/collaboration";
+import { DEFAULT_PALETTE_COLORS } from "./constants/drawing";
 import { ToolboxPanel } from "./components/ToolboxPanel";
 import { DrawingEngine } from "./DrawingEngine";
 import { useDrawing } from "./hooks/useDrawing";
@@ -85,50 +87,6 @@ const getZoomLevels = (): number[] => {
 };
 // SPDX-SnippetEnd
 
-type BrushType = "solid" | "halftone" | "eraser" | "fill" | "pan";
-type LayerType = "foreground" | "background";
-
-interface DrawingState {
-  brushSize: number;
-  opacity: number;
-  color: string;
-  brushType: BrushType;
-  layerType: LayerType;
-  zoomLevel: number;
-  fgVisible: boolean;
-  bgVisible: boolean;
-  pendingPanDeltaX?: number;
-  pendingPanDeltaY?: number;
-}
-
-const DEFAULT_PALETTE_COLORS = [
-  "#ffffff",
-  "#000000",
-  "#888888",
-  "#b47575",
-  "#c096c0",
-  "#fa9696",
-  "#8080ff",
-  "#ffb6ff",
-  "#e7e58d",
-  "#25c7c9",
-  "#99cb7b",
-  "#e7962d",
-  "#f9ddcf",
-  "#fcece2",
-];
-
-// Interface for collaboration meta data
-interface CollaborationMeta {
-  title: string;
-  width: number;
-  height: number;
-  ownerId: string;
-  savedPostId?: string;
-  ownerLoginName: string;
-  maxUsers: number;
-  currentUserCount: number;
-}
 
 /*
  * Backend endpoints required:
@@ -184,11 +142,6 @@ function App() {
   );
 
   // Participants state (moved from Chat.tsx for centralized user management)
-  interface Participant {
-    userId: string;
-    username: string;
-    joinedAt: number;
-  }
   const [participants, setParticipants] = useState<Map<string, Participant>>(
     new Map()
   );
