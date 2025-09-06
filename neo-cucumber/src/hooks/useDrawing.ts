@@ -44,6 +44,7 @@ export const useDrawing = (
   );
   const isDrawingRef = useRef(false);
   const pendingSnapshotRequestRef = useRef(false);
+  const sendSnapshotRef = useRef<(() => Promise<void>) | undefined>(undefined);
   const history = useCanvasHistory(30);
 
   // Update the ref when callback changes
@@ -435,8 +436,8 @@ export const useDrawing = (
         isDrawingRef.current = false;
 
         // Check for pending snapshot request
-        if (pendingSnapshotRequestRef.current) {
-          sendSnapshot();
+        if (pendingSnapshotRequestRef.current && sendSnapshotRef.current) {
+          sendSnapshotRef.current();
           pendingSnapshotRequestRef.current = false;
         }
       }
@@ -639,7 +640,7 @@ export const useDrawing = (
       app.removeEventListener("touchmove", preventTouchOnCanvas);
       app.removeEventListener("touchend", preventTouchOnCanvas);
     };
-  }, [appRef, canvasRef, history, wsRef, userIdRef]);
+  }, [appRef, canvasRef, history, wsRef, userIdRef, containerRef, zoomLevel]);
 
   useEffect(() => {
     initializeDrawing();
@@ -650,7 +651,7 @@ export const useDrawing = (
     if (canvasRef.current && !isInitializedRef.current) {
       initializeDrawing();
     }
-  }, [canvasRef.current, appRef.current]);
+  }, [canvasRef, initializeDrawing]);
 
   useEffect(() => {
     const cleanup = setupDrawingEvents();
@@ -798,6 +799,11 @@ export const useDrawing = (
     }
   }, [canvasWidth, canvasHeight, wsRef, userIdRef]);
 
+  // Update sendSnapshot ref
+  useEffect(() => {
+    sendSnapshotRef.current = sendSnapshot;
+  }, [sendSnapshot]);
+
   // Handle snapshot request from server
   const handleSnapshotRequest = useCallback(
     () => {
@@ -814,9 +820,9 @@ export const useDrawing = (
 
   // Expose snapshot request handler to window for App.tsx
   useEffect(() => {
-    (window as any).handleSnapshotRequest = handleSnapshotRequest;
+    window.handleSnapshotRequest = handleSnapshotRequest;
     return () => {
-      delete (window as any).handleSnapshotRequest;
+      delete window.handleSnapshotRequest;
     };
   }, [handleSnapshotRequest]);
 

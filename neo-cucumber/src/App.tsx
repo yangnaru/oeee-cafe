@@ -1,5 +1,5 @@
 import { i18n } from "@lingui/core";
-import { Trans, useLingui } from "@lingui/react/macro";
+import { Trans } from "@lingui/react/macro";
 import {
   startTransition,
   useCallback,
@@ -22,6 +22,7 @@ import {
   decodeMessage,
   encodeEndSession,
   encodeJoin,
+  type DecodedMessage,
 } from "./utils/binaryProtocol";
 import { pngDataToLayer } from "./utils/canvasSnapshot";
 
@@ -170,7 +171,6 @@ const fetchCollaborationMeta = async (
 };
 
 function App() {
-  const { t } = useLingui();
 
   // State for canvas dimensions and meta information
   const [canvasMeta, setCanvasMeta] = useState<CollaborationMeta | null>(null);
@@ -201,10 +201,16 @@ function App() {
 
   // Track catching up state - when true, drawing should be disabled
   const [isCatchingUp, setIsCatchingUp] = useState(true);
+  const isCatchingUpRef = useRef(isCatchingUp);
   const catchupTimeoutRef = useRef<number | null>(null);
 
+  // Keep ref in sync with state
+  useEffect(() => {
+    isCatchingUpRef.current = isCatchingUp;
+  }, [isCatchingUp]);
+
   // Message queue for sequential processing during catch-up
-  const messageQueueRef = useRef<any[]>([]);
+  const messageQueueRef = useRef<DecodedMessage[]>([]);
   const processingMessageRef = useRef(false);
 
   // Track connection state for reconnection logic
@@ -364,18 +370,9 @@ function App() {
         // Update DOM canvases to show any existing content (immediate for initialization)
         engine.updateAllDOMCanvasesImmediate();
 
-        // Set up layer visibility - only apply local user settings to local user
-        const isLocalUser = userId === userIdRef.current;
-        canvasElements.bgCanvas.style.display = isLocalUser
-          ? drawingState.bgVisible
-            ? "block"
-            : "none"
-          : "block"; // Remote users' layers always visible
-        canvasElements.fgCanvas.style.display = isLocalUser
-          ? drawingState.fgVisible
-            ? "block"
-            : "none"
-          : "block"; // Remote users' layers always visible
+        // Set up initial layer visibility (local user visibility will be managed by separate useEffect)
+        canvasElements.bgCanvas.style.display = "block";
+        canvasElements.fgCanvas.style.display = "block";
       }
 
       // Create offscreen canvas for this user (still needed for drawing operations)
@@ -624,6 +621,14 @@ function App() {
     canvasContainerRef
   );
 
+  // Keep drawingEngine ref in sync to avoid circular dependencies
+  const drawingEngineRef = useRef(drawingEngine);
+  useEffect(() => {
+    drawingEngineRef.current = drawingEngine;
+  }, [drawingEngine]);
+
+  // Keep connectWebSocket ref to avoid circular dependencies in useEffect (defined after connectWebSocket)
+
   // Function to handle manual reconnection
   const handleManualReconnect = useCallback(() => {
     window.location.reload();
@@ -662,7 +667,7 @@ function App() {
     });
 
     return tempCanvas;
-  }, [canvasMeta?.width, canvasMeta?.height, canvasMeta]);
+  }, [canvasMeta]);
 
   // Function to download current canvas as PNG
   const downloadCanvasAsPNG = useCallback(() => {
@@ -688,7 +693,7 @@ function App() {
     } catch (error) {
       console.error("Error in downloadCanvasAsPNG:", error);
     }
-  }, [compositeCanvasesForExport]);
+  }, [compositeCanvasesForExport, canvasMeta?.width, canvasMeta?.height]);
 
   // Function to save collaborative drawing to gallery
   const saveCollaborativeDrawing = useCallback(async () => {
@@ -903,7 +908,7 @@ function App() {
       // Update document title
       const sessionTitle =
         meta.title && meta.title.trim() ? meta.title : "No Title";
-      document.title = `${t`Oeee Cafe`} - ${sessionTitle}`;
+      document.title = `Oeee Cafe - ${sessionTitle}`;
 
       return true;
     } catch (error) {
@@ -1023,7 +1028,7 @@ function App() {
             return;
           }
 
-          if (isCatchingUp) {
+          if (isCatchingUpRef.current) {
             // During catch-up, queue messages for sequential processing
             messageQueueRef.current.push(message);
             processMessageQueue();
@@ -1044,7 +1049,7 @@ function App() {
             return;
           }
 
-          if (isCatchingUp) {
+          if (isCatchingUpRef.current) {
             // During catch-up, queue messages for sequential processing
             messageQueueRef.current.push(message);
             processMessageQueue();
@@ -1071,7 +1076,6 @@ function App() {
         event: event,
         timestamp: new Date().toISOString(),
         userAgent: navigator.userAgent,
-        connectionState: connectionState,
       });
       setConnectionState("disconnected");
     };
@@ -1117,20 +1121,20 @@ function App() {
     };
 
     // Helper function to handle decoded binary messages (moved inside connectWebSocket)
-    const handleBinaryMessage = async (message: any) => {
+    const handleBinaryMessage = async (message: DecodedMessage) => {
       try {
         // Handle different message types
         switch (message.type) {
           case "drawLine": {
             console.log("Drawing event - drawLine", message);
             // Check if this is the local user's drawing event
-            if (message.userId === userIdRef.current && drawingEngine) {
+            if (message.userId === userIdRef.current && drawingEngineRef.current) {
               const targetLayer =
                 message.layer === "foreground"
-                  ? drawingEngine.layers.foreground
-                  : drawingEngine.layers.background;
+                  ? drawingEngineRef.current.layers.foreground
+                  : drawingEngineRef.current.layers.background;
 
-              drawingEngine.drawLine(
+              drawingEngineRef.current.drawLine(
                 targetLayer,
                 message.fromX,
                 message.fromY,
@@ -1145,7 +1149,7 @@ function App() {
               );
 
               // Queue DOM canvases for batched update for local drawing
-              drawingEngine.queueLayerUpdate(
+              drawingEngineRef.current.queueLayerUpdate(
                 message.layer as "foreground" | "background"
               );
 
@@ -1199,13 +1203,13 @@ function App() {
             });
 
             // Check if this is the local user's drawing event
-            if (message.userId === userIdRef.current && drawingEngine) {
+            if (message.userId === userIdRef.current && drawingEngineRef.current) {
               const targetLayer =
                 message.layer === "foreground"
-                  ? drawingEngine.layers.foreground
-                  : drawingEngine.layers.background;
+                  ? drawingEngineRef.current.layers.foreground
+                  : drawingEngineRef.current.layers.background;
 
-              drawingEngine.drawLine(
+              drawingEngineRef.current.drawLine(
                 targetLayer,
                 message.x,
                 message.y,
@@ -1220,7 +1224,7 @@ function App() {
               );
 
               // Queue DOM canvases for batched update for local drawing
-              drawingEngine.queueLayerUpdate(
+              drawingEngineRef.current.queueLayerUpdate(
                 message.layer as "foreground" | "background"
               );
 
@@ -1272,13 +1276,13 @@ function App() {
             });
 
             // Check if this is the local user's drawing event
-            if (message.userId === userIdRef.current && drawingEngine) {
+            if (message.userId === userIdRef.current && drawingEngineRef.current) {
               const targetLayer =
                 message.layer === "foreground"
-                  ? drawingEngine.layers.foreground
-                  : drawingEngine.layers.background;
+                  ? drawingEngineRef.current.layers.foreground
+                  : drawingEngineRef.current.layers.background;
 
-              drawingEngine.doFloodFill(
+              drawingEngineRef.current.doFloodFill(
                 targetLayer,
                 message.x,
                 message.y,
@@ -1289,7 +1293,7 @@ function App() {
               );
 
               // Queue DOM canvases for batched update for local drawing
-              drawingEngine.queueLayerUpdate(
+              drawingEngineRef.current.queueLayerUpdate(
                 message.layer as "foreground" | "background"
               );
 
@@ -1332,10 +1336,10 @@ function App() {
 
             // Add join message to chat when someone joins
             if (
-              (window as any).addChatMessage &&
+              window.addChatMessage &&
               message.userId !== userIdRef.current
             ) {
-              (window as any).addChatMessage({
+              window.addChatMessage({
                 id: `join-${message.userId}-${message.timestamp}`,
                 type: "join",
                 userId: message.userId,
@@ -1396,8 +1400,8 @@ function App() {
             });
 
             // Add leave message to chat when someone leaves
-            if ((window as any).addChatMessage) {
-              (window as any).addChatMessage({
+            if (window.addChatMessage) {
+              window.addChatMessage({
                 id: `leave-${message.userId}-${message.timestamp}`,
                 type: "leave",
                 userId: message.userId,
@@ -1411,8 +1415,8 @@ function App() {
 
           case "chat": {
             // Add chat message to chat component
-            if ((window as any).addChatMessage) {
-              (window as any).addChatMessage({
+            if (window.addChatMessage) {
+              window.addChatMessage({
                 id: `chat-${message.userId}-${message.timestamp}`,
                 type: "user",
                 userId: message.userId,
@@ -1426,8 +1430,8 @@ function App() {
 
           case "snapshotRequest": {
             // Forward snapshot request to drawing hook
-            if ((window as any).handleSnapshotRequest) {
-              (window as any).handleSnapshotRequest(message.timestamp);
+            if (window.handleSnapshotRequest) {
+              window.handleSnapshotRequest(message.timestamp);
             }
             break;
           }
@@ -1452,12 +1456,12 @@ function App() {
               );
 
               // Check if this snapshot is for the local user
-              if (message.userId === userIdRef.current && drawingEngine) {
+              if (message.userId === userIdRef.current && drawingEngineRef.current) {
                 // Apply to local user's canvas
                 const targetLayer =
                   message.layer === "foreground"
-                    ? drawingEngine.layers.foreground
-                    : drawingEngine.layers.background;
+                    ? drawingEngineRef.current.layers.foreground
+                    : drawingEngineRef.current.layers.background;
 
                 targetLayer.set(layerData);
 
@@ -1465,7 +1469,7 @@ function App() {
                 addSnapshotToHistory(message.layer);
 
                 // Queue DOM canvases for batched update for local snapshots
-                drawingEngine.queueLayerUpdate(
+                drawingEngineRef.current.queueLayerUpdate(
                   message.layer as "foreground" | "background"
                 );
 
@@ -1502,10 +1506,17 @@ function App() {
     getWebSocketUrl,
     createUserEngine,
     canvasMeta,
-    drawingEngine,
     handleLocalDrawingChange,
     updateCanvasZIndices,
+    addSnapshotToHistory,
+    markDrawingComplete,
   ]);
+
+  // Keep connectWebSocket ref to avoid circular dependencies in useEffect
+  const connectWebSocketRef = useRef(connectWebSocket);
+  useEffect(() => {
+    connectWebSocketRef.current = connectWebSocket;
+  }, [connectWebSocket]);
 
   const handleZoomReset = useCallback(() => {
     const resetIndex = zoomLevels.findIndex((level) => level >= 1.0);
@@ -1548,11 +1559,11 @@ function App() {
       canvasMeta?.height
     ) {
       // Connect to WebSocket now that everything is initialized
-      if (shouldConnectRef.current) {
-        connectWebSocket();
+      if (shouldConnectRef.current && connectWebSocketRef.current) {
+        connectWebSocketRef.current();
       }
     }
-  }, [canvasMeta, canvasMeta?.width, canvasMeta?.height, connectWebSocket]);
+  }, [canvasMeta]);
 
   // Add scroll wheel zoom functionality
   useEffect(() => {
@@ -1612,6 +1623,7 @@ function App() {
     drawingState.pendingPanDeltaY,
     drawingState.zoomLevel,
     drawingEngine,
+    currentZoom,
   ]);
 
   // Update canvas when layer visibility changes
@@ -1668,7 +1680,7 @@ function App() {
           : "none";
       }
     }
-  }, [drawingEngine, createUserCanvasElements]); // Removed layer visibility from dependencies
+  }, [drawingEngine, createUserCanvasElements, drawingState.bgVisible, drawingState.fgVisible]);
 
   // Update canvas transform when zoom changes
   useEffect(() => {

@@ -97,9 +97,9 @@ export const Chat: React.FC<ChatProps> = ({
 
   // Expose addMessage to parent component
   useEffect(() => {
-    (window as any).addChatMessage = addMessage;
+    window.addChatMessage = addMessage;
     return () => {
-      delete (window as any).addChatMessage;
+      delete window.addChatMessage;
     };
   }, [addMessage]);
 
