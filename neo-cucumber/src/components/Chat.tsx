@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { encodeChat } from "../utils/binaryProtocol";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
+import { getUserColors } from "../utils/userColors";
 
 interface ChatMessage {
   id: string;
@@ -21,23 +22,25 @@ interface Participant {
 interface ChatProps {
   wsRef: React.RefObject<WebSocket | null>;
   userId: string;
-  username: string;
+  participants: Map<string, Participant>;
   onChatMessage: (message: ChatMessage) => void;
   onMinimizedChange?: (isMinimized: boolean) => void;
-  onAddMessage?: (addMessageFn: (message: {
-    id: string;
-    type: "join" | "leave" | "user";
-    userId: string;
-    username: string;
-    message: string;
-    timestamp: number;
-  }) => void) => void;
+  onAddMessage?: (
+    addMessageFn: (message: {
+      id: string;
+      type: "join" | "leave" | "user";
+      userId: string;
+      username: string;
+      message: string;
+      timestamp: number;
+    }) => void
+  ) => void;
 }
 
 export const Chat: React.FC<ChatProps> = ({
   wsRef,
   userId,
-  username,
+  participants,
   onChatMessage,
   onMinimizedChange,
   onAddMessage,
@@ -48,9 +51,6 @@ export const Chat: React.FC<ChatProps> = ({
   const [inputValue, setInputValue] = useState("");
   const [isComposing, setIsComposing] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [participants, setParticipants] = useState<Map<string, Participant>>(
-    new Map()
-  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -63,45 +63,14 @@ export const Chat: React.FC<ChatProps> = ({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Handle participant join
-  const addParticipant = useCallback(
-    (userId: string, username: string, timestamp: number) => {
-      setParticipants((prev) => {
-        const newParticipants = new Map(prev);
-        newParticipants.set(userId, { userId, username, joinedAt: timestamp });
-        return newParticipants;
-      });
-    },
-    []
-  );
-
-  // Handle participant leave
-  const removeParticipant = useCallback((userId: string) => {
-    setParticipants((prev) => {
-      const newParticipants = new Map(prev);
-      newParticipants.delete(userId);
-      return newParticipants;
-    });
-  }, []);
-
   // Handle incoming chat messages
   const addMessage = useCallback(
     (message: ChatMessage) => {
-      // Track participants based on message types
-      if (message.type === "join") {
-        addParticipant(message.userId, message.username, message.timestamp);
-      } else if (message.type === "leave") {
-        removeParticipant(message.userId);
-      } else if (message.type === "user") {
-        // Add participant if not already tracked (for chat messages)
-        addParticipant(message.userId, message.username, message.timestamp);
-      }
-
       // Add message to chat history (including join/leave for display)
       setMessages((prev) => [...prev, message]);
       onChatMessage(message);
     },
-    [onChatMessage, addParticipant, removeParticipant]
+    [onChatMessage]
   );
 
   // Expose addMessage to parent component via callback
@@ -110,13 +79,6 @@ export const Chat: React.FC<ChatProps> = ({
       onAddMessage(addMessage);
     }
   }, [onAddMessage, addMessage]);
-
-  // Add current user to participants when component mounts
-  useEffect(() => {
-    if (userId && username) {
-      addParticipant(userId, username, Date.now());
-    }
-  }, [userId, username, addParticipant]);
 
   // Send chat message
   const sendMessage = useCallback(() => {
@@ -183,27 +145,16 @@ export const Chat: React.FC<ChatProps> = ({
 
   // Generate unique color and background for participant based on username
   const getUserStyle = (username: string) => {
-    // Simple hash function to generate consistent color for same username
-    let hash = 0;
-    for (let i = 0; i < username.length; i++) {
-      hash = username.charCodeAt(i) + ((hash << 5) - hash);
-    }
-
-    // Use hash to generate HSL color
-    const hue = Math.abs(hash) % 360;
-    const saturation = 75; // High saturation for vibrant colors
-
-    // Generate contrasting text and background colors
-    const textColor = `hsl(${hue}, ${saturation}%, 95%)`; // Light text
-    const backgroundColor = `hsl(${hue}, ${saturation}%, 35%)`; // Dark background
-
+    const colors = getUserColors(username);
     return {
-      color: textColor,
-      backgroundColor: backgroundColor,
+      color: colors.textColor,
+      backgroundColor: colors.backgroundColor,
       padding: "2px 6px",
       borderRadius: "3px",
       fontSize: "inherit",
       fontWeight: "bold",
+      // Override any inherited styles
+      borderColor: colors.backgroundColor,
     };
   };
 
@@ -233,34 +184,23 @@ export const Chat: React.FC<ChatProps> = ({
       </div>
       {!isMinimized && (
         <>
-          <div className="mb-3 border-b border-main pb-3">
-            <div className="max-h-20 overflow-y-auto">
-              {Array.from(participants.values())
-                .sort((a, b) => a.username.localeCompare(b.username))
-                .map((participant) => (
-                  <div
-                    key={participant.userId}
-                    className="flex items-center py-0.5 text-xs"
-                  >
-                    <span
-                      className="flex-1"
-                      style={getUserStyle(participant.username)}
-                    >
-                      {participant.username}
-                    </span>
-                    {participant.userId === userId && (
-                      <span className="text-main opacity-60 italic text-xs">
-                        <Trans>(you)</Trans>
-                      </span>
-                    )}
-                  </div>
-                ))}
-              {participants.size === 0 && (
-                <div className="text-main opacity-50 italic text-xs">
-                  No participants
+          <div className="flex flex-row gap-2 w-full">
+            {Array.from(participants.values())
+              .sort((a, b) => a.joinedAt - b.joinedAt)
+              .map((participant) => (
+                <div
+                  key={participant.userId}
+                  className="items-center py-0.5 text-xs"
+                  style={getUserStyle(participant.username)}
+                >
+                  {participant.username}
                 </div>
-              )}
-            </div>
+              ))}
+            {participants.size === 0 && (
+              <div className="text-main opacity-50 italic text-xs">
+                No participants
+              </div>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto p-2 border border-main bg-main text-xs leading-relaxed flex flex-col justify-end">
             <div>
@@ -288,10 +228,7 @@ export const Chat: React.FC<ChatProps> = ({
                   ) : (
                     <>
                       <div className="flex justify-between items-center mb-1">
-                        <span
-                          className="text-xs inline-block"
-                          style={getUserStyle(msg.username)}
-                        >
+                        <span className="" style={getUserStyle(msg.username)}>
                           {msg.username}
                         </span>
                         <span className="text-xs text-main opacity-70">

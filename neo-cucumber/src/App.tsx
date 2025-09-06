@@ -25,6 +25,7 @@ import {
   type DecodedMessage,
 } from "./utils/binaryProtocol";
 import { pngDataToLayer } from "./utils/canvasSnapshot";
+import { getUserBackgroundColor } from "./utils/userColors";
 
 // Initialize i18n with locale messages
 const localeMessages = {
@@ -171,11 +172,20 @@ const fetchCollaborationMeta = async (
 };
 
 function App() {
-
   // State for canvas dimensions and meta information
   const [canvasMeta, setCanvasMeta] = useState<CollaborationMeta | null>(null);
   const [initializationError, setInitializationError] = useState<string | null>(
     null
+  );
+
+  // Participants state (moved from Chat.tsx for centralized user management)
+  interface Participant {
+    userId: string;
+    username: string;
+    joinedAt: number;
+  }
+  const [participants, setParticipants] = useState<Map<string, Participant>>(
+    new Map()
   );
 
   // Canvas dimensions - only available when meta is loaded
@@ -230,16 +240,19 @@ function App() {
   const [sessionEnded, setSessionEnded] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [isChatMinimized, setIsChatMinimized] = useState(false);
-  
+
   // Store reference to chat's addMessage function
-  const chatAddMessageRef = useRef<((message: {
-    id: string;
-    type: "join" | "leave" | "user";
-    userId: string;
-    username: string;
-    message: string;
-    timestamp: number;
-  }) => void) | null>(null);
+  const chatAddMessageRef = useRef<
+    | ((message: {
+        id: string;
+        type: "join" | "leave" | "user";
+        userId: string;
+        username: string;
+        message: string;
+        timestamp: number;
+      }) => void)
+    | null
+  >(null);
 
   // Chat message handler
   const handleChatMessage = useCallback(() => {
@@ -248,24 +261,37 @@ function App() {
   }, []);
 
   // Callback to receive addMessage function from Chat component
-  const handleChatAddMessage = useCallback((addMessageFn: (message: {
-    id: string;
-    type: "join" | "leave" | "user";
-    userId: string;
-    username: string;
-    message: string;
-    timestamp: number;
-  }) => void) => {
-    chatAddMessageRef.current = addMessageFn;
-  }, []);
+  const handleChatAddMessage = useCallback(
+    (
+      addMessageFn: (message: {
+        id: string;
+        type: "join" | "leave" | "user";
+        userId: string;
+        username: string;
+        message: string;
+        timestamp: number;
+      }) => void
+    ) => {
+      chatAddMessageRef.current = addMessageFn;
+    },
+    []
+  );
 
   // Track user IDs and their drawing engines (using ref to avoid re-renders)
   const userEnginesRef = useRef<
     Map<
       string,
-      { engine: DrawingEngine; firstSeen: number; canvas: HTMLCanvasElement }
+      {
+        engine: DrawingEngine;
+        firstSeen: number;
+        canvas: HTMLCanvasElement;
+        username: string;
+      }
     >
   >(new Map());
+
+  // Track active drawing cursors for remote users
+  const activeCursorsRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Track server-provided user order for layer compositing
   const userOrderRef = useRef<string[]>([]);
@@ -279,7 +305,11 @@ function App() {
         canvasHeight: canvasMeta?.height,
       });
 
-      if (!canvasContainerRef.current || !canvasMeta?.width || !canvasMeta?.height) {
+      if (
+        !canvasContainerRef.current ||
+        !canvasMeta?.width ||
+        !canvasMeta?.height
+      ) {
         console.log("Cannot create canvases - missing requirements");
         return null;
       }
@@ -353,14 +383,19 @@ function App() {
 
   // Function to create drawing engine for a new user
   const createUserEngine = useCallback(
-    (userId: string) => {
+    (userId: string, username?: string) => {
       // Only create user engines when canvas dimensions are available
       if (!canvasMeta?.width || !canvasMeta?.height) {
         return;
       }
 
       // Check if user already exists
-      if (userEnginesRef.current.has(userId)) {
+      const existingUser = userEnginesRef.current.get(userId);
+      if (existingUser) {
+        // Update username if provided
+        if (username && existingUser.username !== username) {
+          existingUser.username = username;
+        }
         return;
       }
 
@@ -407,7 +442,12 @@ function App() {
         engine.initialize(ctx);
       }
 
-      userEnginesRef.current.set(userId, { engine, firstSeen, canvas });
+      userEnginesRef.current.set(userId, {
+        engine,
+        firstSeen,
+        canvas,
+        username: username || userId,
+      });
     },
     [canvasMeta?.width, canvasMeta?.height, createUserCanvasElements]
   );
@@ -438,6 +478,158 @@ function App() {
 
   // Check if current user is the session owner
   const isOwner = canvasMeta && userIdRef.current === canvasMeta.ownerId;
+
+  // Function to create or update cursor icon for a remote user
+  const createOrUpdateCursor = useCallback(
+    (userId: string, x: number, y: number, username: string) => {
+      if (!canvasContainerRef.current || userId === userIdRef.current) {
+        return; // Don't show cursor for local user
+      }
+
+      const container = canvasContainerRef.current;
+      let cursorElement = activeCursorsRef.current.get(userId);
+
+      if (!cursorElement) {
+        // Create new cursor element container
+        cursorElement = document.createElement("div");
+        cursorElement.className =
+          "absolute pointer-events-none z-[2000] flex flex-col items-center";
+        cursorElement.style.transition = "opacity 0.3s ease-out";
+        cursorElement.style.opacity = "1";
+
+        // Create username label
+        const userLabel = document.createElement("div");
+        userLabel.className =
+          "text-xs font-bold px-2 py-1 rounded mb-1 whitespace-nowrap";
+        userLabel.textContent = username;
+        const userBackgroundColor = getUserBackgroundColor(username);
+        console.log(
+          `Cursor getUserBackgroundColor for "${username}":`,
+          userBackgroundColor
+        ); // Debug logging
+        userLabel.style.color = userBackgroundColor;
+        userLabel.style.backgroundColor = "rgba(255, 255, 255, 0.9)";
+        userLabel.style.border = `1px solid ${userBackgroundColor}`;
+        userLabel.style.fontSize = "10px";
+        userLabel.setAttribute("data-username-element", "true"); // Mark this as the username element
+        cursorElement.appendChild(userLabel);
+
+        // Create icon element
+        const iconElement = document.createElement("div");
+        iconElement.className = "flex items-center justify-center";
+        iconElement.style.width = "24px";
+        iconElement.style.height = "24px";
+        iconElement.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24"><path fill="${getUserBackgroundColor(
+          username
+        )}" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5s-1.12 2.5-2.5 2.5z"/></svg>`;
+        cursorElement.appendChild(iconElement);
+
+        container.appendChild(cursorElement);
+        activeCursorsRef.current.set(userId, cursorElement);
+      }
+
+      // Position the cursor (convert canvas coordinates to screen coordinates)
+      const canvasStyle = window.getComputedStyle(container);
+
+      // Get zoom level and pan offset from transform
+      let scale = 1;
+      let panX = 0;
+      let panY = 0;
+
+      if (canvasStyle.transform && canvasStyle.transform !== "none") {
+        const matrix = new DOMMatrix(canvasStyle.transform);
+        scale = matrix.a; // Get scale from transform matrix
+        panX = matrix.e; // Get X translation
+        panY = matrix.f; // Get Y translation
+      }
+
+      // Position cursor at the drawing coordinate, accounting for zoom and pan
+      const screenX = x * scale + panX;
+      const screenY = y * scale + panY;
+
+      // Get the actual size of the cursor element to center it properly
+      const cursorRect = cursorElement.getBoundingClientRect();
+      const cursorWidth = cursorRect.width || 24; // Fallback to 24px if not measured yet
+
+      // Position the cursor so the pin point of the location icon is exactly at the drawing coordinates
+      // The location icon has its pin point at approximately 75% down from the top of the icon
+      // Username label is ~16px height (10px font + 6px padding), icon is 24px height
+      const usernameLabelHeight = 16; // More accurate measurement
+      const iconHeight = 24;
+      const pinPointOffset = iconHeight * 1.3; // Pin point is at ~75% down from top of icon
+
+      const totalOffsetY = usernameLabelHeight + pinPointOffset;
+      cursorElement.style.left = `${screenX - cursorWidth / 2}px`; // Center horizontally
+      cursorElement.style.top = `${screenY - totalOffsetY}px`; // Position so the pin point is at the drawing coordinates
+      cursorElement.style.opacity = "1";
+
+      // Update username label if we have a different/better username
+      const userLabel = cursorElement.querySelector(
+        '[data-username-element="true"]'
+      ) as HTMLElement;
+      if (userLabel && userLabel.textContent !== username) {
+        userLabel.textContent = username;
+        userLabel.style.color = getUserBackgroundColor(username);
+        userLabel.style.border = `1px solid ${getUserBackgroundColor(
+          username
+        )}`;
+
+        // Also update the icon color
+        const svgPath = cursorElement.querySelector(
+          "svg path"
+        ) as SVGPathElement;
+        if (svgPath) {
+          svgPath.setAttribute("fill", getUserBackgroundColor(username));
+        }
+      }
+
+      // Clear any existing fadeout timeout
+      const timeoutId = cursorElement.dataset.timeoutId;
+      if (timeoutId) {
+        clearTimeout(parseInt(timeoutId));
+        delete cursorElement.dataset.timeoutId;
+      }
+    },
+    []
+  );
+
+  // Function to hide cursor with fadeout effect
+  const hideCursor = useCallback((userId: string) => {
+    const cursorElement = activeCursorsRef.current.get(userId);
+    if (cursorElement && cursorElement.style.opacity !== "0") {
+      cursorElement.style.opacity = "0";
+
+      // Remove element after fadeout completes
+      const timeoutId = setTimeout(() => {
+        if (cursorElement.parentNode) {
+          cursorElement.parentNode.removeChild(cursorElement);
+        }
+        activeCursorsRef.current.delete(userId);
+      }, 300); // Match CSS transition duration
+
+      cursorElement.dataset.timeoutId = timeoutId.toString();
+    }
+  }, []);
+
+  // Participant management functions (moved from Chat.tsx)
+  const addParticipant = useCallback(
+    (userId: string, username: string, timestamp: number) => {
+      setParticipants((prev) => {
+        const newParticipants = new Map(prev);
+        newParticipants.set(userId, { userId, username, joinedAt: timestamp });
+        return newParticipants;
+      });
+    },
+    []
+  );
+
+  const removeParticipant = useCallback((userId: string) => {
+    setParticipants((prev) => {
+      const newParticipants = new Map(prev);
+      newParticipants.delete(userId);
+      return newParticipants;
+    });
+  }, []);
 
   const updateBrushType = useCallback((type: BrushType) => {
     setDrawingState((prev) => {
@@ -1010,6 +1202,9 @@ function App() {
       });
       setConnectionState("connected");
 
+      // Add current user to participants
+      addParticipant(userIdRef.current, userLoginNameRef.current, Date.now());
+
       // Send initial join message to establish user presence and layer order
       try {
         const binaryMessage = encodeJoin(userIdRef.current, Date.now());
@@ -1065,7 +1260,9 @@ function App() {
             // During normal operation, process immediately
             // Create drawing engine for new user if they don't exist (skip for messages without userId)
             if ("userId" in message && message.userId) {
-              createUserEngine(message.userId);
+              const username =
+                "username" in message ? message.username : message.userId;
+              createUserEngine(message.userId, username);
             }
 
             // Handle message types
@@ -1086,7 +1283,9 @@ function App() {
             // During normal operation, process immediately
             // Create drawing engine for new user if they don't exist (skip for messages without userId)
             if ("userId" in message && message.userId) {
-              createUserEngine(message.userId);
+              const username =
+                "username" in message ? message.username : message.userId;
+              createUserEngine(message.userId, username);
             }
 
             // Handle message types
@@ -1157,7 +1356,10 @@ function App() {
           case "drawLine": {
             console.log("Drawing event - drawLine", message);
             // Check if this is the local user's drawing event
-            if (message.userId === userIdRef.current && drawingEngineRef.current) {
+            if (
+              message.userId === userIdRef.current &&
+              drawingEngineRef.current
+            ) {
               const targetLayer =
                 message.layer === "foreground"
                   ? drawingEngineRef.current.layers.foreground
@@ -1215,6 +1417,16 @@ function App() {
                 engine.queueLayerUpdate(
                   message.layer as "foreground" | "background"
                 );
+
+                // Show cursor at the end position of the line
+                const participant = participants.get(message.userId);
+                const username = participant?.username || userEngine.username;
+                createOrUpdateCursor(
+                  message.userId,
+                  message.toX,
+                  message.toY,
+                  username
+                );
               }
             }
             break;
@@ -1232,7 +1444,10 @@ function App() {
             });
 
             // Check if this is the local user's drawing event
-            if (message.userId === userIdRef.current && drawingEngineRef.current) {
+            if (
+              message.userId === userIdRef.current &&
+              drawingEngineRef.current
+            ) {
               const targetLayer =
                 message.layer === "foreground"
                   ? drawingEngineRef.current.layers.foreground
@@ -1290,6 +1505,16 @@ function App() {
                 engine.queueLayerUpdate(
                   message.layer as "foreground" | "background"
                 );
+
+                // Show cursor at the drawing point
+                const participant = participants.get(message.userId);
+                const username = participant?.username || userEngine.username;
+                createOrUpdateCursor(
+                  message.userId,
+                  message.x,
+                  message.y,
+                  username
+                );
               }
             }
             break;
@@ -1305,7 +1530,10 @@ function App() {
             });
 
             // Check if this is the local user's drawing event
-            if (message.userId === userIdRef.current && drawingEngineRef.current) {
+            if (
+              message.userId === userIdRef.current &&
+              drawingEngineRef.current
+            ) {
               const targetLayer =
                 message.layer === "foreground"
                   ? drawingEngineRef.current.layers.foreground
@@ -1352,6 +1580,16 @@ function App() {
                 engine.queueLayerUpdate(
                   message.layer as "foreground" | "background"
                 );
+
+                // Show cursor at the fill point
+                const participant = participants.get(message.userId);
+                const username = participant?.username || userEngine.username;
+                createOrUpdateCursor(
+                  message.userId,
+                  message.x,
+                  message.y,
+                  username
+                );
               }
             }
             break;
@@ -1361,7 +1599,41 @@ function App() {
             const userEngine = userEnginesRef.current.get(message.userId);
             if (userEngine) {
               userEngine.firstSeen = message.timestamp;
+              userEngine.username = message.username; // Update username when user joins
+
+              // Update any existing cursor to show the proper username
+              const cursorElement = activeCursorsRef.current.get(
+                message.userId
+              );
+              if (cursorElement) {
+                const userLabel = cursorElement.querySelector(
+                  '[data-username-element="true"]'
+                ) as HTMLElement;
+                if (userLabel) {
+                  userLabel.textContent = message.username;
+                  userLabel.style.color = getUserBackgroundColor(
+                    message.username
+                  );
+                  userLabel.style.border = `1px solid ${getUserBackgroundColor(
+                    message.username
+                  )}`;
+
+                  // Also update the icon color
+                  const svgPath = cursorElement.querySelector(
+                    "svg path"
+                  ) as SVGPathElement;
+                  if (svgPath) {
+                    svgPath.setAttribute(
+                      "fill",
+                      getUserBackgroundColor(message.username)
+                    );
+                  }
+                }
+              }
             }
+
+            // Add participant to centralized state
+            addParticipant(message.userId, message.username, message.timestamp);
 
             // Add join message to chat when someone joins
             if (
@@ -1386,7 +1658,7 @@ function App() {
 
             // Initialize drawing engines for all users in the list
             message.userIds.forEach((userId: string) => {
-              createUserEngine(userId);
+              createUserEngine(userId); // Username will be updated when join messages arrive
             });
 
             // Update z-indices for all existing canvases now that we have proper user order
@@ -1428,6 +1700,12 @@ function App() {
               timestamp: message.timestamp,
             });
 
+            // Clean up cursor when user leaves
+            hideCursor(message.userId);
+
+            // Remove participant from centralized state
+            removeParticipant(message.userId);
+
             // Add leave message to chat when someone leaves
             if (chatAddMessageRef.current) {
               chatAddMessageRef.current({
@@ -1443,6 +1721,9 @@ function App() {
           }
 
           case "chat": {
+            // Add participant if not already tracked (for chat messages)
+            addParticipant(message.userId, message.username, message.timestamp);
+
             // Add chat message to chat component
             if (chatAddMessageRef.current) {
               chatAddMessageRef.current({
@@ -1466,6 +1747,10 @@ function App() {
           }
 
           case "pointerup": {
+            // Hide cursor for remote users when they stop drawing
+            if (message.userId !== userIdRef.current) {
+              hideCursor(message.userId);
+            }
             break;
           }
 
@@ -1485,7 +1770,10 @@ function App() {
               );
 
               // Check if this snapshot is for the local user
-              if (message.userId === userIdRef.current && drawingEngineRef.current) {
+              if (
+                message.userId === userIdRef.current &&
+                drawingEngineRef.current
+              ) {
                 // Apply to local user's canvas
                 const targetLayer =
                   message.layer === "foreground"
@@ -1539,6 +1827,10 @@ function App() {
     updateCanvasZIndices,
     addSnapshotToHistory,
     markDrawingComplete,
+    createOrUpdateCursor,
+    hideCursor,
+    addParticipant,
+    removeParticipant,
   ]);
 
   // Keep connectWebSocket ref to avoid circular dependencies in useEffect
@@ -1709,7 +2001,12 @@ function App() {
           : "none";
       }
     }
-  }, [drawingEngine, createUserCanvasElements, drawingState.bgVisible, drawingState.fgVisible]);
+  }, [
+    drawingEngine,
+    createUserCanvasElements,
+    drawingState.bgVisible,
+    drawingState.fgVisible,
+  ]);
 
   // Update canvas transform when zoom changes
   useEffect(() => {
@@ -1859,7 +2156,7 @@ function App() {
             <Chat
               wsRef={wsRef}
               userId={userIdRef.current}
-              username={userLoginNameRef.current}
+              participants={participants}
               onChatMessage={handleChatMessage}
               onMinimizedChange={setIsChatMinimized}
               onAddMessage={handleChatAddMessage}
