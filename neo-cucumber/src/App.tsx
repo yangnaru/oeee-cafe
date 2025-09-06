@@ -1,5 +1,4 @@
 import { i18n } from "@lingui/core";
-import { Trans } from "@lingui/react/macro";
 import {
   startTransition,
   useCallback,
@@ -10,6 +9,12 @@ import {
 import "./App.css";
 import { Chat } from "./components/Chat";
 import { SessionExpiredModal } from "./components/SessionExpiredModal";
+import { InitializationErrorModal } from "./components/modals/InitializationErrorModal";
+import { LoadingModal } from "./components/modals/LoadingModal";
+import { AuthErrorModal } from "./components/modals/AuthErrorModal";
+import { RoomFullModal } from "./components/modals/RoomFullModal";
+import { ConnectionStatusModal } from "./components/modals/ConnectionStatusModal";
+import { SessionEndingModal } from "./components/modals/SessionEndingModal";
 import { SessionHeader } from "./components/SessionHeader";
 import { ToolboxPanel } from "./components/ToolboxPanel";
 import { DrawingEngine } from "./DrawingEngine";
@@ -2060,88 +2065,28 @@ function App() {
   return (
     <>
       <div className="w-full app-container flex flex-col">
-        {initializationError && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[9999]">
-            <div className="bg-main text-main p-8 rounded-lg border-2 border-main text-center max-w-sm shadow-lg">
-              <h2 className="text-highlight mt-0 mb-4 text-xl font-bold">
-                <Trans>Initialization Failed</Trans>
-              </h2>
-              <p className="mb-6 leading-relaxed">{initializationError}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="bg-highlight text-white border-0 px-6 py-3 rounded cursor-pointer text-base font-sans transition-colors hover:bg-orange-600"
-              >
-                <Trans>Retry</Trans>
-              </button>
-            </div>
-          </div>
-        )}
+        <InitializationErrorModal
+          isOpen={!!initializationError}
+          errorMessage={initializationError || ""}
+          onRetry={() => window.location.reload()}
+        />
 
-        {!canvasMeta && !initializationError && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[9999]">
-            <div className="bg-main text-main p-8 rounded-lg border-2 border-main text-center max-w-sm shadow-lg">
-              <h2 className="text-xl font-bold mb-4">
-                <Trans>Loading...</Trans>
-              </h2>
-              <p>
-                <Trans>Initializing collaboration session...</Trans>
-              </p>
-            </div>
-          </div>
-        )}
+        <LoadingModal
+          isOpen={!canvasMeta && !initializationError}
+        />
 
-        {authError && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[9999]">
-            <div className="bg-main text-main p-8 rounded-lg border-2 border-main text-center max-w-sm shadow-lg">
-              <h2 className="text-highlight mt-0 mb-4 text-xl font-bold">
-                <Trans>Authentication Failed</Trans>
-              </h2>
-              <p className="mb-6 leading-relaxed">
-                <Trans>
-                  Unable to authenticate your session. Either the session
-                  doesn't exist, or it has expired. Please return to the lobby.
-                </Trans>
-              </p>
-              <button
-                onClick={() => (window.location.href = "/collaborate")}
-                className="bg-highlight text-white border-0 px-6 py-3 rounded cursor-pointer text-base font-sans transition-colors hover:bg-orange-600"
-              >
-                <Trans>Go to Lobby</Trans>
-              </button>
-            </div>
-          </div>
-        )}
+        <AuthErrorModal
+          isOpen={authError}
+          onGoToLobby={() => (window.location.href = "/collaborate")}
+        />
 
-        {roomFullError && (
-          <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[9999]">
-            <div className="bg-main text-main p-8 rounded-lg border-2 border-main text-center max-w-md shadow-lg">
-              <h2 className="text-highlight mt-0 mb-4 text-xl font-bold">
-                <Trans>Session Full</Trans>
-              </h2>
-              <p className="mb-6 leading-relaxed">
-                <Trans>
-                  This session is full ({roomFullError.currentUserCount}/
-                  {roomFullError.maxUsers} users). Only the first{" "}
-                  {roomFullError.maxUsers} users can join a session.
-                </Trans>
-              </p>
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => (window.location.href = "/collaborate")}
-                  className="bg-highlight text-white border-0 px-6 py-3 rounded cursor-pointer text-base font-sans transition-colors hover:bg-orange-600"
-                >
-                  <Trans>Go to Lobby</Trans>
-                </button>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="bg-gray-500 text-white border-0 px-6 py-3 rounded cursor-pointer text-base font-sans transition-colors hover:bg-gray-600"
-                >
-                  <Trans>Retry</Trans>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <RoomFullModal
+          isOpen={!!roomFullError}
+          currentUserCount={roomFullError?.currentUserCount || 0}
+          maxUsers={roomFullError?.maxUsers || 0}
+          onGoToLobby={() => (window.location.href = "/collaborate")}
+          onRetry={() => window.location.reload()}
+        />
 
         {/* Session Header */}
         {canvasMeta && (
@@ -2175,49 +2120,12 @@ function App() {
               className="flex gap-4 flex-row w-full h-full bg-main justify-center items-center"
               ref={appRef}
             >
-              {isCatchingUp && (
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000] bg-black bg-opacity-80 text-white p-5 text-center shadow-lg backdrop-blur-sm">
-                  <div className="text-5xl mb-3 animate-spin-slow">🥒</div>
-                  <div className="text-base font-bold animate-pulse-slow">
-                    <Trans>LOADING...</Trans>
-                  </div>
-                </div>
-              )}
-              {connectionState !== "connected" && !isCatchingUp && (
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000] bg-main text-main p-6 border-2 border-main text-center shadow-lg min-w-80 font-sans touch-auto select-auto">
-                  {connectionState === "disconnected" && (
-                    <>
-                      <div className="text-base mb-6 leading-relaxed text-main">
-                        <Trans>
-                          Connection lost. Your work is saved locally.
-                        </Trans>
-                      </div>
-                      <div className="flex gap-4 justify-center">
-                        <button
-                          className="px-4 py-2 border border-main bg-main text-main cursor-pointer text-sm font-sans transition-colors hover:bg-highlight hover:text-white"
-                          onClick={handleManualReconnect}
-                        >
-                          <Trans>Reconnect</Trans>
-                        </button>
-                        <button
-                          className="px-4 py-2 border border-main bg-main text-main cursor-pointer text-sm font-sans transition-colors hover:bg-highlight hover:text-white"
-                          onClick={downloadCanvasAsPNG}
-                        >
-                          <Trans>Download PNG</Trans>
-                        </button>
-                      </div>
-                    </>
-                  )}
-                  {connectionState === "connecting" && (
-                    <>
-                      <div className="text-3xl mb-3 animate-spin">🥒</div>
-                      <div>
-                        <Trans>Connecting...</Trans>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+              <ConnectionStatusModal
+                isCatchingUp={isCatchingUp}
+                connectionState={connectionState}
+                onReconnect={handleManualReconnect}
+                onDownloadPNG={downloadCanvasAsPNG}
+              />
               {canvasMeta?.width && canvasMeta?.height && (
                 <div
                   ref={canvasContainerRef}
@@ -2278,25 +2186,7 @@ function App() {
               />
             </div>
 
-            {/* Session ending notification for non-owners */}
-            {sessionEnded && (
-              <div className="fixed inset-0 w-screen h-screen bg-black bg-opacity-80 flex items-center justify-center z-[99999] pointer-events-auto">
-                <div className="bg-main text-main p-8 rounded-xl border-2 border-main text-center max-w-md shadow-2xl">
-                  <div className="text-5xl mb-2 animate-spin">🥒</div>
-                  <div className="text-lg mb-4 leading-relaxed">
-                    <Trans>
-                      Session is ending. The drawing is being saved to the
-                      gallery...
-                    </Trans>
-                  </div>
-                  <div className="text-sm opacity-80 mt-2">
-                    <Trans>
-                      You'll be redirected to the post page shortly.
-                    </Trans>
-                  </div>
-                </div>
-              </div>
-            )}
+            <SessionEndingModal isOpen={sessionEnded} />
           </div>
         </div>
       </div>
