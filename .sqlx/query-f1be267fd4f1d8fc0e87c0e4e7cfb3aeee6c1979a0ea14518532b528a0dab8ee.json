@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE guestbook_entries\n            SET reply = $1, replied_at = NOW()\n            WHERE id = $2\n            RETURNING replied_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "replied_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "f1be267fd4f1d8fc0e87c0e4e7cfb3aeee6c1979a0ea14518532b528a0dab8ee"
+}

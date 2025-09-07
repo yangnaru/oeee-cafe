@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            cs.id,\n            u.login_name as owner_login_name,\n            cs.title,\n            cs.width,\n            cs.height,\n            cs.created_at,\n            COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) as participant_count\n        FROM collaborative_sessions cs\n        JOIN users u ON cs.owner_id = u.id\n        JOIN communities c ON cs.community_id = c.id\n        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id \n        WHERE cs.is_public = true \n          AND cs.ended_at IS NULL\n          AND c.is_private = false\n        GROUP BY cs.id, u.login_name, cs.max_participants\n        HAVING COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) < cs.max_participants\n        ORDER BY cs.last_activity DESC\n        LIMIT 20\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_login_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "width",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "height",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "participant_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "260442311f4a7805b54b2eb61ad7ca49d8975768031021e07fc1edd74b97ec65"
+}

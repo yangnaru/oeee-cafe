@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            comments.id,\n            comments.post_id,\n            comments.user_id,\n            comments.updated_at,\n            comments.created_at,\n            comments.content,\n            users.display_name AS user_display_name,\n            users.login_name AS user_login_name,\n            posts.title AS post_title,\n            post_authors.login_name AS post_author_login_name,\n            images.image_filename AS post_image_filename,\n            images.width AS post_image_width,\n            images.height AS post_image_height\n        FROM comments\n        LEFT JOIN users ON comments.user_id = users.id\n        LEFT JOIN posts ON comments.post_id = posts.id\n        LEFT JOIN users AS post_authors ON posts.author_id = post_authors.id\n        LEFT JOIN images ON posts.image_id = images.id\n        WHERE posts.community_id = $1\n        AND posts.published_at IS NOT NULL\n        AND comments.user_id != posts.author_id\n        AND posts.deleted_at IS NULL\n        ORDER BY created_at DESC\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "post_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "user_display_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "user_login_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "post_title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "post_author_login_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "post_image_filename",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "post_image_width",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "post_image_height",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0f8cdb0c584b77b5d9587ffddeb6cb66fd7d6641dfab2c3b3fc4f1a105736af4"
+}

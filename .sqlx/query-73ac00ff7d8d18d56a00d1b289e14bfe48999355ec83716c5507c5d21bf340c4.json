@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                guestbook_entries.id,\n                author.login_name AS author_login_name,\n                author.display_name AS author_display_name,\n                recipient.login_name AS recipient_login_name,\n                recipient.display_name AS recipient_display_name,\n                guestbook_entries.author_id,\n                guestbook_entries.recipient_id,\n                guestbook_entries.content,\n                guestbook_entries.reply,\n                guestbook_entries.created_at,\n                guestbook_entries.replied_at\n            FROM guestbook_entries\n            JOIN users AS author ON author.id = author_id\n            JOIN users AS recipient ON recipient.id = recipient_id\n            WHERE guestbook_entries.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "author_login_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "author_display_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "recipient_login_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "recipient_display_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "author_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "recipient_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "reply",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "replied_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "73ac00ff7d8d18d56a00d1b289e14bfe48999355ec83716c5507c5d21bf340c4"
+}

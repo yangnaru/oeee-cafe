@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT a.shared_inbox_url\n        FROM follows f\n        JOIN actors a ON f.follower_actor_id = a.id\n        WHERE f.following_actor_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "shared_inbox_url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f6eac1d3b43837b3a6181f6307b6f9338f33f650e838d3fd3dfaa933ce58fb32"
+}

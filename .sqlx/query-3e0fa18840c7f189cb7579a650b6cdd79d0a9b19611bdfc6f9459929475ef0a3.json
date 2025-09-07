@@ -1,0 +1,161 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            a.id, a.iri, a.type as \"type: _\", a.username, a.instance_host, \n            a.handle_host, a.handle, a.user_id, a.community_id, a.name, a.bio_html, \n            a.automatically_approves_followers, a.inbox_url, a.shared_inbox_url, \n            a.followers_url, a.sensitive, a.public_key_pem, a.private_key_pem, \n            a.url, a.created_at, a.updated_at, a.published_at\n        FROM follows f\n        JOIN actors a ON f.follower_actor_id = a.id\n        WHERE f.following_actor_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "iri",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "type: _",
+        "type_info": {
+          "Custom": {
+            "name": "actor_type",
+            "kind": {
+              "Enum": [
+                "Person",
+                "Service",
+                "Group",
+                "Application",
+                "Organization"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "username",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "instance_host",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "handle_host",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "handle",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "user_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "community_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "bio_html",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "automatically_approves_followers",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "inbox_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "shared_inbox_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "followers_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "sensitive",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
+        "name": "public_key_pem",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "private_key_pem",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 20,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 21,
+        "name": "published_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3e0fa18840c7f189cb7579a650b6cdd79d0a9b19611bdfc6f9459929475ef0a3"
+}

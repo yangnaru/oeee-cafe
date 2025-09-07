@@ -1,0 +1,154 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                posts.id,\n                posts.title,\n                posts.content,\n                posts.is_sensitive,\n                posts.author_id,\n                images.id AS image_id,\n                images.tool::text AS image_tool,\n                images.paint_duration,\n                images.width,\n                images.height,\n                images.image_filename,\n                images.replay_filename,\n                posts.viewer_count,\n                posts.published_at,\n                posts.created_at,\n                posts.updated_at,\n                posts.allow_relay,\n                posts.parent_post_id,\n                users.display_name AS display_name,\n                users.login_name AS login_name,\n                communities.id AS community_id,\n                communities.name AS community_name,\n                communities.slug AS community_slug\n            FROM posts\n            LEFT JOIN images ON posts.image_id = images.id\n            LEFT JOIN communities ON posts.community_id = communities.id\n            LEFT JOIN users ON posts.author_id = users.id\n            WHERE posts.id = $1\n            AND posts.deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_sensitive",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "author_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "image_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "image_tool",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "paint_duration",
+        "type_info": "Interval"
+      },
+      {
+        "ordinal": 8,
+        "name": "width",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "height",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "image_filename",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "replay_filename",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "viewer_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "published_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "allow_relay",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 17,
+        "name": "parent_post_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 18,
+        "name": "display_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 19,
+        "name": "login_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 20,
+        "name": "community_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 21,
+        "name": "community_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 22,
+        "name": "community_slug",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "87895551922cedaed2c3cd536adbe7c24d2f1a898c41d832a43dfe10a389b6b3"
+}

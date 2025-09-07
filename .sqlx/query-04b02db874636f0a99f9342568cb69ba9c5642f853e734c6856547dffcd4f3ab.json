@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE collaborative_sessions SET last_activity = $1 WHERE id = $2 AND ended_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamp",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "04b02db874636f0a99f9342568cb69ba9c5642f853e734c6856547dffcd4f3ab"
+}
