@@ -78,7 +78,7 @@ pub async fn do_unfollow_profile(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    unfollow_user(
+    let _ = unfollow_user(
         &mut tx,
         auth_session.user.clone().unwrap().id,
         user.clone().unwrap().id,
