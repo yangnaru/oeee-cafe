@@ -394,6 +394,12 @@ export const useDrawing = (
         drawingStateRef.current.isPanning = false;
       } else {
         // Send pointerup event through WebSocket only for drawing operations
+        console.log("Attempting to send pointerup event:", {
+          hasWsRef: !!wsRef?.current,
+          wsState: wsRef?.current?.readyState,
+          hasUserId: !!userIdRef?.current,
+          connectionReady: wsRef?.current?.readyState === WebSocket.OPEN
+        });
         if (
           wsRef?.current &&
           wsRef.current.readyState === WebSocket.OPEN &&
@@ -573,6 +579,12 @@ export const useDrawing = (
       lastModifiedLayerRef.current = currentDrawingStateRef.current.layerType;
 
       // Send drawLine event through WebSocket
+      console.log("Attempting to send drawLine event:", {
+        hasWsRef: !!wsRef?.current,
+        wsState: wsRef?.current?.readyState,
+        hasUserId: !!userIdRef?.current,
+        connectionReady: wsRef?.current?.readyState === WebSocket.OPEN
+      });
       if (
         wsRef?.current &&
         wsRef.current.readyState === WebSocket.OPEN &&
