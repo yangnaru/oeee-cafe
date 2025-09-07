@@ -51,6 +51,14 @@ interface WebSocketHookParams {
   hideCursor: (userId: string) => void;
   addParticipant: (userId: string, username: string, joinedAt: number) => void;
   removeParticipant: (userId: string) => void;
+  addChatMessage: (message: {
+    id: string;
+    type: "user" | "join" | "leave";
+    userId: string;
+    username: string;
+    message: string;
+    timestamp: number;
+  }) => void;
 }
 
 export const useWebSocket = ({
@@ -76,6 +84,7 @@ export const useWebSocket = ({
   hideCursor,
   addParticipant,
   removeParticipant,
+  addChatMessage,
 }: WebSocketHookParams) => {
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<DecodedMessage[]>([]);
@@ -619,6 +628,26 @@ export const useWebSocket = ({
             break;
           }
 
+          case "chat": {
+            console.log("Chat message received:", {
+              userId: message.userId.substring(0, 8),
+              username: message.username,
+              message: message.message.substring(0, 50) + (message.message.length > 50 ? "..." : ""),
+              timestamp: message.timestamp,
+            });
+
+            // Add chat message to the chat component via the callback
+            addChatMessage({
+              id: `${message.userId}-${message.timestamp}`,
+              type: "user" as const,
+              userId: message.userId,
+              username: message.username,
+              message: message.message,
+              timestamp: message.timestamp,
+            });
+            break;
+          }
+
           case "snapshot": {
             console.log("Snapshot received:", {
               userId: message.userId.substring(0, 8),
@@ -719,6 +748,7 @@ export const useWebSocket = ({
     hideCursor,
     addParticipant,
     removeParticipant,
+    addChatMessage,
   ]);
 
   // Cleanup WebSocket on unmount

@@ -346,6 +346,11 @@ function App() {
     hideCursor,
     addParticipant,
     removeParticipant,
+    addChatMessage: (message) => {
+      if (chatAddMessageRef.current) {
+        chatAddMessageRef.current(message);
+      }
+    },
   });
 
   // Keep connectWebSocket ref stable to avoid reconnection loops
