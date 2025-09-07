@@ -115,7 +115,7 @@ export const useWebSocket = ({
       // Extract session ID from URL path
       const pathSegments = window.location.pathname.split("/");
       const sessionId = pathSegments[2]; // /collaborate/:sessionId
-      const wsUrl = `ws://localhost:8080/collaborate/${sessionId}/ws`;
+      const wsUrl = `ws://localhost:3000/collaborate/${sessionId}/ws`;
       console.log("Generated WebSocket URL:", wsUrl);
       return wsUrl;
     } else {
@@ -632,7 +632,9 @@ export const useWebSocket = ({
             console.log("Chat message received:", {
               userId: message.userId.substring(0, 8),
               username: message.username,
-              message: message.message.substring(0, 50) + (message.message.length > 50 ? "..." : ""),
+              message:
+                message.message.substring(0, 50) +
+                (message.message.length > 50 ? "..." : ""),
               timestamp: message.timestamp,
             });
 
@@ -670,19 +672,23 @@ export const useWebSocket = ({
               canvas.width = canvasMeta.width;
               canvas.height = canvasMeta.height;
               const ctx = canvas.getContext("2d");
-              
+
               if (!ctx) {
                 console.error("Failed to get 2D context for PNG decoding");
               } else {
-                
                 // Load PNG asynchronously and update canvases when ready
                 const url = URL.createObjectURL(blob);
                 img.onload = () => {
                   ctx.clearRect(0, 0, canvasMeta.width, canvasMeta.height);
                   ctx.drawImage(img, 0, 0);
-                  const imageData = ctx.getImageData(0, 0, canvasMeta.width, canvasMeta.height);
+                  const imageData = ctx.getImageData(
+                    0,
+                    0,
+                    canvasMeta.width,
+                    canvasMeta.height
+                  );
                   URL.revokeObjectURL(url);
-                  
+
                   // Apply the decoded data to the appropriate canvas
                   if (message.userId === userIdRef.current) {
                     // Apply to local user's canvas
@@ -691,26 +697,35 @@ export const useWebSocket = ({
                         message.layer === "foreground"
                           ? drawingEngineRef.current.layers.foreground
                           : drawingEngineRef.current.layers.background;
-                      
+
                       targetLayer.set(imageData.data);
-                      drawingEngineRef.current.queueLayerUpdate(message.layer as "foreground" | "background");
-                      
+                      drawingEngineRef.current.queueLayerUpdate(
+                        message.layer as "foreground" | "background"
+                      );
+
                       // Add to history for undo/redo
-                      addSnapshotToHistory(message.layer as "foreground" | "background", imageData.data);
+                      addSnapshotToHistory(
+                        message.layer as "foreground" | "background",
+                        imageData.data
+                      );
                     }
                   } else {
                     // Apply to remote user's canvas AND add to their history
-                    const userEngine = userEnginesRef.current?.get(message.userId);
+                    const userEngine = userEnginesRef.current?.get(
+                      message.userId
+                    );
                     if (userEngine) {
                       const engine = userEngine.engine;
                       const targetLayer =
                         message.layer === "foreground"
                           ? engine.layers.foreground
                           : engine.layers.background;
-                      
+
                       targetLayer.set(imageData.data);
-                      engine.queueLayerUpdate(message.layer as "foreground" | "background");
-                      
+                      engine.queueLayerUpdate(
+                        message.layer as "foreground" | "background"
+                      );
+
                       // Note: Remote canvases don't need undo/redo history
                     }
                   }
@@ -725,7 +740,7 @@ export const useWebSocket = ({
               console.error("Failed to decode PNG snapshot data:", error);
             }
 
-            // Note: Canvas updates and history are now handled asynchronously 
+            // Note: Canvas updates and history are now handled asynchronously
             // in the img.onload callback above after PNG decoding is complete
             break;
           }
