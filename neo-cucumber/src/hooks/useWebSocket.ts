@@ -662,51 +662,71 @@ export const useWebSocket = ({
               break;
             }
 
-            // Convert PNG data to ImageData (simplified for now)
-            // TODO: Properly decode PNG data
-            const layerData = new Uint8ClampedArray(
-              canvasMeta.width * canvasMeta.height * 4
-            );
-
-            if (message.userId === userIdRef.current) {
-              // Apply to local user's canvas
-              if (drawingEngineRef.current) {
-                const targetLayer =
-                  message.layer === "foreground"
-                    ? drawingEngineRef.current.layers.foreground
-                    : drawingEngineRef.current.layers.background;
-
-                targetLayer.set(layerData);
-
-                // Queue DOM canvases for batched update for local snapshots
-                drawingEngineRef.current.queueLayerUpdate(
-                  message.layer as "foreground" | "background"
-                );
-
-                // Add to history for undo/redo
-                addSnapshotToHistory(
-                  message.layer as "foreground" | "background",
-                  layerData
-                );
+            // Decode PNG data to ImageData
+            try {
+              const blob = new Blob([message.pngData], { type: "image/png" });
+              const img = new Image();
+              const canvas = document.createElement("canvas");
+              canvas.width = canvasMeta.width;
+              canvas.height = canvasMeta.height;
+              const ctx = canvas.getContext("2d");
+              
+              if (!ctx) {
+                console.error("Failed to get 2D context for PNG decoding");
+              } else {
+                
+                // Load PNG asynchronously and update canvases when ready
+                const url = URL.createObjectURL(blob);
+                img.onload = () => {
+                  ctx.clearRect(0, 0, canvasMeta.width, canvasMeta.height);
+                  ctx.drawImage(img, 0, 0);
+                  const imageData = ctx.getImageData(0, 0, canvasMeta.width, canvasMeta.height);
+                  URL.revokeObjectURL(url);
+                  
+                  // Apply the decoded data to the appropriate canvas
+                  if (message.userId === userIdRef.current) {
+                    // Apply to local user's canvas
+                    if (drawingEngineRef.current) {
+                      const targetLayer =
+                        message.layer === "foreground"
+                          ? drawingEngineRef.current.layers.foreground
+                          : drawingEngineRef.current.layers.background;
+                      
+                      targetLayer.set(imageData.data);
+                      drawingEngineRef.current.queueLayerUpdate(message.layer as "foreground" | "background");
+                      
+                      // Add to history for undo/redo
+                      addSnapshotToHistory(message.layer as "foreground" | "background", imageData.data);
+                    }
+                  } else {
+                    // Apply to remote user's canvas AND add to their history
+                    const userEngine = userEnginesRef.current?.get(message.userId);
+                    if (userEngine) {
+                      const engine = userEngine.engine;
+                      const targetLayer =
+                        message.layer === "foreground"
+                          ? engine.layers.foreground
+                          : engine.layers.background;
+                      
+                      targetLayer.set(imageData.data);
+                      engine.queueLayerUpdate(message.layer as "foreground" | "background");
+                      
+                      // Note: Remote canvases don't need undo/redo history
+                    }
+                  }
+                };
+                img.onerror = () => {
+                  console.error("Failed to load PNG data for snapshot");
+                  URL.revokeObjectURL(url);
+                };
+                img.src = url;
               }
-            } else {
-              // Apply to remote user's canvas
-              const userEngine = userEnginesRef.current?.get(message.userId);
-              if (userEngine) {
-                const engine = userEngine.engine;
-                const targetLayer =
-                  message.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-
-                targetLayer.set(layerData);
-
-                // Queue DOM canvases for batched update for remote snapshots
-                engine.queueLayerUpdate(
-                  message.layer as "foreground" | "background"
-                );
-              }
+            } catch (error) {
+              console.error("Failed to decode PNG snapshot data:", error);
             }
+
+            // Note: Canvas updates and history are now handled asynchronously 
+            // in the img.onload callback above after PNG decoding is complete
             break;
           }
 
