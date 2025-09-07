@@ -11,6 +11,161 @@ use super::utils::{bytes_to_uuid, read_u64_le};
 
 const MAX_USER_MESSAGES: usize = 100;
 
+// Message type constants matching neo-cucumber protocol
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageType {
+    Join = 0x01,
+    Snapshot = 0x02,
+    Chat = 0x03,
+    SnapshotRequest = 0x05,
+    JoinResponse = 0x06,
+    EndSession = 0x07,
+    SessionExpired = 0x08,
+    Leave = 0x09,
+}
+
+// Message structures
+#[derive(Debug, Clone)]
+pub struct JoinMessage {
+    pub user_id: Uuid,
+    pub timestamp: u64,
+    pub username: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct JoinResponseMessage {
+    pub user_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChatMessage {
+    pub user_id: Uuid,
+    pub timestamp: u64,
+    pub username: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SnapshotRequestMessage {
+    pub user_id: Uuid,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct LeaveMessage {
+    pub user_id: Uuid,
+    pub timestamp: u64,
+    pub username: String,
+}
+
+// Message serialization functions
+impl JoinMessage {
+    pub fn serialize(&self) -> Vec<u8> {
+        let username_bytes = self.username.as_bytes();
+        let username_len = username_bytes.len() as u16;
+        
+        let mut buffer = Vec::with_capacity(1 + 16 + 8 + 2 + username_bytes.len());
+        buffer.push(MessageType::Join as u8);
+        buffer.extend_from_slice(self.user_id.as_bytes());
+        buffer.extend_from_slice(&self.timestamp.to_le_bytes());
+        buffer.extend_from_slice(&username_len.to_le_bytes());
+        buffer.extend_from_slice(username_bytes);
+        
+        buffer
+    }
+}
+
+impl JoinResponseMessage {
+    pub fn serialize(&self) -> Vec<u8> {
+        let user_count = self.user_ids.len() as u16;
+        let mut buffer = Vec::with_capacity(1 + 2 + self.user_ids.len() * 16);
+        
+        buffer.push(MessageType::JoinResponse as u8);
+        buffer.extend_from_slice(&user_count.to_le_bytes());
+        
+        for user_id in &self.user_ids {
+            buffer.extend_from_slice(user_id.as_bytes());
+        }
+        
+        buffer
+    }
+}
+
+impl ChatMessage {
+    pub fn serialize(&self) -> Vec<u8> {
+        let username_bytes = self.username.as_bytes();
+        let username_len = username_bytes.len() as u16;
+        let message_bytes = self.message.as_bytes();
+        let message_len = message_bytes.len() as u16;
+        
+        let mut buffer = Vec::with_capacity(1 + 16 + 8 + 2 + username_bytes.len() + 2 + message_bytes.len());
+        buffer.push(MessageType::Chat as u8);
+        buffer.extend_from_slice(self.user_id.as_bytes());
+        buffer.extend_from_slice(&self.timestamp.to_le_bytes());
+        buffer.extend_from_slice(&username_len.to_le_bytes());
+        buffer.extend_from_slice(username_bytes);
+        buffer.extend_from_slice(&message_len.to_le_bytes());
+        buffer.extend_from_slice(message_bytes);
+        
+        buffer
+    }
+}
+
+impl SnapshotRequestMessage {
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut buffer = Vec::with_capacity(1 + 16 + 8);
+        buffer.push(MessageType::SnapshotRequest as u8);
+        buffer.extend_from_slice(self.user_id.as_bytes());
+        buffer.extend_from_slice(&self.timestamp.to_le_bytes());
+        
+        buffer
+    }
+}
+
+impl LeaveMessage {
+    pub fn serialize(&self) -> Vec<u8> {
+        let username_bytes = self.username.as_bytes();
+        let username_len = username_bytes.len() as u16;
+        
+        let mut buffer = Vec::with_capacity(1 + 16 + 8 + 2 + username_bytes.len());
+        buffer.push(MessageType::Leave as u8);
+        buffer.extend_from_slice(self.user_id.as_bytes());
+        buffer.extend_from_slice(&self.timestamp.to_le_bytes());
+        buffer.extend_from_slice(&username_len.to_le_bytes());
+        buffer.extend_from_slice(username_bytes);
+        
+        buffer
+    }
+}
+
+// Message parsing utilities
+pub fn parse_message_type(data: &[u8]) -> Option<MessageType> {
+    if data.is_empty() {
+        return None;
+    }
+    
+    match data[0] {
+        0x01 => Some(MessageType::Join),
+        0x02 => Some(MessageType::Snapshot),
+        0x03 => Some(MessageType::Chat),
+        0x05 => Some(MessageType::SnapshotRequest),
+        0x06 => Some(MessageType::JoinResponse),
+        0x07 => Some(MessageType::EndSession),
+        0x08 => Some(MessageType::SessionExpired),
+        0x09 => Some(MessageType::Leave),
+        _ => None,
+    }
+}
+
+pub fn is_server_message(msg_type: u8) -> bool {
+    msg_type < 0x10
+}
+
+pub fn is_client_message(msg_type: u8) -> bool {
+    msg_type >= 0x10
+}
+
 pub async fn handle_join_message(
     data: &[u8],
     user_id: Uuid,
@@ -40,15 +195,11 @@ pub async fn handle_join_message(
         user_login_name, user_uuid, timestamp, room_uuid
     );
 
-    let username_bytes = user_login_name.as_bytes();
-    let username_len = username_bytes.len() as u16;
-
-    let mut new_join_msg = Vec::new();
-    new_join_msg.push(0x01u8);
-    new_join_msg.extend_from_slice(user_id.as_bytes());
-    new_join_msg.extend_from_slice(&timestamp.to_le_bytes());
-    new_join_msg.extend_from_slice(&username_len.to_le_bytes());
-    new_join_msg.extend_from_slice(username_bytes);
+    let join_message = JoinMessage {
+        user_id,
+        timestamp,
+        username: user_login_name.to_string(),
+    };
 
     if let Err(e) = db::track_join_participant(db, room_uuid, user_uuid, timestamp as i64).await {
         error!("Failed to track JOIN participant: {}", e);
@@ -56,7 +207,7 @@ pub async fn handle_join_message(
         broadcast_join_response(db, room_uuid, state, tx, user_id).await;
     }
 
-    Some(Message::Binary(new_join_msg))
+    Some(Message::Binary(join_message.serialize()))
 }
 
 async fn broadcast_join_response(
@@ -68,19 +219,11 @@ async fn broadcast_join_response(
 ) {
     match db::get_active_participants(db, room_uuid).await {
         Ok(participants) => {
-            let user_count = participants.len() as u16;
-            let mut response_data = vec![0x06u8];
-
-            response_data.push((user_count & 0xff) as u8);
-            response_data.push(((user_count >> 8) & 0xff) as u8);
-
-            for participant in &participants {
-                let uuid_bytes = participant.id.as_bytes();
-                response_data.extend_from_slice(uuid_bytes);
-            }
+            let user_ids: Vec<Uuid> = participants.iter().map(|p| p.id).collect();
+            let join_response = JoinResponseMessage { user_ids };
 
             if let Some(room_connections) = state.collaboration_rooms.get(&room_uuid) {
-                let join_response_msg = Message::Binary(response_data);
+                let join_response_msg = Message::Binary(join_response.serialize());
                 for conn_ref in room_connections.iter() {
                     let conn_id = conn_ref.key();
                     let sender = conn_ref.value();
@@ -90,7 +233,7 @@ async fn broadcast_join_response(
                 }
                 info!(
                     "Broadcasted JOIN_RESPONSE with {} users to {} connections in room {}",
-                    user_count,
+                    participants.len(),
                     room_connections.len(),
                     room_uuid
                 );
@@ -116,18 +259,13 @@ async fn send_existing_participants_to_new_user(
                 .unwrap()
                 .as_millis() as u64;
 
-            let participant_name = participant.login_name.clone();
-            let username_bytes = participant_name.as_bytes();
-            let username_len = username_bytes.len() as u16;
+            let join_message = JoinMessage {
+                user_id: participant.id,
+                timestamp: current_timestamp,
+                username: participant.login_name.clone(),
+            };
 
-            let mut join_msg = Vec::new();
-            join_msg.push(0x01u8);
-            join_msg.extend_from_slice(participant.id.as_bytes());
-            join_msg.extend_from_slice(&current_timestamp.to_le_bytes());
-            join_msg.extend_from_slice(&username_len.to_le_bytes());
-            join_msg.extend_from_slice(username_bytes);
-
-            let participant_join_msg = Message::Binary(join_msg);
+            let participant_join_msg = Message::Binary(join_message.serialize());
             if let Err(e) = tx.send(participant_join_msg) {
                 debug!(
                     "Failed to send JOIN message for participant {} to new user: {}",
@@ -166,8 +304,8 @@ pub fn handle_snapshot_message(
 
             let stored_msg_type = stored_data[0];
 
-            if stored_msg_type < 0x10 {
-                if stored_msg_type == 0x02 {
+            if is_server_message(stored_msg_type) {
+                if stored_msg_type == MessageType::Snapshot as u8 {
                     if stored_data.len() >= 18 {
                         if let Ok(stored_snapshot_user) = bytes_to_uuid(&stored_data[1..17]) {
                             let stored_snapshot_layer = stored_data[17];
@@ -187,8 +325,8 @@ pub fn handle_snapshot_message(
                     }
 
                     match stored_msg_type {
-                        0x13 => false,
-                        0x10..=0x12 => {
+                        0x13 => false, // POINTER_UP
+                        0x10..=0x12 => { // DRAW_LINE, DRAW_POINT, FILL
                             if stored_data.len() >= 18 {
                                 let stored_layer = stored_data[17];
                                 stored_layer != snapshot_layer
@@ -258,20 +396,14 @@ pub fn handle_chat_message(
         user_login_name, chat_user, chat_text
     );
 
-    let username_bytes = user_login_name.as_bytes();
-    let username_len = username_bytes.len() as u16;
-    let msg_len = chat_text.len() as u16;
+    let chat_message = ChatMessage {
+        user_id,
+        timestamp,
+        username: user_login_name.to_string(),
+        message: chat_text.to_string(),
+    };
 
-    let mut new_chat_msg = Vec::new();
-    new_chat_msg.push(0x03u8);
-    new_chat_msg.extend_from_slice(user_id.as_bytes());
-    new_chat_msg.extend_from_slice(&timestamp.to_le_bytes());
-    new_chat_msg.extend_from_slice(&username_len.to_le_bytes());
-    new_chat_msg.extend_from_slice(username_bytes);
-    new_chat_msg.extend_from_slice(&msg_len.to_le_bytes());
-    new_chat_msg.extend_from_slice(chat_text.as_bytes());
-
-    Some(Message::Binary(new_chat_msg))
+    Some(Message::Binary(chat_message.serialize()))
 }
 
 pub async fn handle_end_session_message(
@@ -331,7 +463,9 @@ pub async fn handle_end_session_message(
 
 pub fn should_store_message(msg: &Message) -> bool {
     if let Message::Binary(data) = msg {
-        !data.is_empty() && data[0] != 0x03 && data[0] != 0x01
+        !data.is_empty() 
+            && data[0] != MessageType::Chat as u8 
+            && data[0] != MessageType::Join as u8
     } else {
         true
     }
@@ -348,11 +482,11 @@ pub fn count_user_messages(
             if let Message::Binary(stored_data) = stored_msg {
                 if stored_data.len() >= 17 {
                     let msg_type = stored_data[0];
-                    if msg_type >= 0x10
-                        || (msg_type < 0x10
-                            && msg_type != 0x05
-                            && msg_type != 0x06
-                            && msg_type != 0x09)
+                    if is_client_message(msg_type)
+                        || (is_server_message(msg_type)
+                            && msg_type != MessageType::SnapshotRequest as u8
+                            && msg_type != MessageType::JoinResponse as u8
+                            && msg_type != MessageType::Leave as u8)
                     {
                         if let Ok(msg_user_id) = bytes_to_uuid(&stored_data[1..17]) {
                             *user_message_counts.entry(msg_user_id).or_insert(0) += 1;
@@ -396,15 +530,17 @@ async fn send_snapshot_request(
     snapshot_key: &str,
 ) {
     if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
-        let mut request_buffer = vec![0x05u8];
-        request_buffer.extend_from_slice(user_id_to_request.as_bytes());
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        request_buffer.extend_from_slice(&timestamp.to_le_bytes());
 
-        let snapshot_request_msg = Message::Binary(request_buffer);
+        let snapshot_request = SnapshotRequestMessage {
+            user_id: *user_id_to_request,
+            timestamp,
+        };
+
+        let snapshot_request_msg = Message::Binary(snapshot_request.serialize());
         let mut sent_count = 0;
 
         for conn_ref in room.iter() {
@@ -438,7 +574,7 @@ pub async fn broadcast_message(
         let mut failed_connections = Vec::new();
 
         let include_sender = if let Message::Binary(data) = msg {
-            !data.is_empty() && data[0] == 0x03
+            !data.is_empty() && data[0] == MessageType::Chat as u8
         } else {
             false
         };
@@ -477,26 +613,23 @@ pub async fn send_leave_message(
             return;
         }
 
-        let mut leave_msg = vec![0x09u8];
-        leave_msg.extend_from_slice(user_id.as_bytes());
-
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        leave_msg.extend_from_slice(&timestamp.to_le_bytes());
 
-        let username_bytes = user_login_name.as_bytes();
-        let username_len = username_bytes.len() as u16;
-        leave_msg.extend_from_slice(&username_len.to_le_bytes());
-        leave_msg.extend_from_slice(username_bytes);
+        let leave_message = LeaveMessage {
+            user_id,
+            timestamp,
+            username: user_login_name.to_string(),
+        };
 
-        let leave_message = Message::Binary(leave_msg);
+        let leave_msg = Message::Binary(leave_message.serialize());
         let mut notified_connections = 0;
 
         for conn_ref in room.iter() {
             let (other_conn_id, sender) = conn_ref.pair();
-            if *other_conn_id != connection_id && sender.send(leave_message.clone()).is_ok() {
+            if *other_conn_id != connection_id && sender.send(leave_msg.clone()).is_ok() {
                 notified_connections += 1;
             }
         }
