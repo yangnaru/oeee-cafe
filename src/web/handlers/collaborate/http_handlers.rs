@@ -229,13 +229,8 @@ pub async fn save_collaborative_session(
 
     let post_url = format!("/@{}/{}", owner_login_name, post_id);
 
-    // End the session in the database (this is handled in save_session_to_post, but let's be explicit)
-    if let Err(e) = db::end_session(&db, session_uuid).await {
-        tracing::error!("Failed to mark session as ended: {}", e);
-    }
-
-    // Notify all WebSocket participants about session ending and redirect to post
-    super::messages::broadcast_end_session(session_uuid, user.id, &post_url, &state).await;
+    // Note: Session ending and participant notification will be handled by the WebSocket END_SESSION message
+    // that the client sends after receiving this HTTP response. This prevents double-broadcasting.
 
     Ok(Json(SaveSessionResponse {
         post_id: post_id.to_string(),

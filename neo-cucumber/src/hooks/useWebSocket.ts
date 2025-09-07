@@ -681,6 +681,21 @@ export const useWebSocket = ({
             break;
           }
 
+          case "endSession": {
+            console.log("Session ended:", {
+              userId: message.userId.substring(0, 8),
+              postUrl: message.postUrl,
+              isLocalUser: message.userId === userIdRef.current,
+            });
+
+            // Redirect to the post page
+            if (message.postUrl) {
+              console.log("Redirecting to post:", message.postUrl);
+              window.location.href = message.postUrl;
+            }
+            break;
+          }
+
           default: {
             console.log("Unknown message type:", message);
             break;

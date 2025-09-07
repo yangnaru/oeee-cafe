@@ -338,7 +338,7 @@ async fn process_server_message(
         }
         0x03 => messages::handle_chat_message(data, user_id, user_login_name),
         0x07 => {
-            let handled = messages::handle_end_session_message(
+            messages::handle_end_session_message(
                 data,
                 user_id,
                 user_login_name,
@@ -350,11 +350,8 @@ async fn process_server_message(
             )
             .await;
             
-            if handled {
-                Some(msg.clone())
-            } else {
-                None
-            }
+            // Message is already broadcast internally, don't re-broadcast
+            None
         }
         _ => {
             debug!(
