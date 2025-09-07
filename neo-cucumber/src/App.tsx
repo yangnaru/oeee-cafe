@@ -332,10 +332,21 @@ function App() {
         }
       }
 
-      // Clear any existing fadeout timeout
-      const timeoutId = cursorElement.dataset.timeoutId;
-      if (timeoutId) {
-        clearTimeout(parseInt(timeoutId));
+      // Clear any existing fadeout timeouts
+      const fadeoutDelayId = cursorElement.dataset.fadeoutDelayId;
+      const removeTimeoutId = cursorElement.dataset.removeTimeoutId;
+      const oldTimeoutId = cursorElement.dataset.timeoutId; // Legacy timeout
+      
+      if (fadeoutDelayId) {
+        clearTimeout(parseInt(fadeoutDelayId));
+        delete cursorElement.dataset.fadeoutDelayId;
+      }
+      if (removeTimeoutId) {
+        clearTimeout(parseInt(removeTimeoutId));
+        delete cursorElement.dataset.removeTimeoutId;
+      }
+      if (oldTimeoutId) {
+        clearTimeout(parseInt(oldTimeoutId));
         delete cursorElement.dataset.timeoutId;
       }
     },
@@ -348,17 +359,40 @@ function App() {
   const hideCursor = useCallback((userId: string) => {
     const cursorElement = activeCursorsRef.current.get(userId);
     if (cursorElement && cursorElement.style.opacity !== "0") {
-      cursorElement.style.opacity = "0";
+      // Clear any existing fadeout timeouts
+      const existingFadeoutDelayId = cursorElement.dataset.fadeoutDelayId;
+      const existingRemoveTimeoutId = cursorElement.dataset.removeTimeoutId;
+      const existingLegacyTimeoutId = cursorElement.dataset.timeoutId;
+      
+      if (existingFadeoutDelayId) {
+        clearTimeout(parseInt(existingFadeoutDelayId));
+        delete cursorElement.dataset.fadeoutDelayId;
+      }
+      if (existingRemoveTimeoutId) {
+        clearTimeout(parseInt(existingRemoveTimeoutId));
+        delete cursorElement.dataset.removeTimeoutId;
+      }
+      if (existingLegacyTimeoutId) {
+        clearTimeout(parseInt(existingLegacyTimeoutId));
+        delete cursorElement.dataset.timeoutId;
+      }
 
-      // Remove element after fadeout completes
-      const timeoutId = setTimeout(() => {
-        if (cursorElement.parentNode) {
-          cursorElement.parentNode.removeChild(cursorElement);
-        }
-        activeCursorsRef.current.delete(userId);
-      }, 300); // Match CSS transition duration
+      // Add delay before starting fadeout
+      const fadeoutDelayId = setTimeout(() => {
+        cursorElement.style.opacity = "0";
 
-      cursorElement.dataset.timeoutId = timeoutId.toString();
+        // Remove element after fadeout completes
+        const removeTimeoutId = setTimeout(() => {
+          if (cursorElement.parentNode) {
+            cursorElement.parentNode.removeChild(cursorElement);
+          }
+          activeCursorsRef.current.delete(userId);
+        }, 300); // Match CSS transition duration
+
+        cursorElement.dataset.removeTimeoutId = removeTimeoutId.toString();
+      }, 1000); // 1 second delay before fadeout starts
+
+      cursorElement.dataset.fadeoutDelayId = fadeoutDelayId.toString();
     }
   }, []);
 
