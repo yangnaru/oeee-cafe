@@ -342,6 +342,47 @@ pub async fn handle_end_session_message(
     true
 }
 
+pub async fn broadcast_end_session(
+    room_uuid: Uuid,
+    owner_id: Uuid,
+    post_url: &str,
+    state: &AppState,
+) {
+    info!(
+        "Broadcasting END_SESSION for room {} with redirect to: {}",
+        room_uuid, post_url
+    );
+
+    let url_bytes = post_url.as_bytes();
+    let url_length = url_bytes.len() as u16;
+
+    let mut end_session_msg = Vec::new();
+    end_session_msg.push(0x07u8); // END_SESSION type
+    end_session_msg.extend_from_slice(owner_id.as_bytes()); // 16 bytes
+    end_session_msg.extend_from_slice(&url_length.to_le_bytes()); // 2 bytes
+    end_session_msg.extend_from_slice(url_bytes); // variable
+
+    let end_session_message = Message::Binary(end_session_msg);
+
+    if let Some(room_connections) = state.collaboration_rooms.get(&room_uuid) {
+        let mut notified_count = 0;
+        for conn_ref in room_connections.iter() {
+            let conn_id = conn_ref.key();
+            let sender = conn_ref.value();
+            if sender.send(end_session_message.clone()).is_ok() {
+                notified_count += 1;
+            } else {
+                debug!("Failed to send END_SESSION to connection {}", conn_id);
+            }
+        }
+        
+        info!(
+            "Broadcasted END_SESSION to {} connections in room {}",
+            notified_count, room_uuid
+        );
+    }
+}
+
 pub fn should_store_message(msg: &Message) -> bool {
     if let Message::Binary(data) = msg {
         !data.is_empty() && data[0] != 0x03 && data[0] != 0x01

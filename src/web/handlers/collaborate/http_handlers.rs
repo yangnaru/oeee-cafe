@@ -223,11 +223,19 @@ pub async fn save_collaborative_session(
     let png_data = body.to_vec();
 
     let (post_id, owner_login_name) =
-        db::save_session_to_post(db, session_uuid, user.id, png_data, state)
+        db::save_session_to_post(db.clone(), session_uuid, user.id, png_data, state.clone())
             .await
             .map_err(|e| anyhow::anyhow!("Save failed: {}", e))?;
 
     let post_url = format!("/@{}/{}", owner_login_name, post_id);
+
+    // End the session in the database (this is handled in save_session_to_post, but let's be explicit)
+    if let Err(e) = db::end_session(&db, session_uuid).await {
+        tracing::error!("Failed to mark session as ended: {}", e);
+    }
+
+    // Notify all WebSocket participants about session ending and redirect to post
+    super::messages::broadcast_end_session(session_uuid, user.id, &post_url, &state).await;
 
     Ok(Json(SaveSessionResponse {
         post_id: post_id.to_string(),
