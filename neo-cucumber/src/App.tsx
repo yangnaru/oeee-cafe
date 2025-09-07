@@ -1,6 +1,5 @@
 import { i18n } from "@lingui/core";
 import {
-  startTransition,
   useCallback,
   useEffect,
   useRef,
@@ -21,6 +20,7 @@ import { ToolboxPanel } from "./components/ToolboxPanel";
 import { DrawingEngine } from "./DrawingEngine";
 import { useDrawing } from "./hooks/useDrawing";
 import { useDrawingState } from "./hooks/useDrawingState";
+import { useZoomControls } from "./hooks/useZoomControls";
 import { messages as enMessages } from "./locales/en/messages";
 import { messages as jaMessages } from "./locales/ja/messages";
 import { messages as koMessages } from "./locales/ko/messages";
@@ -52,40 +52,6 @@ const setupI18n = (locale: string) => {
 // Initialize i18n with default locale (English) to prevent destructuring errors
 setupI18n("en");
 
-const zoomMin = 0.5;
-const zoomMax = 4.0;
-let cachedZoomLevels: number[] = [];
-
-const getZoomLevels = (): number[] => {
-  if (cachedZoomLevels.length === 0) {
-    const steps = 2;
-    const k = steps / Math.LN2;
-
-    const first = Math.ceil(Math.log(zoomMin) * k);
-    const size = Math.floor(Math.log(zoomMax) * k) - first + 1;
-    cachedZoomLevels = new Array(size);
-
-    // enforce zoom levels relating to thirds (33.33%, 66.67%, ...)
-    const snap = new Array(steps).fill(0);
-    if (steps > 1) {
-      const third = Math.log(4.0 / 3.0) * k;
-      const i = Math.round(third);
-      snap[(i - first) % steps] = third - i;
-    }
-
-    const kInverse = 1.0 / k;
-    for (let i = 0; i < steps; i++) {
-      let f = Math.exp((i + first + snap[i]) * kInverse);
-      f = Math.floor(f * Math.pow(2, 48) + 0.5) / Math.pow(2, 48); // round off inaccuracies
-      for (let j = i; j < size; j += steps, f *= 2.0) {
-        cachedZoomLevels[j] = f;
-      }
-    }
-  }
-
-  return cachedZoomLevels;
-};
-// SPDX-SnippetEnd
 
 
 /*
@@ -593,126 +559,7 @@ function App() {
   }, []);
 
 
-  // Zoom level management using engine's getZoomLevels function
-  const zoomLevels = getZoomLevels();
-  const [currentZoomIndex, setCurrentZoomIndex] = useState(
-    zoomLevels.findIndex((level) => level >= 1.0)
-  );
-  const currentZoom = zoomLevels[currentZoomIndex];
 
-  const handleZoomIn = useCallback(
-    (pointerX?: number, pointerY?: number) => {
-      if (currentZoomIndex < zoomLevels.length - 1) {
-        const oldZoom = zoomLevels[currentZoomIndex];
-        const newIndex = currentZoomIndex + 1;
-        const newZoom = zoomLevels[newIndex];
-
-        // Calculate pan offset before state updates if coordinates provided
-        let deltaX = 0;
-        let deltaY = 0;
-        if (
-          pointerX !== undefined &&
-          pointerY !== undefined &&
-          canvasContainerRef.current
-        ) {
-          const canvas = canvasContainerRef.current;
-          const rect = canvas.getBoundingClientRect();
-
-          // Get current pan offset from transform
-          const computedStyle = window.getComputedStyle(canvas);
-          const transform = computedStyle.transform;
-          let currentPanX = 0;
-          let currentPanY = 0;
-
-          if (transform && transform !== "none") {
-            const matrix = new DOMMatrix(transform);
-            currentPanX = matrix.m41;
-            currentPanY = matrix.m42;
-          }
-
-          // Convert screen coordinates to canvas-relative coordinates (accounting for current pan)
-          const canvasX = pointerX - rect.left - currentPanX;
-          const canvasY = pointerY - rect.top - currentPanY;
-
-          // Calculate the zoom scale factor
-          const zoomScale = newZoom / oldZoom;
-
-          // Calculate how much the point should move due to zoom
-          deltaX = canvasX * (1 - zoomScale);
-          deltaY = canvasY * (1 - zoomScale);
-        }
-
-        // Batch state updates to prevent flicker
-        startTransition(() => {
-          setCurrentZoomIndex(newIndex);
-          setDrawingState((prev) => ({
-            ...prev,
-            zoomLevel: Math.round(newZoom * 100),
-            pendingPanDeltaX: deltaX !== 0 ? deltaX : undefined,
-            pendingPanDeltaY: deltaY !== 0 ? deltaY : undefined,
-          }));
-        });
-      }
-    },
-    [currentZoomIndex, zoomLevels, canvasContainerRef]
-  );
-
-  const handleZoomOut = useCallback(
-    (pointerX?: number, pointerY?: number) => {
-      if (currentZoomIndex > 0) {
-        const oldZoom = zoomLevels[currentZoomIndex];
-        const newIndex = currentZoomIndex - 1;
-        const newZoom = zoomLevels[newIndex];
-
-        // Calculate pan offset before state updates if coordinates provided
-        let deltaX = 0;
-        let deltaY = 0;
-        if (
-          pointerX !== undefined &&
-          pointerY !== undefined &&
-          canvasContainerRef.current
-        ) {
-          const canvas = canvasContainerRef.current;
-          const rect = canvas.getBoundingClientRect();
-
-          // Get current pan offset from transform
-          const computedStyle = window.getComputedStyle(canvas);
-          const transform = computedStyle.transform;
-          let currentPanX = 0;
-          let currentPanY = 0;
-
-          if (transform && transform !== "none") {
-            const matrix = new DOMMatrix(transform);
-            currentPanX = matrix.m41;
-            currentPanY = matrix.m42;
-          }
-
-          // Convert screen coordinates to canvas-relative coordinates (accounting for current pan)
-          const canvasX = pointerX - rect.left - currentPanX;
-          const canvasY = pointerY - rect.top - currentPanY;
-
-          // Calculate the zoom scale factor
-          const zoomScale = newZoom / oldZoom;
-
-          // Calculate how much the point should move due to zoom
-          deltaX = canvasX * (1 - zoomScale);
-          deltaY = canvasY * (1 - zoomScale);
-        }
-
-        // Batch state updates to prevent flicker
-        startTransition(() => {
-          setCurrentZoomIndex(newIndex);
-          setDrawingState((prev) => ({
-            ...prev,
-            zoomLevel: Math.round(newZoom * 100),
-            pendingPanDeltaX: deltaX !== 0 ? deltaX : undefined,
-            pendingPanDeltaY: deltaY !== 0 ? deltaY : undefined,
-          }));
-        });
-      }
-    },
-    [currentZoomIndex, zoomLevels, canvasContainerRef]
-  );
 
   // History change callback
   const handleHistoryChange = useCallback(
@@ -741,7 +588,7 @@ function App() {
     appRef,
     drawingState,
     handleHistoryChange,
-    Math.round(currentZoom * 100),
+    100, // Default zoom level, will be updated by zoom controls
     canvasMeta?.width,
     canvasMeta?.height,
     wsRef,
@@ -751,6 +598,15 @@ function App() {
     connectionState,
     canvasContainerRef
   );
+
+  // Zoom controls
+  const { currentZoom, handleZoomIn, handleZoomOut, handleZoomReset } =
+    useZoomControls({
+      canvasContainerRef,
+      appRef,
+      drawingEngine,
+      setDrawingState,
+    });
 
   // Keep drawingEngine ref in sync to avoid circular dependencies
   const drawingEngineRef = useRef(drawingEngine);
@@ -1755,16 +1611,6 @@ function App() {
     connectWebSocketRef.current = connectWebSocket;
   }, [connectWebSocket]);
 
-  const handleZoomReset = useCallback(() => {
-    const resetIndex = zoomLevels.findIndex((level) => level >= 1.0);
-    setCurrentZoomIndex(resetIndex);
-    setDrawingState((prev) => ({ ...prev, zoomLevel: 100 }));
-
-    // Reset pan offset as well
-    if (drawingEngine) {
-      drawingEngine.resetPan(canvasContainerRef.current || undefined, 1.0);
-    }
-  }, [zoomLevels, drawingEngine]);
 
   // Initialize app (auth + collaboration meta) on component mount
   useEffect(() => {
@@ -1802,33 +1648,6 @@ function App() {
     }
   }, [canvasMeta]);
 
-  // Add scroll wheel zoom functionality
-  useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      // Only zoom when cursor is over the canvas or app area
-      const target = e.target as Element;
-      const isOverCanvas = target.id === "canvas" || target.closest("#app");
-
-      if (isOverCanvas) {
-        e.preventDefault();
-
-        if (e.deltaY < 0) {
-          // Zoom out with pointer coordinates
-          handleZoomOut(e.clientX, e.clientY);
-        } else if (e.deltaY > 0) {
-          // Zoom in with pointer coordinates
-          handleZoomIn(e.clientX, e.clientY);
-        }
-      }
-    };
-
-    // Add event listener to the app container
-    const appElement = appRef.current;
-    if (appElement) {
-      appElement.addEventListener("wheel", handleWheel, { passive: false });
-      return () => appElement.removeEventListener("wheel", handleWheel);
-    }
-  }, [handleZoomIn, handleZoomOut, appRef]);
 
   // Apply pending pan adjustments after zoom level changes
   useEffect(() => {
