@@ -3,13 +3,19 @@
 ## Development
 
 ```
-$ cargo install cargo-watch
-$ DATABASE_URL=postgresql:///oeee_cafe cargo watch -- cargo run config/dev.toml
+$ cargo install bacon
+$ bacon run
+
+$ brew install caddy
+$ caddy run -w
+
+$ cd neo-cucumber
+$ pnpm run dev
 ```
 
 ## Migration
 
 ```
 $ cargo install sqlx-cli
-$ DATABASE_URL=postgresql:///oeee_cafe sqlx migrate run
+$ sqlx migrate run
 ```
