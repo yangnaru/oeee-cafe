@@ -14,7 +14,7 @@ interface SessionExpiredModalProps {
   onReturnToLobby: () => void;
 }
 
-export const SessionExpiredModal: React.FC<SessionExpiredModalProps> = ({
+export const SessionExpiredModal = ({
   isOpen,
   isOwner,
   canvasMeta,
@@ -23,7 +23,7 @@ export const SessionExpiredModal: React.FC<SessionExpiredModalProps> = ({
   onSaveToGallery,
   onDownloadPNG,
   onReturnToLobby,
-}) => {
+}: SessionExpiredModalProps) => {
   const { t } = useLingui();
 
   if (!isOpen) return null;

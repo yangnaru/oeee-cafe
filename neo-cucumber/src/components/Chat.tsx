@@ -37,14 +37,14 @@ interface ChatProps {
   ) => void;
 }
 
-export const Chat: React.FC<ChatProps> = ({
+export const Chat = ({
   wsRef,
   userId,
   participants,
   onChatMessage,
   onMinimizedChange,
   onAddMessage,
-}) => {
+}: ChatProps) => {
   const { t } = useLingui();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);

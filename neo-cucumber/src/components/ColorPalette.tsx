@@ -1,4 +1,3 @@
-import React from "react";
 import { useLingui } from "@lingui/react/macro";
 
 interface ColorPaletteProps {
@@ -10,14 +9,14 @@ interface ColorPaletteProps {
   onColorPickerChange: (color: string) => void;
 }
 
-export const ColorPalette: React.FC<ColorPaletteProps> = ({
+export const ColorPalette = ({
   paletteColors,
   selectedPaletteIndex,
   currentColor,
   onSetSelectedPaletteIndex,
   onUpdateColor,
   onColorPickerChange,
-}) => {
+}: ColorPaletteProps) => {
   const { t } = useLingui();
 
   return (

@@ -47,7 +47,7 @@ interface ToolboxPanelProps {
   onSaveCollaborativeDrawing: () => void;
 }
 
-export const ToolboxPanel: React.FC<ToolboxPanelProps> = ({
+export const ToolboxPanel = ({
   drawingState,
   historyState,
   paletteColors,
@@ -67,7 +67,7 @@ export const ToolboxPanel: React.FC<ToolboxPanelProps> = ({
   onZoomOut,
   onZoomReset,
   onSaveCollaborativeDrawing,
-}) => {
+}: ToolboxPanelProps) => {
   const { t } = useLingui();
 
   // Dragging state

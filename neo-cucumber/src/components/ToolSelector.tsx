@@ -1,4 +1,3 @@
-import React from "react";
 import { Icon } from "@iconify/react";
 
 type BrushType = "solid" | "halftone" | "eraser" | "fill" | "pan";
@@ -8,10 +7,10 @@ interface ToolSelectorProps {
   onUpdateBrushType: (type: BrushType) => void;
 }
 
-export const ToolSelector: React.FC<ToolSelectorProps> = ({
+export const ToolSelector = ({
   brushType,
   onUpdateBrushType,
-}) => {
+}: ToolSelectorProps) => {
   const getToolIcon = (toolType: BrushType): string => {
     switch (toolType) {
       case "solid":
