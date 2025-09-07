@@ -1680,6 +1680,7 @@ function App() {
     drawingState.zoomLevel,
     drawingEngine,
     currentZoom,
+    setDrawingState,
   ]);
 
   // Update canvas when layer visibility changes
