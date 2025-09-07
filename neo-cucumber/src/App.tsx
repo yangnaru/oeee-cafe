@@ -21,6 +21,7 @@ import { DrawingEngine } from "./DrawingEngine";
 import { useDrawing } from "./hooks/useDrawing";
 import { useDrawingState } from "./hooks/useDrawingState";
 import { useZoomControls } from "./hooks/useZoomControls";
+import { useCanvas } from "./hooks/useCanvas";
 import { messages as enMessages } from "./locales/en/messages";
 import { messages as jaMessages } from "./locales/ja/messages";
 import { messages as koMessages } from "./locales/ko/messages";
@@ -223,180 +224,9 @@ function App() {
   // Track server-provided user order for layer compositing
   const userOrderRef = useRef<string[]>([]);
 
-  // Function to create DOM canvas elements for a user (foreground and background)
-  const createUserCanvasElements = useCallback(
-    (userId: string, insertionIndex: number) => {
-      console.log("createUserCanvasElements called for:", userId, {
-        containerExists: !!canvasContainerRef.current,
-        canvasWidth: canvasMeta?.width,
-        canvasHeight: canvasMeta?.height,
-      });
 
-      if (
-        !canvasContainerRef.current ||
-        !canvasMeta?.width ||
-        !canvasMeta?.height
-      ) {
-        console.log("Cannot create canvases - missing requirements");
-        return null;
-      }
 
-      // Create background canvas
-      const bgCanvas = document.createElement("canvas");
-      bgCanvas.width = canvasMeta.width;
-      bgCanvas.height = canvasMeta.height;
-      bgCanvas.className = "absolute top-0 left-0 canvas-bg";
-      bgCanvas.style.pointerEvents = "none"; // Background never handles events
-      bgCanvas.style.width = `${canvasMeta.width}px`; // Set base dimensions - container handles zoom
-      bgCanvas.style.height = `${canvasMeta.height}px`;
-      bgCanvas.id = `bg-${userId}`;
 
-      const bgCtx = bgCanvas.getContext("2d");
-      if (bgCtx) {
-        bgCtx.imageSmoothingEnabled = false;
-      }
-
-      // Create foreground canvas
-      const fgCanvas = document.createElement("canvas");
-      fgCanvas.width = canvasMeta.width;
-      fgCanvas.height = canvasMeta.height;
-      fgCanvas.className = "absolute top-0 left-0 canvas-bg";
-      fgCanvas.style.pointerEvents = "none"; // Events handled by interaction canvas
-      fgCanvas.style.width = `${canvasMeta.width}px`; // Set base dimensions - container handles zoom
-      fgCanvas.style.height = `${canvasMeta.height}px`;
-      fgCanvas.id = `fg-${userId}`;
-
-      const fgCtx = fgCanvas.getContext("2d");
-      if (fgCtx) {
-        fgCtx.imageSmoothingEnabled = false;
-      }
-
-      console.log(
-        `Creating canvases for user ${userId}, inserting at position ${insertionIndex}`
-      );
-
-      const container = canvasContainerRef.current;
-      const interactionCanvas = container.querySelector("#canvas"); // Find interaction canvas
-
-      // Set z-index based on user order from server
-      // Earlier users (lower index in userOrderRef) should appear on top (higher z-index)
-      // Later users (higher index in userOrderRef) should appear below (lower z-index)
-      const userIndex = userOrderRef.current.indexOf(userId);
-      const baseZIndex = userIndex !== -1 ? 1000 - userIndex * 10 : 100; // Higher index = lower z-index
-
-      // Background layer gets base z-index, foreground gets +1
-      bgCanvas.style.zIndex = baseZIndex.toString();
-      fgCanvas.style.zIndex = (baseZIndex + 1).toString();
-
-      // Simple insertion before interaction canvas
-      if (interactionCanvas) {
-        container.insertBefore(bgCanvas, interactionCanvas);
-        container.insertBefore(fgCanvas, interactionCanvas);
-      } else {
-        container.appendChild(bgCanvas);
-        container.appendChild(fgCanvas);
-      }
-
-      // Store both canvases
-      userCanvasRefs.current.set(`${userId}-bg`, bgCanvas);
-      userCanvasRefs.current.set(`${userId}-fg`, fgCanvas);
-
-      console.log(`Created canvases for user ${userId}`);
-
-      return { bgCanvas, fgCanvas };
-    },
-    [canvasMeta?.width, canvasMeta?.height]
-  );
-
-  // Function to create drawing engine for a new user
-  const createUserEngine = useCallback(
-    (userId: string, username?: string) => {
-      // Only create user engines when canvas dimensions are available
-      if (!canvasMeta?.width || !canvasMeta?.height) {
-        return;
-      }
-
-      // Check if user already exists
-      const existingUser = userEnginesRef.current.get(userId);
-      if (existingUser) {
-        // Update username if provided
-        if (username && existingUser.username !== username) {
-          existingUser.username = username;
-        }
-        return;
-      }
-
-      // Create new DrawingEngine for this user
-      const engine = new DrawingEngine(canvasMeta.width, canvasMeta.height);
-      const firstSeen = Date.now();
-
-      // Create DOM canvases for this user and attach to container (only if they don't exist)
-      const existingBgCanvas = userCanvasRefs.current.get(`${userId}-bg`);
-      const existingFgCanvas = userCanvasRefs.current.get(`${userId}-fg`);
-
-      let canvasElements = null;
-      if (!existingBgCanvas || !existingFgCanvas) {
-        canvasElements = createUserCanvasElements(userId, 0);
-      } else {
-        canvasElements = {
-          bgCanvas: existingBgCanvas,
-          fgCanvas: existingFgCanvas,
-        };
-      }
-
-      if (canvasElements) {
-        // Attach DOM canvases to the drawing engine
-        engine.attachDOMCanvases(
-          canvasElements.bgCanvas,
-          canvasElements.fgCanvas
-        );
-
-        // Update DOM canvases to show any existing content (immediate for initialization)
-        engine.updateAllDOMCanvasesImmediate();
-
-        // Set up initial layer visibility (local user visibility will be managed by separate useEffect)
-        canvasElements.bgCanvas.style.display = "block";
-        canvasElements.fgCanvas.style.display = "block";
-      }
-
-      // Create offscreen canvas for this user (still needed for drawing operations)
-      const canvas = document.createElement("canvas");
-      canvas.width = canvasMeta.width;
-      canvas.height = canvasMeta.height;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.imageSmoothingEnabled = false;
-        engine.initialize(ctx);
-      }
-
-      userEnginesRef.current.set(userId, {
-        engine,
-        firstSeen,
-        canvas,
-        username: username || userId,
-      });
-    },
-    [canvasMeta?.width, canvasMeta?.height, createUserCanvasElements]
-  );
-
-  // Function to update z-indices for all existing canvases based on current user order
-  const updateCanvasZIndices = useCallback(() => {
-    userCanvasRefs.current.forEach((canvas, key) => {
-      const userId = key.replace(/-(bg|fg)$/, "");
-      const isBackground = key.endsWith("-bg");
-      const userIndex = userOrderRef.current.indexOf(userId);
-
-      if (userIndex !== -1) {
-        const baseZIndex = 1000 - userIndex * 10;
-        canvas.style.zIndex = (baseZIndex + (isBackground ? 0 : 1)).toString();
-        console.log(`Updated z-index for ${key}: ${canvas.style.zIndex}`);
-      }
-    });
-  }, []);
-
-  const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const userCanvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
-  const localUserCanvasRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const userIdRef = useRef<string>("");
@@ -517,6 +347,8 @@ function App() {
         delete cursorElement.dataset.timeoutId;
       }
     },
+    // canvasContainerRef is stable from useCanvas hook - adding it would create circular dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
@@ -569,13 +401,20 @@ function App() {
     []
   );
 
-  // Callback to trigger unified compositing when local drawing changes
+  // Create a ref to hold the DOM canvas update function
+  const domCanvasUpdateRef = useRef<() => void>(() => {});
+
+  // Callback to trigger unified compositing when local drawing changes  
   const handleLocalDrawingChange = useCallback(() => {
-    console.log("Local drawing changed");
-    // No longer needed - browser handles compositing automatically
+    console.log("Local drawing changed - triggering DOM canvas update");
+    domCanvasUpdateRef.current();
   }, []);
 
-  // Use the drawing hook with local user canvas
+  // Temporary refs for initialization order  
+  const tempCanvasContainerRef = useRef<HTMLDivElement>(null);
+  const tempLocalUserCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Use the drawing hook with temporary canvas ref
   const {
     undo,
     redo,
@@ -584,7 +423,7 @@ function App() {
     markDrawingComplete,
     handleSnapshotRequest,
   } = useDrawing(
-    localUserCanvasRef,
+    tempLocalUserCanvasRef,
     appRef,
     drawingState,
     handleHistoryChange,
@@ -596,17 +435,49 @@ function App() {
     handleLocalDrawingChange,
     isCatchingUp,
     connectionState,
-    canvasContainerRef
+    tempCanvasContainerRef
   );
 
   // Zoom controls
   const { currentZoom, handleZoomIn, handleZoomOut, handleZoomReset } =
     useZoomControls({
-      canvasContainerRef,
+      canvasContainerRef: tempCanvasContainerRef,
       appRef,
       drawingEngine,
       setDrawingState,
     });
+
+  // Canvas management (after drawing engine is available)
+  const {
+    canvasContainerRef,
+    createUserEngine,
+    updateCanvasZIndices,
+    compositeCanvasesForExport,
+    downloadCanvasAsPNG,
+  } = useCanvas({
+    canvasMeta,
+    userOrderRef,
+    userEnginesRef,
+    drawingEngine,
+    userIdRef,
+    currentZoom,
+    drawingState,
+  });
+
+  // Ensure drawing engine DOM canvases are updated when engine becomes available
+  useEffect(() => {
+    if (drawingEngine && userIdRef.current) {
+      // Update the DOM canvas update function
+      domCanvasUpdateRef.current = () => {
+        drawingEngine.updateAllDOMCanvasesImmediate();
+      };
+      
+      // Force an immediate update of all DOM canvases to show any existing content
+      setTimeout(() => {
+        drawingEngine.updateAllDOMCanvasesImmediate();
+      }, 0);
+    }
+  }, [drawingEngine]);
 
   // Keep drawingEngine ref in sync to avoid circular dependencies
   const drawingEngineRef = useRef(drawingEngine);
@@ -627,66 +498,7 @@ function App() {
     window.location.reload();
   }, []);
 
-  // Function to composite all canvases for export only
-  const compositeCanvasesForExport = useCallback(() => {
-    if (!canvasMeta?.width || !canvasMeta?.height) return null;
 
-    // Create a temporary canvas for compositing
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = canvasMeta.width;
-    tempCanvas.height = canvasMeta.height;
-    const tempCtx = tempCanvas.getContext("2d");
-
-    if (!tempCtx) return null;
-
-    // Composite all user layer canvases onto the temp canvas in z-index order
-    const canvasElements = Array.from(userCanvasRefs.current.entries()).map(
-      ([key, canvas]) => ({
-        key,
-        canvas,
-        zIndex: parseInt(canvas.style.zIndex) || 0,
-        isBackground: key.endsWith("-bg"),
-      })
-    );
-
-    // Sort by z-index (lower z-index drawn first, appears below)
-    canvasElements.sort((a, b) => a.zIndex - b.zIndex);
-
-    // Draw all layers in z-index order
-    canvasElements.forEach(({ canvas }) => {
-      if (canvas.style.display !== "none") {
-        tempCtx.drawImage(canvas, 0, 0);
-      }
-    });
-
-    return tempCanvas;
-  }, [canvasMeta]);
-
-  // Function to download current canvas as PNG
-  const downloadCanvasAsPNG = useCallback(() => {
-    if (!canvasMeta?.width || !canvasMeta?.height) return;
-
-    try {
-      // Use the composite function to create a single canvas with all layers
-      const tempCanvas = compositeCanvasesForExport();
-      if (!tempCanvas) return;
-
-      // Create download link
-      const link = document.createElement("a");
-      link.download = `canvas-${new Date()
-        .toISOString()
-        .slice(0, 19)
-        .replace(/:/g, "-")}.png`;
-      link.href = tempCanvas.toDataURL("image/png");
-
-      // Trigger download
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error("Error in downloadCanvasAsPNG:", error);
-    }
-  }, [compositeCanvasesForExport, canvasMeta?.width, canvasMeta?.height]);
 
   // Function to save collaborative drawing to gallery
   const saveCollaborativeDrawing = useCallback(async () => {
@@ -1646,7 +1458,7 @@ function App() {
         connectWebSocketRef.current();
       }
     }
-  }, [canvasMeta]);
+  }, [canvasMeta, canvasContainerRef]);
 
 
   // Apply pending pan adjustments after zoom level changes
@@ -1681,87 +1493,9 @@ function App() {
     drawingEngine,
     currentZoom,
     setDrawingState,
+    canvasContainerRef,
   ]);
 
-  // Update canvas when layer visibility changes
-  useEffect(() => {
-    // Update visibility for local user canvases only
-    const localUserId = userIdRef.current;
-    if (localUserId) {
-      const localBgCanvas = userCanvasRefs.current.get(`${localUserId}-bg`);
-      const localFgCanvas = userCanvasRefs.current.get(`${localUserId}-fg`);
-
-      if (localBgCanvas) {
-        localBgCanvas.style.display = drawingState.bgVisible ? "block" : "none";
-      }
-      if (localFgCanvas) {
-        localFgCanvas.style.display = drawingState.fgVisible ? "block" : "none";
-      }
-    }
-  }, [drawingState.fgVisible, drawingState.bgVisible]);
-
-  // Trigger initial compositing when drawing engine is ready
-  useEffect(() => {
-    if (drawingEngine && userIdRef.current) {
-      // Set up DOM canvases for local user (only once, avoid duplicates)
-      const localUserId = userIdRef.current;
-      const existingBgCanvas = userCanvasRefs.current.get(`${localUserId}-bg`);
-      const existingFgCanvas = userCanvasRefs.current.get(`${localUserId}-fg`);
-
-      let canvasElements = null;
-      if (!existingBgCanvas || !existingFgCanvas) {
-        canvasElements = createUserCanvasElements(localUserId, 0);
-      } else {
-        canvasElements = {
-          bgCanvas: existingBgCanvas,
-          fgCanvas: existingFgCanvas,
-        };
-      }
-
-      if (canvasElements) {
-        // Attach DOM canvases to the local drawing engine
-        drawingEngine.attachDOMCanvases(
-          canvasElements.bgCanvas,
-          canvasElements.fgCanvas
-        );
-
-        // Update DOM canvases to show any existing content (immediate for initialization)
-        drawingEngine.updateAllDOMCanvasesImmediate();
-
-        // Set up initial layer visibility for local user
-        canvasElements.bgCanvas.style.display = drawingState.bgVisible
-          ? "block"
-          : "none";
-        canvasElements.fgCanvas.style.display = drawingState.fgVisible
-          ? "block"
-          : "none";
-      }
-    }
-  }, [
-    drawingEngine,
-    createUserCanvasElements,
-    drawingState.bgVisible,
-    drawingState.fgVisible,
-  ]);
-
-  // Update canvas transform when zoom changes
-  useEffect(() => {
-    if (drawingEngine && canvasContainerRef.current) {
-      drawingEngine.adjustPanForZoom(
-        0,
-        0,
-        canvasContainerRef.current,
-        currentZoom
-      );
-    }
-  }, [currentZoom, drawingEngine]);
-
-  // Force drawing system initialization when local canvas is ready
-  useEffect(() => {
-    if (localUserCanvasRef.current && canvasMeta?.width && canvasMeta?.height) {
-      // The useDrawing hook should pick this up and initialize
-    }
-  }, [canvasMeta?.width, canvasMeta?.height]);
 
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
@@ -1872,12 +1606,11 @@ function App() {
                   {/* Local user interaction canvas for drawing events - positioned last in DOM to be on top */}
                   <canvas
                     id="canvas"
-                    ref={localUserCanvasRef}
+                    ref={tempLocalUserCanvasRef}
                     width={canvasMeta.width}
                     height={canvasMeta.height}
                     className="absolute top-0 left-0 pointer-events-auto canvas-bg"
                     style={{
-                      opacity: 0,
                       width: `${canvasMeta.width}px`,
                       height: `${canvasMeta.height}px`,
                     }}
