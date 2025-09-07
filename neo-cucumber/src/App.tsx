@@ -1,10 +1,5 @@
 import { i18n } from "@lingui/core";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import { Chat } from "./components/Chat";
 import { SessionExpiredModal } from "./components/SessionExpiredModal";
@@ -15,7 +10,10 @@ import { RoomFullModal } from "./components/modals/RoomFullModal";
 import { ConnectionStatusModal } from "./components/modals/ConnectionStatusModal";
 import { SessionEndingModal } from "./components/modals/SessionEndingModal";
 import { SessionHeader } from "./components/SessionHeader";
-import { type CollaborationMeta, type Participant } from "./types/collaboration";
+import {
+  type CollaborationMeta,
+  type Participant,
+} from "./types/collaboration";
 import { ToolboxPanel } from "./components/ToolboxPanel";
 import { DrawingEngine } from "./DrawingEngine";
 import { useDrawing } from "./hooks/useDrawing";
@@ -23,14 +21,12 @@ import { useDrawingState } from "./hooks/useDrawingState";
 import { useZoomControls } from "./hooks/useZoomControls";
 import { useCanvas } from "./hooks/useCanvas";
 import { useWebSocket, type ConnectionState } from "./hooks/useWebSocket";
+import { useCursor } from "./hooks/useCursor";
 import { messages as enMessages } from "./locales/en/messages";
 import { messages as jaMessages } from "./locales/ja/messages";
 import { messages as koMessages } from "./locales/ko/messages";
 import { messages as zhMessages } from "./locales/zh/messages";
-import {
-  encodeEndSession,
-} from "./utils/binaryProtocol";
-import { getUserBackgroundColor } from "./utils/userColors";
+import { encodeEndSession } from "./utils/binaryProtocol";
 
 // Initialize i18n with locale messages
 const localeMessages = {
@@ -49,8 +45,6 @@ const setupI18n = (locale: string) => {
 
 // Initialize i18n with default locale (English) to prevent destructuring errors
 setupI18n("en");
-
-
 
 /*
  * Backend endpoints required:
@@ -145,9 +139,9 @@ function App() {
     isCatchingUpRef.current = isCatchingUp;
   }, [isCatchingUp]);
 
-
   // Track connection state for reconnection logic
-  const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>("connecting");
   const shouldConnectRef = useRef(false);
 
   // Track authentication state
@@ -211,14 +205,8 @@ function App() {
     >
   >(new Map());
 
-  // Track active drawing cursors for remote users
-  const activeCursorsRef = useRef<Map<string, HTMLDivElement>>(new Map());
-
   // Track server-provided user order for layer compositing
   const userOrderRef = useRef<string[]>([]);
-
-
-
 
   const appRef = useRef<HTMLDivElement>(null);
   const userIdRef = useRef<string>("");
@@ -227,174 +215,6 @@ function App() {
 
   // Check if current user is the session owner
   const isOwner = canvasMeta && userIdRef.current === canvasMeta.ownerId;
-
-  // Function to create or update cursor icon for a remote user
-  const createOrUpdateCursor = useCallback(
-    (userId: string, x: number, y: number, username: string) => {
-      if (!canvasContainerRef.current || userId === userIdRef.current) {
-        return; // Don't show cursor for local user
-      }
-
-      const container = canvasContainerRef.current;
-      let cursorElement = activeCursorsRef.current.get(userId);
-
-      if (!cursorElement) {
-        // Create new cursor element container
-        cursorElement = document.createElement("div");
-        cursorElement.className =
-          "absolute pointer-events-none z-[2000] flex flex-col items-center";
-        cursorElement.style.transition = "opacity 0.3s ease-out";
-        cursorElement.style.opacity = "1";
-
-        // Create username label
-        const userLabel = document.createElement("div");
-        userLabel.className =
-          "text-xs font-bold px-2 py-1 rounded mb-1 whitespace-nowrap";
-        userLabel.textContent = username;
-        const userBackgroundColor = getUserBackgroundColor(username);
-        console.log(
-          `Cursor getUserBackgroundColor for "${username}":`,
-          userBackgroundColor
-        ); // Debug logging
-        userLabel.style.color = userBackgroundColor;
-        userLabel.style.backgroundColor = "rgba(255, 255, 255, 0.9)";
-        userLabel.style.border = `1px solid ${userBackgroundColor}`;
-        userLabel.style.fontSize = "10px";
-        userLabel.setAttribute("data-username-element", "true"); // Mark this as the username element
-        cursorElement.appendChild(userLabel);
-
-        // Create icon element
-        const iconElement = document.createElement("div");
-        iconElement.className = "flex items-center justify-center";
-        iconElement.style.width = "24px";
-        iconElement.style.height = "24px";
-        iconElement.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24"><path fill="${getUserBackgroundColor(
-          username
-        )}" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5s-1.12 2.5-2.5 2.5z"/></svg>`;
-        cursorElement.appendChild(iconElement);
-
-        container.appendChild(cursorElement);
-        activeCursorsRef.current.set(userId, cursorElement);
-      }
-
-      // Position the cursor (convert canvas coordinates to screen coordinates)
-      const canvasStyle = window.getComputedStyle(container);
-
-      // Get zoom level and pan offset from transform
-      let scale = 1;
-      let panX = 0;
-      let panY = 0;
-
-      if (canvasStyle.transform && canvasStyle.transform !== "none") {
-        const matrix = new DOMMatrix(canvasStyle.transform);
-        scale = matrix.a; // Get scale from transform matrix
-        panX = matrix.e; // Get X translation
-        panY = matrix.f; // Get Y translation
-      }
-
-      // Position cursor at the drawing coordinate, accounting for zoom and pan
-      const screenX = x * scale + panX;
-      const screenY = y * scale + panY;
-
-      // Get the actual size of the cursor element to center it properly
-      const cursorRect = cursorElement.getBoundingClientRect();
-      const cursorWidth = cursorRect.width || 24; // Fallback to 24px if not measured yet
-
-      // Position the cursor so the pin point of the location icon is exactly at the drawing coordinates
-      // The location icon has its pin point at approximately 75% down from the top of the icon
-      // Username label is ~16px height (10px font + 6px padding), icon is 24px height
-      const usernameLabelHeight = 16; // More accurate measurement
-      const iconHeight = 24;
-      const pinPointOffset = iconHeight * 1.3; // Pin point is at ~75% down from top of icon
-
-      const totalOffsetY = usernameLabelHeight + pinPointOffset;
-      cursorElement.style.left = `${screenX - cursorWidth / 2}px`; // Center horizontally
-      cursorElement.style.top = `${screenY - totalOffsetY}px`; // Position so the pin point is at the drawing coordinates
-      cursorElement.style.opacity = "1";
-
-      // Update username label if we have a different/better username
-      const userLabel = cursorElement.querySelector(
-        '[data-username-element="true"]'
-      ) as HTMLElement;
-      if (userLabel && userLabel.textContent !== username) {
-        userLabel.textContent = username;
-        userLabel.style.color = getUserBackgroundColor(username);
-        userLabel.style.border = `1px solid ${getUserBackgroundColor(
-          username
-        )}`;
-
-        // Also update the icon color
-        const svgPath = cursorElement.querySelector(
-          "svg path"
-        ) as SVGPathElement;
-        if (svgPath) {
-          svgPath.setAttribute("fill", getUserBackgroundColor(username));
-        }
-      }
-
-      // Clear any existing fadeout timeouts
-      const fadeoutDelayId = cursorElement.dataset.fadeoutDelayId;
-      const removeTimeoutId = cursorElement.dataset.removeTimeoutId;
-      const oldTimeoutId = cursorElement.dataset.timeoutId; // Legacy timeout
-      
-      if (fadeoutDelayId) {
-        clearTimeout(parseInt(fadeoutDelayId));
-        delete cursorElement.dataset.fadeoutDelayId;
-      }
-      if (removeTimeoutId) {
-        clearTimeout(parseInt(removeTimeoutId));
-        delete cursorElement.dataset.removeTimeoutId;
-      }
-      if (oldTimeoutId) {
-        clearTimeout(parseInt(oldTimeoutId));
-        delete cursorElement.dataset.timeoutId;
-      }
-    },
-    // canvasContainerRef is stable from useCanvas hook - adding it would create circular dependency
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
-
-  // Function to hide cursor with fadeout effect
-  const hideCursor = useCallback((userId: string) => {
-    const cursorElement = activeCursorsRef.current.get(userId);
-    if (cursorElement && cursorElement.style.opacity !== "0") {
-      // Clear any existing fadeout timeouts
-      const existingFadeoutDelayId = cursorElement.dataset.fadeoutDelayId;
-      const existingRemoveTimeoutId = cursorElement.dataset.removeTimeoutId;
-      const existingLegacyTimeoutId = cursorElement.dataset.timeoutId;
-      
-      if (existingFadeoutDelayId) {
-        clearTimeout(parseInt(existingFadeoutDelayId));
-        delete cursorElement.dataset.fadeoutDelayId;
-      }
-      if (existingRemoveTimeoutId) {
-        clearTimeout(parseInt(existingRemoveTimeoutId));
-        delete cursorElement.dataset.removeTimeoutId;
-      }
-      if (existingLegacyTimeoutId) {
-        clearTimeout(parseInt(existingLegacyTimeoutId));
-        delete cursorElement.dataset.timeoutId;
-      }
-
-      // Add delay before starting fadeout
-      const fadeoutDelayId = setTimeout(() => {
-        cursorElement.style.opacity = "0";
-
-        // Remove element after fadeout completes
-        const removeTimeoutId = setTimeout(() => {
-          if (cursorElement.parentNode) {
-            cursorElement.parentNode.removeChild(cursorElement);
-          }
-          activeCursorsRef.current.delete(userId);
-        }, 300); // Match CSS transition duration
-
-        cursorElement.dataset.removeTimeoutId = removeTimeoutId.toString();
-      }, 1000); // 1 second delay before fadeout starts
-
-      cursorElement.dataset.fadeoutDelayId = fadeoutDelayId.toString();
-    }
-  }, []);
 
   // Participant management functions (moved from Chat.tsx)
   const addParticipant = useCallback(
@@ -416,9 +236,6 @@ function App() {
     });
   }, []);
 
-
-
-
   // History change callback
   const handleHistoryChange = useCallback(
     (canUndo: boolean, canRedo: boolean) => {
@@ -430,16 +247,16 @@ function App() {
   // Create a ref to hold the DOM canvas update function
   const domCanvasUpdateRef = useRef<() => void>(() => {});
 
-  // Callback to trigger unified compositing when local drawing changes  
+  // Callback to trigger unified compositing when local drawing changes
   const handleLocalDrawingChange = useCallback(() => {
     console.log("Local drawing changed - triggering DOM canvas update");
     domCanvasUpdateRef.current();
   }, []);
 
-  // Temporary refs for initialization order  
+  // Temporary refs for initialization order
   const tempCanvasContainerRef = useRef<HTMLDivElement>(null);
   const tempLocalUserCanvasRef = useRef<HTMLCanvasElement>(null);
-  
+
   // Create a stable wsRef that will be populated by useWebSocket
   const drawingWsRef = useRef<WebSocket | null>(null);
 
@@ -499,6 +316,12 @@ function App() {
     drawingEngineRef.current = drawingEngine;
   }, [drawingEngine]);
 
+  // Cursor management
+  const { createOrUpdateCursor, hideCursor } = useCursor({
+    canvasContainerRef,
+    userIdRef,
+  });
+
   // WebSocket management
   const { wsRef, connectWebSocket } = useWebSocket({
     canvasMeta,
@@ -519,7 +342,7 @@ function App() {
     updateCanvasZIndices,
     addSnapshotToHistory,
     markDrawingComplete,
-    createOrUpdateCursor: createOrUpdateCursor,
+    createOrUpdateCursor,
     hideCursor,
     addParticipant,
     removeParticipant,
@@ -536,7 +359,7 @@ function App() {
     console.log("Syncing WebSocket for drawing:", {
       wsConnected: !!wsRef.current,
       wsState: wsRef.current?.readyState,
-      drawingWsConnected: !!drawingWsRef.current
+      drawingWsConnected: !!drawingWsRef.current,
     });
     drawingWsRef.current = wsRef.current;
   }, [wsRef.current]);
@@ -548,7 +371,7 @@ function App() {
       domCanvasUpdateRef.current = () => {
         drawingEngine.updateAllDOMCanvasesImmediate();
       };
-      
+
       // Force an immediate update of all DOM canvases to show any existing content
       setTimeout(() => {
         drawingEngine.updateAllDOMCanvasesImmediate();
@@ -568,8 +391,6 @@ function App() {
   const handleManualReconnect = useCallback(() => {
     window.location.reload();
   }, []);
-
-
 
   // Function to save collaborative drawing to gallery
   const saveCollaborativeDrawing = useCallback(async () => {
@@ -649,7 +470,6 @@ function App() {
       setIsSaving(false);
     }
   }, [isSaving, compositeCanvasesForExport]);
-
 
   // New initialization function that follows the required flow
   const initializeApp = useCallback(async (): Promise<boolean> => {
@@ -743,9 +563,6 @@ function App() {
     }
   }, []);
 
-
-
-
   // Initialize app (auth + collaboration meta) on component mount
   useEffect(() => {
     const initApp = async () => {
@@ -782,7 +599,6 @@ function App() {
     }
   }, [canvasMeta, canvasContainerRef]);
 
-
   // Apply pending pan adjustments after zoom level changes
   useEffect(() => {
     if (
@@ -818,7 +634,6 @@ function App() {
     canvasContainerRef,
   ]);
 
-
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -852,9 +667,7 @@ function App() {
           onRetry={() => window.location.reload()}
         />
 
-        <LoadingModal
-          isOpen={!canvasMeta && !initializationError}
-        />
+        <LoadingModal isOpen={!canvasMeta && !initializationError} />
 
         <AuthErrorModal
           isOpen={authError}

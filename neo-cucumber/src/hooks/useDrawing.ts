@@ -67,7 +67,6 @@ export const useDrawing = (
     canvas.style.imageRendering = "pixelated";
     contextRef.current = ctx;
 
-
     // Create and initialize drawing engine
     drawingEngineRef.current = new DrawingEngine(canvasWidth, canvasHeight);
     drawingEngineRef.current.initialize(ctx);
@@ -81,18 +80,13 @@ export const useDrawing = (
         drawingEngineRef.current.layers.foreground,
         drawingEngineRef.current.layers.background,
         false, // This is not a drawing action, just initial state
-        false  // This is not a content snapshot
+        false // This is not a content snapshot
       );
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
     }
 
     isInitializedRef.current = true;
-  }, [
-    canvasRef,
-    history,
-    canvasWidth,
-    canvasHeight,
-  ]);
+  }, [canvasRef, history, canvasWidth, canvasHeight]);
 
   // Drawing state refs to prevent recreation on re-renders
   const drawingStateRef = useRef({
@@ -116,16 +110,16 @@ export const useDrawing = (
   const currentDrawingStateRef = useRef(drawingState);
   const isCatchingUpRef = useRef(isCatchingUp);
   const connectionStateRef = useRef(connectionState);
-  
+
   // Update the refs whenever values change
   useEffect(() => {
     currentDrawingStateRef.current = drawingState;
   }, [drawingState]);
-  
+
   useEffect(() => {
     isCatchingUpRef.current = isCatchingUp;
   }, [isCatchingUp]);
-  
+
   useEffect(() => {
     connectionStateRef.current = connectionState;
   }, [connectionState]);
@@ -146,20 +140,26 @@ export const useDrawing = (
       // Calculate base canvas dimensions (without zoom)
       const baseCanvasWidth = canvas.width;
       const baseCanvasHeight = canvas.height;
-      
+
       // Convert screen coordinates to canvas coordinates
       // rect already includes all transforms (zoom + pan), so we just need to calculate the ratio
       const screenX = clientX - rect.left;
       const screenY = clientY - rect.top;
-      
+
       // Convert from screen space to canvas space
       // The rect dimensions include zoom, so we can directly calculate the ratio
       const x = (screenX / rect.width) * baseCanvasWidth;
       const y = (screenY / rect.height) * baseCanvasHeight;
 
       // Clamp coordinates to canvas bounds
-      const clampedX = Math.max(0, Math.min(baseCanvasWidth - 1, Math.round(x)));
-      const clampedY = Math.max(0, Math.min(baseCanvasHeight - 1, Math.round(y)));
+      const clampedX = Math.max(
+        0,
+        Math.min(baseCanvasWidth - 1, Math.round(x))
+      );
+      const clampedY = Math.max(
+        0,
+        Math.min(baseCanvasHeight - 1, Math.round(y))
+      );
 
       return { x: clampedX, y: clampedY };
     };
@@ -172,7 +172,8 @@ export const useDrawing = (
       if (controlsElement?.contains(target as Node)) return;
 
       // Disable drawing while catching up to stored messages or when disconnected
-      if (isCatchingUpRef.current || connectionStateRef.current !== "connected") return;
+      if (isCatchingUpRef.current || connectionStateRef.current !== "connected")
+        return;
 
       // Only handle drawing area interactions
       if (
@@ -196,7 +197,7 @@ export const useDrawing = (
         return;
 
       drawingStateRef.current.activePointerId = e.pointerId;
-      
+
       // Try to capture pointer, but don't fail if it doesn't work
       try {
         app.setPointerCapture(e.pointerId);
@@ -234,12 +235,23 @@ export const useDrawing = (
           }
 
           // Perform flood fill
-          const r = parseInt(currentDrawingStateRef.current.color.slice(1, 3), 16);
-          const g = parseInt(currentDrawingStateRef.current.color.slice(3, 5), 16);
-          const b = parseInt(currentDrawingStateRef.current.color.slice(5, 7), 16);
+          const r = parseInt(
+            currentDrawingStateRef.current.color.slice(1, 3),
+            16
+          );
+          const g = parseInt(
+            currentDrawingStateRef.current.color.slice(3, 5),
+            16
+          );
+          const b = parseInt(
+            currentDrawingStateRef.current.color.slice(5, 7),
+            16
+          );
 
           drawingEngineRef.current.doFloodFill(
-            drawingEngineRef.current.layers[currentDrawingStateRef.current.layerType],
+            drawingEngineRef.current.layers[
+              currentDrawingStateRef.current.layerType
+            ],
             Math.floor(coords.x),
             Math.floor(coords.y),
             r,
@@ -249,7 +261,8 @@ export const useDrawing = (
           );
 
           // Track which layer was modified
-          lastModifiedLayerRef.current = currentDrawingStateRef.current.layerType;
+          lastModifiedLayerRef.current =
+            currentDrawingStateRef.current.layerType;
 
           // Send fill event through WebSocket
           if (
@@ -282,12 +295,16 @@ export const useDrawing = (
             drawingEngineRef.current.layers.foreground &&
             drawingEngineRef.current.layers.background
           ) {
-            console.log(`Saving fill operation state for ${currentDrawingStateRef.current.layerType} layer`);
+            console.log(
+              `Saving fill operation state for ${currentDrawingStateRef.current.layerType} layer`
+            );
             history.saveState(
               currentDrawingStateRef.current.layerType,
-              drawingEngineRef.current.layers[currentDrawingStateRef.current.layerType],
-              true,  // This is a drawing action
-              false  // This is not a content snapshot
+              drawingEngineRef.current.layers[
+                currentDrawingStateRef.current.layerType
+              ],
+              true, // This is a drawing action
+              false // This is not a content snapshot
             );
             onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
           }
@@ -300,16 +317,27 @@ export const useDrawing = (
           }
 
           // Draw at the initial click position
-          const r = parseInt(currentDrawingStateRef.current.color.slice(1, 3), 16);
-          const g = parseInt(currentDrawingStateRef.current.color.slice(3, 5), 16);
-          const b = parseInt(currentDrawingStateRef.current.color.slice(5, 7), 16);
+          const r = parseInt(
+            currentDrawingStateRef.current.color.slice(1, 3),
+            16
+          );
+          const g = parseInt(
+            currentDrawingStateRef.current.color.slice(3, 5),
+            16
+          );
+          const b = parseInt(
+            currentDrawingStateRef.current.color.slice(5, 7),
+            16
+          );
 
           // Use standard opacity
           const effectiveOpacity = currentDrawingStateRef.current.opacity;
 
           // Draw single point using drawLine method (works for all brush types)
           drawingEngineRef.current.drawLine(
-            drawingEngineRef.current.layers[currentDrawingStateRef.current.layerType],
+            drawingEngineRef.current.layers[
+              currentDrawingStateRef.current.layerType
+            ],
             coords.x,
             coords.y,
             coords.x,
@@ -323,7 +351,8 @@ export const useDrawing = (
           );
 
           // Track which layer was modified
-          lastModifiedLayerRef.current = currentDrawingStateRef.current.layerType;
+          lastModifiedLayerRef.current =
+            currentDrawingStateRef.current.layerType;
 
           // Mark for recomposition - RAF loop will handle compositing
           onDrawingChangeRef.current?.(); // Still notify parent for RAF loop triggering
@@ -372,7 +401,7 @@ export const useDrawing = (
           console.warn("Failed to release pointer capture:", error);
         }
       }
-      
+
       // Reset state only if this is the active pointer
       if (drawingStateRef.current.activePointerId === pointerId) {
         drawingStateRef.current.activePointerId = null;
@@ -387,7 +416,8 @@ export const useDrawing = (
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
       // Disable drawing while catching up to stored messages or when disconnected
-      if (isCatchingUpRef.current || connectionStateRef.current !== "connected") return;
+      if (isCatchingUpRef.current || connectionStateRef.current !== "connected")
+        return;
 
       if (e.button === 1 || drawingStateRef.current.isPanning) {
         // Handle panning end - don't send WebSocket events for panning
@@ -398,7 +428,7 @@ export const useDrawing = (
           hasWsRef: !!wsRef?.current,
           wsState: wsRef?.current?.readyState,
           hasUserId: !!userIdRef?.current,
-          connectionReady: wsRef?.current?.readyState === WebSocket.OPEN
+          connectionReady: wsRef?.current?.readyState === WebSocket.OPEN,
         });
         if (
           wsRef?.current &&
@@ -430,12 +460,14 @@ export const useDrawing = (
           drawingEngineRef.current.layers.foreground &&
           drawingEngineRef.current.layers.background
         ) {
-          console.log(`Saving drawing stroke state for ${lastModifiedLayerRef.current} layer (pointer up)`);
+          console.log(
+            `Saving drawing stroke state for ${lastModifiedLayerRef.current} layer (pointer up)`
+          );
           history.saveState(
             lastModifiedLayerRef.current,
             drawingEngineRef.current.layers[lastModifiedLayerRef.current],
-            true,  // This is a drawing action
-            false  // This is not a content snapshot
+            true, // This is a drawing action
+            false // This is not a content snapshot
           );
           onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
         }
@@ -460,7 +492,7 @@ export const useDrawing = (
         pointerType: e.pointerType,
         activePointerId: drawingStateRef.current.activePointerId,
         isDrawing: drawingStateRef.current.isDrawing,
-        isPanning: drawingStateRef.current.isPanning
+        isPanning: drawingStateRef.current.isPanning,
       });
       // Clean up when pointer is cancelled (e.g., browser takes over, touch cancelled)
       cleanupPointerState(e.pointerId);
@@ -470,7 +502,7 @@ export const useDrawing = (
       // Only clean up if pointer leaves the app area completely
       const relatedTarget = e.relatedTarget as Element | null;
       const shouldCleanup = !relatedTarget || !app.contains(relatedTarget);
-      
+
       console.log("pointerleave event", {
         pointerId: e.pointerId,
         pointerType: e.pointerType,
@@ -478,9 +510,9 @@ export const useDrawing = (
         isDrawing: drawingStateRef.current.isDrawing,
         isPanning: drawingStateRef.current.isPanning,
         relatedTarget: relatedTarget?.tagName,
-        shouldCleanup
+        shouldCleanup,
       });
-      
+
       if (shouldCleanup) {
         cleanupPointerState(e.pointerId);
       }
@@ -492,7 +524,8 @@ export const useDrawing = (
 
       // Disable drawing while catching up to stored messages or when disconnected (allow panning though)
       if (
-        (isCatchingUpRef.current || connectionStateRef.current !== "connected") &&
+        (isCatchingUpRef.current ||
+          connectionStateRef.current !== "connected") &&
         !drawingStateRef.current.isPanning
       )
         return;
@@ -562,7 +595,9 @@ export const useDrawing = (
       const effectiveOpacity = currentDrawingStateRef.current.opacity;
 
       drawingEngineRef.current.drawLine(
-        drawingEngineRef.current.layers[currentDrawingStateRef.current.layerType],
+        drawingEngineRef.current.layers[
+          currentDrawingStateRef.current.layerType
+        ],
         drawingStateRef.current.prevX,
         drawingStateRef.current.prevY,
         drawingStateRef.current.currentX,
@@ -583,7 +618,7 @@ export const useDrawing = (
         hasWsRef: !!wsRef?.current,
         wsState: wsRef?.current?.readyState,
         hasUserId: !!userIdRef?.current,
-        connectionReady: wsRef?.current?.readyState === WebSocket.OPEN
+        connectionReady: wsRef?.current?.readyState === WebSocket.OPEN,
       });
       if (
         wsRef?.current &&
@@ -677,9 +712,13 @@ export const useDrawing = (
     console.log(`Attempting undo - can undo: ${history.canUndo()}`);
     const previousState = history.undo();
     if (previousState && contextRef.current && drawingEngineRef.current) {
-      console.log(`Undoing to previous ${previousState.layer} layer state (timestamp: ${previousState.timestamp})`);
+      console.log(
+        `Undoing to previous ${previousState.layer} layer state (timestamp: ${previousState.timestamp})`
+      );
       // Restore the specific layer that was undone
-      drawingEngineRef.current.layers[previousState.layer].set(previousState.data);
+      drawingEngineRef.current.layers[previousState.layer].set(
+        previousState.data
+      );
 
       // Queue DOM canvases for batched update to show the restored state
       drawingEngineRef.current.queueLayerUpdate(previousState.layer);
@@ -724,7 +763,9 @@ export const useDrawing = (
     console.log(`Attempting redo - can redo: ${history.canRedo()}`);
     const nextState = history.redo();
     if (nextState && contextRef.current && drawingEngineRef.current) {
-      console.log(`Redoing to next ${nextState.layer} layer state (timestamp: ${nextState.timestamp})`);
+      console.log(
+        `Redoing to next ${nextState.layer} layer state (timestamp: ${nextState.timestamp})`
+      );
       // Restore the specific layer that was redone
       drawingEngineRef.current.layers[nextState.layer].set(nextState.data);
 
@@ -794,7 +835,14 @@ export const useDrawing = (
     const ws = wsRef?.current;
     const userId = userIdRef?.current;
 
-    if (!engine || !ws || ws.readyState !== WebSocket.OPEN || !userId || !canvasWidth || !canvasHeight) {
+    if (
+      !engine ||
+      !ws ||
+      ws.readyState !== WebSocket.OPEN ||
+      !userId ||
+      !canvasWidth ||
+      !canvasHeight
+    ) {
       return;
     }
 
@@ -827,44 +875,47 @@ export const useDrawing = (
   }, [sendSnapshot]);
 
   // Handle snapshot request from server
-  const handleSnapshotRequest = useCallback(
-    () => {
-      if (isDrawingRef.current) {
-        // Defer if currently drawing
-        pendingSnapshotRequestRef.current = true;
-      } else {
-        // Send immediately if not drawing
-        sendSnapshot();
-      }
-    },
-    [sendSnapshot]
-  );
+  const handleSnapshotRequest = useCallback(() => {
+    if (isDrawingRef.current) {
+      // Defer if currently drawing
+      pendingSnapshotRequestRef.current = true;
+    } else {
+      // Send immediately if not drawing
+      sendSnapshot();
+    }
+  }, [sendSnapshot]);
 
   // handleSnapshotRequest is now returned directly from the hook
 
   // Function to add snapshot to history (for when we receive our own snapshot after page refresh)
-  const addSnapshotToHistory = useCallback((layer?: "foreground" | "background") => {
-    if (drawingEngineRef.current?.layers.foreground && drawingEngineRef.current?.layers.background) {
-      if (layer) {
-        // Add specific layer snapshot to history
-        history.saveState(
-          layer,
-          drawingEngineRef.current.layers[layer],
-          false, // Not a drawing action, just a received snapshot
-          true   // This is a content snapshot that should be protected from undo
-        );
-      } else {
-        // Add both layers (for initial page load scenarios)
-        history.saveBothLayers(
-          drawingEngineRef.current.layers.foreground,
-          drawingEngineRef.current.layers.background,
-          false, // Not a drawing action, just a received snapshot
-          true   // This is a content snapshot that should be protected from undo
-        );
+  const addSnapshotToHistory = useCallback(
+    (layer?: "foreground" | "background") => {
+      if (
+        drawingEngineRef.current?.layers.foreground &&
+        drawingEngineRef.current?.layers.background
+      ) {
+        if (layer) {
+          // Add specific layer snapshot to history
+          history.saveState(
+            layer,
+            drawingEngineRef.current.layers[layer],
+            false, // Not a drawing action, just a received snapshot
+            true // This is a content snapshot that should be protected from undo
+          );
+        } else {
+          // Add both layers (for initial page load scenarios)
+          history.saveBothLayers(
+            drawingEngineRef.current.layers.foreground,
+            drawingEngineRef.current.layers.background,
+            false, // Not a drawing action, just a received snapshot
+            true // This is a content snapshot that should be protected from undo
+          );
+        }
+        onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
       }
-      onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
-    }
-  }, [history]);
+    },
+    [history]
+  );
 
   // Function to mark drawing operation as complete (prevent double-saving in pointerup)
   const markDrawingComplete = useCallback(() => {
