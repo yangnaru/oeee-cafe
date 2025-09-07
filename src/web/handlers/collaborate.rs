@@ -569,7 +569,7 @@ async fn handle_socket(
     state
         .collaboration_rooms
         .entry(room_uuid)
-        .or_insert_with(DashMap::new)
+        .or_default()
         .insert(connection_id.clone(), tx.clone());
 
     // Send stored messages to new client
@@ -779,7 +779,7 @@ async fn handle_socket(
                                     let mut history = state
                                         .message_history
                                         .entry(room_uuid)
-                                        .or_insert_with(Vec::new);
+                                        .or_default();
 
                                     let initial_count = history.len();
 
@@ -826,7 +826,7 @@ async fn handle_socket(
                                                     // Same user - check message type
                                                     match stored_msg_type {
                                                         0x13 => false, // Remove POINTER_UP
-                                                        0x10 | 0x11 | 0x12 => {
+                                                        0x10..=0x12 => {
                                                             // DRAW_LINE (39), DRAW_POINT (31), FILL (26) - check layer
                                                             if stored_data.len() >= 18 {
                                                                 let stored_layer = stored_data[17];
@@ -886,7 +886,7 @@ async fn handle_socket(
                                                 // New format: [0x03][UUID:16][timestamp:8][usernameLength:2][username:variable][msgLength:2][msgData:variable]
                                                 let username_bytes = user_login_name.as_bytes();
                                                 let username_len = username_bytes.len() as u16;
-                                                let msg_len = chat_text.as_bytes().len() as u16;
+                                                let msg_len = chat_text.len() as u16;
 
                                                 let mut new_chat_msg = Vec::new();
                                                 new_chat_msg.push(0x03u8); // CHAT type
@@ -985,7 +985,7 @@ async fn handle_socket(
             let mut history = state
                 .message_history
                 .entry(room_uuid)
-                .or_insert_with(Vec::new);
+                .or_default();
 
             // Don't store chat messages and JOIN messages in history - they're not persistent
             let should_store = if let Message::Binary(data) = &msg {
@@ -1052,12 +1052,11 @@ async fn handle_socket(
             if message_count > MAX_USER_MESSAGES {
                 // Check if snapshot request was already sent for this user in this room
                 let snapshot_key = format!("{}:{}", room_uuid, user_id_to_request);
-                let should_send_snapshot = state
+                let should_send_snapshot = !state
                     .snapshot_request_tracker
                     .get(&snapshot_key)
                     .map(|entry| *entry.value())
-                    .unwrap_or(false)
-                    == false;
+                    .unwrap_or(false);
 
                 if should_send_snapshot {
                     // Send snapshot request only to the specific user who exceeded the threshold
@@ -1080,11 +1079,10 @@ async fn handle_socket(
                             if let Some(conn_user_id) =
                                 state.connection_user_mapping.get(connection_id)
                             {
-                                if *conn_user_id == *user_id_to_request {
-                                    if sender.send(snapshot_request_msg.clone()).is_ok() {
+                                if *conn_user_id == *user_id_to_request
+                                    && sender.send(snapshot_request_msg.clone()).is_ok() {
                                         sent_count += 1;
                                     }
-                                }
                             }
                         }
 
@@ -1171,11 +1169,10 @@ async fn handle_socket(
             // Broadcast to all OTHER connections (exclude the leaving user)
             for conn_ref in room.iter() {
                 let (other_conn_id, sender) = conn_ref.pair();
-                if *other_conn_id != connection_id {
-                    if sender.send(leave_message.clone()).is_ok() {
+                if *other_conn_id != connection_id
+                    && sender.send(leave_message.clone()).is_ok() {
                         notified_connections += 1;
                     }
-                }
             }
 
             if notified_connections > 0 {
@@ -1299,7 +1296,7 @@ async fn handle_save_request(
     // Upload to S3
     let s3_key = format!(
         "image/{}{}/{}.png",
-        image_sha256.chars().nth(0).unwrap(),
+        image_sha256.chars().next().unwrap(),
         image_sha256.chars().nth(1).unwrap(),
         image_sha256
     );
@@ -1308,7 +1305,7 @@ async fn handle_save_request(
         .put_object()
         .bucket(&state.config.aws_s3_bucket)
         .key(&s3_key)
-        .checksum_sha256(&data_encoding::BASE64.encode(&hex::decode(&image_sha256)?))
+        .checksum_sha256(data_encoding::BASE64.encode(&hex::decode(&image_sha256)?))
         .body(aws_sdk_s3::primitives::ByteStream::from(png_data))
         .send()
         .await?;

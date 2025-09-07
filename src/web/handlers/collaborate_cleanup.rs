@@ -87,7 +87,7 @@ async fn sync_activity_to_database(
                     .as_secs() as i64,
                 0,
             )
-            .unwrap_or_else(|| chrono::Utc::now())
+            .unwrap_or_else(chrono::Utc::now)
             .naive_utc();
 
             (session_id, timestamp)
