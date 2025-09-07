@@ -530,30 +530,30 @@ async fn handle_socket(
     // Disconnect any existing connections for this user in this room
     if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
         let mut connections_to_remove = Vec::new();
-        
+
         // Find existing connections for this user (excluding the new connection)
         for conn_ref in room.iter() {
             let (existing_conn_id, existing_tx) = conn_ref.pair();
-            
+
             // Skip the new connection_id to avoid disconnecting ourselves
             if *existing_conn_id == connection_id {
                 continue;
             }
-            
+
             if let Some(existing_user_id) = state.connection_user_mapping.get(existing_conn_id) {
                 if *existing_user_id == user_id {
                     info!(
                         "Disconnecting older connection {} for user {} in room {} (new connection: {})",
                         existing_conn_id, user_login_name, room_uuid, connection_id
                     );
-                    
+
                     // Send close message to the older connection
                     let _ = existing_tx.send(Message::Close(None));
                     connections_to_remove.push(existing_conn_id.clone());
                 }
             }
         }
-        
+
         // Remove the old connections
         for old_conn_id in connections_to_remove {
             room.remove(&old_conn_id);
@@ -856,8 +856,11 @@ async fn handle_socket(
                                     }
 
                                     // Reset snapshot request tracker for this specific user since we received their snapshot
-                                    let user_snapshot_key = format!("{}:{}", room_uuid, snapshot_user);
-                                    state.snapshot_request_tracker.insert(user_snapshot_key, false);
+                                    let user_snapshot_key =
+                                        format!("{}:{}", room_uuid, snapshot_user);
+                                    state
+                                        .snapshot_request_tracker
+                                        .insert(user_snapshot_key, false);
                                 }
                             }
                         }
@@ -1012,7 +1015,7 @@ async fn handle_socket(
         // Count messages per user in current history for logging and threshold checking
         use std::collections::HashMap;
         let mut user_message_counts: HashMap<Uuid, usize> = HashMap::new();
-        
+
         if let Some(history) = state.message_history.get(&room_uuid) {
             for stored_msg in history.iter() {
                 if let Message::Binary(stored_data) = stored_msg {
@@ -1053,7 +1056,8 @@ async fn handle_socket(
                     .snapshot_request_tracker
                     .get(&snapshot_key)
                     .map(|entry| *entry.value())
-                    .unwrap_or(false) == false;
+                    .unwrap_or(false)
+                    == false;
 
                 if should_send_snapshot {
                     // Send snapshot request only to the specific user who exceeded the threshold
@@ -1073,7 +1077,9 @@ async fn handle_socket(
                         // Send only to connections belonging to the user who exceeded the threshold
                         for conn_ref in room.iter() {
                             let (connection_id, sender) = conn_ref.pair();
-                            if let Some(conn_user_id) = state.connection_user_mapping.get(connection_id) {
+                            if let Some(conn_user_id) =
+                                state.connection_user_mapping.get(connection_id)
+                            {
                                 if *conn_user_id == *user_id_to_request {
                                     if sender.send(snapshot_request_msg.clone()).is_ok() {
                                         sent_count += 1;
@@ -1084,7 +1090,9 @@ async fn handle_socket(
 
                         if sent_count > 0 {
                             // Mark that snapshot request has been sent for this user in this room
-                            state.snapshot_request_tracker.insert(snapshot_key.clone(), true);
+                            state
+                                .snapshot_request_tracker
+                                .insert(snapshot_key.clone(), true);
                             debug!(
                                 "Sent snapshot request to {} connections targeting user {} with {} messages in room {}",
                                 sent_count, user_id_to_request, message_count, room_uuid
@@ -1206,7 +1214,8 @@ async fn handle_socket(
             state.collaboration_rooms.remove(&room_uuid);
             // Clean up snapshot request tracker entries for this room (remove all user:room entries)
             let room_prefix = format!("{}:", room_uuid);
-            let keys_to_remove: Vec<String> = state.snapshot_request_tracker
+            let keys_to_remove: Vec<String> = state
+                .snapshot_request_tracker
                 .iter()
                 .filter_map(|entry| {
                     let key = entry.key();
@@ -1217,7 +1226,7 @@ async fn handle_socket(
                     }
                 })
                 .collect();
-            
+
             for key in keys_to_remove {
                 state.snapshot_request_tracker.remove(&key);
             }

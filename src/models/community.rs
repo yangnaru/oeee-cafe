@@ -448,6 +448,6 @@ pub async fn get_communities_for_collaboration(
         "#,
         user_id
     );
-    
+
     Ok(q.fetch_all(&mut **tx).await?)
 }
