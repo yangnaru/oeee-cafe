@@ -12,9 +12,9 @@ use super::utils::{bytes_to_uuid, read_u64_le};
 const MAX_USER_MESSAGES: usize = 100;
 
 // History limits to prevent unbounded growth
-const MAX_HISTORY_MESSAGES: usize = 5000;  // Max messages per room
-const MAX_HISTORY_BYTES: usize = 50 * 1024 * 1024;  // 50MB per room
-const MAX_MESSAGE_AGE_MINUTES: u64 = 60;  // Remove messages older than 1 hour
+const MAX_HISTORY_MESSAGES: usize = 50000; // Max messages per room
+const MAX_HISTORY_BYTES: usize = 10 * 1024 * 1024; // 10MB per room
+const MAX_MESSAGE_AGE_MINUTES: u64 = 60; // Remove messages older than 1 hour
 
 // Message type constants matching neo-cucumber protocol
 #[repr(u8)]
@@ -69,14 +69,14 @@ impl JoinMessage {
     pub fn serialize(&self) -> Vec<u8> {
         let username_bytes = self.username.as_bytes();
         let username_len = username_bytes.len() as u16;
-        
+
         let mut buffer = Vec::with_capacity(1 + 16 + 8 + 2 + username_bytes.len());
         buffer.push(MessageType::Join as u8);
         buffer.extend_from_slice(self.user_id.as_bytes());
         buffer.extend_from_slice(&self.timestamp.to_le_bytes());
         buffer.extend_from_slice(&username_len.to_le_bytes());
         buffer.extend_from_slice(username_bytes);
-        
+
         buffer
     }
 }
@@ -85,14 +85,14 @@ impl JoinResponseMessage {
     pub fn serialize(&self) -> Vec<u8> {
         let user_count = self.user_ids.len() as u16;
         let mut buffer = Vec::with_capacity(1 + 2 + self.user_ids.len() * 16);
-        
+
         buffer.push(MessageType::JoinResponse as u8);
         buffer.extend_from_slice(&user_count.to_le_bytes());
-        
+
         for user_id in &self.user_ids {
             buffer.extend_from_slice(user_id.as_bytes());
         }
-        
+
         buffer
     }
 }
@@ -103,8 +103,9 @@ impl ChatMessage {
         let username_len = username_bytes.len() as u16;
         let message_bytes = self.message.as_bytes();
         let message_len = message_bytes.len() as u16;
-        
-        let mut buffer = Vec::with_capacity(1 + 16 + 8 + 2 + username_bytes.len() + 2 + message_bytes.len());
+
+        let mut buffer =
+            Vec::with_capacity(1 + 16 + 8 + 2 + username_bytes.len() + 2 + message_bytes.len());
         buffer.push(MessageType::Chat as u8);
         buffer.extend_from_slice(self.user_id.as_bytes());
         buffer.extend_from_slice(&self.timestamp.to_le_bytes());
@@ -112,7 +113,7 @@ impl ChatMessage {
         buffer.extend_from_slice(username_bytes);
         buffer.extend_from_slice(&message_len.to_le_bytes());
         buffer.extend_from_slice(message_bytes);
-        
+
         buffer
     }
 }
@@ -123,7 +124,7 @@ impl SnapshotRequestMessage {
         buffer.push(MessageType::SnapshotRequest as u8);
         buffer.extend_from_slice(self.user_id.as_bytes());
         buffer.extend_from_slice(&self.timestamp.to_le_bytes());
-        
+
         buffer
     }
 }
@@ -132,14 +133,14 @@ impl LeaveMessage {
     pub fn serialize(&self) -> Vec<u8> {
         let username_bytes = self.username.as_bytes();
         let username_len = username_bytes.len() as u16;
-        
+
         let mut buffer = Vec::with_capacity(1 + 16 + 8 + 2 + username_bytes.len());
         buffer.push(MessageType::Leave as u8);
         buffer.extend_from_slice(self.user_id.as_bytes());
         buffer.extend_from_slice(&self.timestamp.to_le_bytes());
         buffer.extend_from_slice(&username_len.to_le_bytes());
         buffer.extend_from_slice(username_bytes);
-        
+
         buffer
     }
 }
@@ -149,7 +150,7 @@ pub fn parse_message_type(data: &[u8]) -> Option<MessageType> {
     if data.is_empty() {
         return None;
     }
-    
+
     match data[0] {
         0x01 => Some(MessageType::Join),
         0x02 => Some(MessageType::Snapshot),
@@ -331,7 +332,8 @@ pub fn handle_snapshot_message(
 
                     match stored_msg_type {
                         0x13 => false, // POINTER_UP
-                        0x10..=0x12 => { // DRAW_LINE, DRAW_POINT, FILL
+                        0x10..=0x12 => {
+                            // DRAW_LINE, DRAW_POINT, FILL
                             if stored_data.len() >= 18 {
                                 let stored_layer = stored_data[17];
                                 stored_layer != snapshot_layer
@@ -361,16 +363,14 @@ pub fn handle_snapshot_message(
     }
 
     let user_snapshot_key = format!("{}:{}", room_uuid, snapshot_user);
-    state.snapshot_request_tracker.insert(user_snapshot_key, false);
+    state
+        .snapshot_request_tracker
+        .insert(user_snapshot_key, false);
 
     Ok(())
 }
 
-pub fn handle_chat_message(
-    data: &[u8],
-    user_id: Uuid,
-    user_login_name: &str,
-) -> Option<Message> {
+pub fn handle_chat_message(data: &[u8], user_id: Uuid, user_login_name: &str) -> Option<Message> {
     if data.len() < 27 {
         return None;
     }
@@ -468,18 +468,13 @@ pub async fn handle_end_session_message(
 
 pub fn should_store_message(msg: &Message) -> bool {
     if let Message::Binary(data) = msg {
-        !data.is_empty() 
-            && data[0] != MessageType::Chat as u8 
-            && data[0] != MessageType::Join as u8
+        !data.is_empty() && data[0] != MessageType::Chat as u8 && data[0] != MessageType::Join as u8
     } else {
         true
     }
 }
 
-pub fn count_user_messages(
-    state: &AppState,
-    room_uuid: Uuid,
-) -> HashMap<Uuid, usize> {
+pub fn count_user_messages(state: &AppState, room_uuid: Uuid) -> HashMap<Uuid, usize> {
     let mut user_message_counts: HashMap<Uuid, usize> = HashMap::new();
 
     if let Some(history) = state.message_history.get(&room_uuid) {
@@ -520,7 +515,14 @@ pub async fn handle_snapshot_requests(
                 .unwrap_or(false);
 
             if should_send_snapshot {
-                send_snapshot_request(room_uuid, state, user_id_to_request, message_count, &snapshot_key).await;
+                send_snapshot_request(
+                    room_uuid,
+                    state,
+                    user_id_to_request,
+                    message_count,
+                    &snapshot_key,
+                )
+                .await;
                 break;
             }
         }
@@ -560,7 +562,9 @@ async fn send_snapshot_request(
         }
 
         if sent_count > 0 {
-            state.snapshot_request_tracker.insert(snapshot_key.to_string(), true);
+            state
+                .snapshot_request_tracker
+                .insert(snapshot_key.to_string(), true);
             debug!(
                 "Sent snapshot request to {} connections targeting user {} with {} messages in room {}",
                 sent_count, user_id_to_request, message_count, room_uuid
@@ -607,66 +611,67 @@ pub async fn broadcast_message(
     }
 }
 
-pub fn enforce_history_limits(
-    history: &mut Vec<Message>,
-    room_uuid: Uuid,
-) {
+pub fn enforce_history_limits(history: &mut Vec<Message>, room_uuid: Uuid) {
     let initial_count = history.len();
     let mut total_bytes = 0;
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
-    
+
     // First pass: calculate total size and identify old messages
     let mut messages_to_keep = Vec::new();
-    
-    for msg in history.iter().rev() {  // Process newest first
+
+    for msg in history.iter().rev() {
+        // Process newest first
         let msg_size = match msg {
             Message::Binary(data) => data.len(),
             Message::Text(text) => text.len(),
             _ => 0,
         };
-        
+
         // Check if we've exceeded limits
         if messages_to_keep.len() >= MAX_HISTORY_MESSAGES {
-            break;  // Too many messages
+            break; // Too many messages
         }
-        
+
         if total_bytes + msg_size > MAX_HISTORY_BYTES {
-            break;  // Too much data
+            break; // Too much data
         }
-        
+
         // Check message age for timestamped messages
         if let Message::Binary(data) = msg {
             if data.len() >= 25 && is_timestamped_message(data[0]) {
                 let msg_timestamp = read_u64_le(data, 17);
                 let age_ms = current_time.saturating_sub(msg_timestamp);
                 if age_ms > MAX_MESSAGE_AGE_MINUTES * 60 * 1000 {
-                    continue;  // Message too old
+                    continue; // Message too old
                 }
             }
         }
-        
+
         total_bytes += msg_size;
         messages_to_keep.push(msg.clone());
     }
-    
+
     // Reverse to maintain chronological order
     messages_to_keep.reverse();
-    
+
     if messages_to_keep.len() < initial_count {
         let removed = initial_count - messages_to_keep.len();
         debug!(
             "Enforced history limits for room {}: removed {} messages (was {} messages, now {})",
-            room_uuid, removed, initial_count, messages_to_keep.len()
+            room_uuid,
+            removed,
+            initial_count,
+            messages_to_keep.len()
         );
         *history = messages_to_keep;
     }
 }
 
 fn is_timestamped_message(msg_type: u8) -> bool {
-    matches!(msg_type, 0x01 | 0x03 | 0x05 | 0x09)  // JOIN, CHAT, SNAPSHOT_REQUEST, LEAVE
+    matches!(msg_type, 0x01 | 0x03 | 0x05 | 0x09) // JOIN, CHAT, SNAPSHOT_REQUEST, LEAVE
 }
 
 pub async fn send_leave_message(
