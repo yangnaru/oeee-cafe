@@ -36,7 +36,6 @@ interface WebSocketHookParams {
   setIsCatchingUp: (catching: boolean) => void;
   createUserEngine: (userId: string, username?: string) => void;
   handleLocalDrawingChange: () => void;
-  updateCanvasZIndices: () => void;
   addSnapshotToHistory: (
     layerName: "foreground" | "background",
     layerData: Uint8ClampedArray
@@ -78,7 +77,6 @@ export const useWebSocket = ({
   setIsCatchingUp,
   createUserEngine,
   handleLocalDrawingChange,
-  updateCanvasZIndices,
   addSnapshotToHistory,
   markDrawingComplete,
   createOrUpdateCursor,
@@ -819,7 +817,6 @@ export const useWebSocket = ({
     setIsCatchingUp,
     createUserEngine,
     handleLocalDrawingChange,
-    updateCanvasZIndices,
     addSnapshotToHistory,
     markDrawingComplete,
     createOrUpdateCursor,
@@ -827,6 +824,16 @@ export const useWebSocket = ({
     addParticipant,
     removeParticipant,
     addChatMessage,
+    catchupTimeoutRef,
+    drawingEngineRef,
+    isCatchingUpRef,
+    localUserJoinTimeRef,
+    participantsRef,
+    processingMessageRef,
+    shouldConnectRef,
+    userEnginesRef,
+    userIdRef,
+    userLoginNameRef,
   ]);
 
   // Cleanup WebSocket on unmount

@@ -297,7 +297,6 @@ function App() {
   const {
     canvasContainerRef,
     createUserEngine,
-    updateCanvasZIndices,
     compositeCanvasesForExport,
     downloadCanvasAsPNG,
   } = useCanvas({
@@ -339,7 +338,6 @@ function App() {
     setIsCatchingUp,
     createUserEngine,
     handleLocalDrawingChange,
-    updateCanvasZIndices,
     addSnapshotToHistory,
     markDrawingComplete,
     createOrUpdateCursor,
@@ -368,7 +366,7 @@ function App() {
       drawingWsConnected: !!drawingWsRef.current,
     });
     drawingWsRef.current = wsRef.current;
-  }, [wsRef.current]);
+  }, [wsRef]);
 
   // Ensure drawing engine DOM canvases are updated when engine becomes available
   useEffect(() => {
@@ -475,7 +473,7 @@ function App() {
       );
       setIsSaving(false);
     }
-  }, [isSaving, compositeCanvasesForExport]);
+  }, [isSaving, compositeCanvasesForExport, wsRef, userIdRef]);
 
   // New initialization function that follows the required flow
   const initializeApp = useCallback(async (): Promise<boolean> => {
@@ -588,7 +586,7 @@ function App() {
         wsRef.current = null;
       }
     };
-  }, [initializeApp]);
+  }, [initializeApp, wsRef, shouldConnectRef]);
 
   // Connect to WebSocket when canvas meta is available
   useEffect(() => {
