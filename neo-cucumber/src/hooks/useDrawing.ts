@@ -953,7 +953,7 @@ export const useDrawing = (
         // onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
       }
     },
-    [history]
+    []
   );
 
   // Function to mark drawing operation as complete (prevent double-saving in pointerup)

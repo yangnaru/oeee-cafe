@@ -90,6 +90,12 @@ export const useWebSocket = ({
 }: WebSocketHookParams) => {
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<DecodedMessage[]>([]);
+  
+  // Keep handleSnapshotRequest ref to avoid dependency issues
+  const handleSnapshotRequestRef = useRef(handleSnapshotRequest);
+  useEffect(() => {
+    handleSnapshotRequestRef.current = handleSnapshotRequest;
+  }, [handleSnapshotRequest]);
 
   // Function to get WebSocket URL dynamically
   const getWebSocketUrl = useCallback(() => {
@@ -778,7 +784,7 @@ export const useWebSocket = ({
             });
 
             // Call the provided snapshot request handler
-            handleSnapshotRequest();
+            handleSnapshotRequestRef.current();
             break;
           }
 
