@@ -461,13 +461,15 @@ export const useDrawing = (
           drawingEngineRef.current.layers.background
         ) {
           console.log(
-            `Saving drawing stroke state for ${lastModifiedLayerRef.current} layer (pointer up)`
+            `Saving complete canvas state for ${lastModifiedLayerRef.current} layer (pointer up)`
           );
           history.saveState(
+            drawingEngineRef.current.layers.foreground,
+            drawingEngineRef.current.layers.background,
             lastModifiedLayerRef.current,
-            drawingEngineRef.current.layers[lastModifiedLayerRef.current],
             true, // This is a drawing action
-            false // This is not a content snapshot
+            false, // This is not a content snapshot
+            false // This is not a remote change
           );
           onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
         }
@@ -713,22 +715,22 @@ export const useDrawing = (
     const previousState = history.undo();
     if (previousState && contextRef.current && drawingEngineRef.current) {
       console.log(
-        `Undoing to previous ${previousState.layer} layer state (timestamp: ${previousState.timestamp})`
+        `Undoing to previous canvas state (modified: ${previousState.modifiedLayer}, timestamp: ${previousState.timestamp})`
       );
-      // Restore the specific layer that was undone
-      drawingEngineRef.current.layers[previousState.layer].set(
-        previousState.data
-      );
+      // Restore both layers to ensure complete state consistency
+      drawingEngineRef.current.layers.foreground.set(previousState.foreground);
+      drawingEngineRef.current.layers.background.set(previousState.background);
 
       // Queue DOM canvases for batched update to show the restored state
-      drawingEngineRef.current.queueLayerUpdate(previousState.layer);
+      drawingEngineRef.current.queueLayerUpdate("foreground");
+      drawingEngineRef.current.queueLayerUpdate("background");
 
       // Update display
       // Notify parent component that drawing has changed
       onDrawingChange?.();
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
 
-      // Send snapshot over WebSocket - use the layer from history, not lastModifiedLayerRef
+      // Send snapshots of both layers over WebSocket to keep remote users in sync
       if (
         wsRef?.current &&
         wsRef.current.readyState === WebSocket.OPEN &&
@@ -737,20 +739,26 @@ export const useDrawing = (
         canvasHeight
       ) {
         try {
-          const pngBlob = await layerToPngBlob(
-            previousState.data,
+          // Send both layer snapshots to ensure complete synchronization
+          const fgBlob = await layerToPngBlob(
+            previousState.foreground,
             canvasWidth,
             canvasHeight
           );
-          const binaryMessage = await encodeSnapshot(
-            userIdRef.current,
-            previousState.layer, // Use the layer from history, not lastModifiedLayerRef
-            pngBlob
+          const bgBlob = await layerToPngBlob(
+            previousState.background,
+            canvasWidth,
+            canvasHeight
           );
+          
+          const fgMessage = await encodeSnapshot(userIdRef.current, "foreground", fgBlob);
+          const bgMessage = await encodeSnapshot(userIdRef.current, "background", bgBlob);
 
-          wsRef.current.send(binaryMessage);
+          wsRef.current.send(fgMessage);
+          wsRef.current.send(bgMessage);
+          console.log("Sent both layer snapshots after undo");
         } catch (error) {
-          console.error("Failed to send undo snapshot:", error);
+          console.error("Failed to send undo snapshots:", error);
         }
       }
     } else {
@@ -764,20 +772,22 @@ export const useDrawing = (
     const nextState = history.redo();
     if (nextState && contextRef.current && drawingEngineRef.current) {
       console.log(
-        `Redoing to next ${nextState.layer} layer state (timestamp: ${nextState.timestamp})`
+        `Redoing to next canvas state (modified: ${nextState.modifiedLayer}, timestamp: ${nextState.timestamp})`
       );
-      // Restore the specific layer that was redone
-      drawingEngineRef.current.layers[nextState.layer].set(nextState.data);
+      // Restore both layers to ensure complete state consistency
+      drawingEngineRef.current.layers.foreground.set(nextState.foreground);
+      drawingEngineRef.current.layers.background.set(nextState.background);
 
       // Queue DOM canvases for batched update to show the restored state
-      drawingEngineRef.current.queueLayerUpdate(nextState.layer);
+      drawingEngineRef.current.queueLayerUpdate("foreground");
+      drawingEngineRef.current.queueLayerUpdate("background");
 
       // Update display
       // Notify parent component that drawing has changed
       onDrawingChange?.();
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
 
-      // Send snapshot over WebSocket - use the layer from history, not lastModifiedLayerRef
+      // Send snapshots of both layers over WebSocket to keep remote users in sync
       if (
         wsRef?.current &&
         wsRef.current.readyState === WebSocket.OPEN &&
@@ -786,20 +796,26 @@ export const useDrawing = (
         canvasHeight
       ) {
         try {
-          const pngBlob = await layerToPngBlob(
-            nextState.data,
+          // Send both layer snapshots to ensure complete synchronization
+          const fgBlob = await layerToPngBlob(
+            nextState.foreground,
             canvasWidth,
             canvasHeight
           );
-          const binaryMessage = await encodeSnapshot(
-            userIdRef.current,
-            nextState.layer, // Use the layer from history, not lastModifiedLayerRef
-            pngBlob
+          const bgBlob = await layerToPngBlob(
+            nextState.background,
+            canvasWidth,
+            canvasHeight
           );
+          
+          const fgMessage = await encodeSnapshot(userIdRef.current, "foreground", fgBlob);
+          const bgMessage = await encodeSnapshot(userIdRef.current, "background", bgBlob);
 
-          wsRef.current.send(binaryMessage);
+          wsRef.current.send(fgMessage);
+          wsRef.current.send(bgMessage);
+          console.log("Sent both layer snapshots after redo");
         } catch (error) {
-          console.error("Failed to send redo snapshot:", error);
+          console.error("Failed to send redo snapshots:", error);
         }
       }
     } else {
@@ -887,31 +903,23 @@ export const useDrawing = (
 
   // handleSnapshotRequest is now returned directly from the hook
 
-  // Function to add snapshot to history (for when we receive our own snapshot after page refresh)
+  // Function to add snapshot to history (called when receiving snapshots from WebSocket)
   const addSnapshotToHistory = useCallback(
-    (layer?: "foreground" | "background") => {
+    (layerName: "foreground" | "background", layerData: Uint8ClampedArray) => {
       if (
         drawingEngineRef.current?.layers.foreground &&
         drawingEngineRef.current?.layers.background
       ) {
-        if (layer) {
-          // Add specific layer snapshot to history
-          history.saveState(
-            layer,
-            drawingEngineRef.current.layers[layer],
-            false, // Not a drawing action, just a received snapshot
-            true // This is a content snapshot that should be protected from undo
-          );
-        } else {
-          // Add both layers (for initial page load scenarios)
-          history.saveBothLayers(
-            drawingEngineRef.current.layers.foreground,
-            drawingEngineRef.current.layers.background,
-            false, // Not a drawing action, just a received snapshot
-            true // This is a content snapshot that should be protected from undo
-          );
-        }
-        onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
+        // For remote snapshots, we don't add them to undo history to avoid interference
+        // The saveState function with isRemote=true will skip adding to history
+        console.log(`Received remote ${layerName} snapshot - updating canvas only (not adding to undo history)`);
+        
+        // Update the layer data directly without affecting undo/redo history
+        drawingEngineRef.current.layers[layerName].set(layerData);
+        drawingEngineRef.current.queueLayerUpdate(layerName);
+        
+        // Don't call history.saveState for remote snapshots to avoid polluting undo history
+        // onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
       }
     },
     [history]

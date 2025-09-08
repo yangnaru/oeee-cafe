@@ -1,10 +1,12 @@
 import { useRef, useCallback } from 'react';
 
 export interface CanvasState {
-  layer: "foreground" | "background";  // Which layer was modified
-  data: Uint8ClampedArray;              // Only the modified layer data
+  foreground: Uint8ClampedArray;        // Complete foreground layer data
+  background: Uint8ClampedArray;        // Complete background layer data
+  modifiedLayer: "foreground" | "background" | "both"; // Which layer(s) were changed
   timestamp: number;
   isContentSnapshot?: boolean; // True if this snapshot contains actual content (BG/FG layers)
+  isRemote?: boolean; // True if this came from a remote user (don't include in undo history)
 }
 
 export const useCanvasHistory = (maxHistorySize: number = 30) => {
@@ -30,32 +32,43 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
     return true;
   }, []);
 
-  const saveState = useCallback((layer: "foreground" | "background", data: Uint8ClampedArray, isDrawingAction: boolean = true, isContentSnapshot: boolean = false) => {
-    // Check for duplicate data - compare with the most recent state for this layer
+  const saveState = useCallback((
+    foreground: Uint8ClampedArray, 
+    background: Uint8ClampedArray, 
+    modifiedLayer: "foreground" | "background" | "both" = "both",
+    isDrawingAction: boolean = true, 
+    isContentSnapshot: boolean = false,
+    isRemote: boolean = false
+  ) => {
+    // Don't add remote snapshots to undo history
+    if (isRemote) {
+      console.log(`Skipping remote ${modifiedLayer} snapshot - not adding to undo history`);
+      return;
+    }
+
+    // Check for duplicate data - compare with the most recent state
     if (historyRef.current.length > 0) {
-      // Find the most recent state for this layer (search backwards)
-      for (let i = historyRef.current.length - 1; i >= 0; i--) {
-        const recentState = historyRef.current[i];
-        if (recentState.layer === layer) {
-          // If the data is identical to the most recent state, skip saving
-          if (arraysEqual(data, recentState.data)) {
-            console.log(`Skipping duplicate ${layer} layer state save`);
-            return;
-          }
-          break; // Found the most recent state for this layer, no need to check further
-        }
+      const recentState = historyRef.current[historyRef.current.length - 1];
+      // If both layers are identical to the most recent state, skip saving
+      if (arraysEqual(foreground, recentState.foreground) && 
+          arraysEqual(background, recentState.background)) {
+        console.log(`Skipping duplicate canvas state save`);
+        return;
       }
     }
 
     const newState: CanvasState = {
-      layer,
-      data: new Uint8ClampedArray(data),
+      foreground: new Uint8ClampedArray(foreground),
+      background: new Uint8ClampedArray(background),
+      modifiedLayer,
       timestamp: Date.now(),
-      isContentSnapshot
+      isContentSnapshot,
+      isRemote
     };
 
     // Update our current state tracking
-    currentStateRef.current[layer] = new Uint8ClampedArray(data);
+    currentStateRef.current.foreground = new Uint8ClampedArray(foreground);
+    currentStateRef.current.background = new Uint8ClampedArray(background);
 
     // Remove any states after current index (when user made new changes after undo)
     if (currentIndexRef.current < historyRef.current.length - 1) {
@@ -64,7 +77,7 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
 
     // Add new state
     historyRef.current.push(newState);
-    console.log(`Saved ${layer} layer state to history (index: ${historyRef.current.length - 1}, drawing action: ${isDrawingAction}, content snapshot: ${isContentSnapshot})`);
+    console.log(`Saved complete canvas state to history (index: ${historyRef.current.length - 1}, modified: ${modifiedLayer}, drawing action: ${isDrawingAction}, content snapshot: ${isContentSnapshot})`);
 
     // Track if this is a drawing action
     if (isDrawingAction) {
@@ -80,15 +93,9 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
     }
   }, [maxHistorySize, arraysEqual]);
 
-  // Helper method to save both layers (for initial state)
+  // Helper method to save both layers (for backward compatibility)
   const saveBothLayers = useCallback((foreground: Uint8ClampedArray, background: Uint8ClampedArray, isDrawingAction: boolean = true, isContentSnapshot: boolean = false) => {
-    // Update our current state tracking
-    currentStateRef.current.foreground = new Uint8ClampedArray(foreground);
-    currentStateRef.current.background = new Uint8ClampedArray(background);
-    
-    // Save foreground first, then background
-    saveState("foreground", foreground, isDrawingAction, isContentSnapshot);
-    saveState("background", background, isDrawingAction, isContentSnapshot);
+    saveState(foreground, background, "both", isDrawingAction, isContentSnapshot, false);
   }, [saveState]);
 
   const undo = useCallback((): CanvasState | null => {
@@ -96,9 +103,10 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
       currentIndexRef.current--;
       const previousState = historyRef.current[currentIndexRef.current];
       
-      // Update our current state tracking
+      // Update our current state tracking with both layers
       if (previousState) {
-        currentStateRef.current[previousState.layer] = new Uint8ClampedArray(previousState.data);
+        currentStateRef.current.foreground = new Uint8ClampedArray(previousState.foreground);
+        currentStateRef.current.background = new Uint8ClampedArray(previousState.background);
       }
       
       return previousState;
@@ -111,9 +119,10 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
       currentIndexRef.current++;
       const nextState = historyRef.current[currentIndexRef.current];
       
-      // Update our current state tracking
+      // Update our current state tracking with both layers
       if (nextState) {
-        currentStateRef.current[nextState.layer] = new Uint8ClampedArray(nextState.data);
+        currentStateRef.current.foreground = new Uint8ClampedArray(nextState.foreground);
+        currentStateRef.current.background = new Uint8ClampedArray(nextState.background);
       }
       
       return nextState;
