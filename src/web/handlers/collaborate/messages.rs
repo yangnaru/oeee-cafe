@@ -9,6 +9,14 @@ use uuid::Uuid;
 use super::db;
 use super::utils::{bytes_to_uuid, read_u64_le};
 
+// Safe timestamp helper to avoid panics from system clock issues
+fn get_current_timestamp_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_else(|_| std::time::Duration::from_secs(0))
+        .as_millis() as u64
+}
+
 const MAX_USER_MESSAGES: usize = 100;
 
 // History limits to prevent unbounded growth
@@ -260,10 +268,7 @@ async fn send_existing_participants_to_new_user(
 ) {
     for participant in participants {
         if participant.id != user_id {
-            let current_timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64;
+            let current_timestamp = get_current_timestamp_ms();
 
             let join_message = JoinMessage {
                 user_id: participant.id,
@@ -546,10 +551,7 @@ async fn send_snapshot_request(
     snapshot_key: &str,
 ) {
     if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let timestamp = get_current_timestamp_ms();
 
         let snapshot_request = SnapshotRequestMessage {
             user_id: *user_id_to_request,
@@ -623,10 +625,7 @@ pub async fn broadcast_message(
 pub fn enforce_history_limits(history: &mut Vec<Message>, room_uuid: Uuid) {
     let initial_count = history.len();
     let mut total_bytes = 0;
-    let current_time = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64;
+    let current_time = get_current_timestamp_ms();
 
     // First pass: calculate total size and identify old messages
     let mut messages_to_keep = Vec::new();
@@ -695,10 +694,7 @@ pub async fn send_leave_message(
             return;
         }
 
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let timestamp = get_current_timestamp_ms();
 
         let leave_message = LeaveMessage {
             user_id,

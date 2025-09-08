@@ -339,12 +339,18 @@ pub async fn save_session_to_post(
         .build();
     let s3_client = aws_sdk_s3::Client::from_conf(s3_config);
 
-    let s3_key = format!(
-        "image/{}{}/{}.png",
-        image_sha256.chars().next().unwrap(),
-        image_sha256.chars().nth(1).unwrap(),
-        image_sha256
-    );
+    // SHA256 is always 64 hex characters, but let's be safe about accessing them
+    let s3_key = if image_sha256.len() >= 2 {
+        format!(
+            "image/{}{}/{}.png",
+            &image_sha256[0..1],
+            &image_sha256[1..2],
+            image_sha256
+        )
+    } else {
+        // This should never happen with valid SHA256, but handle gracefully
+        return Err("Invalid SHA256 hash: too short".into());
+    };
 
     s3_client
         .put_object()
