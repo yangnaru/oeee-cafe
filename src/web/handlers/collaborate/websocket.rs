@@ -374,6 +374,9 @@ async fn process_message_for_history_and_snapshots(
         if messages::should_store_message(msg) {
             history.push(msg.clone());
             state.last_activity_cache.insert(room_uuid, Instant::now());
+            
+            // Enforce limits after adding
+            messages::enforce_history_limits(&mut history, room_uuid);
         }
 
         let total_bytes = history

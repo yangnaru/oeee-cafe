@@ -54,6 +54,9 @@ pub async fn cleanup_collaborative_sessions(state: AppState) {
             error!("Failed to clean up inactive sessions: {}", e);
         }
 
+        // Step 4: Enforce history limits on active sessions
+        enforce_history_limits_for_active_sessions(&state);
+
         let elapsed = start_time.elapsed();
         debug!(
             "Cleanup cycle completed in {:?}: {} sessions synced, {} ended sessions cleaned, {} inactive sessions cleaned",
@@ -324,4 +327,34 @@ async fn cleanup_inactive_sessions(
     }
 
     Ok(())
+}
+
+fn enforce_history_limits_for_active_sessions(state: &AppState) {
+    let mut rooms_processed = 0;
+    let mut total_messages_removed = 0;
+    
+    // Process all rooms with message history
+    let room_ids: Vec<Uuid> = state.message_history.iter()
+        .map(|entry| *entry.key())
+        .collect();
+    
+    for room_uuid in room_ids {
+        if let Some(mut history_entry) = state.message_history.get_mut(&room_uuid) {
+            let initial_count = history_entry.len();
+            super::collaborate::messages::enforce_history_limits(&mut history_entry, room_uuid);
+            let removed = initial_count - history_entry.len();
+            
+            if removed > 0 {
+                total_messages_removed += removed;
+            }
+            rooms_processed += 1;
+        }
+    }
+    
+    if total_messages_removed > 0 {
+        debug!(
+            "Enforced history limits on {} active sessions: removed {} total messages",
+            rooms_processed, total_messages_removed
+        );
+    }
 }

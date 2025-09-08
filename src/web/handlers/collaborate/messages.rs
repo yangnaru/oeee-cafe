@@ -11,6 +11,11 @@ use super::utils::{bytes_to_uuid, read_u64_le};
 
 const MAX_USER_MESSAGES: usize = 100;
 
+// History limits to prevent unbounded growth
+const MAX_HISTORY_MESSAGES: usize = 5000;  // Max messages per room
+const MAX_HISTORY_BYTES: usize = 50 * 1024 * 1024;  // 50MB per room
+const MAX_MESSAGE_AGE_MINUTES: u64 = 60;  // Remove messages older than 1 hour
+
 // Message type constants matching neo-cucumber protocol
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -600,6 +605,68 @@ pub async fn broadcast_message(
             );
         }
     }
+}
+
+pub fn enforce_history_limits(
+    history: &mut Vec<Message>,
+    room_uuid: Uuid,
+) {
+    let initial_count = history.len();
+    let mut total_bytes = 0;
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    
+    // First pass: calculate total size and identify old messages
+    let mut messages_to_keep = Vec::new();
+    
+    for msg in history.iter().rev() {  // Process newest first
+        let msg_size = match msg {
+            Message::Binary(data) => data.len(),
+            Message::Text(text) => text.len(),
+            _ => 0,
+        };
+        
+        // Check if we've exceeded limits
+        if messages_to_keep.len() >= MAX_HISTORY_MESSAGES {
+            break;  // Too many messages
+        }
+        
+        if total_bytes + msg_size > MAX_HISTORY_BYTES {
+            break;  // Too much data
+        }
+        
+        // Check message age for timestamped messages
+        if let Message::Binary(data) = msg {
+            if data.len() >= 25 && is_timestamped_message(data[0]) {
+                let msg_timestamp = read_u64_le(data, 17);
+                let age_ms = current_time.saturating_sub(msg_timestamp);
+                if age_ms > MAX_MESSAGE_AGE_MINUTES * 60 * 1000 {
+                    continue;  // Message too old
+                }
+            }
+        }
+        
+        total_bytes += msg_size;
+        messages_to_keep.push(msg.clone());
+    }
+    
+    // Reverse to maintain chronological order
+    messages_to_keep.reverse();
+    
+    if messages_to_keep.len() < initial_count {
+        let removed = initial_count - messages_to_keep.len();
+        debug!(
+            "Enforced history limits for room {}: removed {} messages (was {} messages, now {})",
+            room_uuid, removed, initial_count, messages_to_keep.len()
+        );
+        *history = messages_to_keep;
+    }
+}
+
+fn is_timestamped_message(msg_type: u8) -> bool {
+    matches!(msg_type, 0x01 | 0x03 | 0x05 | 0x09)  // JOIN, CHAT, SNAPSHOT_REQUEST, LEAVE
 }
 
 pub async fn send_leave_message(
