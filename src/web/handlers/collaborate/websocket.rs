@@ -147,70 +147,78 @@ async fn setup_connection(
 
     db::update_session_activity(state, room_uuid).await;
 
-    state
-        .connection_user_mapping
-        .insert(connection_id.to_string(), user_id);
+    // Atomically handle all connection management
+    setup_connection_atomically(
+        state, 
+        room_uuid, 
+        user_id, 
+        connection_id, 
+        user_login_name,
+        tx
+    );
 
-    disconnect_duplicate_connections(state, room_uuid, user_id, connection_id, user_login_name);
-    add_connection_to_room(state, room_uuid, connection_id, tx);
     send_history_to_new_connection(state, room_uuid, tx, connection_id);
 
     Ok(session_info.owner_id == user_id)
 }
 
-fn disconnect_duplicate_connections(
+fn setup_connection_atomically(
     state: &AppState,
     room_uuid: Uuid,
     user_id: Uuid,
     connection_id: &str,
     user_login_name: &str,
+    tx: &mpsc::UnboundedSender<Message>,
 ) {
-    if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
-        let mut connections_to_remove = Vec::new();
-
-        for conn_ref in room.iter() {
-            let (existing_conn_id, existing_tx) = conn_ref.pair();
-
-            if *existing_conn_id == connection_id {
-                continue;
-            }
-
-            if let Some(existing_user_id) = state.connection_user_mapping.get(existing_conn_id) {
-                if *existing_user_id == user_id {
-                    info!(
-                        "Disconnecting older connection {} for user {} in room {} (new connection: {})",
-                        existing_conn_id, user_login_name, room_uuid, connection_id
-                    );
-
-                    let _ = existing_tx.send(Message::Close(None));
-                    connections_to_remove.push(existing_conn_id.clone());
-                }
+    // Get or create room atomically
+    let room = state.collaboration_rooms.entry(room_uuid).or_default();
+    
+    // Find and mark duplicate connections for removal
+    let mut old_connections = Vec::new();
+    for conn_ref in room.iter() {
+        let (existing_conn_id, existing_tx) = conn_ref.pair();
+        
+        if *existing_conn_id == connection_id {
+            continue;
+        }
+        
+        if let Some(existing_user_id) = state.connection_user_mapping.get(existing_conn_id) {
+            if *existing_user_id == user_id {
+                info!(
+                    "Disconnecting older connection {} for user {} in room {} (new connection: {})",
+                    existing_conn_id, user_login_name, room_uuid, connection_id
+                );
+                
+                let _ = existing_tx.send(Message::Close(None));
+                old_connections.push(existing_conn_id.clone());
             }
         }
-
-        for old_conn_id in connections_to_remove {
-            room.remove(&old_conn_id);
-            state.connection_user_mapping.remove(&old_conn_id);
-            debug!(
-                "Removed duplicate connection {} for user {} in room {}",
-                old_conn_id, user_login_name, room_uuid
-            );
-        }
+    }
+    
+    // Remove old connections from room
+    for old_conn_id in &old_connections {
+        room.remove(old_conn_id);
+    }
+    
+    // Add new connection to room
+    room.insert(connection_id.to_string(), tx.clone());
+    
+    // Drop room reference to release lock
+    drop(room);
+    
+    // Update connection mapping after room is updated
+    state.connection_user_mapping.insert(connection_id.to_string(), user_id);
+    
+    // Clean up old connection mappings
+    for old_conn_id in &old_connections {
+        state.connection_user_mapping.remove(old_conn_id);
+        debug!(
+            "Removed duplicate connection {} for user {} in room {}",
+            old_conn_id, user_login_name, room_uuid
+        );
     }
 }
 
-fn add_connection_to_room(
-    state: &AppState,
-    room_uuid: Uuid,
-    connection_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
-) {
-    state
-        .collaboration_rooms
-        .entry(room_uuid)
-        .or_default()
-        .insert(connection_id.to_string(), tx.clone());
-}
 
 fn send_history_to_new_connection(
     state: &AppState,
