@@ -364,9 +364,10 @@ function App() {
       wsConnected: !!wsRef.current,
       wsState: wsRef.current?.readyState,
       drawingWsConnected: !!drawingWsRef.current,
+      connectionState,
     });
     drawingWsRef.current = wsRef.current;
-  }, [wsRef]);
+  }, [wsRef, connectionState]);
 
   // Ensure drawing engine DOM canvases are updated when engine becomes available
   useEffect(() => {
