@@ -593,6 +593,7 @@ pub async fn broadcast_message(
 
         for failed_id in failed_connections {
             room.remove(&failed_id);
+            state.connection_user_mapping.remove(&failed_id);
             debug!(
                 "Removed failed connection {} from room {}",
                 failed_id, room_uuid
