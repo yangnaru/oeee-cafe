@@ -55,9 +55,8 @@ pub async fn check_existing_participant(
         user_id
     )
     .fetch_one(db)
-    .await
-    .unwrap_or(Some(false))
-    .unwrap_or(false);
+    .await?
+    .unwrap_or(false); // Only unwrap the Option<bool>, not the Result
 
     Ok(existing_participant)
 }
@@ -75,8 +74,7 @@ pub async fn get_active_user_count(
         room_uuid
     )
     .fetch_one(db)
-    .await
-    .unwrap_or(0);
+    .await?; // Propagate database errors instead of returning 0
 
     Ok(active_user_count)
 }
@@ -143,7 +141,7 @@ pub async fn track_participant_with_capacity_check(
     )
     .fetch_one(&mut *tx)
     .await?
-    .unwrap_or(false);
+    .unwrap_or(false); // Only unwrap the Option<bool>, not the Result
     
     if !existing_participant {
         // For new participants, check capacity
