@@ -34,10 +34,6 @@ export const useCursor = ({ canvasContainerRef, userIdRef }: UseCursorParams) =>
           "text-xs font-bold px-2 py-1 rounded mb-1 whitespace-nowrap";
         userLabel.textContent = username;
         const userBackgroundColor = getUserBackgroundColor(username);
-        console.log(
-          `Cursor getUserBackgroundColor for "${username}":`,
-          userBackgroundColor
-        ); // Debug logging
         userLabel.style.color = userBackgroundColor;
         userLabel.style.backgroundColor = "rgba(255, 255, 255, 0.9)";
         userLabel.style.border = `1px solid ${userBackgroundColor}`;

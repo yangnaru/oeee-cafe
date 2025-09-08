@@ -281,39 +281,39 @@ export class DrawingEngine {
   public updatePanOffset(
     deltaX: number,
     deltaY: number,
-    canvas?: HTMLCanvasElement | HTMLDivElement,
+    container?: HTMLCanvasElement | HTMLDivElement,
     zoomScale?: number
   ) {
     this.panOffsetX += deltaX;
     this.panOffsetY += deltaY;
-    this.updateCanvasPan(canvas, zoomScale);
+    this.updateCanvasPan(container, zoomScale);
   }
 
   public adjustPanForZoom(
     deltaX: number,
     deltaY: number,
-    canvas?: HTMLCanvasElement | HTMLDivElement,
+    container?: HTMLCanvasElement | HTMLDivElement,
     zoomScale?: number
   ) {
     this.panOffsetX += deltaX;
     this.panOffsetY += deltaY;
-    this.updateCanvasPan(canvas, zoomScale);
+    this.updateCanvasPan(container, zoomScale);
   }
 
-  public resetPan(canvas?: HTMLCanvasElement | HTMLDivElement, zoomScale?: number) {
+  public resetPan(container?: HTMLCanvasElement | HTMLDivElement, zoomScale?: number) {
     this.panOffsetX = 0;
     this.panOffsetY = 0;
-    this.updateCanvasPan(canvas, zoomScale);
+    this.updateCanvasPan(container, zoomScale);
   }
 
-  private updateCanvasPan(canvas?: HTMLCanvasElement | HTMLDivElement, zoomScale?: number) {
-    if (!canvas) return;
+  private updateCanvasPan(container?: HTMLCanvasElement | HTMLDivElement, zoomScale?: number) {
+    if (!container) return;
 
     // Combine scale and translate transforms
     const scaleTransform = zoomScale ? `scale(${zoomScale})` : '';
     const translateTransform = `translate(${this.panOffsetX}px, ${this.panOffsetY}px)`;
     
-    canvas.style.transform = scaleTransform 
+    container.style.transform = scaleTransform 
       ? `${scaleTransform} ${translateTransform}` 
       : translateTransform;
   }
