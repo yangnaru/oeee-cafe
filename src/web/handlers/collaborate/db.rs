@@ -103,6 +103,86 @@ pub async fn track_participant(
     Ok(())
 }
 
+pub async fn track_participant_with_capacity_check(
+    db: &Pool<Postgres>,
+    room_uuid: Uuid,
+    user_id: Uuid,
+    max_participants: i32,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = db.begin().await?;
+    
+    // First, lock the session row to prevent concurrent modifications
+    let _session = sqlx::query!(
+        r#"
+        SELECT max_participants
+        FROM collaborative_sessions
+        WHERE id = $1 AND ended_at IS NULL
+        FOR UPDATE
+        "#,
+        room_uuid
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    
+    // If session doesn't exist or has ended, fail
+    if _session.is_none() {
+        tx.rollback().await?;
+        return Ok(false);
+    }
+    
+    // Check if user is already a participant (existing participants can always rejoin)
+    let existing_participant = sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM collaborative_sessions_participants 
+            WHERE session_id = $1 AND user_id = $2
+        )
+        "#,
+        room_uuid,
+        user_id
+    )
+    .fetch_one(&mut *tx)
+    .await?
+    .unwrap_or(false);
+    
+    if !existing_participant {
+        // For new participants, check capacity
+        let active_user_count = sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(DISTINCT user_id) as "count!"
+            FROM collaborative_sessions_participants
+            WHERE session_id = $1 AND is_active = true
+            "#,
+            room_uuid
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        
+        if active_user_count >= max_participants as i64 {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+    }
+    
+    // Add or reactivate the participant
+    sqlx::query!(
+        r#"
+        INSERT INTO collaborative_sessions_participants 
+        (session_id, user_id, is_active)
+        VALUES ($1, $2, true)
+        ON CONFLICT (session_id, user_id) 
+        DO UPDATE SET is_active = true, left_at = NULL
+        "#,
+        room_uuid,
+        user_id
+    )
+    .execute(&mut *tx)
+    .await?;
+    
+    tx.commit().await?;
+    Ok(true)
+}
+
 pub async fn update_session_activity(state: &AppState, room_uuid: Uuid) {
     state.last_activity_cache.insert(room_uuid, Instant::now());
 }

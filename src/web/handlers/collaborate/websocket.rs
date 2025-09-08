@@ -123,28 +123,26 @@ async fn setup_connection(
         }
     };
 
-    let existing_participant = match db::check_existing_participant(db, room_uuid, user_id).await {
-        Ok(exists) => exists,
-        Err(_) => false,
+    // Use atomic capacity check and participant tracking to prevent race conditions
+    let join_success = match db::track_participant_with_capacity_check(
+        db, 
+        room_uuid, 
+        user_id, 
+        session_info.max_participants
+    ).await {
+        Ok(success) => success,
+        Err(e) => {
+            error!("Failed to track participant: {}", e);
+            false
+        }
     };
 
-    if !existing_participant {
-        let active_user_count = match db::get_active_user_count(db, room_uuid).await {
-            Ok(count) => count,
-            Err(_) => 0,
-        };
-
-        if active_user_count >= session_info.max_participants as i64 {
-            info!(
-                "User {} rejected from session {} (full: {} users)",
-                user_login_name, room_uuid, active_user_count
-            );
-            return Err(());
-        }
-    }
-
-    if let Err(e) = db::track_participant(db, room_uuid, user_id).await {
-        error!("Failed to track participant: {}", e);
+    if !join_success {
+        info!(
+            "User {} rejected from session {} (capacity check failed)",
+            user_login_name, room_uuid
+        );
+        return Err(());
     }
 
     db::update_session_activity(state, room_uuid).await;
