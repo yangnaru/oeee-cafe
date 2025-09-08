@@ -50,6 +50,9 @@ export const useDrawing = (
   const outboundMessageQueue = useRef<ArrayBuffer[]>([]);
   const isSnapshotInProgress = useRef(false);
   
+  // Track if initial canvas snapshot has been saved
+  const hasInitialSnapshot = useRef(false);
+  
   const history = useCanvasHistory(30);
 
   // Update the ref when callback changes
@@ -207,6 +210,30 @@ export const useDrawing = (
     }
   }, [wsRef, queueMessage]);
 
+  // Save initial canvas snapshot on first interaction
+  const saveInitialSnapshot = useCallback(() => {
+    if (hasInitialSnapshot.current || !drawingEngineRef.current) {
+      return; // Already saved or drawing engine not ready
+    }
+
+    console.log("Saving initial canvas snapshot before first interaction");
+    
+    const engine = drawingEngineRef.current;
+    if (engine.layers.foreground && engine.layers.background) {
+      history.saveState(
+        engine.layers.foreground,
+        engine.layers.background,
+        "both",
+        false, // Not a drawing action - this is initial state
+        false, // Not a content snapshot
+        false  // Not remote
+      );
+      hasInitialSnapshot.current = true;
+      onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
+      console.log("Initial canvas snapshot saved to history");
+    }
+  }, [history]);
+
   // Handle drawing events
   const setupDrawingEvents = useCallback(() => {
     const app = appRef.current;
@@ -299,6 +326,9 @@ export const useDrawing = (
         currentDrawingStateRef.current.brushType !== "pan"
       ) {
         const coords = getCanvasCoordinates(e.clientX, e.clientY);
+
+        // Save initial snapshot before first drawing action
+        saveInitialSnapshot();
 
         // Mark drawing as active
         isDrawingRef.current = true;
@@ -768,7 +798,7 @@ export const useDrawing = (
       app.removeEventListener("touchmove", preventTouchOnCanvas);
       app.removeEventListener("touchend", preventTouchOnCanvas);
     };
-  }, [appRef, canvasRef, history, wsRef, userIdRef, containerRef, zoomLevel, sendOrQueueMessage]);
+  }, [appRef, canvasRef, history, wsRef, userIdRef, containerRef, zoomLevel, sendOrQueueMessage, saveInitialSnapshot]);
 
   useEffect(() => {
     initializeDrawing();
