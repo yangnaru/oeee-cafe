@@ -351,6 +351,7 @@ function App() {
         chatAddMessageRef.current(message);
       }
     },
+    handleSnapshotRequest,
   });
 
   // Keep connectWebSocket ref stable to avoid reconnection loops

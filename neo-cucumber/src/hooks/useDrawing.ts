@@ -45,6 +45,11 @@ export const useDrawing = (
   const isDrawingRef = useRef(false);
   const pendingSnapshotRequestRef = useRef(false);
   const sendSnapshotRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  
+  // Outbound message queue for drawing events
+  const outboundMessageQueue = useRef<ArrayBuffer[]>([]);
+  const isSnapshotInProgress = useRef(false);
+  
   const history = useCanvasHistory(30);
 
   // Update the ref when callback changes
@@ -123,6 +128,49 @@ export const useDrawing = (
   useEffect(() => {
     connectionStateRef.current = connectionState;
   }, [connectionState]);
+
+  // Outbound message queue management
+  const queueMessage = useCallback((message: ArrayBuffer) => {
+    outboundMessageQueue.current.push(message);
+  }, []);
+
+  const flushOutboundQueue = useCallback(() => {
+    if (!wsRef?.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    while (outboundMessageQueue.current.length > 0) {
+      const message = outboundMessageQueue.current.shift();
+      if (message) {
+        try {
+          wsRef.current.send(message);
+        } catch (error) {
+          console.error("Failed to send queued message:", error);
+          // Put the message back at the front of the queue
+          outboundMessageQueue.current.unshift(message);
+          break;
+        }
+      }
+    }
+  }, [wsRef]);
+
+  const sendOrQueueMessage = useCallback((message: ArrayBuffer) => {
+    if (isSnapshotInProgress.current) {
+      // Queue message if snapshot is in progress
+      queueMessage(message);
+    } else if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
+      // Send immediately if possible
+      try {
+        wsRef.current.send(message);
+      } catch (error) {
+        console.error("Failed to send message, queueing:", error);
+        queueMessage(message);
+      }
+    } else {
+      // Queue if WebSocket is not available
+      queueMessage(message);
+    }
+  }, [wsRef, queueMessage]);
 
   // Handle drawing events
   const setupDrawingEvents = useCallback(() => {
@@ -256,11 +304,7 @@ export const useDrawing = (
             currentDrawingStateRef.current.layerType;
 
           // Send fill event through WebSocket
-          if (
-            wsRef?.current &&
-            wsRef.current.readyState === WebSocket.OPEN &&
-            userIdRef?.current
-          ) {
+          if (userIdRef?.current) {
             try {
               const binaryMessage = encodeFill(
                 userIdRef.current,
@@ -272,9 +316,9 @@ export const useDrawing = (
                 b,
                 currentDrawingStateRef.current.opacity
               );
-              wsRef.current.send(binaryMessage);
+              sendOrQueueMessage(binaryMessage);
             } catch (error) {
-              console.error("Failed to send fill event:", error);
+              console.error("Failed to encode/send fill event:", error);
             }
           }
 
@@ -348,11 +392,7 @@ export const useDrawing = (
           onDrawingChangeRef.current?.(); // Still notify parent for RAF loop triggering
 
           // Send single click drawing event through WebSocket
-          if (
-            wsRef?.current &&
-            wsRef.current.readyState === WebSocket.OPEN &&
-            userIdRef?.current
-          ) {
+          if (userIdRef?.current) {
             try {
               const binaryMessage = encodeDrawPoint(
                 userIdRef.current,
@@ -367,9 +407,9 @@ export const useDrawing = (
                 effectiveOpacity,
                 e.pointerType as "mouse" | "pen" | "touch"
               );
-              wsRef.current.send(binaryMessage);
+              sendOrQueueMessage(binaryMessage);
             } catch (error) {
-              console.error("Failed to send drawPoint event:", error);
+              console.error("Failed to encode/send drawPoint event:", error);
             }
           }
 
@@ -420,11 +460,7 @@ export const useDrawing = (
           hasUserId: !!userIdRef?.current,
           connectionReady: wsRef?.current?.readyState === WebSocket.OPEN,
         });
-        if (
-          wsRef?.current &&
-          wsRef.current.readyState === WebSocket.OPEN &&
-          userIdRef?.current
-        ) {
+        if (userIdRef?.current) {
           const coords = getCanvasCoordinates(e.clientX, e.clientY);
           try {
             const binaryMessage = encodePointerUp(
@@ -434,9 +470,9 @@ export const useDrawing = (
               e.button,
               e.pointerType as "mouse" | "pen" | "touch"
             );
-            wsRef.current.send(binaryMessage);
+            sendOrQueueMessage(binaryMessage);
           } catch (error) {
-            console.error("Failed to send pointerup event:", error);
+            console.error("Failed to encode/send pointerup event:", error);
           }
         }
 
@@ -612,11 +648,7 @@ export const useDrawing = (
         hasUserId: !!userIdRef?.current,
         connectionReady: wsRef?.current?.readyState === WebSocket.OPEN,
       });
-      if (
-        wsRef?.current &&
-        wsRef.current.readyState === WebSocket.OPEN &&
-        userIdRef?.current
-      ) {
+      if (userIdRef?.current) {
         try {
           const binaryMessage = encodeDrawLine(
             userIdRef.current,
@@ -633,9 +665,9 @@ export const useDrawing = (
             effectiveOpacity,
             e.pointerType as "mouse" | "pen" | "touch"
           );
-          wsRef.current.send(binaryMessage);
+          sendOrQueueMessage(binaryMessage);
         } catch (error) {
-          console.error("Failed to send drawLine event:", error);
+          console.error("Failed to encode/send drawLine event:", error);
         }
       }
 
@@ -681,7 +713,7 @@ export const useDrawing = (
       app.removeEventListener("touchmove", preventTouchOnCanvas);
       app.removeEventListener("touchend", preventTouchOnCanvas);
     };
-  }, [appRef, canvasRef, history, wsRef, userIdRef, containerRef, zoomLevel]);
+  }, [appRef, canvasRef, history, wsRef, userIdRef, containerRef, zoomLevel, sendOrQueueMessage]);
 
   useEffect(() => {
     initializeDrawing();
@@ -744,8 +776,8 @@ export const useDrawing = (
           const fgMessage = await encodeSnapshot(userIdRef.current, "foreground", fgBlob);
           const bgMessage = await encodeSnapshot(userIdRef.current, "background", bgBlob);
 
-          wsRef.current.send(fgMessage);
-          wsRef.current.send(bgMessage);
+          sendOrQueueMessage(fgMessage);
+          sendOrQueueMessage(bgMessage);
           console.log("Sent both layer snapshots after undo");
         } catch (error) {
           console.error("Failed to send undo snapshots:", error);
@@ -754,7 +786,7 @@ export const useDrawing = (
     } else {
       console.log("Undo failed - no previous state or missing components");
     }
-  }, [history, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange]);
+  }, [history, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange, sendOrQueueMessage]);
 
   // Redo function
   const handleRedo = useCallback(async () => {
@@ -801,8 +833,8 @@ export const useDrawing = (
           const fgMessage = await encodeSnapshot(userIdRef.current, "foreground", fgBlob);
           const bgMessage = await encodeSnapshot(userIdRef.current, "background", bgBlob);
 
-          wsRef.current.send(fgMessage);
-          wsRef.current.send(bgMessage);
+          sendOrQueueMessage(fgMessage);
+          sendOrQueueMessage(bgMessage);
           console.log("Sent both layer snapshots after redo");
         } catch (error) {
           console.error("Failed to send redo snapshots:", error);
@@ -811,7 +843,7 @@ export const useDrawing = (
     } else {
       console.log("Redo failed - no next state or missing components");
     }
-  }, [history, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange]);
+  }, [history, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange, sendOrQueueMessage]);
 
   // Update canvas zoom when zoom level changes
   useEffect(() => {
@@ -853,7 +885,10 @@ export const useDrawing = (
     }
 
     try {
-      // Send foreground layer snapshot
+      // Set snapshot in progress to pause outbound messages
+      isSnapshotInProgress.current = true;
+
+      // Send foreground layer snapshot - bypass queue for immediate send
       const fgPngBlob = await layerToPngBlob(
         engine.layers.foreground,
         canvasWidth,
@@ -862,7 +897,7 @@ export const useDrawing = (
       const fgSnapshot = await encodeSnapshot(userId, "foreground", fgPngBlob);
       ws.send(fgSnapshot);
 
-      // Send background layer snapshot
+      // Send background layer snapshot - bypass queue for immediate send
       const bgPngBlob = await layerToPngBlob(
         engine.layers.background,
         canvasWidth,
@@ -870,10 +905,16 @@ export const useDrawing = (
       );
       const bgSnapshot = await encodeSnapshot(userId, "background", bgPngBlob);
       ws.send(bgSnapshot);
+
+      console.log("Sent both snapshots, now flushing queued messages");
     } catch (error) {
       console.error("Failed to send snapshots:", error);
+    } finally {
+      // Resume outbound messages and flush queue
+      isSnapshotInProgress.current = false;
+      flushOutboundQueue();
     }
-  }, [canvasWidth, canvasHeight, wsRef, userIdRef]);
+  }, [canvasWidth, canvasHeight, wsRef, userIdRef, flushOutboundQueue]);
 
   // Update sendSnapshot ref
   useEffect(() => {

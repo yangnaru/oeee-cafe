@@ -59,6 +59,7 @@ interface WebSocketHookParams {
     message: string;
     timestamp: number;
   }) => void;
+  handleSnapshotRequest: () => void;
 }
 
 export const useWebSocket = ({
@@ -85,6 +86,7 @@ export const useWebSocket = ({
   addParticipant,
   removeParticipant,
   addChatMessage,
+  handleSnapshotRequest,
 }: WebSocketHookParams) => {
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<DecodedMessage[]>([]);
@@ -767,6 +769,16 @@ export const useWebSocket = ({
 
             // Note: Canvas updates and history are now handled asynchronously
             // in the img.onload callback above after PNG decoding is complete
+            break;
+          }
+
+          case "snapshotRequest": {
+            console.log("Snapshot request received:", {
+              timestamp: message.timestamp,
+            });
+
+            // Call the provided snapshot request handler
+            handleSnapshotRequest();
             break;
           }
 
