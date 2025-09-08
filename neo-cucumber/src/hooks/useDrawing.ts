@@ -151,17 +151,8 @@ export const useDrawing = (
       const x = (screenX / rect.width) * baseCanvasWidth;
       const y = (screenY / rect.height) * baseCanvasHeight;
 
-      // Clamp coordinates to canvas bounds
-      const clampedX = Math.max(
-        0,
-        Math.min(baseCanvasWidth - 1, Math.round(x))
-      );
-      const clampedY = Math.max(
-        0,
-        Math.min(baseCanvasHeight - 1, Math.round(y))
-      );
-
-      return { x: clampedX, y: clampedY };
+      // Allow drawing outside canvas bounds - no clamping
+      return { x: Math.round(x), y: Math.round(y) };
     };
 
     const handlePointerDown = (e: PointerEvent) => {
@@ -299,10 +290,9 @@ export const useDrawing = (
               `Saving fill operation state for ${currentDrawingStateRef.current.layerType} layer`
             );
             history.saveState(
+              drawingEngineRef.current.layers.foreground,
+              drawingEngineRef.current.layers.background,
               currentDrawingStateRef.current.layerType,
-              drawingEngineRef.current.layers[
-                currentDrawingStateRef.current.layerType
-              ],
               true, // This is a drawing action
               false // This is not a content snapshot
             );
