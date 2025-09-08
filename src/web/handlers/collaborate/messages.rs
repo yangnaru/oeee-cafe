@@ -299,7 +299,13 @@ pub fn handle_snapshot_message(
         snapshot_user, snapshot_layer, room_uuid
     );
 
-    let mut history = state.message_history.entry(room_uuid).or_default();
+    // Get and clone the history to avoid race conditions with concurrent modifications
+    let mut history = if let Some(entry) = state.message_history.get(&room_uuid) {
+        entry.clone()
+    } else {
+        Vec::new()
+    };
+    
     let initial_count = history.len();
 
     history.retain(|stored_msg| {
@@ -361,6 +367,9 @@ pub fn handle_snapshot_message(
             removed_count, snapshot_user, snapshot_layer, room_uuid
         );
     }
+
+    // Atomically replace the entire history to prevent race conditions
+    state.message_history.insert(room_uuid, history);
 
     let user_snapshot_key = format!("{}:{}", room_uuid, snapshot_user);
     state
