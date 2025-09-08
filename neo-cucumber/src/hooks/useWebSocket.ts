@@ -88,6 +88,7 @@ export const useWebSocket = ({
 }: WebSocketHookParams) => {
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<DecodedMessage[]>([]);
+  const isConnectingRef = useRef(false);
   
   // Keep handleSnapshotRequest ref to avoid dependency issues
   const handleSnapshotRequestRef = useRef(handleSnapshotRequest);
@@ -138,6 +139,7 @@ export const useWebSocket = ({
     console.log("WebSocket connection attempt started:", {
       shouldConnect: shouldConnectRef.current,
       existingConnection: !!wsRef.current,
+      isConnecting: isConnectingRef.current,
       currentUser: userIdRef.current,
       timestamp: new Date().toISOString(),
     });
@@ -147,6 +149,21 @@ export const useWebSocket = ({
       console.log("Connection attempt aborted - should not connect");
       return;
     }
+
+    // Prevent multiple simultaneous connection attempts
+    if (isConnectingRef.current) {
+      console.log("Connection attempt aborted - already connecting");
+      return;
+    }
+
+    // If already connected, don't reconnect
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log("Connection attempt aborted - already connected");
+      return;
+    }
+
+    // Set connecting flag
+    isConnectingRef.current = true;
 
     // Clean up any existing connection
     if (wsRef.current) {
@@ -163,6 +180,7 @@ export const useWebSocket = ({
         "App not properly initialized - missing user ID or canvas meta"
       );
       setConnectionState("disconnected");
+      isConnectingRef.current = false;
       return;
     }
 
@@ -179,6 +197,7 @@ export const useWebSocket = ({
         message: error instanceof Error ? error.message : String(error),
       });
       setConnectionState("disconnected");
+      isConnectingRef.current = false;
       return;
     }
 
@@ -191,6 +210,7 @@ export const useWebSocket = ({
         timestamp: new Date().toISOString(),
       });
       setConnectionState("connected");
+      isConnectingRef.current = false;
 
       // Add current user to participants
       addParticipant(userIdRef.current!, userLoginNameRef.current, Date.now());
@@ -296,6 +316,7 @@ export const useWebSocket = ({
         userAgent: navigator.userAgent,
       });
       setConnectionState("disconnected");
+      isConnectingRef.current = false;
     };
 
     ws.onclose = (event) => {
@@ -309,6 +330,7 @@ export const useWebSocket = ({
         shouldConnect: shouldConnectRef.current,
       });
       setConnectionState("disconnected");
+      isConnectingRef.current = false;
       // No automatic reconnection - user must manually reconnect
     };
 
@@ -773,6 +795,18 @@ export const useWebSocket = ({
 
             // Note: Canvas updates and history are now handled asynchronously
             // in the img.onload callback above after PNG decoding is complete
+            break;
+          }
+
+          case "joinResponse": {
+            console.log("Join response received:", {
+              userIds: message.userIds.map(id => id.substring(0, 8)),
+              userCount: message.userIds.length,
+            });
+            
+            // This message contains the list of existing users in the session
+            // The users are already being created through individual 'join' messages
+            // so we don't need to do anything special here
             break;
           }
 

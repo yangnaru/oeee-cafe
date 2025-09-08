@@ -131,19 +131,30 @@ export const useDrawing = (
 
   // Outbound message queue management
   const queueMessage = useCallback((message: ArrayBuffer) => {
+    console.log("Queueing message, queue length before:", outboundMessageQueue.current.length);
     outboundMessageQueue.current.push(message);
+    console.log("Queueing message, queue length after:", outboundMessageQueue.current.length);
   }, []);
 
   const flushOutboundQueue = useCallback(() => {
+    console.log("flushOutboundQueue called:", {
+      hasWsRef: !!wsRef?.current,
+      wsReadyState: wsRef?.current?.readyState,
+      queueLength: outboundMessageQueue.current.length,
+    });
+
     if (!wsRef?.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.log("Cannot flush queue - WebSocket not ready");
       return;
     }
 
+    console.log("Flushing", outboundMessageQueue.current.length, "queued messages");
     while (outboundMessageQueue.current.length > 0) {
       const message = outboundMessageQueue.current.shift();
       if (message) {
         try {
           wsRef.current.send(message);
+          console.log("Sent queued message successfully");
         } catch (error) {
           console.error("Failed to send queued message:", error);
           // Put the message back at the front of the queue
@@ -152,22 +163,46 @@ export const useDrawing = (
         }
       }
     }
+    console.log("Queue flush completed, remaining messages:", outboundMessageQueue.current.length);
   }, [wsRef]);
 
+  // Flush queue when WebSocket becomes available
+  useEffect(() => {
+    if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log("WebSocket became ready, flushing outbound queue");
+      flushOutboundQueue();
+    }
+  }, [wsRef, connectionState, flushOutboundQueue]);
+
   const sendOrQueueMessage = useCallback((message: ArrayBuffer) => {
+    console.log("sendOrQueueMessage called:", {
+      isSnapshotInProgress: isSnapshotInProgress.current,
+      hasWsRef: !!wsRef?.current,
+      wsReadyState: wsRef?.current?.readyState,
+      wsStateOpen: WebSocket.OPEN,
+      queueLength: outboundMessageQueue.current.length,
+    });
+
     if (isSnapshotInProgress.current) {
       // Queue message if snapshot is in progress
+      console.log("Queuing message - snapshot in progress");
       queueMessage(message);
     } else if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
       // Send immediately if possible
+      console.log("Sending message immediately via WebSocket");
       try {
         wsRef.current.send(message);
+        console.log("Message sent successfully");
       } catch (error) {
         console.error("Failed to send message, queueing:", error);
         queueMessage(message);
       }
     } else {
       // Queue if WebSocket is not available
+      console.log("Queuing message - WebSocket not available", {
+        hasWsRef: !!wsRef?.current,
+        wsReadyState: wsRef?.current?.readyState,
+      });
       queueMessage(message);
     }
   }, [wsRef, queueMessage]);
@@ -392,6 +427,13 @@ export const useDrawing = (
           onDrawingChangeRef.current?.(); // Still notify parent for RAF loop triggering
 
           // Send single click drawing event through WebSocket
+          console.log("Attempting to send drawPoint event:", {
+            hasUserId: !!userIdRef?.current,
+            userId: userIdRef?.current?.substring(0, 8),
+            coords,
+            brushSize: currentDrawingStateRef.current.brushSize,
+            brushType: currentDrawingStateRef.current.brushType,
+          });
           if (userIdRef?.current) {
             try {
               const binaryMessage = encodeDrawPoint(
@@ -407,10 +449,13 @@ export const useDrawing = (
                 effectiveOpacity,
                 e.pointerType as "mouse" | "pen" | "touch"
               );
+              console.log("Encoded drawPoint message, calling sendOrQueueMessage");
               sendOrQueueMessage(binaryMessage);
             } catch (error) {
               console.error("Failed to encode/send drawPoint event:", error);
             }
+          } else {
+            console.log("Not sending drawPoint - no userId");
           }
 
           drawingStateRef.current.isDrawing = true;
@@ -647,6 +692,13 @@ export const useDrawing = (
         wsState: wsRef?.current?.readyState,
         hasUserId: !!userIdRef?.current,
         connectionReady: wsRef?.current?.readyState === WebSocket.OPEN,
+        userId: userIdRef?.current?.substring(0, 8),
+        coords: {
+          prevX: drawingStateRef.current.prevX,
+          prevY: drawingStateRef.current.prevY,
+          currentX: drawingStateRef.current.currentX,
+          currentY: drawingStateRef.current.currentY,
+        },
       });
       if (userIdRef?.current) {
         try {
@@ -665,10 +717,13 @@ export const useDrawing = (
             effectiveOpacity,
             e.pointerType as "mouse" | "pen" | "touch"
           );
+          console.log("Encoded drawLine message, calling sendOrQueueMessage");
           sendOrQueueMessage(binaryMessage);
         } catch (error) {
           console.error("Failed to encode/send drawLine event:", error);
         }
+      } else {
+        console.log("Not sending drawLine - no userId");
       }
 
       // Mark for recomposition - RAF loop will handle compositing
