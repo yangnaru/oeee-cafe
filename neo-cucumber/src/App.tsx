@@ -566,7 +566,7 @@ function App() {
       setAuthError(true);
       return false;
     }
-  }, []);
+  }, [setInitializationError, setCanvasMeta, setRoomFullError, setAuthError]);
 
   // Initialize app (auth + collaboration meta) on component mount
   useEffect(() => {
