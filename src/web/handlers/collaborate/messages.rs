@@ -619,6 +619,12 @@ pub async fn broadcast_message(
                 failed_id, room_uuid
             );
         }
+    } else {
+        // Room doesn't exist - this is a normal condition during cleanup
+        debug!(
+            "Attempted to broadcast message to non-existent room {} from connection {}",
+            room_uuid, connection_id
+        );
     }
 }
 
@@ -691,6 +697,7 @@ pub async fn send_leave_message(
 ) {
     if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
         if room.len() <= 1 {
+            debug!("Not sending LEAVE message for user {} in room {} - only 1 or fewer connections", user_login_name, room_uuid);
             return;
         }
 
@@ -717,6 +724,16 @@ pub async fn send_leave_message(
                 "Sent LEAVE notification for user {} to {} other participants in room {}",
                 user_login_name, notified_connections, room_uuid
             );
+        } else {
+            debug!(
+                "No participants notified of LEAVE for user {} in room {} (failed to send or no other participants)",
+                user_login_name, room_uuid
+            );
         }
+    } else {
+        debug!(
+            "Cannot send LEAVE message for user {} - room {} no longer exists",
+            user_login_name, room_uuid
+        );
     }
 }

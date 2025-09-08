@@ -171,7 +171,14 @@ fn setup_connection_atomically(
     tx: &mpsc::UnboundedSender<Message>,
 ) {
     // Get or create room atomically
+    let room_existed = state.collaboration_rooms.contains_key(&room_uuid);
     let room = state.collaboration_rooms.entry(room_uuid).or_default();
+    
+    if !room_existed {
+        info!("Created new collaboration room {} for user {}", room_uuid, user_login_name);
+    }
+    
+    let initial_connection_count = room.len();
     
     // Find and mark duplicate connections for removal
     let mut old_connections = Vec::new();
@@ -203,6 +210,8 @@ fn setup_connection_atomically(
     // Add new connection to room
     room.insert(connection_id.to_string(), tx.clone());
     
+    let final_connection_count = room.len();
+    
     // Drop room reference to release lock
     drop(room);
     
@@ -217,6 +226,11 @@ fn setup_connection_atomically(
             old_conn_id, user_login_name, room_uuid
         );
     }
+    
+    info!(
+        "Room {} connection setup: {} -> {} connections (added: {}, removed: {})",
+        room_uuid, initial_connection_count, final_connection_count, connection_id, old_connections.len()
+    );
 }
 
 
@@ -438,28 +452,53 @@ async fn cleanup_connection(
         room.remove(connection_id);
         state.connection_user_mapping.remove(connection_id);
 
-        if room.is_empty() {
-            drop(room);
-            state.collaboration_rooms.remove(&room_uuid);
-            
-            let room_prefix = format!("{}:", room_uuid);
-            let keys_to_remove: Vec<String> = state
-                .snapshot_request_tracker
-                .iter()
-                .filter_map(|entry| {
-                    let key = entry.key();
-                    if key.starts_with(&room_prefix) {
-                        Some(key.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+        let room_connection_count = room.len();
+        drop(room); // Release the room lock before database call
 
-            for key in keys_to_remove {
-                state.snapshot_request_tracker.remove(&key);
+        // Only consider removing room if no connections remain
+        if room_connection_count == 0 {
+            // Double-check with database to see if there are still active participants
+            // This prevents removing the room if participants are reconnecting
+            match db::get_active_user_count(db, room_uuid).await {
+                Ok(active_count) => {
+                    if active_count == 0 {
+                        // Safe to remove room since no active participants in database
+                        info!("Removing room {} - no active participants remaining", room_uuid);
+                        state.collaboration_rooms.remove(&room_uuid);
+                        
+                        let room_prefix = format!("{}:", room_uuid);
+                        let keys_to_remove: Vec<String> = state
+                            .snapshot_request_tracker
+                            .iter()
+                            .filter_map(|entry| {
+                                let key = entry.key();
+                                if key.starts_with(&room_prefix) {
+                                    Some(key.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+
+                        let removed_count = keys_to_remove.len();
+                        for key in keys_to_remove {
+                            state.snapshot_request_tracker.remove(&key);
+                        }
+                        debug!("Cleaned up room {} and removed {} snapshot trackers", room_uuid, removed_count);
+                    } else {
+                        debug!("Keeping room {} - {} active participants remain in database", room_uuid, active_count);
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to check active participants for room cleanup: {}", e);
+                    // On database error, err on the side of caution and keep the room
+                    debug!("Keeping room {} due to database error during cleanup check", room_uuid);
+                }
             }
-            debug!("Removed empty room {}", room_uuid);
+        } else {
+            debug!("Room {} has {} connections remaining", room_uuid, room_connection_count);
         }
+    } else {
+        debug!("Room {} not found during cleanup for connection {}", room_uuid, connection_id);
     }
 }
