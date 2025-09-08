@@ -49,7 +49,7 @@
         </p>
         {% if post.image_tool == "neo" and post.allow_relay == "true" %}
           <a href="/@{{ post.login_name }}/{{ post_id }}/relay">
-            <img class="post-image"
+            <img class="post-image-full"
                  width="{{ post.image_width }}"
                  height="{{ post.image_height }}"
                  alt="{{ post.title }}"
@@ -59,7 +59,7 @@
             <i>{{ ftl_post_relay_enabled_notice }}</i>
           </p>
         {% else %}
-          <img class="post-image"
+          <img class="post-image-full"
                width="{{ post.image_width }}"
                height="{{ post.image_height }}"
                alt="{{ post.title }}"

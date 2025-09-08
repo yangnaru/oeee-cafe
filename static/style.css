@@ -86,6 +86,14 @@ nav a:visited,
   background: white;
 }
 
+.post-image-full {
+  width: 100%;
+  height: auto;
+  display: flex;
+  object-fit: contain;
+  background: white;
+}
+
 .posts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
