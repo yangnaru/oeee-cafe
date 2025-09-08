@@ -56,14 +56,16 @@ export const useCursor = ({ canvasContainerRef, userIdRef }: UseCursorParams) =>
       }
 
       // Position the cursor (convert canvas coordinates to screen coordinates)
-      const canvasStyle = window.getComputedStyle(container);
+      // Read transform from the first canvas element since transforms are applied to canvases
+      const firstCanvas = container.querySelector('canvas');
+      const canvasStyle = firstCanvas ? window.getComputedStyle(firstCanvas) : null;
 
       // Get zoom level and pan offset from transform
       let scale = 1;
       let panX = 0;
       let panY = 0;
 
-      if (canvasStyle.transform && canvasStyle.transform !== "none") {
+      if (canvasStyle?.transform && canvasStyle.transform !== "none") {
         const matrix = new DOMMatrix(canvasStyle.transform);
         scale = matrix.a; // Get scale from transform matrix
         panX = matrix.e; // Get X translation

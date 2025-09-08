@@ -106,6 +106,8 @@ export const useDrawing = (
     isPanning: false,
     panStartX: 0,
     panStartY: 0,
+    panLastX: 0,
+    panLastY: 0,
     activePointerId: null as number | null,
   });
 
@@ -316,6 +318,8 @@ export const useDrawing = (
         drawingStateRef.current.isPanning = true;
         drawingStateRef.current.panStartX = e.clientX;
         drawingStateRef.current.panStartY = e.clientY;
+        drawingStateRef.current.panLastX = e.clientX;
+        drawingStateRef.current.panLastY = e.clientY;
         return;
       }
 
@@ -634,21 +638,27 @@ export const useDrawing = (
         return;
 
       if (drawingStateRef.current.isPanning) {
-        const deltaX = e.clientX - drawingStateRef.current.panStartX;
-        const deltaY = e.clientY - drawingStateRef.current.panStartY;
+        const rawDeltaX = e.clientX - drawingStateRef.current.panLastX;
+        const rawDeltaY = e.clientY - drawingStateRef.current.panLastY;
+        
+        // Adjust delta for zoom level - when zoomed in, mouse moves should be scaled down
+        const currentZoomScale = zoomLevel ? zoomLevel / 100 : 1;
+        const deltaX = rawDeltaX / currentZoomScale;
+        const deltaY = rawDeltaY / currentZoomScale;
 
         // Update the engine's pan offset
         if (drawingEngineRef.current) {
+          const container = containerRef?.current || canvasRef.current || undefined;
           drawingEngineRef.current.updatePanOffset(
             deltaX,
             deltaY,
-            containerRef?.current || canvasRef.current || undefined,
+            container,
             zoomLevel ? zoomLevel / 100 : undefined
           );
         }
 
-        drawingStateRef.current.panStartX = e.clientX;
-        drawingStateRef.current.panStartY = e.clientY;
+        drawingStateRef.current.panLastX = e.clientX;
+        drawingStateRef.current.panLastY = e.clientY;
         return;
       }
 

@@ -277,7 +277,7 @@ export class DrawingEngine {
     this.updateDOMCanvas("foreground");
   }
 
-  // Pan offset management
+  // Pan offset management - applies to all canvases
   public updatePanOffset(
     deltaX: number,
     deltaY: number,
@@ -312,10 +312,32 @@ export class DrawingEngine {
     // Combine scale and translate transforms
     const scaleTransform = zoomScale ? `scale(${zoomScale})` : '';
     const translateTransform = `translate(${this.panOffsetX}px, ${this.panOffsetY}px)`;
-    
-    container.style.transform = scaleTransform 
+    const transform = scaleTransform 
       ? `${scaleTransform} ${translateTransform}` 
       : translateTransform;
+    
+    // Find the actual canvas container
+    let actualContainer: HTMLElement | null = null;
+    
+    if (container.tagName === 'CANVAS') {
+      // If we got a canvas, find its parent container
+      actualContainer = container.closest('.canvas-container');
+    } else {
+      // If we got a div, use it directly
+      actualContainer = container;
+    }
+    
+    if (!actualContainer) {
+      // Fallback: find container in document
+      const containerDiv = document.querySelector('.canvas-container') as HTMLElement;
+      if (containerDiv) {
+        containerDiv.style.transform = transform;
+      }
+      return;
+    }
+    
+    // Apply transform to the container itself
+    actualContainer.style.transform = transform;
   }
 
   public drawPoint(

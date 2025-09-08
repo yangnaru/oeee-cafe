@@ -273,7 +273,7 @@ function App() {
     appRef,
     drawingState,
     handleHistoryChange,
-    100, // Default zoom level, will be updated by zoom controls
+    drawingState.zoomLevel, // Use zoom level from drawing state
     canvasMeta?.width,
     canvasMeta?.height,
     drawingWsRef, // Stable wsRef that gets populated later
@@ -603,6 +603,13 @@ function App() {
       }
     }
   }, [canvasMeta, canvasContainerRef]);
+
+  // Synchronize temp container ref with real container ref
+  useEffect(() => {
+    if (canvasContainerRef.current) {
+      tempCanvasContainerRef.current = canvasContainerRef.current;
+    }
+  }, [canvasContainerRef]);
 
   // Apply pending pan adjustments after zoom level changes
   useEffect(() => {
