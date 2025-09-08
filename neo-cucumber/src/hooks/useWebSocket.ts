@@ -316,20 +316,45 @@ export const useWebSocket = ({
       }
 
       processingMessageRef.current = true;
+      const totalMessages = messageQueueRef.current.length;
+      let processedCount = 0;
 
-      while (messageQueueRef.current.length > 0) {
-        const message = messageQueueRef.current.shift()!;
+      console.log(`Starting to process ${totalMessages} queued messages in batches`);
 
-        // Create drawing engine for new user if they don't exist (skip for messages without userId)
-        if ("userId" in message && message.userId) {
-          createUserEngine(message.userId);
+      const MESSAGES_PER_BATCH = 50;
+
+      const processBatch = async () => {
+        const batchSize = Math.min(MESSAGES_PER_BATCH, messageQueueRef.current.length);
+        
+        for (let i = 0; i < batchSize; i++) {
+          const message = messageQueueRef.current.shift()!;
+
+          // Create drawing engine for new user if they don't exist (skip for messages without userId)
+          if ("userId" in message && message.userId) {
+            createUserEngine(message.userId);
+          }
+
+          // Handle message types sequentially
+          await handleBinaryMessage(message);
+          processedCount++;
         }
 
-        // Handle message types sequentially
-        await handleBinaryMessage(message);
-      }
+        if (messageQueueRef.current.length > 0) {
+          // Log progress every 500 messages
+          if (processedCount % 500 === 0) {
+            console.log(`Processed ${processedCount}/${totalMessages} messages (${Math.round(processedCount/totalMessages*100)}%)`);
+          }
+          
+          // Schedule next batch on next frame to yield to browser
+          requestAnimationFrame(() => processBatch());
+        } else {
+          processingMessageRef.current = false;
+          console.log(`Completed processing all ${processedCount} messages`);
+        }
+      };
 
-      processingMessageRef.current = false;
+      // Start processing first batch
+      processBatch();
     };
 
     // Helper function to handle decoded binary messages (moved inside connectWebSocket)
