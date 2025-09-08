@@ -282,19 +282,31 @@ pub async fn save_session_to_post(
     png_data: Vec<u8>,
     state: AppState,
 ) -> Result<(Uuid, String), Box<dyn std::error::Error + Send + Sync>> {
+    let mut tx = db.begin().await?;
+    
+    // Lock the session row and check if it's already saved atomically
     let session = sqlx::query!(
         r#"
-        SELECT cs.owner_id, cs.title, cs.width, cs.height, cs.community_id, cs.created_at, cs.ended_at, u.login_name as owner_login_name 
+        SELECT cs.owner_id, cs.title, cs.width, cs.height, cs.community_id, 
+               cs.created_at, cs.ended_at, cs.saved_post_id,
+               u.login_name as owner_login_name 
         FROM collaborative_sessions cs
         JOIN users u ON cs.owner_id = u.id
         WHERE cs.id = $1 AND cs.owner_id = $2
+        FOR UPDATE
         "#,
         session_id,
         owner_id
     )
-    .fetch_optional(&db)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or("Session not found or not owned by user")?;
+    
+    // Check if already saved while holding the lock
+    if session.saved_post_id.is_some() {
+        tx.rollback().await?;
+        return Err("Session has already been saved".into());
+    }
 
     let participants = sqlx::query!(
         r#"
@@ -306,7 +318,7 @@ pub async fn save_session_to_post(
         "#,
         session_id
     )
-    .fetch_all(&db)
+    .fetch_all(&mut *tx)
     .await?;
 
     let image_sha256 = sha256::digest(&png_data);
@@ -376,7 +388,6 @@ pub async fn save_session_to_post(
     };
 
     let image_id = Uuid::new_v4();
-    let mut tx = db.begin().await?;
 
     sqlx::query!(
         r#"
