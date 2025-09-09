@@ -83,7 +83,6 @@ nav a:visited,
   max-width: 100%;
   display: flex;
   object-fit: contain;
-  background: white;
 }
 
 .post-image-full {
@@ -91,7 +90,6 @@ nav a:visited,
   height: auto;
   display: flex;
   object-fit: contain;
-  background: white;
 }
 
 .posts-grid {
@@ -112,7 +110,6 @@ nav a:visited,
   height: auto;
   vertical-align: bottom;
   aspect-ratio: 1 / 1;
-  background: white;
 }
 
 .banner-controls {
