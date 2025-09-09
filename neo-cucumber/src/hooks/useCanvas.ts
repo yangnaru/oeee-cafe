@@ -213,6 +213,10 @@ export const useCanvas = ({
 
     if (!tempCtx) return null;
 
+    // Fill background with white
+    tempCtx.fillStyle = "#FFFFFF";
+    tempCtx.fillRect(0, 0, canvasMeta.width, canvasMeta.height);
+
     // Composite all user layer canvases onto the temp canvas in z-index order
     const canvasElements = Array.from(userCanvasRefs.current.entries()).map(
       ([key, canvas]) => ({
