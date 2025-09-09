@@ -366,29 +366,28 @@ export const ToolboxPanel = ({
         </div>
 
         {/* Zoom controls */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={onZoomOut}
-              className="px-2 py-1 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
-            >
-              <Icon icon="material-symbols:zoom-out" width={16} height={16} />
-            </button>
-            <span
-              className="px-2 py-1 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white w-15 tabular-nums text-center"
-              onClick={onZoomReset}
-            >
-              {Math.round(currentZoom * 100)}%
-            </span>
-            <button
-              type="button"
-              onClick={onZoomIn}
-              className="px-2 py-1 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
-            >
-              <Icon icon="material-symbols:zoom-in" width={16} height={16} />
-            </button>
-          </div>
+        <div className="flex flex-row">
+          <button
+            type="button"
+            onClick={onZoomOut}
+            className="flex items-center justify-center px-2 py-2 border-l border-t border-b border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white flex-1"
+          >
+            <Icon icon="material-symbols:zoom-out" width={16} height={16} />
+          </button>
+          <button
+            type="button"
+            onClick={onZoomReset}
+            className="flex items-center justify-center px-2 py-2 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white flex-1 tabular-nums text-center"
+          >
+            {Math.round(currentZoom * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={onZoomIn}
+            className="flex items-center justify-center px-2 py-2 border-r border-t border-b border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white flex-1"
+          >
+            <Icon icon="material-symbols:zoom-in" width={16} height={16} />
+          </button>
         </div>
 
         {/* Save button - only show for session owner */}
