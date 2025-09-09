@@ -802,18 +802,23 @@ export const useWebSocket = ({
             console.log("Layers message received:", {
               participants: message.participants.map(p => ({
                 userId: p.userId.substring(0, 8),
-                username: p.username
+                username: p.username,
+                joinTimestamp: p.joinTimestamp
               })),
               participantCount: message.participants.length,
             });
             
+            // Sort participants by join timestamp to ensure correct layer ordering
+            // (participants are already sorted on the server, but we verify here)
+            const sortedParticipants = message.participants.sort((a, b) => a.joinTimestamp - b.joinTimestamp);
+            
             // Initialize participants from layers message - this provides complete
-            // participant information with both user IDs and usernames immediately
-            for (const participant of message.participants) {
+            // participant information with user IDs, usernames, and join timestamps
+            for (const participant of sortedParticipants) {
               addParticipant(
                 participant.userId,
                 participant.username,
-                Date.now() // Use current timestamp since layers doesn't include join time
+                participant.joinTimestamp
               );
               
               // Create drawing engine for the user

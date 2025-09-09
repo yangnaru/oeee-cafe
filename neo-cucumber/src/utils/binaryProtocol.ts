@@ -402,7 +402,7 @@ export interface JoinMessage {
 
 export interface LayersMessage {
   type: "layers";
-  participants: Array<{ userId: string; username: string }>;
+  participants: Array<{ userId: string; username: string; joinTimestamp: number }>;
 }
 
 export interface SnapshotMessage {
@@ -543,12 +543,12 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       if (buffer.length < 3) return null;
       const participantCount = readUint16LE(buffer, 1);
       
-      const participants: Array<{ userId: string; username: string }> = [];
+      const participants: Array<{ userId: string; username: string; joinTimestamp: number }> = [];
       let offset = 3;
       
       for (let i = 0; i < participantCount; i++) {
-        // Check if we have enough bytes for user ID (16) + name length (2)
-        if (offset + 18 > buffer.length) return null;
+        // Check if we have enough bytes for user ID (16) + name length (2) + timestamp (8)
+        if (offset + 26 > buffer.length) return null;
         
         // Read user ID (16 bytes)
         const userId = bytesToUuid(buffer.slice(offset, offset + 16));
@@ -558,14 +558,18 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         const nameLength = readUint16LE(buffer, offset);
         offset += 2;
         
-        // Check if we have enough bytes for the username
-        if (offset + nameLength > buffer.length) return null;
+        // Check if we have enough bytes for the username + timestamp
+        if (offset + nameLength + 8 > buffer.length) return null;
         
         // Read username
         const username = new TextDecoder().decode(buffer.slice(offset, offset + nameLength));
         offset += nameLength;
         
-        participants.push({ userId, username });
+        // Read join timestamp (8 bytes)
+        const joinTimestamp = readUint64LE(buffer, offset);
+        offset += 8;
+        
+        participants.push({ userId, username, joinTimestamp });
       }
 
       return {

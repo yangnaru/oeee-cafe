@@ -250,15 +250,15 @@ impl RedisStateManager {
     }
 
     // Room presence management
-    pub async fn add_user_to_room(&self, room_uuid: Uuid, user_id: Uuid, user_login_name: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn add_user_to_room(&self, room_uuid: Uuid, user_id: Uuid, user_login_name: &str, join_timestamp: i64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let room_key = format!("{}{}:users", ROOM_PREFIX, room_uuid);
-        let user_info = format!("{}:{}", user_id, user_login_name);
+        let user_info = format!("{}:{}:{}", user_id, user_login_name, join_timestamp);
         
         conn.sadd::<_, _, ()>(&room_key, &user_info).await?;
         conn.expire::<_, ()>(&room_key, ROOM_PRESENCE_TTL as i64).await?;
         
-        debug!("Added user {} to room {} presence", user_login_name, room_uuid);
+        debug!("Added user {} to room {} presence with join time {}", user_login_name, room_uuid, join_timestamp);
         Ok(())
     }
 
@@ -279,7 +279,7 @@ impl RedisStateManager {
         Ok(())
     }
 
-    pub async fn get_room_users(&self, room_uuid: Uuid) -> Result<Vec<(Uuid, String)>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_room_users(&self, room_uuid: Uuid) -> Result<Vec<(Uuid, String, i64)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let room_key = format!("{}{}:users", ROOM_PREFIX, room_uuid);
         
@@ -287,14 +287,27 @@ impl RedisStateManager {
         let mut result = Vec::new();
         
         for user_info in users {
-            if let Some((user_id_str, user_login_name)) = user_info.split_once(':') {
-                if let Ok(user_id) = user_id_str.parse::<Uuid>() {
-                    result.push((user_id, user_login_name.to_string()));
+            let parts: Vec<&str> = user_info.split(':').collect();
+            if parts.len() >= 3 {
+                if let Ok(user_id) = parts[0].parse::<Uuid>() {
+                    if let Ok(join_timestamp) = parts[2].parse::<i64>() {
+                        let user_login_name = parts[1].to_string();
+                        result.push((user_id, user_login_name, join_timestamp));
+                    }
+                }
+            } else if parts.len() == 2 {
+                // Handle legacy format without timestamp (fallback for existing users)
+                if let Ok(user_id) = parts[0].parse::<Uuid>() {
+                    let user_login_name = parts[1].to_string();
+                    result.push((user_id, user_login_name, 0)); // Use 0 as fallback timestamp
                 }
             }
         }
         
-        debug!("Found {} users in room {}", result.len(), room_uuid);
+        // Sort by join timestamp (ascending - first to join appears first)
+        result.sort_by_key(|(_, _, timestamp)| *timestamp);
+        
+        debug!("Found {} users in room {} (sorted by join time)", result.len(), room_uuid);
         Ok(result)
     }
 

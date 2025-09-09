@@ -43,7 +43,7 @@ pub struct JoinMessage {
 
 #[derive(Debug, Clone)]
 pub struct LayersMessage {
-    pub participants: Vec<(Uuid, String)>, // (user_id, login_name)
+    pub participants: Vec<(Uuid, String, i64)>, // (user_id, login_name, join_timestamp)
 }
 
 #[derive(Debug, Clone)]
@@ -88,9 +88,10 @@ impl LayersMessage {
     pub fn serialize(&self) -> Vec<u8> {
         let participant_count = self.participants.len() as u16;
         
-        // Calculate total buffer size: 1 + 2 + sum of (16 + 2 + name_length) for each participant
+        // Calculate total buffer size: 1 + 2 + sum of (16 + 2 + name_length + 8) for each participant
+        // Added 8 bytes for join timestamp per participant
         let total_size = 1 + 2 + self.participants.iter()
-            .map(|(_, name)| 16 + 2 + name.as_bytes().len())
+            .map(|(_, name, _)| 16 + 2 + name.as_bytes().len() + 8)
             .sum::<usize>();
         
         let mut buffer = Vec::with_capacity(total_size);
@@ -98,7 +99,7 @@ impl LayersMessage {
         buffer.push(MessageType::Layers as u8);
         buffer.extend_from_slice(&participant_count.to_le_bytes());
 
-        for (user_id, login_name) in &self.participants {
+        for (user_id, login_name, join_timestamp) in &self.participants {
             // Add user ID (16 bytes)
             buffer.extend_from_slice(user_id.as_bytes());
             
@@ -107,6 +108,9 @@ impl LayersMessage {
             let name_len = name_bytes.len() as u16;
             buffer.extend_from_slice(&name_len.to_le_bytes());
             buffer.extend_from_slice(name_bytes);
+            
+            // Add join timestamp (8 bytes)
+            buffer.extend_from_slice(&join_timestamp.to_le_bytes());
         }
 
         buffer
@@ -241,6 +245,7 @@ async fn broadcast_layers(
 ) {
     match state.redis_state.get_room_users(room_uuid).await {
         Ok(participants) => {
+            // Participants are already sorted by join time from get_room_users
             let layers_message = LayersMessage { 
                 participants: participants.clone() 
             };
@@ -258,7 +263,7 @@ async fn broadcast_layers(
             match state.redis_state.publish_message(room_uuid, &room_message).await {
                 Ok(subscriber_count) => {
                     info!(
-                        "Broadcasted LAYERS with {} users to {} subscribers in room {}",
+                        "Broadcasted LAYERS with {} users (ordered by join time) to {} subscribers in room {}",
                         participants.len(),
                         subscriber_count,
                         room_uuid
@@ -271,8 +276,8 @@ async fn broadcast_layers(
 
             // Note: With Redis Pub/Sub architecture, existing participant information 
             // is now sent through the normal message flow. The LAYERS message above 
-            // contains the list of all current users with their usernames, providing 
-            // complete participant state to all connections in the room.
+            // contains the list of all current users with their usernames and join timestamps,
+            // providing complete participant state ordered by join time to all connections.
         }
         Err(e) => {
             error!("Failed to query participants for JOIN_RESPONSE: {}", e);

@@ -229,8 +229,9 @@ async fn setup_connection_atomically(
         error!("Failed to register connection in Redis: {}", e);
     }
     
-    // Add user to room presence
-    if let Err(e) = state.redis_state.add_user_to_room(room_uuid, user_id, user_login_name).await {
+    // Add user to room presence with current timestamp
+    let join_timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
+    if let Err(e) = state.redis_state.add_user_to_room(room_uuid, user_id, user_login_name, join_timestamp).await {
         error!("Failed to add user to room presence in Redis: {}", e);
     }
     
