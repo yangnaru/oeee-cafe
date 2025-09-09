@@ -298,29 +298,56 @@ export const ToolboxPanel = ({
         </div>
 
         {/* Layer selection */}
-        <div className="flex flex-row gap-2">
-          {(["foreground", "background"] as LayerType[]).map((layer) => (
-            <label
+        <div className="flex flex-row">
+          {(["foreground", "background"] as LayerType[]).map((layer, index) => (
+            <button
               key={layer}
-              className="flex items-center gap-2 p-1 border border-main bg-main"
-            >
-              <input
-                type="radio"
-                name="layerType"
-                value={layer}
-                checked={drawingState.layerType === layer}
-                onChange={() =>
+              type="button"
+              className={`flex items-center justify-center gap-2 px-3 py-2 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white flex-1 ${
+                drawingState.layerType === layer ? 'bg-highlight text-white' : ''
+              } ${
+                index === 0 ? 'border-r-0' : 'border-l-0'
+              }`}
+              onClick={() =>
+                onUpdateDrawingState((prev) => ({
+                  ...prev,
+                  layerType: layer,
+                }))
+              }
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (layer === "foreground") {
                   onUpdateDrawingState((prev) => ({
                     ...prev,
-                    layerType: layer,
-                  }))
+                    fgVisible: !prev.fgVisible,
+                  }));
+                } else {
+                  onUpdateDrawingState((prev) => ({
+                    ...prev,
+                    bgVisible: !prev.bgVisible,
+                  }));
                 }
-              />
-              <span
-                className="text-sm"
-                onContextMenu={(e) => {
-                  e.preventDefault(); // Prevent browser context menu
-                  // Toggle layer visibility
+              }}
+              title={t`Left click to select layer, right click to toggle visibility`}
+            >
+              <span className="text-sm">
+                {layer === "foreground" ? "FG" : "BG"}
+              </span>
+              <Icon
+                icon={
+                  layer === "foreground"
+                    ? drawingState.fgVisible ? "material-symbols:visibility" : "material-symbols:visibility-off"
+                    : drawingState.bgVisible ? "material-symbols:visibility" : "material-symbols:visibility-off"
+                }
+                width={16}
+                height={16}
+                className={`cursor-pointer ${
+                  layer === "foreground"
+                    ? drawingState.fgVisible ? "" : "opacity-50"
+                    : drawingState.bgVisible ? "" : "opacity-50"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (layer === "foreground") {
                     onUpdateDrawingState((prev) => ({
                       ...prev,
@@ -333,37 +360,8 @@ export const ToolboxPanel = ({
                     }));
                   }
                 }}
-                title={t`Left click to select layer, right click to toggle visibility`}
-              >
-                {layer === "foreground" ? "FG" : "BG"}
-              </span>
-              <input
-                type="checkbox"
-                checked={
-                  layer === "foreground"
-                    ? drawingState.fgVisible
-                    : drawingState.bgVisible
-                }
-                onChange={(e) => {
-                  if (layer === "foreground") {
-                    onUpdateDrawingState((prev) => ({
-                      ...prev,
-                      fgVisible: e.target.checked,
-                    }));
-                  } else {
-                    onUpdateDrawingState((prev) => ({
-                      ...prev,
-                      bgVisible: e.target.checked,
-                    }));
-                  }
-                }}
-                title={
-                  layer === "foreground"
-                    ? t`Show/hide foreground layer`
-                    : t`Show/hide background layer`
-                }
               />
-            </label>
+            </button>
           ))}
         </div>
 
