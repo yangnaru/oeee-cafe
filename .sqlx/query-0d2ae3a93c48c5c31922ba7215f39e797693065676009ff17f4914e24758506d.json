@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT cs.owner_id, cs.title, cs.width, cs.height, cs.community_id, cs.created_at, cs.ended_at, u.login_name as owner_login_name \n        FROM collaborative_sessions cs\n        JOIN users u ON cs.owner_id = u.id\n        WHERE cs.id = $1 AND cs.owner_id = $2\n        ",
+  "query": "\n        SELECT cs.owner_id, cs.title, cs.width, cs.height, cs.community_id, \n               cs.created_at, cs.ended_at, cs.saved_post_id,\n               u.login_name as owner_login_name \n        FROM collaborative_sessions cs\n        JOIN users u ON cs.owner_id = u.id\n        WHERE cs.id = $1 AND cs.owner_id = $2\n        FOR UPDATE\n        ",
   "describe": {
     "columns": [
       {
@@ -40,6 +40,11 @@
       },
       {
         "ordinal": 7,
+        "name": "saved_post_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
         "name": "owner_login_name",
         "type_info": "Varchar"
       }
@@ -58,8 +63,9 @@
       false,
       false,
       true,
+      true,
       false
     ]
   },
-  "hash": "5c936699f4f8c3165ead8c1c345a587a9ec2bdfe387307deba3f815237430218"
+  "hash": "0d2ae3a93c48c5c31922ba7215f39e797693065676009ff17f4914e24758506d"
 }

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT max_participants\n        FROM collaborative_sessions\n        WHERE id = $1 AND ended_at IS NULL\n        FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max_participants",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "65020fd8818b17b6ba4727d83fea2892b900c64d064fc33edea7f07e98d9c362"
+}
