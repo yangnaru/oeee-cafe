@@ -13,7 +13,7 @@ export const MSG_TYPE = {
   SNAPSHOT: 0x02,
   CHAT: 0x03,
   SNAPSHOT_REQUEST: 0x05,
-  JOIN_RESPONSE: 0x06,
+  LAYERS: 0x06,
   END_SESSION: 0x07,
   SESSION_EXPIRED: 0x08,
   LEAVE: 0x09,
@@ -335,24 +335,6 @@ export function encodeChat(
   return buffer.buffer;
 }
 
-/**
- * Encode JOIN_RESPONSE message (0x06)
- * Format: [0x06][count:2][UUID1:16][UUID2:16]...[UUIDn:16]
- */
-export function encodeJoinResponse(userIds: string[]): ArrayBuffer {
-  const buffer = new Uint8Array(3 + userIds.length * 16);
-
-  buffer[0] = MSG_TYPE.JOIN_RESPONSE;
-  writeUint16LE(buffer, 1, userIds.length);
-
-  let offset = 3;
-  for (const userId of userIds) {
-    buffer.set(uuidToBytes(userId), offset);
-    offset += 16;
-  }
-
-  return buffer.buffer;
-}
 
 /**
  * Encode SNAPSHOT_REQUEST message (0x05)
@@ -418,9 +400,9 @@ export interface JoinMessage {
   timestamp: number;
 }
 
-export interface JoinResponseMessage {
-  type: "joinResponse";
-  userIds: string[];
+export interface LayersMessage {
+  type: "layers";
+  participants: Array<{ userId: string; username: string }>;
 }
 
 export interface SnapshotMessage {
@@ -507,7 +489,7 @@ export interface LeaveMessage {
 
 export type DecodedMessage =
   | JoinMessage
-  | JoinResponseMessage
+  | LayersMessage
   | SnapshotMessage
   | ChatMessage
   | SnapshotRequestMessage
@@ -557,20 +539,38 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       };
     }
 
-    case MSG_TYPE.JOIN_RESPONSE: {
+    case MSG_TYPE.LAYERS: {
       if (buffer.length < 3) return null;
-      const userCount = readUint16LE(buffer, 1);
-      if (buffer.length < 3 + userCount * 16) return null;
-
-      const userIds: string[] = [];
-      for (let i = 0; i < userCount; i++) {
-        const offset = 3 + i * 16;
-        userIds.push(bytesToUuid(buffer.slice(offset, offset + 16)));
+      const participantCount = readUint16LE(buffer, 1);
+      
+      const participants: Array<{ userId: string; username: string }> = [];
+      let offset = 3;
+      
+      for (let i = 0; i < participantCount; i++) {
+        // Check if we have enough bytes for user ID (16) + name length (2)
+        if (offset + 18 > buffer.length) return null;
+        
+        // Read user ID (16 bytes)
+        const userId = bytesToUuid(buffer.slice(offset, offset + 16));
+        offset += 16;
+        
+        // Read username length (2 bytes)
+        const nameLength = readUint16LE(buffer, offset);
+        offset += 2;
+        
+        // Check if we have enough bytes for the username
+        if (offset + nameLength > buffer.length) return null;
+        
+        // Read username
+        const username = new TextDecoder().decode(buffer.slice(offset, offset + nameLength));
+        offset += nameLength;
+        
+        participants.push({ userId, username });
       }
 
       return {
-        type: "joinResponse",
-        userIds: userIds,
+        type: "layers",
+        participants: participants,
       };
     }
 

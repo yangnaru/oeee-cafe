@@ -27,7 +27,7 @@ pub enum MessageType {
     Snapshot = 0x02,
     Chat = 0x03,
     SnapshotRequest = 0x05,
-    JoinResponse = 0x06,
+    Layers = 0x06,
     EndSession = 0x07,
     SessionExpired = 0x08,
     Leave = 0x09,
@@ -42,8 +42,8 @@ pub struct JoinMessage {
 }
 
 #[derive(Debug, Clone)]
-pub struct JoinResponseMessage {
-    pub user_ids: Vec<Uuid>,
+pub struct LayersMessage {
+    pub participants: Vec<(Uuid, String)>, // (user_id, login_name)
 }
 
 #[derive(Debug, Clone)]
@@ -84,16 +84,29 @@ impl JoinMessage {
     }
 }
 
-impl JoinResponseMessage {
+impl LayersMessage {
     pub fn serialize(&self) -> Vec<u8> {
-        let user_count = self.user_ids.len() as u16;
-        let mut buffer = Vec::with_capacity(1 + 2 + self.user_ids.len() * 16);
+        let participant_count = self.participants.len() as u16;
+        
+        // Calculate total buffer size: 1 + 2 + sum of (16 + 2 + name_length) for each participant
+        let total_size = 1 + 2 + self.participants.iter()
+            .map(|(_, name)| 16 + 2 + name.as_bytes().len())
+            .sum::<usize>();
+        
+        let mut buffer = Vec::with_capacity(total_size);
 
-        buffer.push(MessageType::JoinResponse as u8);
-        buffer.extend_from_slice(&user_count.to_le_bytes());
+        buffer.push(MessageType::Layers as u8);
+        buffer.extend_from_slice(&participant_count.to_le_bytes());
 
-        for user_id in &self.user_ids {
+        for (user_id, login_name) in &self.participants {
+            // Add user ID (16 bytes)
             buffer.extend_from_slice(user_id.as_bytes());
+            
+            // Add login name length (2 bytes) + login name
+            let name_bytes = login_name.as_bytes();
+            let name_len = name_bytes.len() as u16;
+            buffer.extend_from_slice(&name_len.to_le_bytes());
+            buffer.extend_from_slice(name_bytes);
         }
 
         buffer
@@ -159,7 +172,7 @@ pub fn parse_message_type(data: &[u8]) -> Option<MessageType> {
         0x02 => Some(MessageType::Snapshot),
         0x03 => Some(MessageType::Chat),
         0x05 => Some(MessageType::SnapshotRequest),
-        0x06 => Some(MessageType::JoinResponse),
+        0x06 => Some(MessageType::Layers),
         0x07 => Some(MessageType::EndSession),
         0x08 => Some(MessageType::SessionExpired),
         0x09 => Some(MessageType::Leave),
@@ -214,13 +227,13 @@ pub async fn handle_join_message(
     if let Err(e) = db::track_join_participant(db, room_uuid, user_uuid, timestamp as i64).await {
         error!("Failed to track JOIN participant: {}", e);
     } else {
-        broadcast_join_response(db, room_uuid, state, user_id).await;
+        broadcast_layers(db, room_uuid, state, user_id).await;
     }
 
     Some(Message::Binary(join_message.serialize()))
 }
 
-async fn broadcast_join_response(
+async fn broadcast_layers(
     _db: &Pool<Postgres>,
     room_uuid: Uuid,
     state: &AppState,
@@ -228,39 +241,38 @@ async fn broadcast_join_response(
 ) {
     match state.redis_state.get_room_users(room_uuid).await {
         Ok(participants) => {
-            let user_ids: Vec<Uuid> = participants.iter().map(|(id, _)| *id).collect();
-            let join_response = JoinResponseMessage { user_ids };
+            let layers_message = LayersMessage { 
+                participants: participants.clone() 
+            };
 
-            // Use Redis pub/sub to send JOIN_RESPONSE to all connections in the room
+            // Use Redis pub/sub to send LAYERS message to all connections in the room
             let room_message = super::redis_state::RoomMessage {
                 from_connection: "system".to_string(),
                 user_id: uuid::Uuid::nil(),
                 user_login_name: "system".to_string(),
-                message_type: "join_response".to_string(),
-                payload: join_response.serialize(),
+                message_type: "layers".to_string(),
+                payload: layers_message.serialize(),
                 timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
             };
 
             match state.redis_state.publish_message(room_uuid, &room_message).await {
                 Ok(subscriber_count) => {
                     info!(
-                        "Broadcasted JOIN_RESPONSE with {} users to {} subscribers in room {}",
+                        "Broadcasted LAYERS with {} users to {} subscribers in room {}",
                         participants.len(),
                         subscriber_count,
                         room_uuid
                     );
                 }
                 Err(e) => {
-                    error!("Failed to publish JOIN_RESPONSE message for room {}: {}", room_uuid, e);
+                    error!("Failed to publish LAYERS message for room {}: {}", room_uuid, e);
                 }
             }
 
             // Note: With Redis Pub/Sub architecture, existing participant information 
-            // is now sent through the normal message flow. The JOIN_RESPONSE above 
-            // contains the list of all current users, and when this user's own JOIN 
-            // message gets stored and broadcast through Redis, other users will see 
-            // this user has joined. Historical JOIN messages are replayed through 
-            // the Redis message history system.
+            // is now sent through the normal message flow. The LAYERS message above 
+            // contains the list of all current users with their usernames, providing 
+            // complete participant state to all connections in the room.
         }
         Err(e) => {
             error!("Failed to query participants for JOIN_RESPONSE: {}", e);

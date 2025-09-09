@@ -798,15 +798,27 @@ export const useWebSocket = ({
             break;
           }
 
-          case "joinResponse": {
-            console.log("Join response received:", {
-              userIds: message.userIds.map(id => id.substring(0, 8)),
-              userCount: message.userIds.length,
+          case "layers": {
+            console.log("Layers message received:", {
+              participants: message.participants.map(p => ({
+                userId: p.userId.substring(0, 8),
+                username: p.username
+              })),
+              participantCount: message.participants.length,
             });
             
-            // This message contains the list of existing users in the session
-            // The users are already being created through individual 'join' messages
-            // so we don't need to do anything special here
+            // Initialize participants from layers message - this provides complete
+            // participant information with both user IDs and usernames immediately
+            for (const participant of message.participants) {
+              addParticipant(
+                participant.userId,
+                participant.username,
+                Date.now() // Use current timestamp since layers doesn't include join time
+              );
+              
+              // Create drawing engine for the user
+              createUserEngine(participant.userId, participant.username);
+            }
             break;
           }
 

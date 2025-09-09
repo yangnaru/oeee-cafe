@@ -502,7 +502,7 @@ async fn count_user_messages_from_redis(
                     || (messages::is_server_message(msg_type)
                         && msg_type != 0x01 // Join (ephemeral)
                         && msg_type != 0x05 // SnapshotRequest
-                        && msg_type != 0x06 // JoinResponse  
+                        && msg_type != 0x06 // Layers  
                         && msg_type != 0x09) // Leave (ephemeral)
                 {
                     if let Ok(msg_user_id) = utils::bytes_to_uuid(&stored_data[1..17]) {
