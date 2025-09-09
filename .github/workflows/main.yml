@@ -47,6 +47,7 @@ jobs:
         run: echo arch=arm64 >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v6
         with:
+          context: .
           pull: "true"
           push: "true"
           no-cache: "false"
