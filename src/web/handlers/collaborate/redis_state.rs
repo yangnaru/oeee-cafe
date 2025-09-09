@@ -226,9 +226,9 @@ impl RedisStateManager {
     }
 
     // Create a dedicated Redis Pub/Sub connection for a specific room
-    pub async fn create_room_subscriber(&self, room_uuid: Uuid) -> Result<redis::aio::PubSub, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn create_room_subscriber(&self, room_uuid: Uuid, redis_url: &str) -> Result<redis::aio::PubSub, Box<dyn std::error::Error + Send + Sync>> {
         // Create a new dedicated connection for Pub/Sub (can't use pooled connections)
-        let client = redis::Client::open(self.get_redis_url().await?)?;
+        let client = redis::Client::open(redis_url)?;
         let mut pubsub = client.get_async_pubsub().await?;
         
         let channel = self.get_room_channel(room_uuid);
@@ -242,11 +242,6 @@ impl RedisStateManager {
         format!("{}{}", PUBSUB_PREFIX, room_uuid)
     }
 
-    pub async fn get_redis_url(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        // We need to get the Redis URL from the pool configuration
-        // For now, we'll hardcode it, but this should be configurable
-        Ok("redis://localhost:6379".to_string())
-    }
 
 
     pub async fn cleanup_room_state(&self, room_uuid: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

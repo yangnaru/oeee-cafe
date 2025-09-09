@@ -82,7 +82,8 @@ pub async fn handle_socket(
     let (redis_tx, mut redis_rx) = mpsc::unbounded_channel::<Message>();
     
     let redis_task = tokio::spawn(async move {
-        match state_clone.redis_state.create_room_subscriber(room_uuid).await {
+        let redis_url = state_clone.config.redis_url.clone();
+        match state_clone.redis_state.create_room_subscriber(room_uuid, &redis_url).await {
             Ok(mut pubsub) => {
                 loop {
                     match pubsub.on_message().next().await {
