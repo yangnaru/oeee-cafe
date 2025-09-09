@@ -20,11 +20,11 @@ export const CustomSlider: React.FC<CustomSliderProps> = ({
       <div
         className="relative flex items-center w-full h-8 cursor-pointer"
         style={{
-          background: `linear-gradient(to right, var(--main-bg-color) 0%, var(--main-bg-color) ${
+          background: `linear-gradient(to right, var(--main-text-color) 0%, var(--main-text-color) ${
             5 + ((value - min) / (max - min)) * 95
-          }%, #e5e7eb ${
+          }%, var(--main-bg-color) ${
             5 + ((value - min) / (max - min)) * 95
-          }%, #e5e7eb 100%)`,
+          }%, var(--main-bg-color) 100%)`,
           border: "1px solid var(--main-border-color)",
         }}
         onMouseDown={(e) => {
