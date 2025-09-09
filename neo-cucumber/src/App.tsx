@@ -46,22 +46,6 @@ const setupI18n = (locale: string) => {
 // Initialize i18n with default locale (English) to prevent destructuring errors
 setupI18n("en");
 
-/*
- * Backend endpoints required:
- *
- * GET /api/auth
- * - Returns: { user_id: string, login_name: string } on success (200)
- * - Returns: { error: string } on auth failure (401)
- * - Used to authenticate and get user information
- * - On 401 response, automatically redirects to login page
- *
- * GET /api/collaboration/{uuid}/meta
- * - Returns: { title: string, width: number, height: number, ownerId: string, savedPostId?: string, ownerLoginName: string }
- * - Used to get collaboration session metadata including canvas dimensions
- * - If savedPostId is not null, the session has been saved and should redirect
- * - This replaces getting dimensions from URL query parameters
- */
-
 // Function to get session ID from URL
 const getSessionId = (): string => {
   const pathSegments = window.location.pathname.split("/");
