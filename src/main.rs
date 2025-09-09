@@ -60,14 +60,19 @@ fn main() {
             env.add_filter("markdown", markdown_to_html);
             env.set_loader(path_loader(&template_path));
 
+            let redis_pool = cfg.connect_redis().await.unwrap_or_else(|e| {
+                eprintln!("error connecting to redis: {}", e);
+                exit(1);
+            });
+
             let state = AppState {
                 config: cfg.clone(),
                 env,
                 collaboration_rooms: Arc::new(DashMap::new()),
-                message_history: Arc::new(DashMap::new()),
                 last_activity_cache: Arc::new(DashMap::new()),
                 snapshot_request_tracker: Arc::new(DashMap::new()),
                 connection_user_mapping: Arc::new(DashMap::new()),
+                redis_pool,
             };
 
             App::new(state).await.unwrap().serve().await.unwrap()

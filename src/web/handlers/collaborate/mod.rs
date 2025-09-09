@@ -1,9 +1,7 @@
-// This file has been refactored into a module structure
-// All functionality is now available through the collaborate module
-
 pub mod db;
 pub mod http_handlers;
 pub mod messages;
+pub mod redis_messages;
 pub mod types;
 pub mod utils;
 pub mod websocket;

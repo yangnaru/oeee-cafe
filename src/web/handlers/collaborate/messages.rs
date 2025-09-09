@@ -1,4 +1,5 @@
 use crate::web::state::AppState;
+use super::redis_messages;
 use axum::extract::ws::Message;
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
@@ -18,11 +19,6 @@ fn get_current_timestamp_ms() -> u64 {
 }
 
 const MAX_USER_MESSAGES: usize = 100;
-
-// History limits to prevent unbounded growth
-const MAX_HISTORY_MESSAGES: usize = 50000; // Max messages per room
-const MAX_HISTORY_BYTES: usize = 10 * 1024 * 1024; // 10MB per room
-const MAX_MESSAGE_AGE_MINUTES: u64 = 60; // Remove messages older than 1 hour
 
 // Message type constants matching neo-cucumber protocol
 #[repr(u8)]
@@ -180,6 +176,8 @@ pub fn is_client_message(msg_type: u8) -> bool {
     msg_type >= 0x10
 }
 
+// bytes_to_uuid is already available from utils module via import
+
 pub async fn handle_join_message(
     data: &[u8],
     user_id: Uuid,
@@ -287,11 +285,11 @@ async fn send_existing_participants_to_new_user(
     }
 }
 
-pub fn handle_snapshot_message(
+pub async fn handle_snapshot_message(
     data: &[u8],
     room_uuid: Uuid,
     state: &AppState,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if data.len() < 22 {
         return Ok(());
     }
@@ -304,77 +302,9 @@ pub fn handle_snapshot_message(
         snapshot_user, snapshot_layer, room_uuid
     );
 
-    // Get and clone the history to avoid race conditions with concurrent modifications
-    let mut history = if let Some(entry) = state.message_history.get(&room_uuid) {
-        entry.clone()
-    } else {
-        Vec::new()
-    };
-    
-    let initial_count = history.len();
-
-    history.retain(|stored_msg| {
-        if let Message::Binary(stored_data) = stored_msg {
-            if stored_data.is_empty() {
-                return true;
-            }
-
-            let stored_msg_type = stored_data[0];
-
-            if is_server_message(stored_msg_type) {
-                if stored_msg_type == MessageType::Snapshot as u8 {
-                    if stored_data.len() >= 18 {
-                        if let Ok(stored_snapshot_user) = bytes_to_uuid(&stored_data[1..17]) {
-                            let stored_snapshot_layer = stored_data[17];
-                            return !(stored_snapshot_user == snapshot_user
-                                && stored_snapshot_layer == snapshot_layer);
-                        }
-                    }
-                    return true;
-                }
-                return true;
-            }
-
-            if stored_data.len() >= 17 {
-                if let Ok(stored_user) = bytes_to_uuid(&stored_data[1..17]) {
-                    if stored_user != snapshot_user {
-                        return true;
-                    }
-
-                    match stored_msg_type {
-                        0x13 => false, // POINTER_UP
-                        0x10..=0x12 => {
-                            // DRAW_LINE, DRAW_POINT, FILL
-                            if stored_data.len() >= 18 {
-                                let stored_layer = stored_data[17];
-                                stored_layer != snapshot_layer
-                            } else {
-                                true
-                            }
-                        }
-                        _ => true,
-                    }
-                } else {
-                    true
-                }
-            } else {
-                true
-            }
-        } else {
-            true
-        }
-    });
-
-    let removed_count = initial_count - history.len();
-    if removed_count > 0 {
-        debug!(
-            "Removed {} obsolete messages from history for user {} layer {} in room {}",
-            removed_count, snapshot_user, snapshot_layer, room_uuid
-        );
-    }
-
-    // Atomically replace the entire history to prevent race conditions
-    state.message_history.insert(room_uuid, history);
+    // Use Redis to handle the message filtering
+    let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
+    redis_store.remove_obsolete_messages(room_uuid, snapshot_user, snapshot_layer).await?;
 
     let user_snapshot_key = format!("{}:{}", room_uuid, snapshot_user);
     state
@@ -452,6 +382,14 @@ pub async fn handle_end_session_message(
                             error!("Failed to update session ended_at: {}", e);
                         }
 
+                        // Clean up Redis message history when session is explicitly ended
+                        let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
+                        if let Err(e) = redis_store.cleanup_room(room_uuid).await {
+                            error!("Failed to cleanup Redis for ended session {}: {}", room_uuid, e);
+                        } else {
+                            info!("Cleaned up Redis message history for ended session {}", room_uuid);
+                        }
+
                         // Broadcast END_SESSION to all participants in the room (including sender)
                         if let Some(room_connections) = state.collaboration_rooms.get(&room_uuid) {
                             let end_session_msg = msg.clone();
@@ -488,31 +426,8 @@ pub fn should_store_message(msg: &Message) -> bool {
     }
 }
 
-pub fn count_user_messages(state: &AppState, room_uuid: Uuid) -> HashMap<Uuid, usize> {
-    let mut user_message_counts: HashMap<Uuid, usize> = HashMap::new();
-
-    if let Some(history) = state.message_history.get(&room_uuid) {
-        for stored_msg in history.iter() {
-            if let Message::Binary(stored_data) = stored_msg {
-                if stored_data.len() >= 17 {
-                    let msg_type = stored_data[0];
-                    if is_client_message(msg_type)
-                        || (is_server_message(msg_type)
-                            && msg_type != MessageType::SnapshotRequest as u8
-                            && msg_type != MessageType::JoinResponse as u8
-                            && msg_type != MessageType::Leave as u8)
-                    {
-                        if let Ok(msg_user_id) = bytes_to_uuid(&stored_data[1..17]) {
-                            *user_message_counts.entry(msg_user_id).or_insert(0) += 1;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    user_message_counts
-}
+// This function is now replaced by count_user_messages_from_redis in websocket.rs
+// but kept here for reference and potential fallback use
 
 pub async fn handle_snapshot_requests(
     user_message_counts: &HashMap<Uuid, usize>,
@@ -628,65 +543,8 @@ pub async fn broadcast_message(
     }
 }
 
-pub fn enforce_history_limits(history: &mut Vec<Message>, room_uuid: Uuid) {
-    let initial_count = history.len();
-    let mut total_bytes = 0;
-    let current_time = get_current_timestamp_ms();
-
-    // First pass: calculate total size and identify old messages
-    let mut messages_to_keep = Vec::new();
-
-    for msg in history.iter().rev() {
-        // Process newest first
-        let msg_size = match msg {
-            Message::Binary(data) => data.len(),
-            Message::Text(text) => text.len(),
-            _ => 0,
-        };
-
-        // Check if we've exceeded limits
-        if messages_to_keep.len() >= MAX_HISTORY_MESSAGES {
-            break; // Too many messages
-        }
-
-        if total_bytes + msg_size > MAX_HISTORY_BYTES {
-            break; // Too much data
-        }
-
-        // Check message age for timestamped messages
-        if let Message::Binary(data) = msg {
-            if data.len() >= 25 && is_timestamped_message(data[0]) {
-                let msg_timestamp = read_u64_le(data, 17);
-                let age_ms = current_time.saturating_sub(msg_timestamp);
-                if age_ms > MAX_MESSAGE_AGE_MINUTES * 60 * 1000 {
-                    continue; // Message too old
-                }
-            }
-        }
-
-        total_bytes += msg_size;
-        messages_to_keep.push(msg.clone());
-    }
-
-    // Reverse to maintain chronological order
-    messages_to_keep.reverse();
-
-    if messages_to_keep.len() < initial_count {
-        let removed = initial_count - messages_to_keep.len();
-        debug!(
-            "Enforced history limits for room {}: removed {} messages (was {} messages, now {})",
-            room_uuid,
-            removed,
-            initial_count,
-            messages_to_keep.len()
-        );
-        *history = messages_to_keep;
-    }
-}
-
-fn is_timestamped_message(msg_type: u8) -> bool {
-    matches!(msg_type, 0x01 | 0x03 | 0x05 | 0x09) // JOIN, CHAT, SNAPSHOT_REQUEST, LEAVE
-}
+// This function is now handled by Redis automatic limits and TTL
+// The RedisMessageStore enforces limits during store_message operations
 
 pub async fn send_leave_message(
     room_uuid: Uuid,

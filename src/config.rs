@@ -18,6 +18,11 @@ pub struct AppConfig {
     #[serde_as(as = "DurationSeconds<u64>")]
     pub db_acquire_timeout: Duration,
 
+    pub redis_url: String,
+    pub redis_max_connections: u32,
+    #[serde_as(as = "DurationSeconds<u64>")]
+    pub redis_acquire_timeout: Duration,
+
     pub official_account_login_name: String,
     pub default_community_id: String,
 

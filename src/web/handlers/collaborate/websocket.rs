@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use super::{db, messages};
+use super::{db, messages, redis_messages, utils};
 
 pub async fn websocket_collaborate_handler(
     Path(room_uuid): Path<Uuid>,
@@ -157,7 +157,7 @@ async fn setup_connection(
         tx
     );
 
-    send_history_to_new_connection(state, room_uuid, tx, connection_id);
+    send_history_to_new_connection(state, room_uuid, tx, connection_id).await;
 
     Ok(session_info.owner_id == user_id)
 }
@@ -234,27 +234,37 @@ fn setup_connection_atomically(
 }
 
 
-fn send_history_to_new_connection(
+async fn send_history_to_new_connection(
     state: &AppState,
     room_uuid: Uuid,
     tx: &mpsc::UnboundedSender<Message>,
     connection_id: &str,
 ) {
-    if let Some(history) = state.message_history.get(&room_uuid) {
-        for stored_msg in history.iter() {
-            if tx.send(stored_msg.clone()).is_err() {
-                warn!(
-                    "Failed to send stored message to new connection {}",
-                    connection_id
-                );
-                break;
+    let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
+    
+    match redis_store.get_history(room_uuid).await {
+        Ok(history) => {
+            for stored_msg in history.iter() {
+                if tx.send(stored_msg.clone()).is_err() {
+                    warn!(
+                        "Failed to send stored message to new connection {}",
+                        connection_id
+                    );
+                    break;
+                }
             }
+            debug!(
+                "Sent {} stored messages from Redis to new connection {}",
+                history.len(),
+                connection_id
+            );
         }
-        debug!(
-            "Sent {} stored messages to new connection {}",
-            history.len(),
-            connection_id
-        );
+        Err(e) => {
+            error!(
+                "Failed to retrieve message history from Redis for connection {}: {}",
+                connection_id, e
+            );
+        }
     }
 }
 
@@ -351,7 +361,7 @@ async fn process_server_message(
             .await
         }
         0x02 => {
-            if let Err(e) = messages::handle_snapshot_message(data, room_uuid, state) {
+            if let Err(e) = messages::handle_snapshot_message(data, room_uuid, state).await {
                 error!("Error handling snapshot message: {}", e);
             }
             Some(msg.clone())
@@ -390,34 +400,72 @@ async fn process_message_for_history_and_snapshots(
     connection_id: &str,
     state: &AppState,
 ) {
-    let (history_count, history_bytes) = {
-        let mut history = state.message_history.entry(room_uuid).or_default();
-
-        if messages::should_store_message(msg) {
-            history.push(msg.clone());
+    let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
+    
+    if messages::should_store_message(msg) {
+        debug!(
+            "Storing message to Redis for room {} (connection {}): message type = 0x{:02x}",
+            room_uuid, connection_id,
+            if let Message::Binary(data) = msg { 
+                if data.is_empty() { 0x00 } else { data[0] } 
+            } else { 0xFF }
+        );
+        
+        // Store message in Redis
+        if let Err(e) = redis_store.store_message(room_uuid, msg).await {
+            error!("Failed to store message in Redis for room {}: {}", room_uuid, e);
+        } else {
+            debug!("Successfully stored message in Redis for room {}", room_uuid);
+            
+            // Update last activity cache
             state.last_activity_cache.insert(room_uuid, Instant::now());
             
-            // Enforce limits after adding
-            messages::enforce_history_limits(&mut history, room_uuid);
+            // Refresh TTL for the room
+            if let Err(e) = redis_store.refresh_ttl(room_uuid).await {
+                error!("Failed to refresh TTL in Redis: {}", e);
+            }
         }
+    } else {
+        debug!(
+            "Skipping message storage for room {} (connection {}): message type = 0x{:02x} (filtered out)",
+            room_uuid, connection_id,
+            if let Message::Binary(data) = msg { 
+                if data.is_empty() { 0x00 } else { data[0] } 
+            } else { 0xFF }
+        );
+    }
 
-        let total_bytes = history
-            .iter()
-            .map(|m| match m {
-                Message::Text(text) => text.len(),
-                Message::Binary(data) => data.len(),
-                _ => 0,
-            })
-            .sum::<usize>();
-
-        (history.len(), total_bytes)
+    // Get current history from Redis to count messages
+    let (history_count, history_bytes) = match redis_store.get_history(room_uuid).await {
+        Ok(history) => {
+            let total_bytes = history
+                .iter()
+                .map(|m| match m {
+                    Message::Text(text) => text.len(),
+                    Message::Binary(data) => data.len(),
+                    _ => 0,
+                })
+                .sum::<usize>();
+            (history.len(), total_bytes)
+        }
+        Err(e) => {
+            error!("Failed to get history from Redis: {}", e);
+            (0, 0)
+        }
     };
 
-    let user_message_counts = messages::count_user_messages(state, room_uuid);
+    // Count user messages from Redis history
+    let user_message_counts = match count_user_messages_from_redis(&redis_store, room_uuid).await {
+        Ok(counts) => counts,
+        Err(e) => {
+            error!("Failed to count user messages from Redis: {}", e);
+            std::collections::HashMap::new()
+        }
+    };
 
     let history_mb = history_bytes as f64 / 1_048_576.0;
     debug!(
-        "Received message from connection {} in room {} (history: {} messages, {:.2} MB, user {}: {} messages)",
+        "Received message from connection {} in room {} (Redis history: {} messages, {:.2} MB, user {}: {} messages)",
         connection_id,
         room_uuid,
         history_count,
@@ -427,6 +475,38 @@ async fn process_message_for_history_and_snapshots(
     );
 
     messages::handle_snapshot_requests(&user_message_counts, room_uuid, state).await;
+}
+
+async fn count_user_messages_from_redis(
+    redis_store: &redis_messages::RedisMessageStore,
+    room_uuid: Uuid,
+) -> Result<std::collections::HashMap<Uuid, usize>, Box<dyn std::error::Error + Send + Sync>> {
+    use std::collections::HashMap;
+    
+    let history = redis_store.get_history(room_uuid).await?;
+    let mut user_message_counts: HashMap<Uuid, usize> = HashMap::new();
+
+    for stored_msg in history.iter() {
+        if let Message::Binary(stored_data) = stored_msg {
+            if stored_data.len() >= 17 {
+                let msg_type = stored_data[0];
+                
+                // Same logic as the original count_user_messages function
+                if messages::is_client_message(msg_type)
+                    || (messages::is_server_message(msg_type)
+                        && msg_type != 0x05 // SnapshotRequest
+                        && msg_type != 0x06 // JoinResponse  
+                        && msg_type != 0x09) // Leave
+                {
+                    if let Ok(msg_user_id) = utils::bytes_to_uuid(&stored_data[1..17]) {
+                        *user_message_counts.entry(msg_user_id).or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(user_message_counts)
 }
 
 async fn cleanup_connection(
@@ -465,6 +545,14 @@ async fn cleanup_connection(
                         // Safe to remove room since no active participants in database
                         info!("Removing room {} - no active participants remaining", room_uuid);
                         state.collaboration_rooms.remove(&room_uuid);
+                        
+                        // NOTE: We do NOT clean up Redis message history here!
+                        // Redis history should persist even when no one is connected,
+                        // so users can rejoin and see the previous drawing history.
+                        // Redis cleanup only happens when:
+                        // 1. Session is explicitly ended (END_SESSION)
+                        // 2. Session is inactive for extended period (cleanup task)
+                        // 3. Messages expire via TTL
                         
                         let room_prefix = format!("{}:", room_uuid);
                         let keys_to_remove: Vec<String> = state

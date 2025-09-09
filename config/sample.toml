@@ -7,6 +7,10 @@ db_url = "postgres://"
 db_max_connections = 5
 db_acquire_timeout = 3
 
+redis_url = "redis://localhost:6379"
+redis_max_connections = 10
+redis_acquire_timeout = 5
+
 official_account_login_name = ""
 default_community_id = ""
 

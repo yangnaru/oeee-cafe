@@ -1,4 +1,5 @@
 use crate::web::state::AppState;
+use super::collaborate::redis_messages;
 use axum::extract::ws::Message;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info, warn};
@@ -55,7 +56,7 @@ pub async fn cleanup_collaborative_sessions(state: AppState) {
         }
 
         // Step 4: Enforce history limits on active sessions
-        enforce_history_limits_for_active_sessions(&state);
+        enforce_history_limits_for_active_sessions(&state).await;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -168,8 +169,12 @@ async fn cleanup_ended_sessions(
             removed_items.push("collaboration_room");
         }
 
-        if state.message_history.remove(&session_id).is_some() {
-            removed_items.push("message_history");
+        // Clean up Redis message history
+        let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
+        if let Err(e) = redis_store.cleanup_room(session_id).await {
+            error!("Failed to cleanup Redis for session {}: {}", session_id, e);
+        } else {
+            removed_items.push("redis_message_history");
         }
 
         if state.last_activity_cache.remove(&session_id).is_some() {
@@ -300,8 +305,12 @@ async fn cleanup_inactive_sessions(
             removed_items.push("collaboration_room");
         }
 
-        if state.message_history.remove(&session_id).is_some() {
-            removed_items.push("message_history");
+        // Clean up Redis message history
+        let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
+        if let Err(e) = redis_store.cleanup_room(session_id).await {
+            error!("Failed to cleanup Redis for session {}: {}", session_id, e);
+        } else {
+            removed_items.push("redis_message_history");
         }
 
         if state.last_activity_cache.remove(&session_id).is_some() {
@@ -329,31 +338,34 @@ async fn cleanup_inactive_sessions(
     Ok(())
 }
 
-fn enforce_history_limits_for_active_sessions(state: &AppState) {
+async fn enforce_history_limits_for_active_sessions(state: &AppState) {
     let mut rooms_processed = 0;
     let mut total_messages_removed = 0;
     
-    // Process all rooms with message history
-    let room_ids: Vec<Uuid> = state.message_history.iter()
+    // Get all active room IDs from collaboration_rooms since we no longer have message_history DashMap
+    let room_ids: Vec<Uuid> = state.collaboration_rooms.iter()
         .map(|entry| *entry.key())
         .collect();
     
+    let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
+    
     for room_uuid in room_ids {
-        if let Some(mut history_entry) = state.message_history.get_mut(&room_uuid) {
-            let initial_count = history_entry.len();
-            super::collaborate::messages::enforce_history_limits(&mut history_entry, room_uuid);
-            let removed = initial_count - history_entry.len();
-            
-            if removed > 0 {
-                total_messages_removed += removed;
+        match redis_store.enforce_history_limits(room_uuid).await {
+            Ok(removed) => {
+                if removed > 0 {
+                    total_messages_removed += removed;
+                }
+                rooms_processed += 1;
             }
-            rooms_processed += 1;
+            Err(e) => {
+                error!("Failed to enforce history limits for room {}: {}", room_uuid, e);
+            }
         }
     }
     
     if total_messages_removed > 0 {
         debug!(
-            "Enforced history limits on {} active sessions: removed {} total messages",
+            "Enforced Redis history limits on {} active sessions: removed {} total messages",
             rooms_processed, total_messages_removed
         );
     }
