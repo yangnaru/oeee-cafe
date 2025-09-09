@@ -49,7 +49,7 @@ interface WebSocketHookParams {
   ) => void;
   hideCursor: (userId: string) => void;
   addParticipant: (userId: string, username: string, joinedAt: number) => void;
-  removeParticipant: (userId: string) => void;
+  clearParticipants: () => void;
   addChatMessage: (message: {
     id: string;
     type: "user" | "join" | "leave";
@@ -64,7 +64,6 @@ interface WebSocketHookParams {
 export const useWebSocket = ({
   canvasMeta,
   userIdRef,
-  userLoginNameRef,
   localUserJoinTimeRef,
   drawingEngineRef,
   userEnginesRef,
@@ -82,14 +81,14 @@ export const useWebSocket = ({
   createOrUpdateCursor,
   hideCursor,
   addParticipant,
-  removeParticipant,
+  clearParticipants,
   addChatMessage,
   handleSnapshotRequest,
 }: WebSocketHookParams) => {
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<DecodedMessage[]>([]);
   const isConnectingRef = useRef(false);
-  
+
   // Keep handleSnapshotRequest ref to avoid dependency issues
   const handleSnapshotRequestRef = useRef(handleSnapshotRequest);
   useEffect(() => {
@@ -212,8 +211,8 @@ export const useWebSocket = ({
       setConnectionState("connected");
       isConnectingRef.current = false;
 
-      // Add current user to participants
-      addParticipant(userIdRef.current!, userLoginNameRef.current, Date.now());
+      // Don't add current user here - wait for server LAYERS message
+      // This ensures all clients get consistent participant order from server
 
       // Send initial join message to establish user presence and layer order
       try {
@@ -347,13 +346,18 @@ export const useWebSocket = ({
       const totalMessages = messageQueueRef.current.length;
       let processedCount = 0;
 
-      console.log(`Starting to process ${totalMessages} queued messages in batches`);
+      console.log(
+        `Starting to process ${totalMessages} queued messages in batches`
+      );
 
       const MESSAGES_PER_BATCH = 50;
 
       const processBatch = async () => {
-        const batchSize = Math.min(MESSAGES_PER_BATCH, messageQueueRef.current.length);
-        
+        const batchSize = Math.min(
+          MESSAGES_PER_BATCH,
+          messageQueueRef.current.length
+        );
+
         for (let i = 0; i < batchSize; i++) {
           const message = messageQueueRef.current.shift()!;
 
@@ -370,9 +374,13 @@ export const useWebSocket = ({
         if (messageQueueRef.current.length > 0) {
           // Log progress every 500 messages
           if (processedCount % 500 === 0) {
-            console.log(`Processed ${processedCount}/${totalMessages} messages (${Math.round(processedCount/totalMessages*100)}%)`);
+            console.log(
+              `Processed ${processedCount}/${totalMessages} messages (${Math.round(
+                (processedCount / totalMessages) * 100
+              )}%)`
+            );
           }
-          
+
           // Schedule next batch on next frame to yield to browser
           requestAnimationFrame(() => processBatch());
         } else {
@@ -656,27 +664,38 @@ export const useWebSocket = ({
               timestamp: message.timestamp,
             });
 
-            // Add participant
-            addParticipant(
-              message.userId,
-              message.username || message.userId,
-              message.timestamp
-            );
+            // Don't add participant here - wait for LAYERS message
+            // This ensures consistent participant ordering from server
 
-            // Create drawing engine for the user
-            createUserEngine(message.userId, message.username);
+            // Add join notification to chat
+            addChatMessage({
+              id: `${message.userId}-${message.timestamp}-join`,
+              type: "join" as const,
+              userId: message.userId,
+              username: message.username,
+              message: `${message.username} joined`,
+              timestamp: message.timestamp,
+            });
             break;
           }
 
           case "leave": {
             console.log("User left:", {
               userId: message.userId.substring(0, 8),
+              username: message.username,
             });
 
-            // Remove participant
-            removeParticipant(message.userId);
+            // Add leave notification to chat
+            addChatMessage({
+              id: `${message.userId}-${message.timestamp}-leave`,
+              type: "leave" as const,
+              userId: message.userId,
+              username: message.username,
+              message: `${message.username} left the session`,
+              timestamp: message.timestamp,
+            });
 
-            // Hide cursor for the user
+            // Hide cursor for the user (but keep participant in layer order)
             hideCursor(message.userId);
             break;
           }
@@ -800,18 +819,30 @@ export const useWebSocket = ({
 
           case "layers": {
             console.log("Layers message received:", {
-              participants: message.participants.map(p => ({
+              participants: message.participants.map((p) => ({
                 userId: p.userId.substring(0, 8),
                 username: p.username,
-                joinTimestamp: p.joinTimestamp
+                joinTimestamp: p.joinTimestamp,
               })),
               participantCount: message.participants.length,
             });
-            
+
+            console.log(
+              "LAYERS message - clearing and rebuilding participant order from server"
+            );
+
+            // Clear existing participants to avoid inconsistencies
+            // This ensures all clients have identical participant ordering from server
+            participantsRef.current?.clear();
+            clearParticipants();
+
             // Sort participants by join timestamp to ensure correct layer ordering
             // (participants are already sorted on the server, but we verify here)
-            const sortedParticipants = message.participants.sort((a, b) => a.joinTimestamp - b.joinTimestamp);
-            
+            const sortedParticipants = message.participants.sort(
+              (a, b) => a.joinTimestamp - b.joinTimestamp
+            );
+            console.log("Sorted participants:", sortedParticipants);
+
             // Initialize participants from layers message - this provides complete
             // participant information with user IDs, usernames, and join timestamps
             for (const participant of sortedParticipants) {
@@ -820,10 +851,15 @@ export const useWebSocket = ({
                 participant.username,
                 participant.joinTimestamp
               );
-              
+
               // Create drawing engine for the user
               createUserEngine(participant.userId, participant.username);
             }
+
+            console.log("All participants processed, z-indices will update declaratively");
+            
+            // Z-index updates now happen declaratively via useEffect in useCanvas hook
+            // No manual triggering needed - changes to userOrderRef will automatically update z-indices
             break;
           }
 
@@ -873,7 +909,7 @@ export const useWebSocket = ({
     createOrUpdateCursor,
     hideCursor,
     addParticipant,
-    removeParticipant,
+    clearParticipants,
     addChatMessage,
     catchupTimeoutRef,
     drawingEngineRef,
@@ -884,7 +920,6 @@ export const useWebSocket = ({
     shouldConnectRef,
     userEnginesRef,
     userIdRef,
-    userLoginNameRef,
   ]);
 
   // Cleanup WebSocket on unmount

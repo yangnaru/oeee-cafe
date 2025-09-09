@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from "react";
+import { useCallback, useRef, useEffect, useMemo } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { type CollaborationMeta } from "../types/collaboration";
 
@@ -7,10 +7,21 @@ interface CanvasElements {
   fgCanvas: HTMLCanvasElement;
 }
 
+interface Participant {
+  userId: string;
+  username: string;
+  joinedAt: number;
+}
+
 interface CanvasHookParams {
   canvasMeta: CollaborationMeta | null;
-  userOrderRef: React.RefObject<string[]>;
-  userEnginesRef: React.RefObject<Map<string, { engine: DrawingEngine; username: string; canvas: HTMLCanvasElement }>>;
+  participants: Map<string, Participant>;
+  userEnginesRef: React.RefObject<
+    Map<
+      string,
+      { engine: DrawingEngine; username: string; canvas: HTMLCanvasElement }
+    >
+  >;
   drawingEngine: DrawingEngine | null;
   userIdRef: React.RefObject<string | null>;
   currentZoom: number;
@@ -20,9 +31,55 @@ interface CanvasHookParams {
   };
 }
 
+// Declarative z-index calculation system
+const LAYER_Z_INDEX = {
+  // Base z-index for layers - each user gets 100 z-index levels
+  BASE: 1000,
+  USER_SEPARATION: 100,
+
+  // Within each user's 100 levels:
+  // Background: 0-39 (40 levels for background)
+  // Foreground: 40-79 (40 levels for foreground)
+  // Reserved: 80-99 (20 levels for future use)
+  BACKGROUND_OFFSET: 0,
+  FOREGROUND_OFFSET: 40,
+} as const;
+
+/**
+ * Calculate z-index for a user's layer in a declarative way
+ * Earlier users (lower index) get higher z-index values
+ * Each user gets 100 z-index levels to prevent any overlap
+ */
+function calculateLayerZIndex(
+  userIndex: number,
+  layerType: "background" | "foreground"
+): number {
+  if (userIndex < 0) {
+    console.warn(
+      `calculateLayerZIndex: userIndex is ${userIndex}, using fallback z-index ${LAYER_Z_INDEX.BASE}`
+    );
+    return LAYER_Z_INDEX.BASE; // Fallback for unknown users
+  }
+
+  const userBaseZIndex =
+    LAYER_Z_INDEX.BASE - userIndex * LAYER_Z_INDEX.USER_SEPARATION;
+  const layerOffset =
+    layerType === "background"
+      ? LAYER_Z_INDEX.BACKGROUND_OFFSET
+      : LAYER_Z_INDEX.FOREGROUND_OFFSET;
+
+  const finalZIndex = userBaseZIndex + layerOffset;
+
+  console.log(
+    `calculateLayerZIndex: userIndex=${userIndex}, layerType=${layerType}, userBaseZIndex=${userBaseZIndex}, layerOffset=${layerOffset}, finalZIndex=${finalZIndex}`
+  );
+
+  return finalZIndex;
+}
+
 export const useCanvas = ({
   canvasMeta,
-  userOrderRef,
+  participants,
   userEnginesRef,
   drawingEngine,
   userIdRef,
@@ -32,6 +89,13 @@ export const useCanvas = ({
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const userCanvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
   const localUserCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Derive user order from participants (sorted by join time)
+  const userOrder = useMemo(() => {
+    return Array.from(participants.values())
+      .sort((a, b) => a.joinedAt - b.joinedAt)
+      .map((p) => p.userId);
+  }, [participants]);
 
   // Function to create DOM canvas elements for a user (foreground and background)
   const createUserCanvasElements = useCallback(
@@ -88,15 +152,20 @@ export const useCanvas = ({
       const container = canvasContainerRef.current;
       const interactionCanvas = container.querySelector("#canvas"); // Find interaction canvas
 
-      // Set z-index based on user order from server
-      // Earlier users (lower index in userOrderRef) should appear on top (higher z-index)
-      // Later users (higher index in userOrderRef) should appear below (lower z-index)
-      const userIndex = userOrderRef.current?.indexOf(userId) ?? -1;
-      const baseZIndex = userIndex !== -1 ? 1000 - userIndex * 10 : 100; // Higher index = lower z-index
+      // Calculate correct z-index immediately based on current userOrder
+      const userIndex = userOrder.indexOf(userId);
+      const bgZIndex = calculateLayerZIndex(userIndex, "background");
+      const fgZIndex = calculateLayerZIndex(userIndex, "foreground");
 
-      // Background layer gets base z-index, foreground gets +1
-      bgCanvas.style.zIndex = baseZIndex.toString();
-      fgCanvas.style.zIndex = (baseZIndex + 1).toString();
+      bgCanvas.style.zIndex = bgZIndex.toString();
+      fgCanvas.style.zIndex = fgZIndex.toString();
+
+      console.log(
+        `Created canvases for user ${userId.substring(
+          0,
+          8
+        )} with z-indices: bg=${bgZIndex}, fg=${fgZIndex}`
+      );
 
       // Simple insertion before interaction canvas
       if (interactionCanvas) {
@@ -115,7 +184,7 @@ export const useCanvas = ({
 
       return { bgCanvas, fgCanvas };
     },
-    [canvasMeta?.width, canvasMeta?.height, userOrderRef]
+    [canvasMeta?.width, canvasMeta?.height, userOrder]
   );
 
   // Function to create drawing engine for a new user
@@ -185,21 +254,45 @@ export const useCanvas = ({
         canvas,
       });
     },
-    [canvasMeta?.width, canvasMeta?.height, createUserCanvasElements, userEnginesRef]
+    [
+      canvasMeta?.width,
+      canvasMeta?.height,
+      createUserCanvasElements,
+      userEnginesRef,
+    ]
   );
 
-  // Function to update z-indices for all existing canvases based on current user order
-  const updateCanvasZIndices = useCallback(() => {
+  // userOrder is now derived directly from participants via useMemo
+
+  // Declaratively update z-indices when userOrder changes
+  useEffect(() => {
+    if (!userOrder.length) return; // Wait until we have participants
+
+    console.log(
+      "Declaratively updating canvas z-indices based on user order:",
+      userOrder.map((id) => id.substring(0, 8))
+    );
+    console.log(
+      "Available canvases:",
+      Array.from(userCanvasRefs.current.keys())
+    );
+
     userCanvasRefs.current.forEach((canvas, key) => {
       const userId = key.replace(/-[bf]g$/, ""); // Remove -bg or -fg suffix
-      const isBackground = key.endsWith("-bg");
-      const userIndex = userOrderRef.current?.indexOf(userId) ?? -1;
-      const baseZIndex = userIndex !== -1 ? 1000 - userIndex * 10 : 100;
-      
-      canvas.style.zIndex = (baseZIndex + (isBackground ? 0 : 1)).toString();
-      console.log(`Updated z-index for ${key}: ${canvas.style.zIndex}`);
+      const layerType = key.endsWith("-bg") ? "background" : "foreground";
+      const userIndex = userOrder.indexOf(userId);
+
+      const zIndex = calculateLayerZIndex(userIndex, layerType);
+      canvas.style.zIndex = zIndex.toString();
+
+      console.log(
+        `Set z-index for ${key} (user ${userId.substring(
+          0,
+          8
+        )}, index ${userIndex}): ${zIndex}`
+      );
     });
-  }, [userOrderRef]);
+  }, [userOrder]); // React when userOrder derived from participants changes
 
   // Function to composite all canvases for export only
   const compositeCanvasesForExport = useCallback(() => {
@@ -228,7 +321,7 @@ export const useCanvas = ({
     );
 
     // Sort by z-index (lower z-index drawn first, appears below)
-    canvasElements.sort((a, b) => a.zIndex - b.zIndex);
+    canvasElements.sort((a, b) => b.zIndex - a.zIndex);
 
     // Draw all layers in z-index order
     canvasElements.forEach(({ canvas }) => {
@@ -353,7 +446,6 @@ export const useCanvas = ({
     localUserCanvasRef,
     createUserCanvasElements,
     createUserEngine,
-    updateCanvasZIndices,
     compositeCanvasesForExport,
     downloadCanvasAsPNG,
   };

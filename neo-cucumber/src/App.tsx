@@ -189,8 +189,7 @@ function App() {
     >
   >(new Map());
 
-  // Track server-provided user order for layer compositing
-  const userOrderRef = useRef<string[]>([]);
+  // userOrderRef removed - now derived directly from participants
 
   const appRef = useRef<HTMLDivElement>(null);
   const userIdRef = useRef<string>("");
@@ -200,25 +199,32 @@ function App() {
   // Check if current user is the session owner
   const isOwner = canvasMeta && userIdRef.current === canvasMeta.ownerId;
 
+  // Function to clear all participants (used before processing LAYERS message)
+  const clearParticipants = useCallback(() => {
+    setParticipants(new Map());
+    console.log("Cleared all participants for LAYERS rebuild");
+  }, []);
+
   // Participant management functions (moved from Chat.tsx)
   const addParticipant = useCallback(
     (userId: string, username: string, timestamp: number) => {
       setParticipants((prev) => {
         const newParticipants = new Map(prev);
         newParticipants.set(userId, { userId, username, joinedAt: timestamp });
+        
+        console.log(`Added participant ${userId.substring(0, 8)} with joinedAt: ${timestamp}`);
+        
         return newParticipants;
       });
+      
+      // Keep participantsRef in sync
+      participantsRef.current?.set(userId, { userId, username, joinedAt: timestamp });
+      
+      // Z-index updates now happen declaratively via useEffect in useCanvas
     },
-    []
+    [participantsRef]
   );
 
-  const removeParticipant = useCallback((userId: string) => {
-    setParticipants((prev) => {
-      const newParticipants = new Map(prev);
-      newParticipants.delete(userId);
-      return newParticipants;
-    });
-  }, []);
 
   // History change callback
   const handleHistoryChange = useCallback(
@@ -285,7 +291,7 @@ function App() {
     downloadCanvasAsPNG,
   } = useCanvas({
     canvasMeta,
-    userOrderRef,
+    participants,
     userEnginesRef,
     drawingEngine,
     userIdRef,
@@ -327,7 +333,7 @@ function App() {
     createOrUpdateCursor,
     hideCursor,
     addParticipant,
-    removeParticipant,
+    clearParticipants,
     addChatMessage: (message) => {
       if (chatAddMessageRef.current) {
         chatAddMessageRef.current(message);
