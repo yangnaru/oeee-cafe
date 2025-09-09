@@ -227,12 +227,12 @@ export const ToolboxPanel = ({
 
       <div className="p-2 flex flex-col gap-1">
         {/* Undo/Redo buttons */}
-        <div className="flex flex-row gap-1">
+        <div className="flex flex-row">
           <button
             type="button"
             onClick={onUndo}
             disabled={!historyState.canUndo}
-            className="px-3 py-1 border border-main bg-main text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white"
+            className="flex items-center justify-center px-3 py-2 border-l border-t border-b border-r border-main bg-main text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white flex-1"
           >
             <Icon icon="material-symbols:undo" width={16} height={16} />
           </button>
@@ -240,7 +240,7 @@ export const ToolboxPanel = ({
             type="button"
             onClick={onRedo}
             disabled={!historyState.canRedo}
-            className="px-3 py-1 border border-main bg-main text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white"
+            className="flex items-center justify-center px-3 py-2 border-t border-b border-r border-main bg-main text-main cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white flex-1"
           >
             <Icon icon="material-symbols:redo" width={16} height={16} />
           </button>
