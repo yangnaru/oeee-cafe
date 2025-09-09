@@ -264,7 +264,7 @@ export const ToolboxPanel = ({
           />
         </div>
 
-        <div className="p-2 flex flex-col gap-1">
+        <div className="flex flex-col gap-1">
           {/* Brush size gauge */}
           <CustomSlider
             value={drawingState.brushSize}
@@ -284,7 +284,10 @@ export const ToolboxPanel = ({
             value={drawingState.opacity}
             min={1}
             max={255}
-            label={`Opacity: ${Math.max(1, Math.round((drawingState.opacity / 255) * 100))}%`}
+            label={`Opacity: ${Math.max(
+              1,
+              Math.round((drawingState.opacity / 255) * 100)
+            )}%`}
             onChange={(value) =>
               onUpdateDrawingState((prev) => ({
                 ...prev,
