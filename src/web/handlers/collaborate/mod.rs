@@ -2,6 +2,7 @@ pub mod db;
 pub mod http_handlers;
 pub mod messages;
 pub mod redis_messages;
+pub mod redis_state;
 pub mod types;
 pub mod utils;
 pub mod websocket;

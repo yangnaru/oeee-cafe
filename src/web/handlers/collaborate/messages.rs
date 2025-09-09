@@ -223,35 +223,42 @@ pub async fn handle_join_message(
 }
 
 async fn broadcast_join_response(
-    db: &Pool<Postgres>,
+    _db: &Pool<Postgres>,
     room_uuid: Uuid,
     state: &AppState,
     tx: &mpsc::UnboundedSender<Message>,
     user_id: Uuid,
 ) {
-    match db::get_active_participants(db, room_uuid).await {
+    match state.redis_state.get_room_users(room_uuid).await {
         Ok(participants) => {
-            let user_ids: Vec<Uuid> = participants.iter().map(|p| p.id).collect();
+            let user_ids: Vec<Uuid> = participants.iter().map(|(id, _)| *id).collect();
             let join_response = JoinResponseMessage { user_ids };
 
-            if let Some(room_connections) = state.collaboration_rooms.get(&room_uuid) {
-                let join_response_msg = Message::Binary(join_response.serialize());
-                for conn_ref in room_connections.iter() {
-                    let conn_id = conn_ref.key();
-                    let sender = conn_ref.value();
-                    if sender.send(join_response_msg.clone()).is_err() {
-                        debug!("Failed to send JOIN_RESPONSE to connection {}", conn_id);
-                    }
-                }
-                info!(
-                    "Broadcasted JOIN_RESPONSE with {} users to {} connections in room {}",
-                    participants.len(),
-                    room_connections.len(),
-                    room_uuid
-                );
+            // Use Redis pub/sub to send JOIN_RESPONSE to all connections in the room
+            let room_message = super::redis_state::RoomMessage {
+                from_connection: "system".to_string(),
+                user_id: uuid::Uuid::nil(),
+                user_login_name: "system".to_string(),
+                message_type: "join_response".to_string(),
+                payload: join_response.serialize(),
+                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+            };
 
-                send_existing_participants_to_new_user(&participants, tx, user_id).await;
+            match state.redis_state.publish_message(room_uuid, &room_message).await {
+                Ok(subscriber_count) => {
+                    info!(
+                        "Broadcasted JOIN_RESPONSE with {} users to {} subscribers in room {}",
+                        participants.len(),
+                        subscriber_count,
+                        room_uuid
+                    );
+                }
+                Err(e) => {
+                    error!("Failed to publish JOIN_RESPONSE message for room {}: {}", room_uuid, e);
+                }
             }
+
+            send_existing_participants_to_new_user(&participants, tx, user_id).await;
         }
         Err(e) => {
             error!("Failed to query participants for JOIN_RESPONSE: {}", e);
@@ -260,25 +267,25 @@ async fn broadcast_join_response(
 }
 
 async fn send_existing_participants_to_new_user(
-    participants: &[crate::models::user::User],
+    participants: &[(Uuid, String)],
     tx: &mpsc::UnboundedSender<Message>,
     user_id: Uuid,
 ) {
-    for participant in participants {
-        if participant.id != user_id {
+    for (participant_id, participant_name) in participants {
+        if *participant_id != user_id {
             let current_timestamp = get_current_timestamp_ms();
 
             let join_message = JoinMessage {
-                user_id: participant.id,
+                user_id: *participant_id,
                 timestamp: current_timestamp,
-                username: participant.login_name.clone(),
+                username: participant_name.clone(),
             };
 
             let participant_join_msg = Message::Binary(join_message.serialize());
             if let Err(e) = tx.send(participant_join_msg) {
                 debug!(
                     "Failed to send JOIN message for participant {} to new user: {}",
-                    participant.id, e
+                    participant_id, e
                 );
             }
         }
@@ -306,10 +313,9 @@ pub async fn handle_snapshot_message(
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
     redis_store.remove_obsolete_messages(room_uuid, snapshot_user, snapshot_layer).await?;
 
-    let user_snapshot_key = format!("{}:{}", room_uuid, snapshot_user);
-    state
-        .snapshot_request_tracker
-        .insert(user_snapshot_key, false);
+    if let Err(e) = state.redis_state.set_snapshot_requested(room_uuid, snapshot_user, false).await {
+        error!("Failed to clear snapshot request in Redis: {}", e);
+    }
 
     Ok(())
 }
@@ -364,6 +370,7 @@ pub async fn handle_end_session_message(
     db: &Pool<Postgres>,
     state: &AppState,
     msg: &Message,
+    connection_id: &str,
 ) {
     if is_owner && data.len() >= 19 {
         if let Ok(sender_uuid) = bytes_to_uuid(&data[1..17]) {
@@ -390,21 +397,27 @@ pub async fn handle_end_session_message(
                             info!("Cleaned up Redis message history for ended session {}", room_uuid);
                         }
 
-                        // Broadcast END_SESSION to all participants in the room (including sender)
-                        if let Some(room_connections) = state.collaboration_rooms.get(&room_uuid) {
-                            let end_session_msg = msg.clone();
-                            for conn_ref in room_connections.iter() {
-                                let conn_id = conn_ref.key();
-                                let sender = conn_ref.value();
-                                if sender.send(end_session_msg.clone()).is_err() {
-                                    debug!("Failed to send END_SESSION to connection {}", conn_id);
-                                }
+                        // Broadcast END_SESSION to all participants in the room (including sender) via Redis pub/sub
+                        let room_message = super::redis_state::RoomMessage {
+                            from_connection: connection_id.to_string(),
+                            user_id,
+                            user_login_name: user_login_name.to_string(),
+                            message_type: "websocket".to_string(),
+                            payload: msg.clone().into_data(),
+                            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+                        };
+
+                        match state.redis_state.publish_message(room_uuid, &room_message).await {
+                            Ok(subscriber_count) => {
+                                info!(
+                                    "Broadcasted END_SESSION to {} subscribers in room {}",
+                                    subscriber_count,
+                                    room_uuid
+                                );
                             }
-                            info!(
-                                "Broadcasted END_SESSION to {} connections in room {}",
-                                room_connections.len(),
-                                room_uuid
-                            );
+                            Err(e) => {
+                                error!("Failed to publish END_SESSION message for room {}: {}", room_uuid, e);
+                            }
                         }
                     }
                 }
@@ -436,12 +449,7 @@ pub async fn handle_snapshot_requests(
 ) {
     for (user_id_to_request, &message_count) in user_message_counts.iter() {
         if message_count > MAX_USER_MESSAGES {
-            let snapshot_key = format!("{}:{}", room_uuid, user_id_to_request);
-            let should_send_snapshot = !state
-                .snapshot_request_tracker
-                .get(&snapshot_key)
-                .map(|entry| *entry.value())
-                .unwrap_or(false);
+            let should_send_snapshot = !state.redis_state.is_snapshot_requested(room_uuid, *user_id_to_request).await.unwrap_or(false);
 
             if should_send_snapshot {
                 send_snapshot_request(
@@ -449,7 +457,6 @@ pub async fn handle_snapshot_requests(
                     state,
                     user_id_to_request,
                     message_count,
-                    &snapshot_key,
                 )
                 .await;
                 break;
@@ -463,38 +470,37 @@ async fn send_snapshot_request(
     state: &AppState,
     user_id_to_request: &Uuid,
     message_count: usize,
-    snapshot_key: &str,
 ) {
-    if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
-        let timestamp = get_current_timestamp_ms();
+    let timestamp = get_current_timestamp_ms();
 
-        let snapshot_request = SnapshotRequestMessage {
-            user_id: *user_id_to_request,
-            timestamp,
-        };
+    let snapshot_request = SnapshotRequestMessage {
+        user_id: *user_id_to_request,
+        timestamp,
+    };
 
-        let snapshot_request_msg = Message::Binary(snapshot_request.serialize());
-        let mut sent_count = 0;
+    // Use Redis pub/sub to send snapshot request to all connections
+    // Only the connections owned by user_id_to_request will respond
+    let room_message = super::redis_state::RoomMessage {
+        from_connection: "system".to_string(),
+        user_id: *user_id_to_request,
+        user_login_name: "system".to_string(),
+        message_type: "snapshot_request".to_string(),
+        payload: snapshot_request.serialize(),
+        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+    };
 
-        for conn_ref in room.iter() {
-            let (connection_id, sender) = conn_ref.pair();
-            if let Some(conn_user_id) = state.connection_user_mapping.get(connection_id) {
-                if *conn_user_id == *user_id_to_request
-                    && sender.send(snapshot_request_msg.clone()).is_ok()
-                {
-                    sent_count += 1;
-                }
+    match state.redis_state.publish_message(room_uuid, &room_message).await {
+        Ok(subscriber_count) => {
+            if let Err(e) = state.redis_state.set_snapshot_requested(room_uuid, *user_id_to_request, true).await {
+                error!("Failed to set snapshot request in Redis: {}", e);
             }
-        }
-
-        if sent_count > 0 {
-            state
-                .snapshot_request_tracker
-                .insert(snapshot_key.to_string(), true);
             debug!(
-                "Sent snapshot request to {} connections targeting user {} with {} messages in room {}",
-                sent_count, user_id_to_request, message_count, room_uuid
+                "Sent snapshot request to {} subscribers targeting user {} with {} messages in room {}",
+                subscriber_count, user_id_to_request, message_count, room_uuid
             );
+        }
+        Err(e) => {
+            error!("Failed to publish snapshot request for room {}: {}", room_uuid, e);
         }
     }
 }
@@ -505,41 +511,31 @@ pub async fn broadcast_message(
     connection_id: &str,
     state: &AppState,
 ) {
-    if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
-        let mut failed_connections = Vec::new();
+    // Convert WebSocket message to Redis room message
+    let room_message = super::redis_state::RoomMessage {
+        from_connection: connection_id.to_string(),
+        user_id: Uuid::nil(), // We'll get this from Redis connection info if needed
+        user_login_name: String::new(), // We'll get this from Redis connection info if needed
+        message_type: "websocket".to_string(),
+        payload: match msg {
+            Message::Binary(data) => data.clone(),
+            Message::Text(text) => text.as_bytes().to_vec(),
+            _ => vec![],
+        },
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64,
+    };
 
-        let include_sender = if let Message::Binary(data) = msg {
-            !data.is_empty() && data[0] == MessageType::Chat as u8
-        } else {
-            false
-        };
-
-        for entry in room.iter() {
-            let (other_connection_id, other_tx) = entry.pair();
-
-            if !include_sender && *other_connection_id == connection_id {
-                continue;
-            }
-
-            if other_tx.send(msg.clone()).is_err() {
-                failed_connections.push(other_connection_id.clone());
-            }
+    // Publish to Redis Pub/Sub - this will reach all server instances
+    match state.redis_state.publish_message(room_uuid, &room_message).await {
+        Ok(subscriber_count) => {
+            debug!("Published message to Redis for room {} - {} subscribers", room_uuid, subscriber_count);
         }
-
-        for failed_id in failed_connections {
-            room.remove(&failed_id);
-            state.connection_user_mapping.remove(&failed_id);
-            debug!(
-                "Removed failed connection {} from room {}",
-                failed_id, room_uuid
-            );
+        Err(e) => {
+            error!("Failed to publish message to Redis for room {}: {}", room_uuid, e);
         }
-    } else {
-        // Room doesn't exist - this is a normal condition during cleanup
-        debug!(
-            "Attempted to broadcast message to non-existent room {} from connection {}",
-            room_uuid, connection_id
-        );
     }
 }
 
@@ -553,45 +549,47 @@ pub async fn send_leave_message(
     user_login_name: &str,
     state: &AppState,
 ) {
-    if let Some(room) = state.collaboration_rooms.get(&room_uuid) {
-        if room.len() <= 1 {
-            debug!("Not sending LEAVE message for user {} in room {} - only 1 or fewer connections", user_login_name, room_uuid);
+    // Check how many connections are in the room via Redis
+    let redis_connections = match state.redis_state.get_room_connections(room_uuid).await {
+        Ok(connections) => connections,
+        Err(e) => {
+            error!("Failed to get Redis connections for leave message in room {}: {}", room_uuid, e);
             return;
         }
+    };
 
-        let timestamp = get_current_timestamp_ms();
+    if redis_connections.len() <= 1 {
+        debug!("Not sending LEAVE message for user {} in room {} - only 1 or fewer connections", user_login_name, room_uuid);
+        return;
+    }
 
-        let leave_message = LeaveMessage {
-            user_id,
-            timestamp,
-            username: user_login_name.to_string(),
-        };
+    let timestamp = get_current_timestamp_ms();
 
-        let leave_msg = Message::Binary(leave_message.serialize());
-        let mut notified_connections = 0;
+    let leave_message = LeaveMessage {
+        user_id,
+        timestamp,
+        username: user_login_name.to_string(),
+    };
 
-        for conn_ref in room.iter() {
-            let (other_conn_id, sender) = conn_ref.pair();
-            if *other_conn_id != connection_id && sender.send(leave_msg.clone()).is_ok() {
-                notified_connections += 1;
-            }
-        }
+    // Use Redis pub/sub to send LEAVE message to all connections except the one leaving
+    let room_message = super::redis_state::RoomMessage {
+        from_connection: connection_id.to_string(),
+        user_id,
+        user_login_name: user_login_name.to_string(),
+        message_type: "leave".to_string(),
+        payload: leave_message.serialize(),
+        timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+    };
 
-        if notified_connections > 0 {
+    match state.redis_state.publish_message(room_uuid, &room_message).await {
+        Ok(subscriber_count) => {
             info!(
-                "Sent LEAVE notification for user {} to {} other participants in room {}",
-                user_login_name, notified_connections, room_uuid
-            );
-        } else {
-            debug!(
-                "No participants notified of LEAVE for user {} in room {} (failed to send or no other participants)",
-                user_login_name, room_uuid
+                "Sent LEAVE notification for user {} to {} subscribers in room {}",
+                user_login_name, subscriber_count, room_uuid
             );
         }
-    } else {
-        debug!(
-            "Cannot send LEAVE message for user {} - room {} no longer exists",
-            user_login_name, room_uuid
-        );
+        Err(e) => {
+            error!("Failed to publish LEAVE message for user {} in room {}: {}", user_login_name, room_uuid, e);
+        }
     }
 }

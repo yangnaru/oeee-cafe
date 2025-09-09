@@ -5,7 +5,6 @@ use data_encoding;
 use hex;
 use sha256;
 use sqlx::{Pool, Postgres};
-use std::time::Instant;
 use uuid::Uuid;
 
 pub struct SessionInfo {
@@ -182,7 +181,9 @@ pub async fn track_participant_with_capacity_check(
 }
 
 pub async fn update_session_activity(state: &AppState, room_uuid: Uuid) {
-    state.last_activity_cache.insert(room_uuid, Instant::now());
+    if let Err(e) = state.redis_state.update_room_activity(room_uuid).await {
+        tracing::error!("Failed to update room activity in Redis: {}", e);
+    }
 }
 
 pub async fn track_join_participant(

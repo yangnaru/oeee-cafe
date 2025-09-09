@@ -1,12 +1,11 @@
-use dashmap::DashMap;
 use minijinja::{path_loader, Environment};
 use oeee_cafe::web::app::App;
 use oeee_cafe::web::state::AppState;
+use oeee_cafe::web::handlers::collaborate::redis_state::RedisStateManager;
 use oeee_cafe::AppConfig;
 use std::env::args;
 use std::path::PathBuf;
 use std::process::exit;
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::Level;
 
@@ -65,14 +64,13 @@ fn main() {
                 exit(1);
             });
 
+            let redis_state = RedisStateManager::new(redis_pool.clone());
+
             let state = AppState {
                 config: cfg.clone(),
                 env,
-                collaboration_rooms: Arc::new(DashMap::new()),
-                last_activity_cache: Arc::new(DashMap::new()),
-                snapshot_request_tracker: Arc::new(DashMap::new()),
-                connection_user_mapping: Arc::new(DashMap::new()),
                 redis_pool,
+                redis_state,
             };
 
             App::new(state).await.unwrap().serve().await.unwrap()
