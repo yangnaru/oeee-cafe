@@ -3,6 +3,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
 import { ToolSelector } from "./ToolSelector";
 import { ColorPalette } from "./ColorPalette";
+import { CustomSlider } from "./CustomSlider";
 
 type BrushType = "solid" | "halftone" | "eraser" | "fill" | "pan";
 type LayerType = "foreground" | "background";
@@ -245,7 +246,7 @@ export const ToolboxPanel = ({
           </button>
         </div>
 
-        <div className="flex flex-row gap-4">
+        <div className="flex flex-row gap-2">
           {/* Color palette and picker */}
           <ColorPalette
             paletteColors={paletteColors}
@@ -263,58 +264,34 @@ export const ToolboxPanel = ({
           />
         </div>
 
-        <div className="p-2 flex flex-col gap-4">
-          {/* Brush size */}
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-row gap-1 items-center">
-              <Icon
-                icon="material-symbols:line-weight"
-                width={16}
-                height={16}
-              />
-              <span className="text-sm text-main tabular-nums">
-                {drawingState.brushSize} / 30
-              </span>
-            </div>
-            <label className="flex flex-row gap-1 justify-between">
-              <input
-                type="range"
-                min="1"
-                max="30"
-                value={drawingState.brushSize}
-                onChange={(e) =>
-                  onUpdateDrawingState((prev) => ({
-                    ...prev,
-                    brushSize: parseInt(e.target.value),
-                  }))
-                }
-              />
-            </label>
-          </div>
+        <div className="p-2 flex flex-col gap-1">
+          {/* Brush size gauge */}
+          <CustomSlider
+            value={drawingState.brushSize}
+            min={1}
+            max={30}
+            label={`Size: ${drawingState.brushSize}`}
+            onChange={(value) =>
+              onUpdateDrawingState((prev) => ({
+                ...prev,
+                brushSize: value,
+              }))
+            }
+          />
 
-          {/* Opacity */}
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-row gap-1 items-center">
-              <Icon icon="material-symbols:opacity" width={16} height={16} />
-              <span className="text-sm text-main tabular-nums">
-                {drawingState.opacity} / 255
-              </span>
-            </div>
-            <label className="flex flex-row gap-1 items-center">
-              <input
-                type="range"
-                min="1"
-                max="255"
-                value={drawingState.opacity}
-                onChange={(e) =>
-                  onUpdateDrawingState((prev) => ({
-                    ...prev,
-                    opacity: parseInt(e.target.value),
-                  }))
-                }
-              />
-            </label>
-          </div>
+          {/* Opacity gauge */}
+          <CustomSlider
+            value={drawingState.opacity}
+            min={1}
+            max={255}
+            label={`Opacity: ${Math.max(1, Math.round((drawingState.opacity / 255) * 100))}%`}
+            onChange={(value) =>
+              onUpdateDrawingState((prev) => ({
+                ...prev,
+                opacity: value,
+              }))
+            }
+          />
         </div>
 
         {/* Layer selection */}
