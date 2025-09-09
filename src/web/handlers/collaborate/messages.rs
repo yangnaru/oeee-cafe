@@ -237,15 +237,48 @@ pub async fn handle_join_message(
     Some(Message::Binary(join_message.serialize()))
 }
 
+async fn get_session_participants(
+    session_id: Uuid,
+    state: &AppState,
+) -> Result<Vec<(Uuid, String, i64)>, Box<dyn std::error::Error + Send + Sync>> {
+    let db = state.config.connect_database().await?;
+    
+    // Query participants from the database, ordered by join time
+    let rows = sqlx::query!(
+        r#"
+        SELECT csp.user_id, u.login_name, csp.joined_at
+        FROM collaborative_sessions_participants csp
+        JOIN users u ON csp.user_id = u.id
+        WHERE csp.session_id = $1 AND csp.is_active = true
+        ORDER BY csp.joined_at ASC
+        "#,
+        session_id
+    )
+    .fetch_all(&db)
+    .await?;
+    
+    let participants: Vec<(Uuid, String, i64)> = rows
+        .into_iter()
+        .map(|row| {
+            // Convert timestamp to milliseconds since epoch
+            let millis = row.joined_at.and_utc().timestamp_millis();
+            (row.user_id, row.login_name, millis)
+        })
+        .collect();
+    
+    Ok(participants)
+}
+
 async fn broadcast_layers(
     _db: &Pool<Postgres>,
     room_uuid: Uuid,
     state: &AppState,
     _user_id: Uuid,
 ) {
-    match state.redis_state.get_room_users(room_uuid).await {
+    // Use database as the canonical source for participant join order
+    match get_session_participants(room_uuid, state).await {
         Ok(participants) => {
-            // Participants are already sorted by join time from get_room_users
+            // Participants are already sorted by join time from the database query
             let layers_message = LayersMessage { 
                 participants: participants.clone() 
             };

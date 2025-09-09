@@ -229,11 +229,8 @@ async fn setup_connection_atomically(
         error!("Failed to register connection in Redis: {}", e);
     }
     
-    // Add user to room presence with current timestamp
-    let join_timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
-    if let Err(e) = state.redis_state.add_user_to_room(room_uuid, user_id, user_login_name, join_timestamp).await {
-        error!("Failed to add user to room presence in Redis: {}", e);
-    }
+    // Note: Previously added user to Redis room presence, but now using database 
+    // for canonical participant ordering via collaborative_sessions_participants table
     
     info!(
         "Completed Redis Pub/Sub setup for connection {} in room {}",
@@ -543,7 +540,7 @@ async fn cleanup_connection(
 
     // Check if user has any other connections in this room
     let room_connections = state.redis_state.get_room_connections(room_uuid).await.unwrap_or_default();
-    let user_has_other_connections = {
+    let _user_has_other_connections = {
         let mut has_other = false;
         for conn_id in &room_connections {
             if conn_id != connection_id {
@@ -558,12 +555,9 @@ async fn cleanup_connection(
         has_other
     };
         
-    // Remove from room presence only if no other connections for this user
-    if !user_has_other_connections {
-        if let Err(e) = state.redis_state.remove_user_from_room(room_uuid, user_id).await {
-            error!("Failed to remove user from room presence in Redis: {}", e);
-        }
-    }
+    // Note: Previously removed user from Redis room presence, but now using database
+    // for canonical participant ordering. User remains in collaborative_sessions_participants
+    // until they explicitly leave or session ends.
 
     let room_connection_count = room_connections.len();
 

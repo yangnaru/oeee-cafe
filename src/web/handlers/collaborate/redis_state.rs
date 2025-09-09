@@ -17,7 +17,6 @@ const PUBSUB_PREFIX: &str = "oeee:pubsub:";
 const ACTIVITY_TTL: u64 = 3600; // 1 hour
 const SNAPSHOT_REQ_TTL: u64 = 300; // 5 minutes
 const CONNECTION_TTL: u64 = 30; // 30 seconds (with heartbeat)
-const ROOM_PRESENCE_TTL: u64 = 60; // 1 minute
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionInfo {
@@ -141,7 +140,7 @@ impl RedisStateManager {
         // Also track connection in room set
         let room_key = format!("{}{}:connections", ROOM_PREFIX, connection_info.room_id);
         conn.sadd::<_, _, ()>(&room_key, &connection_info.connection_id).await?;
-        conn.expire::<_, ()>(&room_key, ROOM_PRESENCE_TTL as i64).await?;
+        conn.expire::<_, ()>(&room_key, CONNECTION_TTL as i64).await?;
         
         debug!("Registered connection {} for user {} in room {}", 
                connection_info.connection_id, connection_info.user_id, connection_info.room_id);
@@ -249,67 +248,6 @@ impl RedisStateManager {
         Ok("redis://localhost:6379".to_string())
     }
 
-    // Room presence management
-    pub async fn add_user_to_room(&self, room_uuid: Uuid, user_id: Uuid, user_login_name: &str, join_timestamp: i64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut conn = self.pool.get().await?;
-        let room_key = format!("{}{}:users", ROOM_PREFIX, room_uuid);
-        let user_info = format!("{}:{}:{}", user_id, user_login_name, join_timestamp);
-        
-        conn.sadd::<_, _, ()>(&room_key, &user_info).await?;
-        conn.expire::<_, ()>(&room_key, ROOM_PRESENCE_TTL as i64).await?;
-        
-        debug!("Added user {} to room {} presence with join time {}", user_login_name, room_uuid, join_timestamp);
-        Ok(())
-    }
-
-    pub async fn remove_user_from_room(&self, room_uuid: Uuid, user_id: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut conn = self.pool.get().await?;
-        let room_key = format!("{}{}:users", ROOM_PREFIX, room_uuid);
-        
-        // Get all users and remove ones matching the user_id
-        let users = conn.smembers::<_, Vec<String>>(&room_key).await?;
-        for user_info in users {
-            if user_info.starts_with(&format!("{}:", user_id)) {
-                conn.srem::<_, _, ()>(&room_key, &user_info).await?;
-                debug!("Removed user {} from room {} presence", user_id, room_uuid);
-                break;
-            }
-        }
-        
-        Ok(())
-    }
-
-    pub async fn get_room_users(&self, room_uuid: Uuid) -> Result<Vec<(Uuid, String, i64)>, Box<dyn std::error::Error + Send + Sync>> {
-        let mut conn = self.pool.get().await?;
-        let room_key = format!("{}{}:users", ROOM_PREFIX, room_uuid);
-        
-        let users = conn.smembers::<_, Vec<String>>(&room_key).await?;
-        let mut result = Vec::new();
-        
-        for user_info in users {
-            let parts: Vec<&str> = user_info.split(':').collect();
-            if parts.len() >= 3 {
-                if let Ok(user_id) = parts[0].parse::<Uuid>() {
-                    if let Ok(join_timestamp) = parts[2].parse::<i64>() {
-                        let user_login_name = parts[1].to_string();
-                        result.push((user_id, user_login_name, join_timestamp));
-                    }
-                }
-            } else if parts.len() == 2 {
-                // Handle legacy format without timestamp (fallback for existing users)
-                if let Ok(user_id) = parts[0].parse::<Uuid>() {
-                    let user_login_name = parts[1].to_string();
-                    result.push((user_id, user_login_name, 0)); // Use 0 as fallback timestamp
-                }
-            }
-        }
-        
-        // Sort by join timestamp (ascending - first to join appears first)
-        result.sort_by_key(|(_, _, timestamp)| *timestamp);
-        
-        debug!("Found {} users in room {} (sorted by join time)", result.len(), room_uuid);
-        Ok(result)
-    }
 
     pub async fn cleanup_room_state(&self, room_uuid: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
