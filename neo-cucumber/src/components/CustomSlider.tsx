@@ -17,7 +17,7 @@ export const CustomSlider: React.FC<CustomSliderProps> = ({
 }) => {
   return (
     <div className="flex flex-col gap-1">
-      <div 
+      <div
         className="relative flex items-center w-full h-8 cursor-pointer"
         style={{
           background: `linear-gradient(to right, var(--main-bg-color) 0%, var(--main-bg-color) ${
@@ -25,13 +25,16 @@ export const CustomSlider: React.FC<CustomSliderProps> = ({
           }%, #e5e7eb ${
             5 + ((value - min) / (max - min)) * 95
           }%, #e5e7eb 100%)`,
-          border: "1px solid #d1d5db",
+          border: "1px solid var(--main-border-color)",
         }}
         onMouseDown={(e) => {
           const element = e.currentTarget;
           const updateValue = (clientX: number) => {
             const rect = element.getBoundingClientRect();
-            const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+            const percent = Math.max(
+              0,
+              Math.min(1, (clientX - rect.left) / rect.width)
+            );
             const newValue = Math.round(min + percent * (max - min));
             const clampedValue = Math.max(min, Math.min(max, newValue));
             onChange(clampedValue);
@@ -44,18 +47,21 @@ export const CustomSlider: React.FC<CustomSliderProps> = ({
           };
 
           const handleMouseUp = () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener("mousemove", handleMouseMove);
+            document.removeEventListener("mouseup", handleMouseUp);
           };
 
-          document.addEventListener('mousemove', handleMouseMove);
-          document.addEventListener('mouseup', handleMouseUp);
+          document.addEventListener("mousemove", handleMouseMove);
+          document.addEventListener("mouseup", handleMouseUp);
         }}
         onTouchStart={(e) => {
           const element = e.currentTarget;
           const updateValue = (clientX: number) => {
             const rect = element.getBoundingClientRect();
-            const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+            const percent = Math.max(
+              0,
+              Math.min(1, (clientX - rect.left) / rect.width)
+            );
             const newValue = Math.round(min + percent * (max - min));
             const clampedValue = Math.max(min, Math.min(max, newValue));
             onChange(clampedValue);
@@ -71,12 +77,12 @@ export const CustomSlider: React.FC<CustomSliderProps> = ({
           };
 
           const handleTouchEnd = () => {
-            document.removeEventListener('touchmove', handleTouchMove);
-            document.removeEventListener('touchend', handleTouchEnd);
+            document.removeEventListener("touchmove", handleTouchMove);
+            document.removeEventListener("touchend", handleTouchEnd);
           };
 
-          document.addEventListener('touchmove', handleTouchMove);
-          document.addEventListener('touchend', handleTouchEnd);
+          document.addEventListener("touchmove", handleTouchMove);
+          document.addEventListener("touchend", handleTouchEnd);
           e.preventDefault();
         }}
       >
