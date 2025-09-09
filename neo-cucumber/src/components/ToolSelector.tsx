@@ -29,7 +29,7 @@ export const ToolSelector = ({
   };
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1">
       {(["solid", "halftone", "eraser", "fill", "pan"] as BrushType[]).map(
         (type) => (
           <label key={type} className="relative cursor-pointer">
@@ -42,7 +42,7 @@ export const ToolSelector = ({
               className="sr-only"
             />
             <div
-              className={`w-8 h-8 flex items-center justify-center border-2 transition-all duration-200 text-xl ${
+              className={`w-8 h-8 flex items-center justify-center border transition-all duration-200 text-xl ${
                 brushType === type
                   ? "border-highlight bg-highlight text-white shadow-md"
                   : "border-main bg-main text-main hover:border-highlight hover:bg-highlight hover:text-white"
