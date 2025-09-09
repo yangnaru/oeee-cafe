@@ -3,7 +3,6 @@ use super::redis_messages;
 use axum::extract::ws::Message;
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
-use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -185,7 +184,6 @@ pub async fn handle_join_message(
     room_uuid: Uuid,
     db: &Pool<Postgres>,
     state: &AppState,
-    tx: &mpsc::UnboundedSender<Message>,
 ) -> Option<Message> {
     if data.len() < 25 {
         return None;
@@ -216,7 +214,7 @@ pub async fn handle_join_message(
     if let Err(e) = db::track_join_participant(db, room_uuid, user_uuid, timestamp as i64).await {
         error!("Failed to track JOIN participant: {}", e);
     } else {
-        broadcast_join_response(db, room_uuid, state, tx, user_id).await;
+        broadcast_join_response(db, room_uuid, state, user_id).await;
     }
 
     Some(Message::Binary(join_message.serialize()))
@@ -226,8 +224,7 @@ async fn broadcast_join_response(
     _db: &Pool<Postgres>,
     room_uuid: Uuid,
     state: &AppState,
-    tx: &mpsc::UnboundedSender<Message>,
-    user_id: Uuid,
+    _user_id: Uuid,
 ) {
     match state.redis_state.get_room_users(room_uuid).await {
         Ok(participants) => {
@@ -258,7 +255,12 @@ async fn broadcast_join_response(
                 }
             }
 
-            send_existing_participants_to_new_user(&participants, tx, user_id).await;
+            // Note: With Redis Pub/Sub architecture, existing participant information 
+            // is now sent through the normal message flow. The JOIN_RESPONSE above 
+            // contains the list of all current users, and when this user's own JOIN 
+            // message gets stored and broadcast through Redis, other users will see 
+            // this user has joined. Historical JOIN messages are replayed through 
+            // the Redis message history system.
         }
         Err(e) => {
             error!("Failed to query participants for JOIN_RESPONSE: {}", e);
@@ -266,31 +268,9 @@ async fn broadcast_join_response(
     }
 }
 
-async fn send_existing_participants_to_new_user(
-    participants: &[(Uuid, String)],
-    tx: &mpsc::UnboundedSender<Message>,
-    user_id: Uuid,
-) {
-    for (participant_id, participant_name) in participants {
-        if *participant_id != user_id {
-            let current_timestamp = get_current_timestamp_ms();
-
-            let join_message = JoinMessage {
-                user_id: *participant_id,
-                timestamp: current_timestamp,
-                username: participant_name.clone(),
-            };
-
-            let participant_join_msg = Message::Binary(join_message.serialize());
-            if let Err(e) = tx.send(participant_join_msg) {
-                debug!(
-                    "Failed to send JOIN message for participant {} to new user: {}",
-                    participant_id, e
-                );
-            }
-        }
-    }
-}
+// Note: send_existing_participants_to_new_user function is not needed
+// JOIN and LEAVE messages are ephemeral (not stored in history)
+// Current participants are communicated via JOIN_RESPONSE messages
 
 pub async fn handle_snapshot_message(
     data: &[u8],
@@ -433,7 +413,18 @@ pub async fn handle_end_session_message(
 
 pub fn should_store_message(msg: &Message) -> bool {
     if let Message::Binary(data) = msg {
-        !data.is_empty() && data[0] != MessageType::Chat as u8 && data[0] != MessageType::Join as u8
+        if data.is_empty() {
+            return false;
+        }
+        
+        let msg_type = data[0];
+        // Store all messages except ephemeral ones:
+        // - Chat messages (ephemeral conversation)
+        // - JOIN messages (current participants sent via JOIN_RESPONSE)  
+        // - LEAVE messages (current participants tracked in Redis presence)
+        msg_type != MessageType::Chat as u8 
+            && msg_type != MessageType::Join as u8
+            && msg_type != MessageType::Leave as u8
     } else {
         true
     }

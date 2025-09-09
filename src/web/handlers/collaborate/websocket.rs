@@ -4,6 +4,7 @@ use crate::web::state::AppState;
 use axum::extract::{ws::Message, ws::WebSocket, Path, State, WebSocketUpgrade};
 use axum::response::Response;
 use futures_util::{SinkExt, StreamExt};
+use futures_util::stream::SplitSink;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -32,7 +33,6 @@ pub async fn handle_socket(
     user_login_name: String,
 ) {
     let (mut sender, mut receiver) = socket.split();
-    let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 
     let connection_id = Uuid::new_v4().to_string();
 
@@ -56,13 +56,15 @@ pub async fn handle_socket(
         &user_login_name,
         &connection_id,
         &state,
-        &tx,
     )
     .await
     {
         Ok(owner_status) => owner_status,
         Err(_) => return,
     };
+
+    // Send history to new connection
+    send_history_to_new_connection(&state, room_uuid, &mut sender, &connection_id).await;
 
     info!(
         "User {} joined session {} as {}",
@@ -74,7 +76,11 @@ pub async fn handle_socket(
     // Create Redis Pub/Sub subscriber for this connection
     let connection_id_clone = connection_id.clone();
     let state_clone = state.clone();
-    let tx_clone = tx.clone();
+    
+    // Create separate Redis subscriber task that will handle incoming Redis messages
+    // and send them through a channel to the main WebSocket sending loop
+    let (redis_tx, mut redis_rx) = mpsc::unbounded_channel::<Message>();
+    
     let redis_task = tokio::spawn(async move {
         match state_clone.redis_state.create_room_subscriber(room_uuid).await {
             Ok(mut pubsub) => {
@@ -87,8 +93,8 @@ pub async fn handle_socket(
                                     // Don't send messages back to the sender (avoid echo)
                                     if room_msg.from_connection != connection_id_clone {
                                         let ws_message = Message::Binary(room_msg.payload);
-                                        if tx_clone.send(ws_message).is_err() {
-                                            debug!("WebSocket send failed for connection {}", connection_id_clone);
+                                        if redis_tx.send(ws_message).is_err() {
+                                            debug!("Redis message channel closed for connection {}", connection_id_clone);
                                             break;
                                         }
                                     }
@@ -111,19 +117,16 @@ pub async fn handle_socket(
         }
     });
 
-    // Also handle direct sends (like history replay) via the mpsc channel
-    let connection_id_clone2 = connection_id.clone();
+    // Handle outgoing messages (from Redis) in a separate task
     let outgoing_task = tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
+        while let Some(msg) = redis_rx.recv().await {
             if sender.send(msg).await.is_err() {
-                warn!(
-                    "Failed to send direct message to connection {}",
-                    connection_id_clone2
-                );
+                debug!("WebSocket send failed");
                 break;
             }
         }
     });
+
 
     handle_incoming_messages(
         &mut receiver,
@@ -150,7 +153,6 @@ async fn setup_connection(
     user_login_name: &str,
     connection_id: &str,
     state: &AppState,
-    _tx: &mpsc::UnboundedSender<Message>,
 ) -> Result<bool, ()> {
     let session_info = match db::get_session_info(db, room_uuid).await {
         Ok(Some(info)) => info,
@@ -194,11 +196,8 @@ async fn setup_connection(
         room_uuid, 
         user_id, 
         connection_id, 
-        user_login_name,
-        _tx
+        user_login_name
     ).await;
-
-    send_history_to_new_connection(state, room_uuid, _tx, connection_id).await;
 
     Ok(session_info.owner_id == user_id)
 }
@@ -209,7 +208,6 @@ async fn setup_connection_atomically(
     user_id: Uuid,
     connection_id: &str,
     user_login_name: &str,
-    _tx: &mpsc::UnboundedSender<Message>,
 ) {
     // With pure Redis Pub/Sub, we don't need local room tracking
     // Each connection is independent with its own Redis subscriber
@@ -246,7 +244,7 @@ async fn setup_connection_atomically(
 async fn send_history_to_new_connection(
     state: &AppState,
     room_uuid: Uuid,
-    _tx: &mpsc::UnboundedSender<Message>,
+    sender: &mut SplitSink<WebSocket, Message>,
     connection_id: &str,
 ) {
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
@@ -254,7 +252,7 @@ async fn send_history_to_new_connection(
     match redis_store.get_history(room_uuid).await {
         Ok(history) => {
             for stored_msg in history.iter() {
-                if _tx.send(stored_msg.clone()).is_err() {
+                if sender.send(stored_msg.clone()).await.is_err() {
                     warn!(
                         "Failed to send stored message to new connection {}",
                         connection_id
@@ -347,13 +345,10 @@ async fn process_server_message(
 ) -> Option<Message> {
     match msg_type {
         0x01 => {
-            // For JOIN messages, we don't need to find a specific user's connection
-            // since the join message gets broadcasted to all participants anyway
-            // Let's just use a dummy sender for the handle_join_message function
-            let dummy_tx = {
-                let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-                tx
-            };
+            // For JOIN messages with Redis Pub/Sub architecture:
+            // 1. Process the join (sends JOIN_RESPONSE via Redis to all participants)
+            // 2. Return the original message to be broadcast (but not stored - JOIN messages are ephemeral)
+            // 3. Current participants are communicated via JOIN_RESPONSE, not history replay
             
             messages::handle_join_message(
                 data,
@@ -362,9 +357,11 @@ async fn process_server_message(
                 room_uuid,
                 db,
                 state,
-                &dummy_tx,
             )
-            .await
+            .await;
+            
+            // Return the JOIN message to be stored and broadcast via Redis
+            Some(msg.clone())
         }
         0x02 => {
             if let Err(e) = messages::handle_snapshot_message(data, room_uuid, state).await {
@@ -500,12 +497,13 @@ async fn count_user_messages_from_redis(
             if stored_data.len() >= 17 {
                 let msg_type = stored_data[0];
                 
-                // Same logic as the original count_user_messages function
+                // Count user messages for snapshot logic (exclude ephemeral and system messages)
                 if messages::is_client_message(msg_type)
                     || (messages::is_server_message(msg_type)
+                        && msg_type != 0x01 // Join (ephemeral)
                         && msg_type != 0x05 // SnapshotRequest
                         && msg_type != 0x06 // JoinResponse  
-                        && msg_type != 0x09) // Leave
+                        && msg_type != 0x09) // Leave (ephemeral)
                 {
                     if let Ok(msg_user_id) = utils::bytes_to_uuid(&stored_data[1..17]) {
                         *user_message_counts.entry(msg_user_id).or_insert(0) += 1;
