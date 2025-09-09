@@ -21,52 +21,54 @@ export const useCursor = ({ canvasContainerRef, userIdRef }: UseCursorParams) =>
       let cursorElement = activeCursorsRef.current.get(userId);
 
       if (!cursorElement) {
-        // Create new cursor element container
+        // Create container for both elements
         cursorElement = document.createElement("div");
-        cursorElement.className =
-          "absolute pointer-events-none z-[2000] flex flex-col items-center";
+        cursorElement.className = "absolute pointer-events-none z-[2000]";
         cursorElement.style.transition = "opacity 0.3s ease-out";
         cursorElement.style.opacity = "1";
 
-        // Create username label
+        // Create username label (positioned separately)
         const userLabel = document.createElement("div");
-        userLabel.className =
-          "text-xs font-bold px-2 py-1 rounded mb-1 whitespace-nowrap";
+        userLabel.className = "absolute text-xs font-bold px-2 py-1 rounded whitespace-nowrap";
         userLabel.textContent = username;
         const userBackgroundColor = getUserBackgroundColor(username);
         userLabel.style.color = userBackgroundColor;
         userLabel.style.backgroundColor = "rgba(255, 255, 255, 0.9)";
         userLabel.style.border = `1px solid ${userBackgroundColor}`;
         userLabel.style.fontSize = "10px";
-        userLabel.setAttribute("data-username-element", "true"); // Mark this as the username element
+        userLabel.setAttribute("data-username-element", "true");
         cursorElement.appendChild(userLabel);
 
-        // Create icon element
-        const iconElement = document.createElement("div");
-        iconElement.className = "flex items-center justify-center";
-        iconElement.style.width = "24px";
-        iconElement.style.height = "24px";
-        iconElement.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24"><path fill="${getUserBackgroundColor(
+        // Create crosshair element (positioned separately)
+        const crosshairElement = document.createElement("div");
+        crosshairElement.className = "absolute flex items-center justify-center";
+        crosshairElement.style.width = "16px";
+        crosshairElement.style.height = "16px";
+        crosshairElement.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16"><g fill="${getUserBackgroundColor(
           username
-        )}" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5s-1.12 2.5-2.5 2.5z"/></svg>`;
-        cursorElement.appendChild(iconElement);
+        )}"><path d="M8 1v5M8 10v5M1 8h5M10 8h5" stroke="${getUserBackgroundColor(
+          username
+        )}" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="8" r="1.5" fill="${getUserBackgroundColor(
+          username
+        )}"/></g></svg>`;
+        crosshairElement.setAttribute("data-crosshair-element", "true");
+        cursorElement.appendChild(crosshairElement);
 
         container.appendChild(cursorElement);
         activeCursorsRef.current.set(userId, cursorElement);
       }
 
       // Position the cursor (convert canvas coordinates to screen coordinates)
-      // Read transform from the first canvas element since transforms are applied to canvases
-      const firstCanvas = container.querySelector('canvas');
-      const canvasStyle = firstCanvas ? window.getComputedStyle(firstCanvas) : null;
+      // Read transform from the container since that's where transforms are applied
+      const containerStyle = window.getComputedStyle(container);
 
       // Get zoom level and pan offset from transform
       let scale = 1;
       let panX = 0;
       let panY = 0;
 
-      if (canvasStyle?.transform && canvasStyle.transform !== "none") {
-        const matrix = new DOMMatrix(canvasStyle.transform);
+      if (containerStyle.transform && containerStyle.transform !== "none") {
+        const matrix = new DOMMatrix(containerStyle.transform);
         scale = matrix.a; // Get scale from transform matrix
         panX = matrix.e; // Get X translation
         panY = matrix.f; // Get Y translation
@@ -76,39 +78,42 @@ export const useCursor = ({ canvasContainerRef, userIdRef }: UseCursorParams) =>
       const screenX = x * scale + panX;
       const screenY = y * scale + panY;
 
-      // Get the actual size of the cursor element to center it properly
-      const cursorRect = cursorElement.getBoundingClientRect();
-      const cursorWidth = cursorRect.width || 24; // Fallback to 24px if not measured yet
+      // Position the container at the screen coordinates
+      cursorElement.style.left = `${screenX}px`;
+      cursorElement.style.top = `${screenY}px`;
 
-      // Position the cursor so the pin point of the location icon is exactly at the drawing coordinates
-      // The location icon has its pin point at approximately 75% down from the top of the icon
-      // Username label is ~16px height (10px font + 6px padding), icon is 24px height
-      const usernameLabelHeight = 16; // More accurate measurement
-      const iconHeight = 24;
-      const pinPointOffset = iconHeight * 1.3; // Pin point is at ~75% down from top of icon
+      // Position crosshair centered at (0, 0) relative to container
+      const crosshairElement = cursorElement.querySelector('[data-crosshair-element="true"]') as HTMLElement;
+      if (crosshairElement) {
+        crosshairElement.style.left = "-8px"; // Center 16px crosshair (-16/2)
+        crosshairElement.style.top = "-8px";  // Center 16px crosshair (-16/2)
+      }
 
-      const totalOffsetY = usernameLabelHeight + pinPointOffset;
-      cursorElement.style.left = `${screenX - cursorWidth / 2}px`; // Center horizontally
-      cursorElement.style.top = `${screenY - totalOffsetY}px`; // Position so the pin point is at the drawing coordinates
+      // Position username above crosshair
+      const userLabel = cursorElement.querySelector('[data-username-element="true"]') as HTMLElement;
+      if (userLabel) {
+        // Center username horizontally and place above crosshair
+        userLabel.style.left = "50%";
+        userLabel.style.top = "-40px"; // Float higher above the crosshair
+        userLabel.style.transform = "translateX(-50%)"; // Center horizontally
+      }
       cursorElement.style.opacity = "1";
 
-      // Update username label if we have a different/better username
-      const userLabel = cursorElement.querySelector(
-        '[data-username-element="true"]'
-      ) as HTMLElement;
+      // Update username and colors if needed
       if (userLabel && userLabel.textContent !== username) {
         userLabel.textContent = username;
-        userLabel.style.color = getUserBackgroundColor(username);
-        userLabel.style.border = `1px solid ${getUserBackgroundColor(
-          username
-        )}`;
+        const newColor = getUserBackgroundColor(username);
+        userLabel.style.color = newColor;
+        userLabel.style.border = `1px solid ${newColor}`;
 
-        // Also update the icon color
-        const svgPath = cursorElement.querySelector(
-          "svg path"
-        ) as SVGPathElement;
+        // Also update the crosshair color
+        const svgPath = cursorElement.querySelector("svg path") as SVGPathElement;
+        const svgCircle = cursorElement.querySelector("svg circle") as SVGCircleElement;
         if (svgPath) {
-          svgPath.setAttribute("fill", getUserBackgroundColor(username));
+          svgPath.setAttribute("stroke", newColor);
+        }
+        if (svgCircle) {
+          svgCircle.setAttribute("fill", newColor);
         }
       }
 
