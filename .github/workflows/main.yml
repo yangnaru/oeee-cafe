@@ -26,6 +26,8 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
       - name: Install SQLx CLI
         run: cargo install sqlx-cli --no-default-features --features postgres
