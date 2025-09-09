@@ -20,31 +20,33 @@ export const ColorPalette = ({
   const { t } = useLingui();
 
   return (
-    <div className="flex flex-col gap-1 p-1">
-      <div className="grid grid-cols-2 grid-rows-7 grid-flow-col-dense">
-        {paletteColors.map((paletteColor, index) => (
-          <button
-            key={index}
-            className={`w-6 h-5 border border-main p-0 m-0.5 cursor-pointer transition-transform duration-100 hover:scale-105 hover:shadow-sm ${
-              selectedPaletteIndex === index
-                ? "shadow-black shadow-2xl scale-110 ring-2 ring-white ring-inset"
-                : ""
-            }`}
-            style={{ backgroundColor: paletteColor }}
-            onClick={() => {
-              onSetSelectedPaletteIndex(index);
-              onUpdateColor(paletteColor);
-            }}
-            title={
-              selectedPaletteIndex === index
-                ? t`Palette color ${
-                    index + 1
-                  } (selected - edit with color picker below)`
-                : t`Palette color ${index + 1}`
-            }
-            data-color={paletteColor}
-          />
-        ))}
+    <div className="flex flex-col gap-1">
+      <div className="border border-main bg-main p-1">
+        <div className="grid grid-cols-2 grid-rows-7 grid-flow-col-dense gap-0.5">
+          {paletteColors.map((paletteColor, index) => (
+            <button
+              key={index}
+              className={`w-6 h-5 border border-main cursor-pointer hover:bg-highlight transition-colors ${
+                selectedPaletteIndex === index
+                  ? "ring-2 ring-inset ring-highlight"
+                  : ""
+              }`}
+              style={{ backgroundColor: paletteColor }}
+              onClick={() => {
+                onSetSelectedPaletteIndex(index);
+                onUpdateColor(paletteColor);
+              }}
+              title={
+                selectedPaletteIndex === index
+                  ? t`Palette color ${
+                      index + 1
+                    } (selected - edit with color picker below)`
+                  : t`Palette color ${index + 1}`
+              }
+              data-color={paletteColor}
+            />
+          ))}
+        </div>
       </div>
       <input
         type="color"
@@ -56,7 +58,7 @@ export const ColorPalette = ({
             ? t`Edit palette color ${selectedPaletteIndex + 1}`
             : t`Custom color picker`
         }
-        className="w-13 h-8 border-2 border-main cursor-pointer appearance-none bg-transparent [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none hover:border-highlight transition-colors mx-auto"
+        className="w-full h-8 border border-main bg-main cursor-pointer appearance-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none hover:bg-highlight transition-colors"
       />
     </div>
   );
