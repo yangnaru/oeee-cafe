@@ -8,6 +8,8 @@ When running cargo commands, use the environment variable `DATABASE_URL=postgres
 
 When creating SQLx migrations, use the command `sqlx migrate add`.
 
+When connecting to PostgreSQL via command line, use `psql oeee_cafe`.
+
 ## neo-cucumber (`./neo-cucumber`)
 
 Don't try to run the development server. Just run `pnpm run build` if you need to check if the code compiles.
