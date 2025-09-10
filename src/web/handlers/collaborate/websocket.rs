@@ -91,8 +91,12 @@ pub async fn handle_socket(
                             let payload: String = msg.get_payload().unwrap_or_default();
                             match serde_json::from_str::<super::redis_state::RoomMessage>(&payload) {
                                 Ok(room_msg) => {
-                                    // Don't send messages back to the sender (avoid echo)
-                                    if room_msg.from_connection != connection_id_clone {
+                                    // Allow chat messages to echo back to sender for confirmation
+                                    // Don't echo other message types back to sender (avoid duplicate drawing commands)
+                                    let should_send = room_msg.from_connection != connection_id_clone || 
+                                        (!room_msg.payload.is_empty() && room_msg.payload[0] == 0x03); // Chat message type
+                                    
+                                    if should_send {
                                         let ws_message = Message::Binary(room_msg.payload);
                                         if redis_tx.send(ws_message).is_err() {
                                             debug!("Redis message channel closed for connection {}", connection_id_clone);
