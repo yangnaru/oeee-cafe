@@ -245,13 +245,10 @@ export const useWebSocket = ({
 
     ws.onmessage = async (event) => {
       try {
-        // Reset catch-up timeout on any message received
+        // Clear any existing catch-up timeout since we now end catch-up when queue is empty
         if (catchupTimeoutRef.current) {
           clearTimeout(catchupTimeoutRef.current);
-          catchupTimeoutRef.current = window.setTimeout(() => {
-            setIsCatchingUp(false);
-            console.log("Catch-up phase completed");
-          }, 500); // 500ms timeout after last message
+          catchupTimeoutRef.current = null;
         }
 
         // Handle binary messages (can be ArrayBuffer or Blob)
@@ -264,6 +261,8 @@ export const useWebSocket = ({
           if (isCatchingUpRef.current) {
             // During catch-up, queue messages for sequential processing
             messageQueueRef.current.push(message);
+            console.log(`📥 Queued message during catch-up (queue size: ${messageQueueRef.current.length})`);
+            // Process queue immediately if not already processing
             processMessageQueue();
           } else {
             // During normal operation, process immediately
@@ -287,6 +286,8 @@ export const useWebSocket = ({
           if (isCatchingUpRef.current) {
             // During catch-up, queue messages for sequential processing
             messageQueueRef.current.push(message);
+            console.log(`📥 Queued message during catch-up (queue size: ${messageQueueRef.current.length})`);
+            // Process queue immediately if not already processing
             processMessageQueue();
           } else {
             // During normal operation, process immediately
@@ -333,7 +334,7 @@ export const useWebSocket = ({
       // No automatic reconnection - user must manually reconnect
     };
 
-    // Process messages sequentially from the queue during catch-up
+    // Process all queued messages immediately during catch-up
     const processMessageQueue = async () => {
       if (
         processingMessageRef.current ||
@@ -344,53 +345,30 @@ export const useWebSocket = ({
 
       processingMessageRef.current = true;
       const totalMessages = messageQueueRef.current.length;
-      let processedCount = 0;
 
       console.log(
-        `Starting to process ${totalMessages} queued messages in batches`
+        `🚀 Processing ${totalMessages} queued messages during catch-up (no batching)`
       );
 
-      const MESSAGES_PER_BATCH = 50;
+      // Process all messages immediately without artificial delays
+      while (messageQueueRef.current.length > 0) {
+        const message = messageQueueRef.current.shift()!;
 
-      const processBatch = async () => {
-        const batchSize = Math.min(
-          MESSAGES_PER_BATCH,
-          messageQueueRef.current.length
-        );
-
-        for (let i = 0; i < batchSize; i++) {
-          const message = messageQueueRef.current.shift()!;
-
-          // Create drawing engine for new user if they don't exist (skip for messages without userId)
-          if ("userId" in message && message.userId) {
-            createUserEngine(message.userId);
-          }
-
-          // Handle message types sequentially
-          await handleBinaryMessage(message);
-          processedCount++;
+        // Create drawing engine for new user if they don't exist
+        if ("userId" in message && message.userId) {
+          createUserEngine(message.userId);
         }
 
-        if (messageQueueRef.current.length > 0) {
-          // Log progress every 500 messages
-          if (processedCount % 500 === 0) {
-            console.log(
-              `Processed ${processedCount}/${totalMessages} messages (${Math.round(
-                (processedCount / totalMessages) * 100
-              )}%)`
-            );
-          }
+        // Handle message types
+        await handleBinaryMessage(message);
+      }
 
-          // Schedule next batch on next frame to yield to browser
-          requestAnimationFrame(() => processBatch());
-        } else {
-          processingMessageRef.current = false;
-          console.log(`Completed processing all ${processedCount} messages`);
-        }
-      };
-
-      // Start processing first batch
-      processBatch();
+      processingMessageRef.current = false;
+      console.log(`✅ Completed processing all ${totalMessages} messages from catch-up queue`);
+      
+      // End catch-up phase now that queue is empty
+      setIsCatchingUp(false);
+      console.log("🎯 Catch-up phase completed - queue is empty");
     };
 
     // Helper function to handle decoded binary messages (moved inside connectWebSocket)
