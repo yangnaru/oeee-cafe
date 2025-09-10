@@ -54,7 +54,9 @@ jobs:
           push: "true"
           no-cache: "false"
           build-args: GIT_COMMIT=${{ github.sha }}
-          tags: ghcr.io/${{ github.repository }}:git-${{ github.sha }}-${{ steps.arch.outputs.arch }}
+          tags: |
+            ghcr.io/${{ github.repository }}:git-${{ github.sha }}-${{ steps.arch.outputs.arch }}
+            ghcr.io/${{ github.repository }}:latest
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
           annotations: |
