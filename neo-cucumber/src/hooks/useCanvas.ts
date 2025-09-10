@@ -321,7 +321,7 @@ export const useCanvas = ({
     );
 
     // Sort by z-index (lower z-index drawn first, appears below)
-    canvasElements.sort((a, b) => b.zIndex - a.zIndex);
+    canvasElements.sort((a, b) => a.zIndex - b.zIndex);
 
     // Draw all layers in z-index order
     canvasElements.forEach(({ canvas }) => {
