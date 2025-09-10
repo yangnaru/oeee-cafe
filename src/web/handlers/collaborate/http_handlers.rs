@@ -5,7 +5,7 @@ use crate::web::state::AppState;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::{Html, IntoResponse, Json, Response};
+use axum::response::{Html, IntoResponse, Json, Redirect, Response};
 use minijinja::context;
 use uuid::Uuid;
 
@@ -95,10 +95,11 @@ pub async fn collaborate_lobby(
     auth_session: AuthSession,
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
-) -> Result<Html<String>, AppError> {
-    let user = auth_session
-        .user
-        .ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
+) -> Result<impl IntoResponse, AppError> {
+    let user = match auth_session.user {
+        Some(user) => user,
+        None => return Ok(Redirect::to("/login?next=/collaborate").into_response()),
+    };
 
     let db = state.config.connect_database().await?;
     let mut tx = db.begin().await?;
@@ -145,7 +146,7 @@ pub async fn collaborate_lobby(
         ..create_base_ftl_context(&bundle)
     })?;
 
-    Ok(Html(rendered))
+    Ok(Html(rendered).into_response())
 }
 
 pub async fn create_collaborative_session(
