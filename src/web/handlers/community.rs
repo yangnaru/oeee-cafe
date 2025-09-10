@@ -29,7 +29,7 @@ pub async fn community(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let (community, community_id) = if id.starts_with('@') {
@@ -142,7 +142,7 @@ pub async fn community_iframe(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let community = if id.starts_with('@') {
@@ -211,7 +211,7 @@ pub async fn communities(
     State(state): State<AppState>,
     messages: Messages,
 ) -> Result<Html<String>, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let own_communities = match auth_session.user.clone() {
@@ -342,7 +342,7 @@ pub async fn do_create_community(
         return Ok(StatusCode::BAD_REQUEST.into_response());
     }
 
-    let db: sqlx::Pool<sqlx::Postgres> = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let community = create_community(
         &mut tx,
@@ -400,7 +400,7 @@ pub async fn create_community_form(
     State(state): State<AppState>,
     messages: Messages,
 ) -> Result<Html<String>, AppError> {
-    let db: sqlx::Pool<sqlx::Postgres> = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
@@ -433,7 +433,7 @@ pub async fn hx_edit_community(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let community = if id.starts_with('@') {
@@ -491,7 +491,7 @@ pub async fn hx_do_edit_community(
         return Ok(StatusCode::BAD_REQUEST.into_response());
     }
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let (community_uuid, original_slug) = if id.starts_with('@') {

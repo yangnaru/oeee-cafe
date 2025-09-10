@@ -22,7 +22,7 @@ pub async fn home(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     messages: Messages,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let user_preferred_language = auth_session
@@ -85,7 +85,7 @@ pub async fn my_timeline(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     messages: Messages,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let user_preferred_language = auth_session

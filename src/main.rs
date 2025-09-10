@@ -59,6 +59,11 @@ fn main() {
             env.add_filter("markdown", markdown_to_html);
             env.set_loader(path_loader(&template_path));
 
+            let db_pool = cfg.connect_database().await.unwrap_or_else(|e| {
+                eprintln!("error connecting to database: {}", e);
+                exit(1);
+            });
+
             let redis_pool = cfg.connect_redis().await.unwrap_or_else(|e| {
                 eprintln!("error connecting to redis: {}", e);
                 exit(1);
@@ -69,6 +74,7 @@ fn main() {
             let state = AppState {
                 config: cfg.clone(),
                 env,
+                db_pool,
                 redis_pool,
                 redis_state,
             };

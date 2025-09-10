@@ -51,7 +51,7 @@ pub async fn get_collaboration_meta(
         .user
         .ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
 
     let session = sqlx::query!(
         r#"
@@ -62,7 +62,7 @@ pub async fn get_collaboration_meta(
         "#,
         session_uuid
     )
-    .fetch_optional(&db)
+    .fetch_optional(db)
     .await?
     .ok_or_else(|| anyhow::anyhow!("Session not found or not active"))?;
 
@@ -74,7 +74,7 @@ pub async fn get_collaboration_meta(
         "#,
         session_uuid
     )
-    .fetch_one(&db)
+    .fetch_one(db)
     .await?;
 
     Ok(Json(CollaborationMeta {
@@ -101,7 +101,7 @@ pub async fn collaborate_lobby(
         None => return Ok(Redirect::to("/login?next=/collaborate").into_response()),
     };
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let active_sessions = sqlx::query_as!(
@@ -158,7 +158,7 @@ pub async fn create_collaborative_session(
         .user
         .ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let session_id = Uuid::new_v4();
@@ -198,7 +198,7 @@ pub async fn save_collaborative_session(
         .user
         .ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
 
     let session = sqlx::query!(
         r#"
@@ -209,7 +209,7 @@ pub async fn save_collaborative_session(
         "#,
         session_uuid
     )
-    .fetch_optional(&db)
+    .fetch_optional(db)
     .await?
     .ok_or_else(|| anyhow::anyhow!("Session not found"))?;
 

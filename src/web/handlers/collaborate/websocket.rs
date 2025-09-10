@@ -41,13 +41,7 @@ pub async fn handle_socket(
         connection_id, user_login_name, room_uuid
     );
 
-    let db = match state.config.connect_database().await {
-        Ok(db) => db,
-        Err(e) => {
-            error!("Failed to connect to database: {}", e);
-            return;
-        }
-    };
+    let db = &state.db_pool;
 
     let is_owner = match setup_connection(
         &db,

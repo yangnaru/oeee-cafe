@@ -52,7 +52,7 @@ async fn send_post_to_followers(
     _content: String,
     state: &AppState,
 ) -> Result<Note, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     // Get all followers for this actor
@@ -134,7 +134,7 @@ async fn send_post_to_community_followers(
     // Print note
     tracing::info!("Note: {:?}", note);
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     // Find the community's actor, create one if it doesn't exist
@@ -253,7 +253,7 @@ pub async fn post_relay_view(
         ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
-    let db = state.config.connect_database().await.unwrap();
+    let db = &state.db_pool;
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
 
@@ -272,7 +272,7 @@ pub async fn post_relay_view(
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("draw_post_neo.jinja").unwrap();
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
@@ -327,7 +327,7 @@ pub async fn post_view(
         ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
-    let db = state.config.connect_database().await.unwrap();
+    let db = &state.db_pool;
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
 
@@ -476,7 +476,7 @@ pub async fn post_replay_view(
         ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
-    let db = state.config.connect_database().await.unwrap();
+    let db = &state.db_pool;
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
     if post.is_none() {
@@ -548,7 +548,7 @@ pub async fn post_publish_form(
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid = Uuid::parse_str(&id)?;
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
 
@@ -638,7 +638,7 @@ pub async fn post_publish(
 ) -> Result<impl IntoResponse, AppError> {
     let post_id = Uuid::parse_str(&form.post_id)?;
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, post_id).await?;
     if post.is_none() {
@@ -731,7 +731,7 @@ pub async fn draft_posts(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
@@ -786,7 +786,7 @@ pub async fn do_create_comment(
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user_id = auth_session.user.unwrap().id;
     let post_id = Uuid::parse_str(&form.post_id).unwrap();
@@ -818,7 +818,7 @@ pub async fn post_edit_community(
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid = Uuid::parse_str(&id)?;
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
     if post.is_none() {
@@ -895,7 +895,7 @@ pub async fn do_post_edit_community(
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid = Uuid::parse_str(&id)?;
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
     if post.is_none() {
@@ -928,7 +928,7 @@ pub async fn hx_edit_post(
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid = Uuid::parse_str(&id)?;
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
 
@@ -983,7 +983,7 @@ pub async fn hx_do_edit_post(
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid = Uuid::parse_str(&id)?;
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
     if post.is_none() {
@@ -1066,7 +1066,7 @@ pub async fn hx_delete_post(
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid = Uuid::parse_str(&id)?;
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let post = find_post_by_id(&mut tx, post_uuid).await?;
     if post.is_none() {
@@ -1167,7 +1167,7 @@ pub async fn post_view_by_login_name(
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
 
-    let db = state.config.connect_database().await.unwrap();
+    let db = &state.db_pool;
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
 
@@ -1320,7 +1320,7 @@ pub async fn redirect_post_to_login_name(
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
 
-    let db = state.config.connect_database().await.unwrap();
+    let db = &state.db_pool;
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
     tx.commit().await?;
@@ -1340,7 +1340,7 @@ async fn send_post_update_to_followers(
     post_id: Uuid,
     state: &AppState,
 ) -> Result<(), AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     // Get all followers for this actor
@@ -1417,7 +1417,7 @@ pub async fn post_relay_view_by_login_name(
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
 
-    let db = state.config.connect_database().await.unwrap();
+    let db = &state.db_pool;
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
 
@@ -1499,7 +1499,7 @@ pub async fn post_replay_view_by_login_name(
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
 
-    let db = state.config.connect_database().await.unwrap();
+    let db = &state.db_pool;
     let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
 

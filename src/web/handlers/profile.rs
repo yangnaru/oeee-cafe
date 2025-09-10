@@ -31,7 +31,7 @@ pub async fn do_follow_profile(
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user = find_user_by_login_name(&mut tx, &login_name).await?;
 
@@ -70,7 +70,7 @@ pub async fn do_unfollow_profile(
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user = find_user_by_login_name(&mut tx, &login_name).await?;
 
@@ -109,7 +109,7 @@ pub async fn profile(
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user = find_user_by_login_name(&mut tx, &login_name).await?;
 
@@ -193,7 +193,7 @@ pub async fn profile_iframe(
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user = find_user_by_login_name(&mut tx, &login_name).await?;
 
@@ -227,7 +227,7 @@ pub async fn profile_banners_iframe(
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user = find_user_by_login_name(&mut tx, &login_name).await?;
 
@@ -263,7 +263,7 @@ pub async fn do_move_link_down(
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let user = find_user_by_login_name(&mut tx, &login_name).await?;
@@ -312,7 +312,7 @@ pub async fn do_move_link_up(
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let user = find_user_by_login_name(&mut tx, &login_name).await?;
@@ -367,7 +367,7 @@ pub async fn do_delete_link(
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let user = find_user_by_login_name(&mut tx, &login_name).await?;
@@ -415,7 +415,7 @@ pub async fn do_add_link(
     Path(login_name): Path<String>,
     Form(form): Form<AddLinkForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let user = find_user_by_login_name(&mut tx, &login_name).await?;
@@ -465,7 +465,7 @@ pub async fn profile_settings(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user = find_user_by_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
 
@@ -517,7 +517,7 @@ pub async fn do_reply_guestbook_entry(
     Path((login_name, entry_id)): Path<(String, Uuid)>,
     Form(form): Form<AddGuestbookEntryReplyForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?;
     if entry.is_none() {
@@ -578,7 +578,7 @@ pub async fn do_delete_guestbook_entry(
     State(state): State<AppState>,
     Path((login_name, entry_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?;
     if entry.is_none() {
@@ -614,7 +614,7 @@ pub async fn do_write_guestbook_entry(
     Path(login_name): Path<String>,
     Form(form): Form<CreateGuestbookEntryForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let current_user_id = auth_session.user.clone().unwrap().id;
     let recipient_user = find_user_by_login_name(&mut tx, &login_name).await?;
@@ -658,7 +658,7 @@ pub async fn guestbook(
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user = find_user_by_login_name(&mut tx, &login_name).await?;
 

@@ -14,7 +14,7 @@ pub async fn about(
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     auth_session: AuthSession,
 ) -> Result<Html<String>, AppError> {
-    let db: sqlx::Pool<sqlx::Postgres> = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)

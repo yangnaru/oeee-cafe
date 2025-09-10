@@ -241,7 +241,7 @@ async fn get_session_participants(
     session_id: Uuid,
     state: &AppState,
 ) -> Result<Vec<(Uuid, String, i64)>, Box<dyn std::error::Error + Send + Sync>> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     
     // Query participants from the database, ordered by join time
     let rows = sqlx::query!(
@@ -254,7 +254,7 @@ async fn get_session_participants(
         "#,
         session_id
     )
-    .fetch_all(&db)
+    .fetch_all(db)
     .await?;
     
     let participants: Vec<(Uuid, String, i64)> = rows

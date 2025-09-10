@@ -84,7 +84,7 @@ impl Object for Actor {
         object_id: Url,
         data: &Data<Self::DataType>,
     ) -> Result<Option<Self>, Self::Error> {
-        let db = data.app_data().config.connect_database().await?;
+        let db = &data.app_data().db_pool;
         let mut tx = db.begin().await?;
 
         let actor = Actor::find_by_iri(&mut tx, object_id.to_string()).await?;
@@ -265,7 +265,7 @@ pub async fn activitypub_webfinger(
     data: Data<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     let name = extract_webfinger_name(&query.resource, &data)?;
-    let db = data.app_data().config.connect_database().await?;
+    let db = &data.app_data().db_pool;
     let mut tx = db.begin().await?;
 
     // First, try to find a user with this login name
@@ -303,7 +303,7 @@ pub async fn activitypub_get_user(
     Path(actor_id): Path<String>,
     data: Data<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = data.app_data().config.connect_database().await?;
+    let db = &data.app_data().db_pool;
     let mut tx = db.begin().await?;
 
     if let Some(actor) =
@@ -335,7 +335,7 @@ pub async fn activitypub_get_community(
     Path(community_id): Path<String>,
     data: Data<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = data.app_data().config.connect_database().await?;
+    let db = &data.app_data().db_pool;
     let mut tx = db.begin().await?;
 
     if let Some(actor) =
@@ -367,7 +367,7 @@ pub async fn activitypub_get_post(
     Path(post_id): Path<String>,
     data: Data<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = data.app_data().config.connect_database().await?;
+    let db = &data.app_data().db_pool;
     let mut tx = db.begin().await?;
 
     let post_uuid = Uuid::parse_str(&post_id)?;
@@ -493,7 +493,7 @@ impl ActivityHandler for Follow {
         tracing::info!("receive: {:?} {:?}", self.actor, self.object);
 
         // add to followers
-        let db = data.app_data().config.connect_database().await?;
+        let db = &data.app_data().db_pool;
         let mut tx = db.begin().await?;
 
         // Find the target actor being followed
@@ -629,7 +629,7 @@ impl ActivityHandler for Undo {
         tracing::info!("receive: {:?} {:?}", self.actor, self.object);
 
         // Remove the follow relationship from the database
-        let db = data.app_data().config.connect_database().await?;
+        let db = &data.app_data().db_pool;
         let mut tx = db.begin().await?;
 
         // Find the target actor being unfollowed
@@ -909,7 +909,7 @@ impl ActivityHandler for Update {
         // We would typically update our local copy of the actor here
         tracing::info!("Received Update activity: {:?}", self);
 
-        let db = data.app_data().config.connect_database().await?;
+        let db = &data.app_data().db_pool;
         let mut tx = db.begin().await?;
 
         // Find the actor being updated
@@ -1116,7 +1116,7 @@ pub async fn send_update_activity(
     use crate::models::follow::get_follower_shared_inboxes_for_actor;
     use activitypub_federation::config::FederationConfig;
 
-    let db = app_state.config.connect_database().await?;
+    let db = &app_state.db_pool;
     let mut tx = db.begin().await?;
 
     // Get follower inboxes
@@ -1183,7 +1183,7 @@ pub async fn send_delete_activity(
     use crate::models::follow::get_follower_shared_inboxes_for_actor;
     use activitypub_federation::config::FederationConfig;
 
-    let db = app_state.config.connect_database().await?;
+    let db = &app_state.db_pool;
     let mut tx = db.begin().await?;
 
     // Get follower inboxes
@@ -1294,7 +1294,7 @@ impl ActivityHandler for Delete {
         // We would typically mark the object as deleted in our local copy
         tracing::info!("Received Delete activity: {:?}", self);
 
-        let db = data.app_data().config.connect_database().await?;
+        let db = &data.app_data().db_pool;
         let mut tx = db.begin().await?;
 
         // Check if this is a post deletion by trying to parse the object URL

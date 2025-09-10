@@ -57,7 +57,7 @@ pub async fn start_draw(
         _ => "draw_post_neo.jinja",
     };
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
@@ -275,7 +275,7 @@ pub async fn draw_finish(
         parent_post_id,
     };
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let post = create_post(&mut tx, post_draft).await?;
     let _ = tx.commit().await;
@@ -397,7 +397,7 @@ pub async fn banner_draw_finish(
         replay_filename: Some(format!("{}.pch", replay_sha256)),
     };
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let banner = create_banner(&mut tx, banner_draft).await?;
     let _ = tx.commit().await;

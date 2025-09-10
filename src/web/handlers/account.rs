@@ -35,7 +35,7 @@ pub async fn account(
     auth_session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let draft_post_count = match auth_session.user.clone() {
         Some(user) => get_draft_post_count(&mut tx, user.id)
@@ -80,7 +80,7 @@ pub async fn save_language(
     State(state): State<AppState>,
     Form(form): Form<LanguageEditForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let language = match form.language.as_deref() {
         Some("ko") => Some(Language::Ko),
@@ -116,7 +116,7 @@ pub async fn edit_password(
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user = auth_session.user.clone().unwrap();
     let user_id = user.id;
@@ -190,7 +190,7 @@ pub async fn verify_email_verification_code(
     State(state): State<AppState>,
     Form(form): Form<EmailVerificationChallengeResponseForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = state.config.connect_database().await.unwrap();
+    let db = &state.db_pool;
     let mut tx = db.begin().await.unwrap();
     let challenge = find_email_verification_challenge_by_id(&mut tx, form.challenge_id)
         .await
@@ -300,7 +300,7 @@ pub async fn request_email_verification_code(
         .into_response());
     }
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     let token = {
@@ -395,7 +395,7 @@ pub async fn edit_account(
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
-    let db = state.config.connect_database().await?;
+    let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user_id = auth_session.user.unwrap().id;
     let _ = update_user_with_activity(

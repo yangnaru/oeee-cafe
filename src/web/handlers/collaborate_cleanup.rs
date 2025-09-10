@@ -25,13 +25,7 @@ pub async fn cleanup_collaborative_sessions(state: AppState) {
         let mut ended_sessions_cleaned = 0;
         let mut inactive_sessions_cleaned = 0;
 
-        let db = match state.config.connect_database().await {
-            Ok(db) => db,
-            Err(e) => {
-                error!("Failed to connect to database for cleanup: {}", e);
-                continue;
-            }
-        };
+        let db = &state.db_pool;
 
         // Step 1: Sync in-memory activity cache to database (batch update)
         if let Err(e) = sync_activity_to_database(&state, &db, &mut sessions_synced).await {
@@ -381,16 +375,10 @@ async fn enforce_history_limits_for_active_sessions(state: &AppState) {
     let mut total_messages_removed = 0;
     
     // Get all active room IDs from database since we don't have in-memory tracking
-    let db = match state.config.connect_database().await {
-        Ok(db) => db,
-        Err(e) => {
-            error!("Failed to connect to database for history cleanup: {}", e);
-            return;
-        }
-    };
+    let db = &state.db_pool;
 
     let room_ids: Vec<Uuid> = match sqlx::query!("SELECT id FROM collaborative_sessions WHERE ended_at IS NULL")
-        .fetch_all(&db)
+        .fetch_all(db)
         .await
     {
         Ok(sessions) => sessions.into_iter().map(|s| s.id).collect(),
@@ -429,16 +417,10 @@ async fn cleanup_stale_redis_connections(state: &AppState) {
     let mut rooms_checked = 0;
     
     // Get all active room IDs from database since we don't have in-memory tracking
-    let db = match state.config.connect_database().await {
-        Ok(db) => db,
-        Err(e) => {
-            error!("Failed to connect to database for connection cleanup: {}", e);
-            return;
-        }
-    };
+    let db = &state.db_pool;
 
     let room_ids: Vec<Uuid> = match sqlx::query!("SELECT id FROM collaborative_sessions WHERE ended_at IS NULL")
-        .fetch_all(&db)
+        .fetch_all(db)
         .await
     {
         Ok(sessions) => sessions.into_iter().map(|s| s.id).collect(),

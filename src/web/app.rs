@@ -43,7 +43,6 @@ use axum::routing::{delete, get, post, put};
 use axum::Router;
 use axum_login::{login_required, AuthManagerLayerBuilder};
 use axum_messages::MessagesManagerLayer;
-use sqlx::PgPool;
 use std::net::SocketAddr;
 use time::Duration;
 use tokio::signal;
@@ -60,18 +59,16 @@ pub struct App {
 impl App {
     pub async fn new(state: AppState) -> Result<Self, Box<dyn std::error::Error>> {
         sqlx::migrate!()
-            .run(&state.config.connect_database().await.unwrap())
+            .run(&state.db_pool)
             .await?;
 
         Ok(Self { state })
     }
 
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error>> {
-        let db = self.state.config.connect_database().await.unwrap();
-        let authn_backend: Backend = Backend { db: db.to_owned() };
+        let authn_backend: Backend = Backend { db: self.state.db_pool.clone() };
 
-        let pool = PgPool::connect(&self.state.config.db_url).await?;
-        let session_store = PostgresStore::new(pool)
+        let session_store = PostgresStore::new(self.state.db_pool.clone())
             .with_table_name("sessions")
             .unwrap()
             .with_schema_name("public")
