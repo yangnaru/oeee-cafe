@@ -1,12 +1,28 @@
 # Build Rust binary
 FROM rust:1.89 AS rust-builder
 WORKDIR /app
+
+# Install sccache prebuilt binary
+RUN case "$(uname -m)" in \
+    x86_64) ARCH=x86_64 ;; \
+    aarch64) ARCH=aarch64 ;; \
+    *) echo "Unsupported architecture: $(uname -m)" && exit 1 ;; \
+    esac && \
+    curl -L "https://github.com/mozilla/sccache/releases/download/v0.10.0/sccache-v0.10.0-${ARCH}-unknown-linux-musl.tar.gz" | \
+    tar -xz --strip-components=1 -C /usr/local/bin/
+
+# Copy source files
 COPY Cargo.toml Cargo.lock ./
 COPY .sqlx/ ./.sqlx/
 COPY locales/ ./locales/
 COPY migrations/ ./migrations/
 COPY src/ ./src/
-RUN cargo build --release
+
+# Build with sccache
+ENV RUSTC_WRAPPER=sccache
+ENV SCCACHE_DIR=/sccache
+RUN --mount=type=cache,target=/sccache \
+    cargo build --release
 
 # Build cucumber
 FROM node:24-slim AS node-builder-cucumber
