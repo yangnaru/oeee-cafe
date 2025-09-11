@@ -9,6 +9,8 @@ $ bacon run
 $ brew install caddy
 $ caddy run -w
 
+$ pnpm install vite
+
 $ cd neo-cucumber
 $ pnpm run dev
 ```
