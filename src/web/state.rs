@@ -1,9 +1,9 @@
 use minijinja::Environment;
 use sqlx::PgPool;
 
+use super::handlers::collaborate::redis_state::RedisStateManager;
 use crate::redis::RedisPool;
 use crate::AppConfig;
-use super::handlers::collaborate::redis_state::RedisStateManager;
 
 #[derive(Clone)]
 pub struct AppState {

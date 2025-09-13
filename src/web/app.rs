@@ -58,15 +58,15 @@ pub struct App {
 
 impl App {
     pub async fn new(state: AppState) -> Result<Self, Box<dyn std::error::Error>> {
-        sqlx::migrate!()
-            .run(&state.db_pool)
-            .await?;
+        sqlx::migrate!().run(&state.db_pool).await?;
 
         Ok(Self { state })
     }
 
     pub async fn serve(self) -> Result<(), Box<dyn std::error::Error>> {
-        let authn_backend: Backend = Backend { db: self.state.db_pool.clone() };
+        let authn_backend: Backend = Backend {
+            db: self.state.db_pool.clone(),
+        };
 
         let session_store = PostgresStore::new(self.state.db_pool.clone())
             .with_table_name("sessions")
