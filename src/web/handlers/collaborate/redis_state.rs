@@ -59,29 +59,41 @@ impl RedisStateManager {
     }
 
     // Activity Cache Management
-    pub async fn update_room_activity(&self, room_uuid: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn update_room_activity(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", ACTIVITY_PREFIX, room_uuid);
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-        
+
         conn.set::<_, _, ()>(&key, timestamp).await?;
         conn.expire::<_, ()>(&key, ACTIVITY_TTL as i64).await?;
-        debug!("Updated activity cache for room {} at timestamp {}", room_uuid, timestamp);
+        debug!(
+            "Updated activity cache for room {} at timestamp {}",
+            room_uuid, timestamp
+        );
         Ok(())
     }
 
-    pub async fn get_room_activity(&self, room_uuid: Uuid) -> Result<Option<u64>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_room_activity(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<Option<u64>, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", ACTIVITY_PREFIX, room_uuid);
-        
+
         let timestamp = conn.get::<_, Option<u64>>(&key).await?;
         Ok(timestamp)
     }
 
-    pub async fn cleanup_room_activity(&self, room_uuid: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn cleanup_room_activity(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", ACTIVITY_PREFIX, room_uuid);
-        
+
         let deleted: bool = conn.del(&key).await?;
         if deleted {
             debug!("Cleaned up activity cache for room {}", room_uuid);
@@ -90,76 +102,105 @@ impl RedisStateManager {
     }
 
     // Snapshot Request Tracking
-    pub async fn set_snapshot_requested(&self, room_uuid: Uuid, user_id: Uuid, requested: bool) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn set_snapshot_requested(
+        &self,
+        room_uuid: Uuid,
+        user_id: Uuid,
+        requested: bool,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}:{}", SNAPSHOT_REQ_PREFIX, room_uuid, user_id);
-        
+
         if requested {
             conn.set::<_, _, ()>(&key, 1u8).await?;
         } else {
             conn.set::<_, _, ()>(&key, 0u8).await?;
         }
         conn.expire::<_, ()>(&key, SNAPSHOT_REQ_TTL as i64).await?;
-        
-        debug!("Set snapshot request for user {} in room {} to {}", user_id, room_uuid, requested);
+
+        debug!(
+            "Set snapshot request for user {} in room {} to {}",
+            user_id, room_uuid, requested
+        );
         Ok(())
     }
 
-    pub async fn is_snapshot_requested(&self, room_uuid: Uuid, user_id: Uuid) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn is_snapshot_requested(
+        &self,
+        room_uuid: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}:{}", SNAPSHOT_REQ_PREFIX, room_uuid, user_id);
-        
+
         let value = conn.get::<_, Option<u8>>(&key).await?;
         Ok(value.unwrap_or(0) != 0)
     }
 
-    pub async fn cleanup_snapshot_requests(&self, room_uuid: Uuid) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn cleanup_snapshot_requests(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let pattern = format!("{}{}:*", SNAPSHOT_REQ_PREFIX, room_uuid);
-        
+
         let keys = conn.keys::<_, Vec<String>>(&pattern).await?;
         let count = keys.len();
-        
+
         if count > 0 {
             let deleted: usize = conn.del(&keys).await?;
-            debug!("Cleaned up {} snapshot request trackers for room {}", deleted, room_uuid);
+            debug!(
+                "Cleaned up {} snapshot request trackers for room {}",
+                deleted, room_uuid
+            );
         }
-        
+
         Ok(count)
     }
 
     // Connection Registry
-    pub async fn register_connection(&self, connection_info: &ConnectionInfo) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn register_connection(
+        &self,
+        connection_info: &ConnectionInfo,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", CONNECTION_PREFIX, connection_info.connection_id);
-        
+
         let serialized = serde_json::to_string(connection_info)?;
         conn.set::<_, _, ()>(&key, &serialized).await?;
         conn.expire::<_, ()>(&key, CONNECTION_TTL as i64).await?;
-        
+
         // Also track connection in room set
         let room_key = format!("{}{}:connections", ROOM_PREFIX, connection_info.room_id);
-        conn.sadd::<_, _, ()>(&room_key, &connection_info.connection_id).await?;
-        conn.expire::<_, ()>(&room_key, CONNECTION_TTL as i64).await?;
-        
-        debug!("Registered connection {} for user {} in room {}", 
-               connection_info.connection_id, connection_info.user_id, connection_info.room_id);
+        conn.sadd::<_, _, ()>(&room_key, &connection_info.connection_id)
+            .await?;
+        conn.expire::<_, ()>(&room_key, CONNECTION_TTL as i64)
+            .await?;
+
+        debug!(
+            "Registered connection {} for user {} in room {}",
+            connection_info.connection_id, connection_info.user_id, connection_info.room_id
+        );
         Ok(())
     }
 
-    pub async fn heartbeat_connection(&self, connection_id: &str) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn heartbeat_connection(
+        &self,
+        connection_id: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", CONNECTION_PREFIX, connection_id);
-        
+
         // Get existing connection info
         if let Some(info_str) = conn.get::<_, Option<String>>(&key).await? {
             let mut connection_info: ConnectionInfo = serde_json::from_str(&info_str)?;
-            connection_info.last_heartbeat = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-            
+            connection_info.last_heartbeat =
+                SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+
             let serialized = serde_json::to_string(&connection_info)?;
             conn.set::<_, _, ()>(&key, &serialized).await?;
             conn.expire::<_, ()>(&key, CONNECTION_TTL as i64).await?;
-            
+
             debug!("Updated heartbeat for connection {}", connection_id);
             Ok(true)
         } else {
@@ -168,10 +209,13 @@ impl RedisStateManager {
         }
     }
 
-    pub async fn get_connection_info(&self, connection_id: &str) -> Result<Option<ConnectionInfo>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_connection_info(
+        &self,
+        connection_id: &str,
+    ) -> Result<Option<ConnectionInfo>, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", CONNECTION_PREFIX, connection_id);
-        
+
         if let Some(info_str) = conn.get::<_, Option<String>>(&key).await? {
             let connection_info: ConnectionInfo = serde_json::from_str(&info_str)?;
             Ok(Some(connection_info))
@@ -180,61 +224,85 @@ impl RedisStateManager {
         }
     }
 
-    pub async fn unregister_connection(&self, connection_id: &str) -> Result<Option<ConnectionInfo>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn unregister_connection(
+        &self,
+        connection_id: &str,
+    ) -> Result<Option<ConnectionInfo>, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", CONNECTION_PREFIX, connection_id);
-        
+
         // Get connection info before deletion
         let connection_info = if let Some(info_str) = conn.get::<_, Option<String>>(&key).await? {
             Some(serde_json::from_str::<ConnectionInfo>(&info_str)?)
         } else {
             None
         };
-        
+
         // Remove from Redis
         conn.del::<_, ()>(&key).await?;
-        
+
         // Remove from room set if we have the info
         if let Some(ref info) = connection_info {
             let room_key = format!("{}{}:connections", ROOM_PREFIX, info.room_id);
             conn.srem::<_, _, ()>(&room_key, connection_id).await?;
         }
-        
+
         debug!("Unregistered connection {}", connection_id);
         Ok(connection_info)
     }
 
-    pub async fn get_room_connections(&self, room_uuid: Uuid) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_room_connections(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let room_key = format!("{}{}:connections", ROOM_PREFIX, room_uuid);
-        
+
         let connections = conn.smembers::<_, Vec<String>>(&room_key).await?;
-        debug!("Found {} connections in room {}", connections.len(), room_uuid);
+        debug!(
+            "Found {} connections in room {}",
+            connections.len(),
+            room_uuid
+        );
         Ok(connections)
     }
 
     // Pub/Sub for message broadcasting
-    pub async fn publish_message(&self, room_uuid: Uuid, message: &RoomMessage) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn publish_message(
+        &self,
+        room_uuid: Uuid,
+        message: &RoomMessage,
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let channel = format!("{}{}", PUBSUB_PREFIX, room_uuid);
-        
+
         let serialized = serde_json::to_string(message)?;
         let subscriber_count: usize = conn.publish(&channel, &serialized).await?;
-        
-        debug!("Published message to {} subscribers in room {}", subscriber_count, room_uuid);
+
+        debug!(
+            "Published message to {} subscribers in room {}",
+            subscriber_count, room_uuid
+        );
         Ok(subscriber_count)
     }
 
     // Create a dedicated Redis Pub/Sub connection for a specific room
-    pub async fn create_room_subscriber(&self, room_uuid: Uuid, redis_url: &str) -> Result<redis::aio::PubSub, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn create_room_subscriber(
+        &self,
+        room_uuid: Uuid,
+        redis_url: &str,
+    ) -> Result<redis::aio::PubSub, Box<dyn std::error::Error + Send + Sync>> {
         // Create a new dedicated connection for Pub/Sub (can't use pooled connections)
         let client = redis::Client::open(redis_url)?;
         let mut pubsub = client.get_async_pubsub().await?;
-        
+
         let channel = self.get_room_channel(room_uuid);
         pubsub.subscribe(&channel).await?;
-        
-        debug!("Created Redis subscriber for room {} on channel {}", room_uuid, channel);
+
+        debug!(
+            "Created Redis subscriber for room {} on channel {}",
+            room_uuid, channel
+        );
         Ok(pubsub)
     }
 
@@ -242,18 +310,19 @@ impl RedisStateManager {
         format!("{}{}", PUBSUB_PREFIX, room_uuid)
     }
 
-
-
-    pub async fn cleanup_room_state(&self, room_uuid: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn cleanup_room_state(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
-        
+
         // Clean up all room-related keys
         let patterns = [
             format!("{}{}:*", ROOM_PREFIX, room_uuid),
             format!("{}{}", ACTIVITY_PREFIX, room_uuid),
             format!("{}{}:*", SNAPSHOT_REQ_PREFIX, room_uuid),
         ];
-        
+
         let mut total_deleted = 0;
         for pattern in &patterns {
             let keys = conn.keys::<_, Vec<String>>(pattern).await?;
@@ -262,8 +331,11 @@ impl RedisStateManager {
                 total_deleted += deleted;
             }
         }
-        
-        info!("Cleaned up {} Redis keys for room {}", total_deleted, room_uuid);
+
+        info!(
+            "Cleaned up {} Redis keys for room {}",
+            total_deleted, room_uuid
+        );
         Ok(())
     }
 }

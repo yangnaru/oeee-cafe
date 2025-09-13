@@ -4,33 +4,33 @@
   {% if post.title %}
     {{ post.title }}
   {% else %}
-    {{ ftl_post_no_title }}
+    {{ ftl_get_message("post-no-title") }}
   {% endif %}
-  ({{ ftl_post_replay }})
+  ({{ ftl_get_message("post-replay") }})
 {% endblock title %}
 {% block content %}
   <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
   <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}"
           charset="utf-8"></script>
   <div class="center">
-    <p>{{ ftl_post_published_at }}: {{ post.published_at }}</p>
-    <p>{{ ftl_post_duration }}: {{ post.paint_duration }}</p>
+    <p>{{ ftl_get_message("post-published-at") }}: {{ post.published_at }}</p>
+    <p>{{ ftl_get_message("post-duration") }}: {{ post.paint_duration }}</p>
     <p>
-      {{ ftl_community }}:
+      {{ ftl_get_message("community") }}:
       <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
     </p>
     <input type="hidden" id="viewer" />
     <p>
-      {{ ftl_post_title }}:
+      {{ ftl_get_message("post-title") }}:
       <a href="/@{{ post.login_name }}/{{ post_id }}">
         {% if post.title %}
           {{ post.title }}
         {% else %}
-          {{ ftl_post_no_title }}
+          {{ ftl_get_message("post-no-title") }}
         {% endif %}
       </a>
     </p>
-    <p>{{ ftl_post_description }}: {{ post.content }}</p>
+    <p>{{ ftl_get_message("post-description") }}: {{ post.content }}</p>
   </div>
   <script>
   document.write(`

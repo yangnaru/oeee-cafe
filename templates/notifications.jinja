@@ -1,10 +1,10 @@
 {% extends "base.jinja" %}
 {% block title %}
-  {{ ftl_brand }}
+  {{ ftl_get_message("brand") }}
 {% endblock title %}
 {% block content %}
   <div class="center">
-    <h2>{{ ftl_notifications }}</h2>
+    <h2>{{ ftl_get_message("notifications") }}</h2>
     {% if comments %}
       {% for (comment, post_id) in comments %}
         <div class="comment notification-comment">
@@ -17,11 +17,11 @@
           </a>
           <div>
             <p>
-              {{ ftl_comment_created_at }}: {{ comment.created_at|datetimeformat(format="short",
+              {{ ftl_get_message("comment-created-at") }}: {{ comment.created_at|datetimeformat(format="short",
                tz="Asia/Seoul") }}
             </p>
             <p>
-              {{ ftl_display_name }}:
+              {{ ftl_get_message("display-name") }}:
               <a href="/@{{ comment.user_login_name }}">{{ comment.user_display_name }}</a>
               <span class="muted">@{{ comment.user_login_name }}</span>
             </p>
@@ -30,7 +30,7 @@
         </div>
       {% endfor %}
     {% else %}
-      {{ ftl_no_notifications }}
+      {{ ftl_get_message("no-notifications") }}
     {% endif %}
   </div>
 {% endblock content %}

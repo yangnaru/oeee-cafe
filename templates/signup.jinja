@@ -3,28 +3,28 @@
   <div class="center">
     <form method="post">
       <fieldset>
-        <legend>{{ ftl_sign_up }}</legend>
+        <legend>{{ ftl_get_message("sign-up") }}</legend>
         <p>
-          <label for="login_name">{{ ftl_login_name }}</label>
+          <label for="login_name">{{ ftl_get_message("login-name") }}</label>
           <input name="login_name" id="login_name" autocapitalize="none" required />
         </p>
         <p>
-          <label for="password">{{ ftl_password }}</label>
+          <label for="password">{{ ftl_get_message("password") }}</label>
           <input name="password" id="password" type="password" required />
         </p>
         <p>
-          <label for="password_confirm">{{ ftl_password_repeat }}</label>
+          <label for="password_confirm">{{ ftl_get_message("password-repeat") }}</label>
           <input name="password_confirm"
                  id="password_confirm"
                  type="password"
                  required />
         </p>
         <p>
-          <label for="display_name">{{ ftl_display_name }}</label>
+          <label for="display_name">{{ ftl_get_message("display-name") }}</label>
           <input name="display_name" id="display_name" required />
         </p>
       </fieldset>
-      <input type="submit" value="{{ ftl_sign_up }}" />
+      <input type="submit" value="{{ ftl_get_message("sign-up") }}" />
       {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
     </form>
   </div>

@@ -7,7 +7,7 @@ use crate::models::user::{
     find_user_by_id, update_password, update_user_email_verified_at,
     update_user_preferred_language, update_user_with_activity, AuthSession, Language,
 };
-use crate::web::handlers::{create_base_ftl_context, get_bundle};
+use crate::web::handlers::get_bundle;
 use crate::web::state::AppState;
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
@@ -57,6 +57,7 @@ pub async fn account(
         ("en", "English"),
         ("zh", "中文"),
     ];
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let template: minijinja::Template<'_, '_> = state.env.get_template("account.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -64,7 +65,7 @@ pub async fn account(
         languages,
         draft_post_count,
         messages => messages.into_iter().collect::<Vec<_>>(),
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered))
@@ -211,24 +212,26 @@ pub async fn verify_email_verification_code(
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     if challenge.token != form.token {
+        let ftl_lang = bundle.locales.first().unwrap().to_string();
         let rendered = template.render(context! {
             challenge_id => challenge.id,
             email => challenge.email,
             message => bundle.format_pattern(bundle.get_message("account-change-email-error-token-mismatch").unwrap().value().unwrap(), None, &mut vec![]),
             success => false,
-            ..create_base_ftl_context(&bundle)
+            ftl_lang
         })?;
 
         return Ok(Html(rendered).into_response());
     }
 
     if challenge.expires_at < now {
+        let ftl_lang = bundle.locales.first().unwrap().to_string();
         let rendered = template.render(context! {
             challenge_id => challenge.id,
             email => challenge.email,
             message => bundle.format_pattern(bundle.get_message("account-change-email-error-token-expired").unwrap().value().unwrap(), None, &mut vec![]),
             success => false,
-            ..create_base_ftl_context(&bundle)
+            ftl_lang
         })?;
 
         return Ok(Html(rendered).into_response());
@@ -243,12 +246,13 @@ pub async fn verify_email_verification_code(
     .await;
     let _ = tx.commit().await;
 
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         challenge_id => challenge.id,
         email => challenge.email,
         message => bundle.format_pattern(bundle.get_message("account-change-email-success").unwrap().value().unwrap(), None, &mut vec![]),
         success => true,
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered).into_response())
@@ -283,6 +287,7 @@ pub async fn request_email_verification_code(
             .email_verified_at
             .is_some()
     {
+        let ftl_lang = bundle.locales.first().unwrap().to_string();
         return Ok(Html(edit_email_template.render(context! {
             current_user => auth_session.user,
             default_community_id => state.config.default_community_id.clone(),
@@ -295,7 +300,7 @@ pub async fn request_email_verification_code(
                 None,
                 &mut vec![],
             ),
-            ..create_base_ftl_context(&bundle),
+            ftl_lang,
         })?)
         .into_response());
     }
@@ -365,11 +370,12 @@ pub async fn request_email_verification_code(
     let _ = mailer.send(&email).unwrap();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("email_verify.jinja")?;
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
 
     let rendered = template.render(context! {
         challenge_id => email_verification_challenge.id,
         email => form.email,
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered).into_response())

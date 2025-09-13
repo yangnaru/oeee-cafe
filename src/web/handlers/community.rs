@@ -8,7 +8,7 @@ use crate::models::community::{
 };
 use crate::models::post::{find_published_posts_by_community_id, get_draft_post_count};
 use crate::models::user::AuthSession;
-use crate::web::handlers::{create_base_ftl_context, parse_id_with_legacy_support, ParsedId};
+use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
 use crate::web::state::AppState;
 use axum::extract::Path;
 use axum::http::{HeaderMap, HeaderValue};
@@ -80,6 +80,7 @@ pub async fn community(
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
+        let ftl_lang = bundle.locales.first().unwrap().to_string();
         let rendered = template
             .eval_to_state(context! {
                 current_user => auth_session.user,
@@ -88,12 +89,13 @@ pub async fn community(
                 },
                 community_id => community.as_ref().map(|c| c.id.to_string()).unwrap_or_default(),
                 domain => state.config.domain.clone(),
-                ..create_base_ftl_context(&bundle)
+                ftl_lang
             })?
             .render_block("community_edit_block")
             .unwrap();
         Ok(Html(rendered).into_response())
     } else {
+        let ftl_lang = bundle.locales.first().unwrap().to_string();
         let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -130,7 +132,7 @@ pub async fn community(
                 ])
             }).collect::<Vec<_>>(),
             draft_post_count,
-            ..create_base_ftl_context(&bundle),
+            ftl_lang,
     })?;
         Ok(Html(rendered).into_response())
     }
@@ -180,6 +182,7 @@ pub async fn community_iframe(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let template: minijinja::Template<'_, '_> = state.env.get_template("community_iframe.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -199,7 +202,7 @@ pub async fn community_iframe(
                 ("updated_at".to_string(), post.updated_at.to_string()),
             ])
         }).collect::<Vec<_>>(),
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -308,6 +311,7 @@ pub async fn communities(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.clone().render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -317,7 +321,7 @@ pub async fn communities(
         public_communities,
         participating_communities,
         own_communities,
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered))
@@ -416,12 +420,13 @@ pub async fn create_community_form(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count,
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered))
@@ -469,12 +474,13 @@ pub async fn hx_edit_community(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         community,
         community_id => id,
         domain => state.config.domain.clone(),
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered).into_response())
@@ -553,13 +559,14 @@ pub async fn hx_do_edit_community(
                     .map(|u| u.preferred_language)
                     .unwrap_or_else(|| None);
                 let bundle = get_bundle(&accept_language, user_preferred_language);
+                let ftl_lang = bundle.locales.first().unwrap().to_string();
                 let rendered = template
                     .eval_to_state(context! {
                         current_user => auth_session.user,
                         community => updated_community,
                         community_id => updated_community.id.to_string(),
                         domain => state.config.domain.clone(),
-                        ..create_base_ftl_context(&bundle)
+                        ftl_lang
                     })?
                     .render_block("community_edit_block")?;
 
@@ -614,13 +621,14 @@ pub async fn hx_do_edit_community(
                 .map(|u| u.preferred_language)
                 .unwrap_or_else(|| None);
             let bundle = get_bundle(&accept_language, user_preferred_language);
+            let ftl_lang = bundle.locales.first().unwrap().to_string();
             let rendered = template.render(context! {
                 current_user => auth_session.user,
                 community => current_community,
                 community_id => id,
                 domain => state.config.domain.clone(),
                 error_message => error_message,
-                ..create_base_ftl_context(&bundle)
+                ftl_lang
             })?;
 
             Ok(Html(rendered).into_response())

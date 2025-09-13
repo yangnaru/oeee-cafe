@@ -1,7 +1,7 @@
 {% extends "base.jinja" %}
 {% block title %}
   {{ super() }} | {{
-  ftl_community_drawing_new }} @ {{ community_name }}
+  ftl_get_message("community-drawing-new") }} @ {{ community_name }}
 {% endblock title %}
 {%
 block head %} {{ super() }}
@@ -23,7 +23,7 @@ block head %} {{ super() }}
 {% endblock head %}
 {% block content %}
   <div class="center">
-    <h2>{{ ftl_community_drawing_new }} @ {{ community_name }}</h2>
+    <h2>{{ ftl_get_message("community-drawing-new") }} @ {{ community_name }}</h2>
   </div>
   <div id="cucumber-container">
     <div id="cucumber-canvas-safe"></div>
@@ -51,11 +51,11 @@ block head %} {{ super() }}
           </div>
         </div>
         <div id="cucumber-undo-redo-container">
-          <input type="button" id="cucumber-undo" value="{{ ftl_cucumber_undo }}" />
+          <input type="button" id="cucumber-undo" value="{{ ftl_get_message("cucumber-undo") }}" />
         </div>
       </div>
       <div>
-        <input type="button" id="cucumber-save" value="{{ ftl_cucumber_save }}" />
+        <input type="button" id="cucumber-save" value="{{ ftl_get_message("cucumber-save") }}" />
       </div>
     </div>
   </div>
@@ -152,7 +152,7 @@ block head %} {{ super() }}
         })
         .catch((error) => {
           alert(
-            "{{ ftl_community_drawing_post_error }}"
+            "{{ ftl_get_message("community-drawing-post-error") }}"
           );
         });
       });

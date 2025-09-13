@@ -5,7 +5,7 @@
   {% if post.title %}
     {{ post.title }}
   {% else %}
-    {{ ftl_post_no_title }}
+    {{ ftl_get_message("post-no-title") }}
   {% endif %}
 {% endblock title %}
 {% block head %}
@@ -32,19 +32,19 @@
   <div class="center">
     <div class="post-sidebar">
       <div class="post-main">
-        <p>{{ ftl_post_published_at }}: {{ post.published_at }}</p>
+        <p>{{ ftl_get_message("post-published-at") }}: {{ post.published_at }}</p>
         <p>
-          {{ ftl_post_duration }}: {{ post.paint_duration }}
+          {{ ftl_get_message("post-duration") }}: {{ post.paint_duration }}
           {% if post.replay_filename %}
-            <a href="/@{{ post.login_name }}/{{ post_id }}/replay">{{ ftl_post_replay }}</a>
+            <a href="/@{{ post.login_name }}/{{ post_id }}/replay">{{ ftl_get_message("post-replay") }}</a>
           {% endif %}
         </p>
         <p>HIT: {{ post.viewer_count }}</p>
         <p>
-          {{ ftl_community }}:
+          {{ ftl_get_message("community") }}:
           <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
           {% if current_user.id == post.author_id -%}
-            (<a href="/posts/{{ post_id }}/edit/community">{{ ftl_edit }}</a>)
+            (<a href="/posts/{{ post_id }}/edit/community">{{ ftl_get_message("edit") }}</a>)
           {%- endif %}
         </p>
         {% if post.image_tool == "neo" and post.allow_relay == "true" %}
@@ -56,7 +56,7 @@
                  src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
           </a>
           <p>
-            <i>{{ ftl_post_relay_enabled_notice }}</i>
+            <i>{{ ftl_get_message("post-relay-enabled-notice") }}</i>
           </p>
         {% else %}
           <img class="post-image-full"
@@ -67,12 +67,12 @@
         {% endif %}
         <div class="center">
           <p>
-            {{ ftl_post_author }}: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted fediverse-handle">@{{ post.login_name }}@{{ domain }}</span>
+            {{ ftl_get_message("post-author") }}: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted fediverse-handle">@{{ post.login_name }}@{{ domain }}</span>
           </p>
           {% if collaborative_participants %}
             <div class="collaborative-participants">
               <p>
-                <strong>{{ ftl_post_collaborative_participants }}:</strong>
+                <strong>{{ ftl_get_message("post-collaborative-participants") }}:</strong>
               </p>
               <ul>
                 {% for participant in collaborative_participants %}
@@ -86,25 +86,25 @@
           {% block post_edit_block %}
             <div hx-target="this" hx-swap="outerHTML">
               <p>
-                {{ ftl_post_title }}:
+                {{ ftl_get_message("post-title") }}:
                 {% if post.title %}
                   {{ post.title }}
                 {% else %}
-                  {{ ftl_post_no_title }}
+                  {{ ftl_get_message("post-no-title") }}
                 {% endif %}
                 {% if parent_post_id %}<a href="/@{{ parent_post_author_login_name }}/{{ parent_post_id }}">↵</a>{% endif %}
               </p>
               <p>
-                {{ ftl_post_description }}:
+                {{ ftl_get_message("post-description") }}:
                 <div class="post-content">{{ post.content|markdown|safe }}</div>
               </p>
               {% if current_user.id == post.author_id %}
                 <div class="post-menu">
-                  <button hx-get="/posts/{{ post_id }}/edit">{{ ftl_edit }}</button>
+                  <button hx-get="/posts/{{ post_id }}/edit">{{ ftl_get_message("edit") }}</button>
                   <form hx-delete="/posts/{{ post_id }}"
-                        hx-confirm="{{ ftl_post_delete_confirm }}"
+                        hx-confirm="{{ ftl_get_message("post-delete-confirm") }}"
                         hx-target="body">
-                    <button type="submit">{{ ftl_delete }}</button>
+                    <button type="submit">{{ ftl_get_message("delete") }}</button>
                   </form>
                 </div>
               {% endif %}
@@ -113,7 +113,7 @@
           <div class="post-share">
             <a href="https://twitter.com/share?ref_src=twsrc%5Etfw"
                class="twitter-share-button"
-               data-text="{%- if post.title -%}{{ post.title }}{%- else -%}{{ ftl_post_no_title }}{%- endif -%}"
+               data-text="{%- if post.title -%}{{ post.title }}{%- else -%}{{ ftl_get_message("post-no-title") }}{%- endif -%}"
                data-hashtags="oeee_cafe"
                data-related="oeee_cafe"
                data-show-count="false">Tweet</a><script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
@@ -121,21 +121,21 @@
         </div>
       </div>
       <div class="post-comments">
-        <h2>{{ ftl_post_comments }}</h2>
+        <h2>{{ ftl_get_message("post-comments") }}</h2>
         <div id="comments">
           {% if current_user %}
             <form hx-post="/comments" hx-swap="outerHTML" hx-target="#comments">
               <input type="hidden" name="post_id" value="{{ post_id }}">
               <textarea name="content"></textarea>
-              <button type="submit">{{ ftl_post_comment }}</button>
+              <button type="submit">{{ ftl_get_message("post-comment") }}</button>
             </form>
           {% endif %}
           {% if comments %}
             {{ comments_macro.comments(comments) }}
           {% else %}
             <p>
-              {{ ftl_post_no_comments }}
-              {% if not current_user %}{{ ftl_post_no_comments_signin }}{% endif %}
+              {{ ftl_get_message("post-no-comments") }}
+              {% if not current_user %}{{ ftl_get_message("post-no-comments-signin") }}{% endif %}
             </p>
           {% endif %}
         </div>

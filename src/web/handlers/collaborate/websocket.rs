@@ -3,8 +3,8 @@ use crate::models::user::AuthSession;
 use crate::web::state::AppState;
 use axum::extract::{ws::Message, ws::WebSocket, Path, State, WebSocketUpgrade};
 use axum::response::Response;
-use futures_util::{SinkExt, StreamExt};
 use futures_util::stream::SplitSink;
+use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -70,30 +70,40 @@ pub async fn handle_socket(
     // Create Redis Pub/Sub subscriber for this connection
     let connection_id_clone = connection_id.clone();
     let state_clone = state.clone();
-    
+
     // Create separate Redis subscriber task that will handle incoming Redis messages
     // and send them through a channel to the main WebSocket sending loop
     let (redis_tx, mut redis_rx) = mpsc::unbounded_channel::<Message>();
-    
+
     let redis_task = tokio::spawn(async move {
         let redis_url = state_clone.config.redis_url.clone();
-        match state_clone.redis_state.create_room_subscriber(room_uuid, &redis_url).await {
+        match state_clone
+            .redis_state
+            .create_room_subscriber(room_uuid, &redis_url)
+            .await
+        {
             Ok(mut pubsub) => {
                 loop {
                     match pubsub.on_message().next().await {
                         Some(msg) => {
                             let payload: String = msg.get_payload().unwrap_or_default();
-                            match serde_json::from_str::<super::redis_state::RoomMessage>(&payload) {
+                            match serde_json::from_str::<super::redis_state::RoomMessage>(&payload)
+                            {
                                 Ok(room_msg) => {
                                     // Allow chat messages to echo back to sender for confirmation
                                     // Don't echo other message types back to sender (avoid duplicate drawing commands)
-                                    let should_send = room_msg.from_connection != connection_id_clone || 
-                                        (!room_msg.payload.is_empty() && room_msg.payload[0] == 0x03); // Chat message type
-                                    
+                                    let should_send = room_msg.from_connection
+                                        != connection_id_clone
+                                        || (!room_msg.payload.is_empty()
+                                            && room_msg.payload[0] == 0x03); // Chat message type
+
                                     if should_send {
                                         let ws_message = Message::Binary(room_msg.payload);
                                         if redis_tx.send(ws_message).is_err() {
-                                            debug!("Redis message channel closed for connection {}", connection_id_clone);
+                                            debug!(
+                                                "Redis message channel closed for connection {}",
+                                                connection_id_clone
+                                            );
                                             break;
                                         }
                                     }
@@ -104,14 +114,20 @@ pub async fn handle_socket(
                             }
                         }
                         None => {
-                            debug!("Redis Pub/Sub stream ended for connection {}", connection_id_clone);
+                            debug!(
+                                "Redis Pub/Sub stream ended for connection {}",
+                                connection_id_clone
+                            );
                             break;
                         }
                     }
                 }
             }
             Err(e) => {
-                error!("Failed to create Redis subscriber for connection {}: {}", connection_id_clone, e);
+                error!(
+                    "Failed to create Redis subscriber for connection {}: {}",
+                    connection_id_clone, e
+                );
             }
         }
     });
@@ -126,7 +142,6 @@ pub async fn handle_socket(
         }
     });
 
-
     handle_incoming_messages(
         &mut receiver,
         &connection_id,
@@ -139,7 +154,15 @@ pub async fn handle_socket(
     )
     .await;
 
-    cleanup_connection(&connection_id, &user_login_name, user_id, room_uuid, &db, &state).await;
+    cleanup_connection(
+        &connection_id,
+        &user_login_name,
+        user_id,
+        room_uuid,
+        &db,
+        &state,
+    )
+    .await;
 
     redis_task.abort();
     outgoing_task.abort();
@@ -167,11 +190,13 @@ async fn setup_connection(
 
     // Use atomic capacity check and participant tracking to prevent race conditions
     let join_success = match db::track_participant_with_capacity_check(
-        db, 
-        room_uuid, 
-        user_id, 
-        session_info.max_participants
-    ).await {
+        db,
+        room_uuid,
+        user_id,
+        session_info.max_participants,
+    )
+    .await
+    {
         Ok(success) => success,
         Err(e) => {
             error!("Failed to track participant: {}", e);
@@ -190,13 +215,7 @@ async fn setup_connection(
     db::update_session_activity(state, room_uuid).await;
 
     // Atomically handle all connection management
-    setup_connection_atomically(
-        state, 
-        room_uuid, 
-        user_id, 
-        connection_id, 
-        user_login_name
-    ).await;
+    setup_connection_atomically(state, room_uuid, user_id, connection_id, user_login_name).await;
 
     Ok(session_info.owner_id == user_id)
 }
@@ -210,9 +229,12 @@ async fn setup_connection_atomically(
 ) {
     // With pure Redis Pub/Sub, we don't need local room tracking
     // Each connection is independent with its own Redis subscriber
-    
-    info!("Setting up Redis Pub/Sub connection for user {} in room {}", user_login_name, room_uuid);
-    
+
+    info!(
+        "Setting up Redis Pub/Sub connection for user {} in room {}",
+        user_login_name, room_uuid
+    );
+
     // Register connection in Redis
     let connection_info = super::redis_state::ConnectionInfo {
         connection_id: connection_id.to_string(),
@@ -220,23 +242,32 @@ async fn setup_connection_atomically(
         room_id: room_uuid,
         user_login_name: user_login_name.to_string(),
         server_instance: state.redis_state.get_server_instance_id().to_string(),
-        connected_at: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
-        last_heartbeat: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+        connected_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        last_heartbeat: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
     };
-    
-    if let Err(e) = state.redis_state.register_connection(&connection_info).await {
+
+    if let Err(e) = state
+        .redis_state
+        .register_connection(&connection_info)
+        .await
+    {
         error!("Failed to register connection in Redis: {}", e);
     }
-    
-    // Note: Previously added user to Redis room presence, but now using database 
+
+    // Note: Previously added user to Redis room presence, but now using database
     // for canonical participant ordering via collaborative_sessions_participants table
-    
+
     info!(
         "Completed Redis Pub/Sub setup for connection {} in room {}",
         connection_id, room_uuid
     );
 }
-
 
 async fn send_history_to_new_connection(
     state: &AppState,
@@ -245,7 +276,7 @@ async fn send_history_to_new_connection(
     connection_id: &str,
 ) {
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
-    
+
     match redis_store.get_history(room_uuid).await {
         Ok(history) => {
             for stored_msg in history.iter() {
@@ -346,17 +377,10 @@ async fn process_server_message(
             // 1. Process the join (sends JOIN_RESPONSE via Redis to all participants)
             // 2. Return the original message to be broadcast (but not stored - JOIN messages are ephemeral)
             // 3. Current participants are communicated via JOIN_RESPONSE, not history replay
-            
-            messages::handle_join_message(
-                data,
-                user_id,
-                user_login_name,
-                room_uuid,
-                db,
-                state,
-            )
-            .await;
-            
+
+            messages::handle_join_message(data, user_id, user_login_name, room_uuid, db, state)
+                .await;
+
             // Return the JOIN message to be stored and broadcast via Redis
             Some(msg.clone())
         }
@@ -380,7 +404,7 @@ async fn process_server_message(
                 &connection_id,
             )
             .await;
-            
+
             // Message is already broadcast internally, don't re-broadcast
             None
         }
@@ -402,27 +426,40 @@ async fn process_message_for_history_and_snapshots(
     state: &AppState,
 ) {
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
-    
+
     if messages::should_store_message(msg) {
         debug!(
             "Storing message to Redis for room {} (connection {}): message type = 0x{:02x}",
-            room_uuid, connection_id,
-            if let Message::Binary(data) = msg { 
-                if data.is_empty() { 0x00 } else { data[0] } 
-            } else { 0xFF }
+            room_uuid,
+            connection_id,
+            if let Message::Binary(data) = msg {
+                if data.is_empty() {
+                    0x00
+                } else {
+                    data[0]
+                }
+            } else {
+                0xFF
+            }
         );
-        
+
         // Store message in Redis
         if let Err(e) = redis_store.store_message(room_uuid, msg).await {
-            error!("Failed to store message in Redis for room {}: {}", room_uuid, e);
+            error!(
+                "Failed to store message in Redis for room {}: {}",
+                room_uuid, e
+            );
         } else {
-            debug!("Successfully stored message in Redis for room {}", room_uuid);
-            
+            debug!(
+                "Successfully stored message in Redis for room {}",
+                room_uuid
+            );
+
             // Update last activity cache in Redis
             if let Err(e) = state.redis_state.update_room_activity(room_uuid).await {
                 error!("Failed to update room activity in Redis: {}", e);
             }
-            
+
             // Refresh TTL for the room
             if let Err(e) = redis_store.refresh_ttl(room_uuid).await {
                 error!("Failed to refresh TTL in Redis: {}", e);
@@ -432,8 +469,8 @@ async fn process_message_for_history_and_snapshots(
         debug!(
             "Skipping message storage for room {} (connection {}): message type = 0x{:02x} (filtered out)",
             room_uuid, connection_id,
-            if let Message::Binary(data) = msg { 
-                if data.is_empty() { 0x00 } else { data[0] } 
+            if let Message::Binary(data) = msg {
+                if data.is_empty() { 0x00 } else { data[0] }
             } else { 0xFF }
         );
     }
@@ -485,7 +522,7 @@ async fn count_user_messages_from_redis(
     room_uuid: Uuid,
 ) -> Result<std::collections::HashMap<Uuid, usize>, Box<dyn std::error::Error + Send + Sync>> {
     use std::collections::HashMap;
-    
+
     let history = redis_store.get_history(room_uuid).await?;
     let mut user_message_counts: HashMap<Uuid, usize> = HashMap::new();
 
@@ -493,14 +530,15 @@ async fn count_user_messages_from_redis(
         if let Message::Binary(stored_data) = stored_msg {
             if stored_data.len() >= 17 {
                 let msg_type = stored_data[0];
-                
+
                 // Count user messages for snapshot logic (exclude ephemeral and system messages)
                 if messages::is_client_message(msg_type)
                     || (messages::is_server_message(msg_type)
                         && msg_type != 0x01 // Join (ephemeral)
                         && msg_type != 0x05 // SnapshotRequest
                         && msg_type != 0x06 // Layers  
-                        && msg_type != 0x09) // Leave (ephemeral)
+                        && msg_type != 0x09)
+                // Leave (ephemeral)
                 {
                     if let Ok(msg_user_id) = utils::bytes_to_uuid(&stored_data[1..17]) {
                         *user_message_counts.entry(msg_user_id).or_insert(0) += 1;
@@ -534,11 +572,18 @@ async fn cleanup_connection(
 
     // Unregister connection from Redis
     if let Err(e) = state.redis_state.unregister_connection(connection_id).await {
-        error!("Failed to unregister connection {} from Redis: {}", connection_id, e);
+        error!(
+            "Failed to unregister connection {} from Redis: {}",
+            connection_id, e
+        );
     }
 
     // Check if user has any other connections in this room
-    let room_connections = state.redis_state.get_room_connections(room_uuid).await.unwrap_or_default();
+    let room_connections = state
+        .redis_state
+        .get_room_connections(room_uuid)
+        .await
+        .unwrap_or_default();
     let _user_has_other_connections = {
         let mut has_other = false;
         for conn_id in &room_connections {
@@ -553,7 +598,7 @@ async fn cleanup_connection(
         }
         has_other
     };
-        
+
     // Note: Previously removed user from Redis room presence, but now using database
     // for canonical participant ordering. User remains in collaborative_sessions_participants
     // until they explicitly leave or session ends.
@@ -567,43 +612,64 @@ async fn cleanup_connection(
         match db::get_active_user_count(db, room_uuid).await {
             Ok(active_count) => {
                 if active_count == 0 {
-                        // Safe to remove room since no active participants in database
-                        info!("Removing room {} - no active participants remaining", room_uuid);
-                        // Room cleanup is now handled entirely by Redis state
-                        
-                        // NOTE: We do NOT clean up Redis message history here!
-                        // Redis history should persist even when no one is connected,
-                        // so users can rejoin and see the previous drawing history.
-                        // Redis cleanup only happens when:
-                        // 1. Session is explicitly ended (END_SESSION)
-                        // 2. Session is inactive for extended period (cleanup task)
-                        // 3. Messages expire via TTL
-                        
-                        // Clean up Redis snapshot request trackers for this room
-                        match state.redis_state.cleanup_snapshot_requests(room_uuid).await {
-                            Ok(removed_count) => {
-                                debug!("Cleaned up room {} and removed {} snapshot trackers from Redis", room_uuid, removed_count);
-                            }
-                            Err(e) => {
-                                error!("Failed to cleanup snapshot requests for room {}: {}", room_uuid, e);
-                            }
+                    // Safe to remove room since no active participants in database
+                    info!(
+                        "Removing room {} - no active participants remaining",
+                        room_uuid
+                    );
+                    // Room cleanup is now handled entirely by Redis state
+
+                    // NOTE: We do NOT clean up Redis message history here!
+                    // Redis history should persist even when no one is connected,
+                    // so users can rejoin and see the previous drawing history.
+                    // Redis cleanup only happens when:
+                    // 1. Session is explicitly ended (END_SESSION)
+                    // 2. Session is inactive for extended period (cleanup task)
+                    // 3. Messages expire via TTL
+
+                    // Clean up Redis snapshot request trackers for this room
+                    match state.redis_state.cleanup_snapshot_requests(room_uuid).await {
+                        Ok(removed_count) => {
+                            debug!(
+                                "Cleaned up room {} and removed {} snapshot trackers from Redis",
+                                room_uuid, removed_count
+                            );
                         }
-                        
-                        // Clean up room presence and activity
-                        if let Err(e) = state.redis_state.cleanup_room_state(room_uuid).await {
-                            error!("Failed to cleanup room state for room {}: {}", room_uuid, e);
+                        Err(e) => {
+                            error!(
+                                "Failed to cleanup snapshot requests for room {}: {}",
+                                room_uuid, e
+                            );
                         }
-                    } else {
-                        debug!("Keeping room {} - {} active participants remain in database", room_uuid, active_count);
                     }
-                }
-                Err(e) => {
-                    error!("Failed to check active participants for room cleanup: {}", e);
-                    // On database error, err on the side of caution and keep the room
-                    debug!("Keeping room {} due to database error during cleanup check", room_uuid);
+
+                    // Clean up room presence and activity
+                    if let Err(e) = state.redis_state.cleanup_room_state(room_uuid).await {
+                        error!("Failed to cleanup room state for room {}: {}", room_uuid, e);
+                    }
+                } else {
+                    debug!(
+                        "Keeping room {} - {} active participants remain in database",
+                        room_uuid, active_count
+                    );
                 }
             }
-        } else {
-            debug!("Room {} has {} connections remaining", room_uuid, room_connection_count);
+            Err(e) => {
+                error!(
+                    "Failed to check active participants for room cleanup: {}",
+                    e
+                );
+                // On database error, err on the side of caution and keep the room
+                debug!(
+                    "Keeping room {} due to database error during cleanup check",
+                    room_uuid
+                );
+            }
         }
+    } else {
+        debug!(
+            "Room {} has {} connections remaining",
+            room_uuid, room_connection_count
+        );
+    }
 }

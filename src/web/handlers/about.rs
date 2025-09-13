@@ -1,8 +1,8 @@
+use crate::app_error::AppError;
 use crate::models::post::get_draft_post_count;
 use crate::models::user::{find_users_with_public_posts_and_banner, AuthSession};
 use crate::web::handlers::get_bundle;
 use crate::web::state::AppState;
-use crate::{app_error::AppError, web::handlers::create_base_ftl_context};
 use axum::{extract::State, response::Html};
 
 use minijinja::context;
@@ -33,6 +33,7 @@ pub async fn about(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let template: minijinja::Template<'_, '_> = state.env.get_template("about.jinja")?;
     let rendered: String = template.render(context! {
         current_user => auth_session.user,
@@ -40,7 +41,7 @@ pub async fn about(
         draft_post_count,
         users_with_public_posts_and_banner,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered))

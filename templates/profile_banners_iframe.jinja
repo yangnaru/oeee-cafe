@@ -7,7 +7,7 @@
     {% if followings|length > 0 %}
       {% if
         followings|selectattr("banner_image_filename")|length > 0 %}
-        <h3>{{ ftl_profile_banner }}</h3>
+        <h3>{{ ftl_get_message("profile-banner") }}</h3>
         <div class="banners-grid">
           {% for following in followings|selectattr("banner_image_filename") %}
             <div class="banners-grid-item">

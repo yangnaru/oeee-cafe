@@ -1,11 +1,11 @@
 {% extends "base.jinja" %}
 {% block title %}
-  {{ ftl_brand }}
+  {{ ftl_get_message("brand") }}
 {% endblock title %}
 {% block content %}
   <div class="center">
     {% if non_official_public_community_posts| length > 0 %}
-      <h2 class="home-section-title">{{ ftl_posts_from_public_communities }}</h2>
+      <h2 class="home-section-title">{{ ftl_get_message("posts-from-public-communities") }}</h2>
       <div class="posts-grid">
         {% for post in non_official_public_community_posts %}
           <div class="posts-grid-item">
@@ -20,7 +20,7 @@
         {% endfor %}
       </div>
     {% endif %}
-    <h2 class="home-section-title">{{ ftl_latest_active_communities }}</h2>
+    <h2 class="home-section-title">{{ ftl_get_message("latest-active-communities") }}</h2>
     <div class="community-badges">
       {% for (community, id) in active_public_communities[:10] %}
         <div class="community-badge">
@@ -49,7 +49,7 @@
         </div>
       {% endfor %}
     {% else %}
-      <p>{{ ftl_timeline_empty|safe }}</p>
+      <p>{{ ftl_get_message("timeline-empty")|safe }}</p>
     {% endif %}
   </div>
 {% endblock content %}

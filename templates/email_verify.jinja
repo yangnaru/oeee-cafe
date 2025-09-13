@@ -1,14 +1,14 @@
 <form hx-post="/account/verify-email" hx-swap="outerHTML">
   <input type="hidden" name="challenge_id" value="{{ challenge_id }}" />
   <fieldset>
-    <legend>{{ ftl_account_change_email }}</legend>
+    <legend>{{ ftl_get_message("account-change-email") }}</legend>
     <p>
-      <label for="email">{{ ftl_account_change_email_email }}:</label>
+      <label for="email">{{ ftl_get_message("account-change-email-email") }}:</label>
       <input name="email" id="email" type="email" value="{{ email }}" disabled />
     </p>
     {% if not success %}
       <p>
-        <label for="token">{{ ftl_account_change_email_token }}:</label>
+        <label for="token">{{ ftl_get_message("account-change-email-token") }}:</label>
         <input name="token" id="token" type="text" pattern="\d*" maxlength="6" />
       </p>
     {% endif %}
@@ -20,5 +20,5 @@
       {% endif %}
     {% endif %}
   </fieldset>
-  <input type="submit" value="{{ ftl_account_change_email_verify }}" />
+  <input type="submit" value="{{ ftl_get_message("account-change-email-verify") }}" />
 </form>

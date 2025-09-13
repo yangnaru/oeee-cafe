@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="{{ ftl_lang }}">
+<html lang="{{ ftl_get_message("lang") }}">
   <head>
     <meta charset="utf-8" />
     <title>
       {%- block title -%}
-        {{ ftl_brand }}
+        {{ ftl_get_message("brand") }}
       {%- endblock title -%}
     </title>
     <link rel="stylesheet"

@@ -13,7 +13,7 @@ use crate::models::post::{
     get_draft_post_count,
 };
 use crate::models::user::{find_user_by_id, find_user_by_login_name, AuthSession};
-use crate::web::handlers::{create_base_ftl_context, get_bundle};
+use crate::web::handlers::get_bundle;
 use crate::web::state::AppState;
 use axum::extract::Path;
 use axum::response::IntoResponse;
@@ -54,11 +54,12 @@ pub async fn do_follow_profile(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         user,
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -93,11 +94,12 @@ pub async fn do_unfollow_profile(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         user,
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -168,6 +170,7 @@ pub async fn profile(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -181,7 +184,7 @@ pub async fn profile(
         public_community_posts,
         private_community_posts,
         draft_post_count,
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -210,12 +213,13 @@ pub async fn profile_iframe(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         posts,
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -245,13 +249,14 @@ pub async fn profile_banners_iframe(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         followings,
         user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -296,11 +301,12 @@ pub async fn do_move_link_down(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
             links => links,
-            ..create_base_ftl_context(&bundle),
+            ftl_lang,
         })?
         .render_block("links")?;
     Ok(Html(rendered).into_response())
@@ -345,11 +351,12 @@ pub async fn do_move_link_up(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
             links => links,
-            ..create_base_ftl_context(&bundle),
+            ftl_lang,
         })?
         .render_block("links")?;
     Ok(Html(rendered).into_response())
@@ -398,11 +405,12 @@ pub async fn do_delete_link(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
             links => links,
-            ..create_base_ftl_context(&bundle),
+            ftl_lang,
         })?
         .render_block("links")?;
     Ok(Html(rendered).into_response())
@@ -450,11 +458,12 @@ pub async fn do_add_link(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
             links => links,
-            ..create_base_ftl_context(&bundle),
+            ftl_lang,
         })?
         .render_block("links")?;
     Ok(Html(rendered).into_response())
@@ -493,13 +502,14 @@ pub async fn profile_settings(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         draft_post_count,
         links,
         user,
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -557,12 +567,13 @@ pub async fn do_reply_guestbook_entry(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         user => author,
         entry => guestbook_entry,
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -642,12 +653,13 @@ pub async fn do_write_guestbook_entry(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         user => recipient_user.unwrap(),
         entry => guestbook_entry.unwrap(),
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
     Ok(Html(rendered).into_response())
 }
@@ -696,6 +708,7 @@ pub async fn guestbook(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -705,7 +718,7 @@ pub async fn guestbook(
         draft_post_count,
         is_following => is_current_user_following,
         guestbook_entries,
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered).into_response())

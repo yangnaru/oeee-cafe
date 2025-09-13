@@ -16,7 +16,7 @@
         <p>{{ community.description }}</p>
         {% if current_user.id == community.owner_id %}
           <div class="community-menu">
-            <button hx-get="/communities/{{ community_id }}/edit">{{ ftl_edit }}</button>
+            <button hx-get="/communities/{{ community_id }}/edit">{{ ftl_get_message("edit") }}</button>
           </div>
         {% endif %}
       </div>
@@ -28,16 +28,16 @@
           <input type="hidden" name="tool" value="cucumber" />
           <input type="hidden" name="width" value="640" />
           <input type="hidden" name="height" value="480" />
-          <input type="submit" value="{{ ftl_community_drawing_new }}" />
+          <input type="submit" value="{{ ftl_get_message("community-drawing-new") }}" />
         </form>
       {% else %}
         <form action="/draw" method="post">
           <input type="hidden" name="community_id" value="{{ community_id }}" />
-          <select name="tool" title="{{ ftl_community_drawing_tool }}">
+          <select name="tool" title="{{ ftl_get_message("community-drawing-tool") }}">
             <option value="neo" selected>PaintBBS NEO</option>
             <option value="tegaki">Tegaki</option>
           </select>
-          <select name="width" title="{{ ftl_community_drawing_width }}">
+          <select name="width" title="{{ ftl_get_message("community-drawing-width") }}">
             <option value="300" selected>300</option>
             <option value="350">350</option>
             <option value="400">400</option>
@@ -55,7 +55,7 @@
             <option value="1000">1000</option>
           </select>
           X
-          <select name="height" title="{{ ftl_community_drawing_height }}">
+          <select name="height" title="{{ ftl_get_message("community-drawing-height") }}">
             <option value="300" selected>300</option>
             <option value="350">350</option>
             <option value="400">400</option>
@@ -68,12 +68,12 @@
             <option value="750">750</option>
             <option value="800">800</option>
           </select>
-          <input type="submit" value="{{ ftl_community_drawing_new }}" />
+          <input type="submit" value="{{ ftl_get_message("community-drawing-new") }}" />
         </form>
       {% endif %}
     {% endif %}
     {% if comments %}
-      <h3>{{ ftl_recent_comments }}</h3>
+      <h3>{{ ftl_get_message("recent-comments") }}</h3>
       <div class="comment-list">
         {% for comment in comments %}
           <div class="comment-list-item">
@@ -81,14 +81,14 @@
               {% if comment.post_title %}
                 {{ comment.post_title }}
               {% else %}
-                {{ ftl_post_no_title }}
+                {{ ftl_get_message("post-no-title") }}
               {% endif %}
             </a>: {{ comment.content }}
           </div>
         {% endfor %}
       </div>
     {% endif %}
-    <h3>{{ ftl_recent_drawings }}</h3>
+    <h3>{{ ftl_get_message("recent-drawings") }}</h3>
     {% if posts %}
       <div class="posts-grid">
         {% for post in posts %}
@@ -103,7 +103,7 @@
         {% endfor %}
       </div>
     {% else %}
-      <p>{{ ftl_community_no_posts }}</p>
+      <p>{{ ftl_get_message("community-no-posts") }}</p>
     {% endif %}
   </div>
 {% endblock content %}

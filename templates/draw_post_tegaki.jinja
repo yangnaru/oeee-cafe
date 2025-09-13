@@ -2,7 +2,7 @@
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
-    <title>{{ ftl_brand }} | {{ ftl_community_drawing_new }} ({{ community_name }})</title>
+    <title>{{ ftl_get_message("brand") }} | {{ ftl_get_message("community-drawing-new") }} ({{ community_name }})</title>
     <meta name="keywords" content="오이카페, 오에카키, 커뮤니티, お絵かき" />
     <meta name="description" content="오이카페는 오에카키 커뮤니티입니다. お絵かできるOEEEカフェです。" />
     <link rel="stylesheet"
@@ -64,7 +64,7 @@
           })
           .catch((error) => {
             alert(
-              "{{ ftl_community_drawing_post_error }}"
+              "{{ ftl_get_message("community-drawing-post-error") }}"
             );
           });
 

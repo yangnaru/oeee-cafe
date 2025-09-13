@@ -1,37 +1,37 @@
 {% extends "base.jinja" %}
 {% block content %}
     <div class="center">
-        <h2>{{ ftl_profile_settings }}</h2>
-        <h3>{{ ftl_profile_link_management }}</h3>
+        <h2>{{ ftl_get_message("profile-settings") }}</h2>
+        <h3>{{ ftl_get_message("profile-link-management") }}</h3>
         {% block links %}
             {% if not user.email_verified_at %}
-                <p>{{ ftl_profile_link_requires_verified_email }}</p>
+                <p>{{ ftl_get_message("profile-link-requires-verified-email") }}</p>
             {% else %}
                 <div id="links">
                     <ul>
                         {% for link in links %}
                             <li>
-                                <a href="{{ link.url }}" target="_blank">{{ link.description }}</a> ({{ ftl_profile_link_order }}: {{ link.index }})
+                                <a href="{{ link.url }}" target="_blank">{{ link.description }}</a> ({{ ftl_get_message("profile-link-order") }}: {{ link.index }})
                                 <button hx-post="/@{{ user.login_name }}/settings/links/{{ link.id }}/up"
-                                        hx-target="#links">{{ ftl_profile_link_move_up }}</button>
+                                        hx-target="#links">{{ ftl_get_message("profile-link-move-up") }}</button>
                                 <button hx-post="/@{{ user.login_name }}/settings/links/{{ link.id }}/down"
-                                        hx-target="#links">{{ ftl_profile_link_move_down }}</button>
+                                        hx-target="#links">{{ ftl_get_message("profile-link-move-down") }}</button>
                                 <button hx-delete="/@{{ user.login_name }}/settings/links/{{ link.id }}"
                                         hx-target="#links"
-                                        hx-confirm="{{ ftl_profile_link_delete_confirm }}">
-                                    {{ ftl_profile_link_delete }}
+                                        hx-confirm="{{ ftl_get_message("profile-link-delete-confirm") }}">
+                                    {{ ftl_get_message("profile-link-delete") }}
                                 </button>
                             </li>
                         {% endfor %}
                     </ul>
                     <form hx-post="/@{{ user.login_name }}/settings/links" hx-target="#links">
                         <fieldset>
-                            <legend>{{ ftl_profile_link_add }}</legend>
+                            <legend>{{ ftl_get_message("profile-link-add") }}</legend>
                             <input type="url" name="url" placeholder="https://example.com">
                             <input type="text"
                                    name="description"
-                                   placeholder="{{ ftl_profile_link_description }}">
-                            <input type="submit" value="{{ ftl_profile_link_add }}">
+                                   placeholder="{{ ftl_get_message("profile-link-description") }}">
+                            <input type="submit" value="{{ ftl_get_message("profile-link-add") }}">
                         </fieldset>
                     </form>
                 </div>

@@ -1,10 +1,10 @@
 {% extends "base.jinja" %}
 {% block title %}
-  {{ super() }} | {{ ftl_timeline }}
+  {{ super() }} | {{ ftl_get_message("timeline") }}
 {% endblock title %}
 {% block content %}
   <div class="center">
-    <h2>{{ ftl_timeline_my }}</h2>
+    <h2>{{ ftl_get_message("timeline-my") }}</h2>
     {% if posts|length > 0 %}
       <div class="posts-grid">
         {% for post in posts %}
@@ -19,7 +19,7 @@
         {% endfor %}
       </div>
     {% else %}
-      <p>{{ ftl_timeline_empty|safe }}</p>
+      <p>{{ ftl_get_message("timeline-empty")|safe }}</p>
     {% endif %}
   </div>
 {% endblock content %}

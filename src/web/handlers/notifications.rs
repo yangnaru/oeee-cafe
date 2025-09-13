@@ -1,8 +1,5 @@
 use super::{get_bundle, ExtractAcceptLanguage};
-use crate::{
-    app_error::AppError, models::comment::find_comments_to_posts_by_author,
-    web::handlers::create_base_ftl_context,
-};
+use crate::{app_error::AppError, models::comment::find_comments_to_posts_by_author};
 use axum::{
     extract::State,
     response::{Html, IntoResponse},
@@ -38,6 +35,7 @@ pub async fn list_notifications(
         })
         .collect::<Vec<_>>();
 
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let template: minijinja::Template<'_, '_> = state.env.get_template("notifications.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -45,7 +43,7 @@ pub async fn list_notifications(
         messages => messages.into_iter().collect::<Vec<_>>(),
         comments => comments_with_post_id,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered).into_response())

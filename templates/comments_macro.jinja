@@ -2,11 +2,11 @@
   {% for comment in comments %}
     <div class="comment">
       <p>
-        {{ ftl_comment_created_at }}: {{ comment.created_at|datetimeformat(format="short",
+        {{ ftl_get_message("comment-created-at") }}: {{ comment.created_at|datetimeformat(format="short",
          tz="Asia/Seoul") }}
       </p>
       <p>
-        {{ ftl_display_name }}:
+        {{ ftl_get_message("display-name") }}:
         <a href="/@{{ comment.user_login_name }}">{{ comment.user_display_name }}</a>
         <span class="muted">@{{ comment.user_login_name }}</span>
       </p>

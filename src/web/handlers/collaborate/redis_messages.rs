@@ -23,27 +23,32 @@ impl RedisMessageStore {
         room_uuid: Uuid,
         message: &Message,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        debug!("Attempting to store message in Redis for room {}", room_uuid);
-        
+        debug!(
+            "Attempting to store message in Redis for room {}",
+            room_uuid
+        );
+
         let mut conn = self.pool.get().await.map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             e
         })?;
-        
+
         let key = format!("{}{}", MESSAGE_HISTORY_PREFIX, room_uuid);
         debug!("Using Redis key: {}", key);
-        
+
         let message_data = match message {
             Message::Binary(data) => {
-                debug!("Storing binary message of {} bytes (type: 0x{:02x})", 
-                       data.len(), 
-                       if data.is_empty() { 0x00 } else { data[0] });
+                debug!(
+                    "Storing binary message of {} bytes (type: 0x{:02x})",
+                    data.len(),
+                    if data.is_empty() { 0x00 } else { data[0] }
+                );
                 data.clone()
-            },
+            }
             Message::Text(text) => {
                 debug!("Storing text message of {} bytes", text.len());
                 text.as_bytes().to_vec()
-            },
+            }
             _ => {
                 debug!("Skipping non-binary/text message type");
                 return Ok(()); // Skip other message types
@@ -51,26 +56,30 @@ impl RedisMessageStore {
         };
 
         // Add message to Redis list (LPUSH for FIFO order)
-        conn.lpush::<_, _, ()>(&key, &message_data).await.map_err(|e| {
-            error!("Failed to LPUSH to Redis key {}: {}", key, e);
-            e
-        })?;
+        conn.lpush::<_, _, ()>(&key, &message_data)
+            .await
+            .map_err(|e| {
+                error!("Failed to LPUSH to Redis key {}: {}", key, e);
+                e
+            })?;
         debug!("Successfully LPUSH message to Redis key: {}", key);
-        
+
         // Set TTL on the key (refreshes TTL if key exists)
-        conn.expire::<_, ()>(&key, MESSAGE_HISTORY_TTL as i64).await.map_err(|e| {
-            error!("Failed to set TTL on Redis key {}: {}", key, e);
-            e
-        })?;
+        conn.expire::<_, ()>(&key, MESSAGE_HISTORY_TTL as i64)
+            .await
+            .map_err(|e| {
+                error!("Failed to set TTL on Redis key {}: {}", key, e);
+                e
+            })?;
         debug!("Successfully set TTL on Redis key: {}", key);
-        
+
         // Enforce message count limit
         let current_length: usize = conn.llen(&key).await.map_err(|e| {
             error!("Failed to get length of Redis key {}: {}", key, e);
             e
         })?;
         debug!("Current Redis list length for {}: {}", key, current_length);
-        
+
         if current_length > MAX_REDIS_MESSAGES {
             // Remove excess messages from the right (oldest)
             let to_remove = current_length - MAX_REDIS_MESSAGES;
@@ -83,7 +92,10 @@ impl RedisMessageStore {
             );
         }
 
-        debug!("Message storage completed successfully for room {}", room_uuid);
+        debug!(
+            "Message storage completed successfully for room {}",
+            room_uuid
+        );
         Ok(())
     }
 
@@ -93,17 +105,21 @@ impl RedisMessageStore {
     ) -> Result<Vec<Message>, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", MESSAGE_HISTORY_PREFIX, room_uuid);
-        
+
         // Get all messages from Redis list (LRANGE with reverse order to maintain chronological)
         let messages: Vec<Vec<u8>> = conn.lrange(&key, 0, -1).await?;
-        
+
         // Convert back to Messages and reverse (since we used LPUSH, newest is first)
         let mut result = Vec::new();
         for data in messages.into_iter().rev() {
             result.push(Message::Binary(data));
         }
-        
-        debug!("Retrieved {} messages from Redis for room {}", result.len(), room_uuid);
+
+        debug!(
+            "Retrieved {} messages from Redis for room {}",
+            result.len(),
+            room_uuid
+        );
         Ok(result)
     }
 
@@ -115,13 +131,13 @@ impl RedisMessageStore {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", MESSAGE_HISTORY_PREFIX, room_uuid);
-        
+
         // Get all messages
         let messages: Vec<Vec<u8>> = conn.lrange(&key, 0, -1).await?;
-        
+
         let initial_count = messages.len();
         let mut filtered_messages = Vec::new();
-        
+
         // Filter messages (same logic as the original function)
         for data in &messages {
             if data.is_empty() {
@@ -133,11 +149,13 @@ impl RedisMessageStore {
 
             // Keep server messages (except certain snapshot ones)
             if is_server_message(msg_type) {
-                if msg_type == 0x02 { // Snapshot message
+                if msg_type == 0x02 {
+                    // Snapshot message
                     if data.len() >= 18 {
                         if let Ok(stored_snapshot_user) = bytes_to_uuid(&data[1..17]) {
                             let stored_snapshot_layer = data[17];
-                            if !(stored_snapshot_user == user_id && stored_snapshot_layer == layer) {
+                            if !(stored_snapshot_user == user_id && stored_snapshot_layer == layer)
+                            {
                                 filtered_messages.push(data.clone());
                             }
                         }
@@ -159,7 +177,7 @@ impl RedisMessageStore {
                     }
 
                     match msg_type {
-                        0x13 => {}, // POINTER_UP - remove
+                        0x13 => {} // POINTER_UP - remove
                         0x10..=0x12 => {
                             // DRAW_LINE, DRAW_POINT, FILL
                             if data.len() >= 18 {
@@ -182,7 +200,7 @@ impl RedisMessageStore {
         }
 
         let removed_count = initial_count - filtered_messages.len();
-        
+
         if removed_count > 0 {
             // Replace the entire list with filtered messages
             conn.del::<_, ()>(&key).await?;
@@ -192,9 +210,10 @@ impl RedisMessageStore {
                     conn.lpush::<_, _, ()>(&key, &data).await?;
                 }
                 // Reset TTL
-                conn.expire::<_, ()>(&key, MESSAGE_HISTORY_TTL as i64).await?;
+                conn.expire::<_, ()>(&key, MESSAGE_HISTORY_TTL as i64)
+                    .await?;
             }
-            
+
             debug!(
                 "Removed {} obsolete messages from Redis for user {} layer {} in room {}",
                 removed_count, user_id, layer, room_uuid
@@ -210,12 +229,12 @@ impl RedisMessageStore {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", MESSAGE_HISTORY_PREFIX, room_uuid);
-        
+
         let deleted: bool = conn.del(&key).await?;
         if deleted {
             debug!("Cleaned up Redis message history for room {}", room_uuid);
         }
-        
+
         Ok(())
     }
 
@@ -225,25 +244,25 @@ impl RedisMessageStore {
     ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", MESSAGE_HISTORY_PREFIX, room_uuid);
-        
+
         // Get current message count
         let current_length: usize = conn.llen(&key).await?;
-        
+
         if current_length <= MAX_REDIS_MESSAGES {
             return Ok(0);
         }
-        
+
         // Remove excess messages from the right (oldest)
         let to_remove = current_length - MAX_REDIS_MESSAGES;
         for _ in 0..to_remove {
             let _: Option<Vec<u8>> = conn.rpop(&key, None).await?;
         }
-        
+
         debug!(
             "Enforced history limits for room {}: removed {} messages (was {}, now {})",
             room_uuid, to_remove, current_length, MAX_REDIS_MESSAGES
         );
-        
+
         Ok(to_remove)
     }
 
@@ -253,8 +272,9 @@ impl RedisMessageStore {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", MESSAGE_HISTORY_PREFIX, room_uuid);
-        
-        conn.expire::<_, ()>(&key, MESSAGE_HISTORY_TTL as i64).await?;
+
+        conn.expire::<_, ()>(&key, MESSAGE_HISTORY_TTL as i64)
+            .await?;
         Ok(())
     }
 }

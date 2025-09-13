@@ -1,11 +1,11 @@
 {% extends "base.jinja" %}
 {% block title %}
-  {{ super() }} | {{ ftl_brand }}?
+  {{ super() }} | {{ ftl_get_message("brand") }}?
 {% endblock title %}
 {% block content %}
   <div class="center">
-    <h2>{{ ftl_brand }}?</h2>
-    <p>{{ ftl_about }}</p>
+    <h2>{{ ftl_get_message("brand") }}?</h2>
+    <p>{{ ftl_get_message("about") }}</p>
     <h3>한국어 SNS</h3>
     <ul>
       <li>
@@ -25,7 +25,7 @@
       </li>
     </ul>
     {% if users_with_public_posts_and_banner|length > 0 %}
-      <h3>{{ ftl_user_contributors }}</h3>
+      <h3>{{ ftl_get_message("user-contributors") }}</h3>
       <div class="banners-grid">
         {% for user in users_with_public_posts_and_banner %}
           <div class="banners-grid-item">

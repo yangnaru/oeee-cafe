@@ -1,10 +1,10 @@
 {% extends "base.jinja" %}
 {% block title %}
-  {{ super() }} | {{ ftl_community }}
+  {{ super() }} | {{ ftl_get_message("community") }}
 {% endblock title %}
 {% block content %}
   <div class="center">
-    <h2>{{ ftl_official_communities }}</h2>
+    <h2>{{ ftl_get_message("official-communities") }}</h2>
     {% if official_communities %}
       <ul>
         {% for community in official_communities %}
@@ -14,11 +14,11 @@
         {% endfor %}
       </ul>
     {% else %}
-      <p>{{ ftl_official_communities_nil }}</p>
+      <p>{{ ftl_get_message("official-communities-nil") }}</p>
     {% endif %}
     {% if current_user %}
       {% if participating_communities %}
-        <h2>{{ ftl_participating_community }}</h2>
+        <h2>{{ ftl_get_message("participating-community") }}</h2>
         <ul>
           {% for community in participating_communities %}
             <li>
@@ -27,11 +27,11 @@
           {% endfor %}
         </ul>
       {% else %}
-        <p>{{ ftl_active_communities_nil }}</p>
+        <p>{{ ftl_get_message("active-communities-nil") }}</p>
       {% endif %}
     {% endif %}
     {% if public_communities %}
-      <h2>{{ ftl_latest_active_public_community }}</h2>
+      <h2>{{ ftl_get_message("latest-active-public-community") }}</h2>
       <ul>
         {% for community in public_communities %}
           <li>
@@ -40,10 +40,10 @@
         {% endfor %}
       </ul>
     {% else %}
-      <p>{{ ftl_active_communities_nil }}</p>
+      <p>{{ ftl_get_message("active-communities-nil") }}</p>
     {% endif %}
     {% if current_user %}
-      <h2>{{ ftl_my_communities }}</h2>
+      <h2>{{ ftl_get_message("my-communities") }}</h2>
       {% if own_communities %}
         <ul>
           {% for community in own_communities %}
@@ -53,9 +53,9 @@
           {% endfor %}
         </ul>
       {% else %}
-        <p>{{ ftl_my_communities_nil }}</p>
+        <p>{{ ftl_get_message("my-communities-nil") }}</p>
       {% endif %}
-      <a href="/communities/new">{{ ftl_create_community }}</a>
+      <a href="/communities/new">{{ ftl_get_message("create-community") }}</a>
     {% endif %}
   </div>
 {% endblock content %}

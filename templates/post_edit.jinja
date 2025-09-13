@@ -2,27 +2,27 @@
       hx-target="this"
       hx-swap="outerHTML">
     <div>
-        <label>{{ ftl_post_title }}:</label>
+        <label>{{ ftl_get_message("post-title") }}:</label>
         <input type="text" name="title" value="{{ post.title }}">
     </div>
     <div class="form-group">
-        <label>{{ ftl_post_description }}:</label>
+        <label>{{ ftl_get_message("post-description") }}:</label>
         <textarea name="content">{{ post.content }}</textarea>
     </div>
     <div>
-        <label>{{ ftl_sensitive }}:</label>
+        <label>{{ ftl_get_message("sensitive") }}:</label>
         <input type="checkbox"
                name="is_sensitive"
                {% if post.is_sensitive == "true" %}checked{% endif %}>
     </div>
     <div>
-        <label>{{ ftl_allow_relay }}:</label>
+        <label>{{ ftl_get_message("allow-relay") }}:</label>
         <input type="checkbox"
                name="allow_relay"
                {% if post.allow_relay == "true" %}checked{% endif %}>
     </div>
     <div class="post-menu">
-        <button class="btn" hx-get="/posts/{{ post_id }}">{{ ftl_cancel }}</button>
-        <button class="btn">{{ ftl_save }}</button>
+        <button class="btn" hx-get="/posts/{{ post_id }}">{{ ftl_get_message("cancel") }}</button>
+        <button class="btn">{{ ftl_get_message("save") }}</button>
     </div>
 </form>

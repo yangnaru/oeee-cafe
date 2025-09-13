@@ -3,7 +3,7 @@ use crate::models::banner::{create_banner, BannerDraft};
 use crate::models::community::find_community_by_id;
 use crate::models::post::{create_post, get_draft_post_count, PostDraft, Tool};
 use crate::models::user::AuthSession;
-use crate::web::handlers::{create_base_ftl_context, get_bundle};
+use crate::web::handlers::get_bundle;
 use crate::web::state::AppState;
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::error::SdkError;
@@ -76,6 +76,7 @@ pub async fn start_draw(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -88,7 +89,7 @@ pub async fn start_draw(
         community_id => input.community_id,
         community_slug => community.slug,
         draft_post_count,
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered))
@@ -424,11 +425,12 @@ pub async fn start_banner_draw(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         width => 200,
         height => 40,
         current_user => auth_session.user,
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered))

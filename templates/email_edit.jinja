@@ -1,16 +1,16 @@
 <form hx-post="/account/request-verify-email" hx-swap="outerHTML">
   <fieldset>
-    <legend>{{ ftl_account_change_email }}</legend>
+    <legend>{{ ftl_get_message("account-change-email") }}</legend>
     {% if current_user.email_verified_at %}
       <p>
-        {{ ftl_account_change_email_verified_at }}: {{ current_user.email_verified_at|dateformat(format="short",
+        {{ ftl_get_message("account-change-email-verified-at") }}: {{ current_user.email_verified_at|dateformat(format="short",
          tz="Asia/Seoul") }}
       </p>
     {% else %}
-      <p class="dangerous">{{ ftl_account_email_not_verified_warning }}</p>
+      <p class="dangerous">{{ ftl_get_message("account-email-not-verified-warning") }}</p>
     {% endif %}
     <p>
-      <label for="email">{{ ftl_account_change_email_email }}:</label>
+      <label for="email">{{ ftl_get_message("account-change-email-email") }}:</label>
       <input name="email"
              id="email"
              type="email"
@@ -18,5 +18,5 @@
     </p>
     {% if message %}<p>{{ message }}</p>{% endif %}
   </fieldset>
-  <input type="submit" value="{{ ftl_account_verify_email_request }}" />
+  <input type="submit" value="{{ ftl_get_message("account-verify-email-request") }}" />
 </form>

@@ -1,6 +1,6 @@
 use crate::app_error::AppError;
 use crate::models::user::AuthSession;
-use crate::web::handlers::{create_base_ftl_context, get_bundle, ExtractAcceptLanguage};
+use crate::web::handlers::{get_bundle, ExtractAcceptLanguage};
 use crate::web::state::AppState;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -134,6 +134,7 @@ pub async fn collaborate_lobby(
     let template = state.env.get_template("collaborate_lobby.jinja")?;
     let user_preferred_language = user.preferred_language.clone();
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
 
     let rendered = template.render(context! {
         current_user => user,
@@ -143,7 +144,7 @@ pub async fn collaborate_lobby(
             ("300x300", "300×300"),
             ("1024x768", "1024×768"),
         ],
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered).into_response())

@@ -13,9 +13,7 @@ use crate::web::handlers::activitypub::{
     create_note_from_post, create_updated_note_from_post, generate_object_id, Announce, Create,
     Note, UpdateNote,
 };
-use crate::web::handlers::{
-    create_base_ftl_context, get_bundle, parse_id_with_legacy_support, ParsedId,
-};
+use crate::web::handlers::{get_bundle, parse_id_with_legacy_support, ParsedId};
 use crate::web::state::AppState;
 use activitypub_federation::fetch::object_id::ObjectId;
 use anyhow::Error;
@@ -297,6 +295,7 @@ pub async fn post_relay_view(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         parent_post => post.clone().unwrap(),
         current_user => auth_session.user,
@@ -309,7 +308,7 @@ pub async fn post_relay_view(
         foreground_color => community.foreground_color,
         community_id => community_id.to_string(),
         draft_post_count,
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered).into_response())
@@ -424,6 +423,7 @@ pub async fn post_view(
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
+        let ftl_lang = bundle.locales.first().unwrap().to_string();
         let rendered = template
             .eval_to_state(context! {
                 current_user => auth_session.user,
@@ -431,12 +431,13 @@ pub async fn post_view(
                     post.as_ref()
                 },
                 post_id => id,
-                ..create_base_ftl_context(&bundle)
+                ftl_lang
             })?
             .render_block("post_edit_block")
             .unwrap();
         Ok(Html(rendered).into_response())
     } else {
+        let ftl_lang = bundle.locales.first().unwrap().to_string();
         let rendered = template
             .render(context! {
                 current_user => auth_session.user,
@@ -458,7 +459,7 @@ pub async fn post_view(
                 domain => state.config.domain.clone(),
                 comments,
                 collaborative_participants,
-                ..create_base_ftl_context(&bundle)
+                ftl_lang
             })
             .unwrap();
         Ok(Html(rendered).into_response())
@@ -523,6 +524,7 @@ pub async fn post_replay_view(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
@@ -534,7 +536,7 @@ pub async fn post_replay_view(
             post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
             community_id,
             draft_post_count,
-            ..create_base_ftl_context(&bundle),
+            ftl_lang,
         })
         .unwrap();
     Ok(Html(rendered).into_response())
@@ -606,6 +608,7 @@ pub async fn post_publish_form(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -616,7 +619,7 @@ pub async fn post_publish_form(
             post
         },
         draft_post_count,
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered).into_response())
@@ -749,13 +752,14 @@ pub async fn draft_posts(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         posts => posts,
         draft_post_count,
-        ..create_base_ftl_context(&bundle),
+        ftl_lang,
     })?;
 
     Ok(Html(rendered))
@@ -785,6 +789,7 @@ pub async fn do_create_comment(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
@@ -805,7 +810,7 @@ pub async fn do_create_comment(
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_comments.jinja")?;
     let rendered = template.render(context! {
         comments => comments,
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
     Ok(Html(rendered).into_response())
 }
@@ -869,6 +874,7 @@ pub async fn post_edit_community(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -876,7 +882,7 @@ pub async fn post_edit_community(
         post,
         post_id => id,
         known_communities_with_community_id,
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered).into_response())
@@ -955,12 +961,13 @@ pub async fn hx_edit_post(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         post,
         post_id => id,
-        ..create_base_ftl_context(&bundle)
+        ftl_lang
     })?;
 
     Ok(Html(rendered).into_response())
@@ -1046,13 +1053,14 @@ pub async fn hx_do_edit_post(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .eval_to_state(context! {
             current_user => auth_session.user,
             default_community_id => state.config.default_community_id.clone(),
             post,
             post_id => id,
-            ..create_base_ftl_context(&bundle)
+            ftl_lang
         })?
         .render_block("post_edit_block")?;
 
@@ -1267,6 +1275,7 @@ pub async fn post_view_by_login_name(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
 
     if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
         let rendered = template
@@ -1276,7 +1285,7 @@ pub async fn post_view_by_login_name(
                     post.as_ref()
                 },
                 post_id => post_id,
-                ..create_base_ftl_context(&bundle)
+                ftl_lang
             })?
             .render_block("post_edit_block")
             .unwrap();
@@ -1303,7 +1312,7 @@ pub async fn post_view_by_login_name(
                 domain => state.config.domain.clone(),
                 comments,
                 collaborative_participants,
-                ..create_base_ftl_context(&bundle)
+                ftl_lang
             })
             .unwrap();
         Ok(Html(rendered).into_response())
@@ -1468,6 +1477,7 @@ pub async fn post_relay_view_by_login_name(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .render(context! {
             parent_post => post.clone().unwrap(),
@@ -1481,7 +1491,7 @@ pub async fn post_relay_view_by_login_name(
             foreground_color => community.foreground_color,
             community_id => community_id.to_string(),
             draft_post_count,
-            ..create_base_ftl_context(&bundle)
+            ftl_lang
         })
         .unwrap();
     Ok(Html(rendered).into_response())
@@ -1555,6 +1565,7 @@ pub async fn post_replay_view_by_login_name(
         .map(|u| u.preferred_language)
         .unwrap_or_else(|| None);
     let bundle = get_bundle(&accept_language, user_preferred_language);
+    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
@@ -1565,7 +1576,7 @@ pub async fn post_replay_view_by_login_name(
             post_id => post_id,
             community_id,
             draft_post_count,
-            ..create_base_ftl_context(&bundle)
+            ftl_lang
         })
         .unwrap();
     Ok(Html(rendered).into_response())

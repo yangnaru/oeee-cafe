@@ -35,18 +35,18 @@
              src="{{ r2_public_endpoint_url }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
       {% endif %}
     {% else %}
-      {% if user.id == current_user.id %}<a href="/banners/draw" class="button">{{ ftl_profile_draw_banner }}</a>{% endif %}
+      {% if user.id == current_user.id %}<a href="/banners/draw" class="button">{{ ftl_get_message("profile-draw-banner") }}</a>{% endif %}
     {% endif %}
   </div>
 </div>
 {% if current_user and current_user.id != user.id %}
   <form hx-post="/@{{ user.login_name }}/guestbook" hx-swap="outerHTML">
-    <textarea name="content" title="{{ ftl_gusetbook }}"></textarea>
-    <input type="submit" value="{{ ftl_guestbook_write }}" />
+    <textarea name="content" title="{{ ftl_get_message("guestbook") }}"></textarea>
+    <input type="submit" value="{{ ftl_get_message("guestbook-write") }}" />
   </form>
 {% endif %}
 {% if guestbook_entries|length == 0 %}
-  <p class="muted">{{ ftl_guestbook_empty }}</p>
+  <p class="muted">{{ ftl_get_message("guestbook-empty") }}</p>
 {% else %}
   <div class="guestbook-entries">
     {% for entry in guestbook_entries %}

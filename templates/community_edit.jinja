@@ -7,7 +7,7 @@
     </div>
     {% endif %}
     <div>
-        <label>{{ ftl_community_name }}:</label>
+        <label>{{ ftl_get_message("community-name") }}:</label>
         <input type="text" name="name" value="{{ community.name }}">
     </div>
     <div>
@@ -15,17 +15,17 @@
         <input type="text" name="slug" value="{{ community.slug }}">
     </div>
     <div class="form-group">
-        <label>{{ ftl_community_description }}:</label>
+        <label>{{ ftl_get_message("community-description") }}:</label>
         <textarea name="description">{{ community.description }}</textarea>
     </div>
     <div>
-        <label>{{ ftl_private_community }}:</label>
+        <label>{{ ftl_get_message("private-community") }}:</label>
         <input type="checkbox"
                name="is_private"
                {% if community.is_private == true %}checked{% endif %}>
     </div>
     <div class="post-menu">
-        <button class="btn" hx-get="/communities/{{ community_id }}">{{ ftl_cancel }}</button>
-        <button class="btn">{{ ftl_save }}</button>
+        <button class="btn" hx-get="/communities/{{ community_id }}">{{ ftl_get_message("cancel") }}</button>
+        <button class="btn">{{ ftl_get_message("save") }}</button>
     </div>
 </form>

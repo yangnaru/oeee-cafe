@@ -1,10 +1,10 @@
 {% extends "base.jinja" %}
 {% block title %}
   {{ super() }} | {{
-  ftl_profile_draw_banner }}
+  ftl_get_message("profile-draw-banner") }}
 {% endblock title %}
 {% block content %}
-  <h2 class="center">{{ ftl_profile_draw_banner }}</h2>
+  <h2 class="center">{{ ftl_get_message("profile-draw-banner") }}</h2>
   <link rel="stylesheet"
         href="{{ '/static/neo/dist/neo.css' | cachebuster | safe }}"
         type="text/css" />

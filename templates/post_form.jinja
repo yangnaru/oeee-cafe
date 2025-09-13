@@ -1,40 +1,40 @@
 {% extends "base.jinja" %}
 {% block content %}
   <div class="center">
-    <p>{{ ftl_post_created_at }}: {{ post.created_at }}</p>
-    <p>{{ ftl_post_duration }}: {{ post.paint_duration }}</p>
+    <p>{{ ftl_get_message("post-created-at") }}: {{ post.created_at }}</p>
+    <p>{{ ftl_get_message("post-duration") }}: {{ post.paint_duration }}</p>
     <img width="{{ post.image_width }}"
          height="{{ post.image_height }}"
-         alt="{{ ftl_draft_post }}"
+         alt="{{ ftl_get_message("draft-post") }}"
          src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
     <form action="/posts/publish" method="post">
       <input type="hidden" name="post_id" value="{{ post.id }}" />
       <p>
-        {{ ftl_community }}:
+        {{ ftl_get_message("community") }}:
         <a href="{{ link }}">{{ post.community_name }}</a>
       </p>
       <p>
-        <label for="title">{{ ftl_post_title }}:</label>
+        <label for="title">{{ ftl_get_message("post-title") }}:</label>
         <input type="text" name="title" />
       </p>
       <p>
-        <label for="content">{{ ftl_post_description }}:</label>
+        <label for="content">{{ ftl_get_message("post-description") }}:</label>
         <textarea name="content"></textarea>
       </p>
       <p>
-        <label for="is_sensitive">{{ ftl_sensitive }}:</label>
+        <label for="is_sensitive">{{ ftl_get_message("sensitive") }}:</label>
         <input type="checkbox" name="is_sensitive" />
       </p>
       <div>
-        <label>{{ ftl_allow_relay }}:</label>
+        <label>{{ ftl_get_message("allow-relay") }}:</label>
         <input type="checkbox" name="allow_relay" checked />
       </div>
-      <input type="submit" value="{{ ftl_post_publish }}" />
+      <input type="submit" value="{{ ftl_get_message("post-publish") }}" />
     </form>
     <form hx-delete="/posts/{{ post_id }}"
-          hx-confirm="{{ ftl_post_delete_confirm }}"
+          hx-confirm="{{ ftl_get_message("post-delete-confirm") }}"
           hx-target="body">
-      <button type="submit">{{ ftl_delete }}</button>
+      <button type="submit">{{ ftl_get_message("delete") }}</button>
     </form>
   </div>
 {% endblock content %}

@@ -1,15 +1,15 @@
 {% extends "base.jinja" %}
 {% block title %}
-  {{ super() }} | {{ ftl_create_community }}
+  {{ super() }} | {{ ftl_get_message("create-community") }}
 {% endblock title %}
 {% block content %}
   <div class="center">
-    <h2>{{ ftl_create_community }}</h2>
+    <h2>{{ ftl_get_message("create-community") }}</h2>
     <form method="post" action="/communities">
       <fieldset>
-        <legend>{{ ftl_new_community }}</legend>
+        <legend>{{ ftl_get_message("new-community") }}</legend>
         <p>
-          <label for="name">{{ ftl_community_name }}:</label>
+          <label for="name">{{ ftl_get_message("community-name") }}:</label>
           <input name="name" id="name" />
         </p>
         <p>
@@ -17,16 +17,16 @@
           <input name="slug" id="slug" required />
         </p>
         <p>
-          <label for="email">{{ ftl_community_description }}:</label>
+          <label for="email">{{ ftl_get_message("community-description") }}:</label>
           <textarea name="description" id="description"></textarea>
         </p>
         <p>
-          <label for="is_private">{{ ftl_private_community }}:</label>
+          <label for="is_private">{{ ftl_get_message("private-community") }}:</label>
           <input type="checkbox" name="is_private" id="is_private" />
-          ({{ ftl_private_community_description }})
+          ({{ ftl_get_message("private-community-description") }})
         </p>
       </fieldset>
-      <input type="submit" value="{{ ftl_create_community }}" />
+      <input type="submit" value="{{ ftl_get_message("create-community") }}" />
     </form>
   </div>
 {% endblock content %}

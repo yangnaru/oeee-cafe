@@ -5,7 +5,7 @@
   {% if post.title %}
     {{ post.title }}
   {% else %}
-    {{ ftl_post_no_title }}
+    {{ ftl_get_message("post-no-title") }}
   {% endif %}
 {% endblock title %}
 {% block head %}
@@ -31,7 +31,7 @@
     <div class="post-sidebar">
       <div class="post-main">
         <p>
-          {{ ftl_community }}:
+          {{ ftl_get_message("community") }}:
           <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
         </p>
         <img class="post-image"
@@ -56,7 +56,7 @@
               <td>
                 <form method="post" action="/posts/{{ post_id }}/edit/community">
                   <input type="hidden" name="community_id" value="{{ community.id }}" />
-                  <input type="submit" value="{{ ftl_post_move_community }}" />
+                  <input type="submit" value="{{ ftl_get_message("post-move-community") }}" />
                 </form>
               </td>
             </tr>

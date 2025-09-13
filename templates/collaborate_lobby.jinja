@@ -1,50 +1,50 @@
 {% extends "base.jinja" %}
 {% block title %}
-  {{ super() }} | {{ ftl_collaborate_title }}
+  {{ super() }} | {{ ftl_get_message("collaborate-title") }}
 {% endblock title %}
 {% block content %}
   <div class="center">
-    <h2>{{ ftl_collaborate_title }}</h2>
+    <h2>{{ ftl_get_message("collaborate-title") }}</h2>
     <div class="create-session-section">
-      <h3>{{ ftl_collaborate_create_session }}</h3>
+      <h3>{{ ftl_get_message("collaborate-create-session") }}</h3>
       <form id="create-session-form" method="post" action="/collaborate">
         <input type="hidden" name="community_id" value="{{ default_community_id }}">
         <p>
-          <label for="canvas-size">{{ ftl_collaborate_canvas_size_label }}:</label>
+          <label for="canvas-size">{{ ftl_get_message("collaborate-canvas-size-label") }}:</label>
           <select id="canvas-size" name="canvas-size" required>
             {% for size_value, size_label in canvas_sizes %}<option value="{{ size_value }}">{{ size_label }}</option>{% endfor %}
           </select>
         </p>
         <p>
-          <label for="session-title">{{ ftl_collaborate_session_title_label }}:</label>
+          <label for="session-title">{{ ftl_get_message("collaborate-session-title-label") }}:</label>
           <input type="text"
                  id="session-title"
                  name="title"
                  maxlength="100"
-                 placeholder="{{ ftl_collaborate_session_title_placeholder }}">
+                 placeholder="{{ ftl_get_message("collaborate-session-title-placeholder") }}">
         </p>
         <p>
-          <label for="max-participants">{{ ftl_collaborate_max_participants_label }}:</label>
+          <label for="max-participants">{{ ftl_get_message("collaborate-max-participants-label") }}:</label>
           <select id="max-participants" name="max_participants" required>
-            <option value="2">2 {{ ftl_collaborate_participants }}</option>
-            <option value="4" selected>4 {{ ftl_collaborate_participants }}</option>
-            <option value="6">6 {{ ftl_collaborate_participants }}</option>
-            <option value="8">8 {{ ftl_collaborate_participants }}</option>
+            <option value="2">2 {{ ftl_get_message("collaborate-participants") }}</option>
+            <option value="4" selected>4 {{ ftl_get_message("collaborate-participants") }}</option>
+            <option value="6">6 {{ ftl_get_message("collaborate-participants") }}</option>
+            <option value="8">8 {{ ftl_get_message("collaborate-participants") }}</option>
           </select>
         </p>
         <p>
           <label for="is-public">
             <input type="checkbox" id="is-public" name="is_public" checked>
-            {{ ftl_collaborate_public_session_label }}
+            {{ ftl_get_message("collaborate-public-session-label") }}
           </label>
         </p>
-        <small>{{ ftl_collaborate_public_session_description }}</small>
-        <input type="submit" value="{{ ftl_collaborate_create_button }}">
+        <small>{{ ftl_get_message("collaborate-public-session-description") }}</small>
+        <input type="submit" value="{{ ftl_get_message("collaborate-create-button") }}">
       </form>
     </div>
     {% if active_sessions|length > 0 %}
       <div class="active-sessions-section">
-        <h3>{{ ftl_collaborate_active_sessions }}</h3>
+        <h3>{{ ftl_get_message("collaborate-active-sessions") }}</h3>
         <div class="sessions-grid">
           {% for session in active_sessions %}
             <div class="session-card">
@@ -52,7 +52,7 @@
                 {% if session.title %}
                   <h4>{{ session.title }}</h4>
                 {% else %}
-                  <h4>{{ ftl_post_no_title }}</h4>
+                  <h4>{{ ftl_get_message("post-no-title") }}</h4>
                 {% endif %}
                 <small>
                   <a href="/@{{ session.owner_login_name }}">@{{ session.owner_login_name }}</a>
@@ -63,16 +63,16 @@
                   <span class="canvas-size">{{ session.width }}×{{ session.height }}</span>
                   <span class="participant-count">
                     {% if session.participant_count == 1 %}
-                      {{ ftl_collaborate_session_participants_singular }}
+                      {{ ftl_get_message("collaborate-session-participants-singular") }}
                     {% else %}
-                      {{ session.participant_count }}{{ ftl_collaborate_session_participants_plural }}
+                      {{ session.participant_count }}{{ ftl_get_message("collaborate-session-participants-plural") }}
                     {% endif %}
                   </span>
-                  <span class="session-time">{{ ftl_collaborate_session_created }} {{ session.created_at|dateformat(format="short", tz="Asia/Seoul") }}</span>
+                  <span class="session-time">{{ ftl_get_message("collaborate-session-created") }} {{ session.created_at|dateformat(format="short", tz="Asia/Seoul") }}</span>
                 </div>
               </div>
               <div class="session-actions">
-                <a href="/collaborate/{{ session.id }}">{{ ftl_collaborate_join_session }}</a>
+                <a href="/collaborate/{{ session.id }}">{{ ftl_get_message("collaborate-join-session") }}</a>
               </div>
             </div>
           {% endfor %}
@@ -80,7 +80,7 @@
       </div>
     {% else %}
       <div class="no-sessions">
-        <p>{{ ftl_collaborate_no_sessions }}</p>
+        <p>{{ ftl_get_message("collaborate-no-sessions") }}</p>
       </div>
     {% endif %}
   </div>

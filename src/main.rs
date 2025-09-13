@@ -1,7 +1,9 @@
-use minijinja::{path_loader, Environment};
+use fluent::bundle::FluentBundle;
+use minijinja::{path_loader, Environment, State};
+use oeee_cafe::locale::LOCALES;
 use oeee_cafe::web::app::App;
-use oeee_cafe::web::state::AppState;
 use oeee_cafe::web::handlers::collaborate::redis_state::RedisStateManager;
+use oeee_cafe::web::state::AppState;
 use oeee_cafe::AppConfig;
 use std::env::args;
 use std::path::PathBuf;
@@ -57,6 +59,36 @@ fn main() {
                 oeee_cafe::markdown_utils::process_markdown_content(&value)
             }
             env.add_filter("markdown", markdown_to_html);
+
+            fn ftl_get_message(state: &State, message_id: String) -> String {
+                // Get the current language from template context
+                let lang = match state.lookup("ftl_lang") {
+                    Some(lang_val) => lang_val.as_str().unwrap_or("ko").to_string(),
+                    None => "ko".to_string(),
+                };
+
+                // Get the appropriate Fluent resource
+                let ftl = LOCALES
+                    .get(&lang)
+                    .unwrap_or_else(|| LOCALES.get("ko").unwrap());
+
+                // Create bundle
+                let mut bundle = FluentBundle::new_concurrent(vec![lang.parse().unwrap()]);
+                bundle.add_resource(ftl).expect("Failed to add a resource.");
+
+                // Get and format the message
+                match bundle.get_message(&message_id) {
+                    Some(message) => match message.value() {
+                        Some(pattern) => bundle
+                            .format_pattern(pattern, None, &mut vec![])
+                            .to_string(),
+                        None => message_id,
+                    },
+                    None => message_id,
+                }
+            }
+            env.add_function("ftl_get_message", ftl_get_message);
+
             env.set_loader(path_loader(&template_path));
 
             let db_pool = cfg.connect_database().await.unwrap_or_else(|e| {

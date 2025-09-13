@@ -107,7 +107,7 @@ pub async fn track_participant_with_capacity_check(
     max_participants: i32,
 ) -> Result<bool, sqlx::Error> {
     let mut tx = db.begin().await?;
-    
+
     // First, lock the session row to prevent concurrent modifications
     let _session = sqlx::query!(
         r#"
@@ -120,13 +120,13 @@ pub async fn track_participant_with_capacity_check(
     )
     .fetch_optional(&mut *tx)
     .await?;
-    
+
     // If session doesn't exist or has ended, fail
     if _session.is_none() {
         tx.rollback().await?;
         return Ok(false);
     }
-    
+
     // Check if user is already a participant (existing participants can always rejoin)
     let existing_participant = sqlx::query_scalar!(
         r#"
@@ -141,7 +141,7 @@ pub async fn track_participant_with_capacity_check(
     .fetch_one(&mut *tx)
     .await?
     .unwrap_or(false); // Only unwrap the Option<bool>, not the Result
-    
+
     if !existing_participant {
         // For new participants, check capacity
         let active_user_count = sqlx::query_scalar!(
@@ -154,13 +154,13 @@ pub async fn track_participant_with_capacity_check(
         )
         .fetch_one(&mut *tx)
         .await?;
-        
+
         if active_user_count >= max_participants as i64 {
             tx.rollback().await?;
             return Ok(false);
         }
     }
-    
+
     // Add or reactivate the participant
     sqlx::query!(
         r#"
@@ -175,7 +175,7 @@ pub async fn track_participant_with_capacity_check(
     )
     .execute(&mut *tx)
     .await?;
-    
+
     tx.commit().await?;
     Ok(true)
 }
@@ -282,7 +282,7 @@ pub async fn save_session_to_post(
     state: AppState,
 ) -> Result<(Uuid, String), Box<dyn std::error::Error + Send + Sync>> {
     let mut tx = db.begin().await?;
-    
+
     // Lock the session row and check if it's already saved atomically
     let session = sqlx::query!(
         r#"
@@ -300,7 +300,7 @@ pub async fn save_session_to_post(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or("Session not found or not owned by user")?;
-    
+
     // Check if already saved while holding the lock
     if session.saved_post_id.is_some() {
         tx.rollback().await?;
