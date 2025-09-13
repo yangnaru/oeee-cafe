@@ -44,7 +44,7 @@ pub async fn handle_socket(
     let db = &state.db_pool;
 
     let is_owner = match setup_connection(
-        &db,
+        db,
         room_uuid,
         user_id,
         &user_login_name,
@@ -149,7 +149,7 @@ pub async fn handle_socket(
         user_id,
         room_uuid,
         is_owner,
-        &db,
+        db,
         &state,
     )
     .await;
@@ -159,7 +159,7 @@ pub async fn handle_socket(
         &user_login_name,
         user_id,
         room_uuid,
-        &db,
+        db,
         &state,
     )
     .await;
@@ -401,7 +401,7 @@ async fn process_server_message(
                 db,
                 state,
                 msg,
-                &connection_id,
+                connection_id,
             )
             .await;
 

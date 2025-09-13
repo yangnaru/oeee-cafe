@@ -95,7 +95,7 @@ impl LayersMessage {
             + self
                 .participants
                 .iter()
-                .map(|(_, name, _)| 16 + 2 + name.as_bytes().len() + 8)
+                .map(|(_, name, _)| 16 + 2 + name.len() + 8)
                 .sum::<usize>();
 
         let mut buffer = Vec::with_capacity(total_size);

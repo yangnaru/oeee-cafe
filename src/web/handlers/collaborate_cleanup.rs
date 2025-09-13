@@ -28,19 +28,19 @@ pub async fn cleanup_collaborative_sessions(state: AppState) {
         let db = &state.db_pool;
 
         // Step 1: Sync in-memory activity cache to database (batch update)
-        if let Err(e) = sync_activity_to_database(&state, &db, &mut sessions_synced).await {
+        if let Err(e) = sync_activity_to_database(&state, db, &mut sessions_synced).await {
             error!("Failed to sync activity to database: {}", e);
         }
 
         // Step 2: Clean up ended sessions (those with ended_at set)
-        if let Err(e) = cleanup_ended_sessions(&state, &db, &mut ended_sessions_cleaned).await {
+        if let Err(e) = cleanup_ended_sessions(&state, db, &mut ended_sessions_cleaned).await {
             error!("Failed to clean up ended sessions: {}", e);
         }
 
         // Step 3: Clean up inactive sessions (no activity for threshold duration)
         if let Err(e) = cleanup_inactive_sessions(
             &state,
-            &db,
+            db,
             inactive_threshold,
             &mut inactive_sessions_cleaned,
         )
