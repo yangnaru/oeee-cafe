@@ -4,6 +4,7 @@
         "target": "es6",
         "strict": true,
         "esModuleInterop": true,
+        "moduleResolution": "node",
         "lib": ["DOM", "ESNext"],
     },
     "include": ["*.ts"]
