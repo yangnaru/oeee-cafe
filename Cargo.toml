@@ -16,7 +16,7 @@ debug = true
 [dependencies]
 activitypub_federation = { version = "0.6.5", features = ["axum"] }
 activitystreams-kinds = "0.3.0"
-anyhow = "1.0.81"
+anyhow = "1.0.99"
 argon2 = { version = "0.5.3", features = ["password-hash", "std"] }
 async-trait = "0.1.89"
 aws-sdk-s3 = "1.19.1"
