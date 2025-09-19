@@ -45,7 +45,7 @@ markdown = "1.0.0"
 minijinja = { version = "1.0.12", features = ["loader"] }
 minijinja-contrib = { version = "1.0.12", features = ["datetime", "timezone"] }
 rand = "0.8.5"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.12", features = ["json"] }
 rpassword = "7.3.1"
 sentry = { version = "0.32.2", features = ["anyhow"] }
 serde = { version = "1.0.197", features = ["derive"] }
