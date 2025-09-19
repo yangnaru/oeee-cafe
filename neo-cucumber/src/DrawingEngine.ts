@@ -171,7 +171,7 @@ export class DrawingEngine {
 
     // Push current layer data to canvas
     const imageData = new ImageData(
-      layerData,
+      new Uint8ClampedArray(layerData),
       this.imageWidth,
       this.imageHeight
     );
@@ -214,7 +214,7 @@ export class DrawingEngine {
 
     if (domCtx && layerData) {
       const imageData = new ImageData(
-        layerData,
+        new Uint8ClampedArray(layerData),
         this.imageWidth,
         this.imageHeight
       );
@@ -743,7 +743,7 @@ export class DrawingEngine {
     if (ctx) {
       ctx.imageSmoothingEnabled = false;
       ctx.putImageData(
-        new ImageData(this.compositeBuffer, this.imageWidth, this.imageHeight),
+        new ImageData(new Uint8ClampedArray(this.compositeBuffer), this.imageWidth, this.imageHeight),
         0,
         0
       );

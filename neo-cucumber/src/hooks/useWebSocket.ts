@@ -716,7 +716,7 @@ export const useWebSocket = ({
 
             // Decode PNG data to ImageData
             try {
-              const blob = new Blob([message.pngData], { type: "image/png" });
+              const blob = new Blob([new Uint8Array(message.pngData)], { type: "image/png" });
               const img = new Image();
               const canvas = document.createElement("canvas");
               canvas.width = canvasMeta.width;

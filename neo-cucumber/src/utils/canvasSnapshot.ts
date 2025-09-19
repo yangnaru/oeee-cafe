@@ -21,7 +21,7 @@ export async function layerToPngBlob(
   }
 
   // Create ImageData from the layer
-  const imageData = new ImageData(layer, width, height);
+  const imageData = new ImageData(new Uint8ClampedArray(layer), width, height);
   ctx.putImageData(imageData, 0, 0);
 
   // Convert to PNG blob
@@ -75,7 +75,7 @@ export async function pngDataToLayer(
     };
 
     // Create blob URL from PNG data
-    const blob = new Blob([pngData], { type: "image/png" });
+    const blob = new Blob([new Uint8Array(pngData)], { type: "image/png" });
     const url = URL.createObjectURL(blob);
 
     img.onload = () => {

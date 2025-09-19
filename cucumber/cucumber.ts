@@ -210,7 +210,7 @@ export default class Cucumber {
 			new Uint8Array([w % 0x100, Math.floor(w / 0x100)]),
 			new Uint8Array([h % 0x100, Math.floor(h / 0x100)]),
 			new Uint8Array(4),
-			compressedData,
+			new Uint8Array(compressedData),
 		]);
 	}
 
