@@ -21,7 +21,7 @@ argon2 = { version = "0.5.3", features = ["password-hash", "std"] }
 async-trait = "0.1.89"
 aws-sdk-s3 = "1.19.1"
 axum = { version = "0.7.4", features = ["macros", "multipart", "ws"] }
-axum-login = "0.14.0"
+axum-login = "0.16.0"
 axum-macros = "0.5.0"
 axum-messages = "0.5.0"
 chrono = { version = "0.4.42", features = ["serde"] }
