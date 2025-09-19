@@ -63,7 +63,7 @@ tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 unic-langid = "0.9.4"
 url = "2.5.7"
-uuid = { version = "1.7.0", features = ["serde"] }
+uuid = { version = "1.18.1", features = ["serde"] }
 redis = { version = "0.32.5", features = ["aio", "tokio-comp"] }
 bb8-redis = "0.24.0"
 
