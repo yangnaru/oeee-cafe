@@ -12,8 +12,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::Level;
 
 fn main() {
-    let _guard = sentry::init(("https://6f202f7747ec1610bddefdb78d0d771d@o4506172058959872.ingest.us.sentry.io/4506955685298176", sentry::ClientOptions {
+    let _guard = sentry::init(("https://d8284c2171832794baf0bdaace92c55f@o4504757655764992.ingest.us.sentry.io/4510046127194112", sentry::ClientOptions {
         release: sentry::release_name!(),
+        // Capture user IPs and potentially sensitive headers when using HTTP server integrations
+        // see https://docs.sentry.io/platforms/rust/data-management/data-collected for more info
+        send_default_pii: true,
         ..Default::default()
       }));
 
