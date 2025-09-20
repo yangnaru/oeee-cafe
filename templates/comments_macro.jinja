@@ -7,8 +7,8 @@
       </p>
       <p>
         {{ ftl_get_message("display-name") }}:
-        <a href="/@{{ comment.user_login_name }}">{{ comment.user_display_name }}</a>
-        <span class="muted">@{{ comment.user_login_name }}</span>
+        <a href="{{ comment.actor_handle }}">{{ comment.actor_name }}</a>
+        <span class="muted">{{ comment.actor_handle }}</span>
       </p>
       <div>{{ comment.content|markdown|safe }}</div>
     </div>

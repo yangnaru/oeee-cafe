@@ -107,8 +107,8 @@ pub async fn community(
             |comment| {
                 HashMap::<String, String>::from_iter(vec![
                     ("id".to_string(), comment.id.to_string().to_string()),
-                    ("user_login_name".to_string(), comment.user_login_name.clone().to_string()),
-                    ("user_display_name".to_string(), comment.user_display_name.clone().to_string()),
+                    ("actor_handle".to_string(), comment.actor_handle.clone().to_string()),
+                    ("actor_name".to_string(), comment.actor_name.clone().to_string()),
                     ("post_title".to_string(), comment.post_title.clone().unwrap_or_default().to_string()),
                     ("post_author_login_name".to_string(), comment.post_author_login_name.clone().to_string()),
                     ("post_id".to_string(), comment.post_id.to_string().to_string()),

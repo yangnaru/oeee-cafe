@@ -795,10 +795,15 @@ pub async fn do_create_comment(
     let mut tx = db.begin().await?;
     let user_id = auth_session.user.unwrap().id;
     let post_id = Uuid::parse_str(&form.post_id).unwrap();
+
+    // Get the actor for this user
+    let actor = Actor::find_by_user_id(&mut tx, user_id).await?
+        .ok_or_else(|| anyhow::anyhow!("No actor found for user"))?;
+
     let _ = create_comment(
         &mut tx,
         CommentDraft {
-            user_id,
+            actor_id: actor.id,
             post_id,
             content: form.content,
         },
