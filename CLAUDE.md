@@ -6,6 +6,8 @@ Don't try to run the development server. Just run `cargo check` if you need to c
 
 When running cargo commands, use the environment variable `DATABASE_URL=postgresql:///oeee_cafe`.
 
+When running psql commands, specify the database name like `psql oeee_cafe`.
+
 When creating SQLx migrations, use the command `sqlx migrate add`.
 
 When connecting to PostgreSQL via command line, use `psql oeee_cafe`.
