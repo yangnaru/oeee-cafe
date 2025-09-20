@@ -806,6 +806,7 @@ pub async fn do_create_comment(
             actor_id: actor.id,
             post_id,
             content: form.content,
+            content_html: None,
         },
     )
     .await;

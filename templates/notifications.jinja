@@ -25,7 +25,11 @@
               <a href="{{ comment.actor_handle }}">{{ comment.actor_name }}</a>
               <span class="muted">{{ comment.actor_handle }}</span>
             </p>
-            <pre>{{ comment.content }}</pre>
+            {% if comment.content_html %}
+              <div>{{ comment.content_html|safe }}</div>
+            {% else %}
+              <pre>{{ comment.content }}</pre>
+            {% endif %}
           </div>
         </div>
       {% endfor %}

@@ -16,6 +16,7 @@ use activitystreams_kinds::activity::{
 };
 use activitystreams_kinds::actor::GroupType;
 use activitystreams_kinds::object::NoteType;
+use ammonia;
 use axum::extract::{Path, Query};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
@@ -28,12 +29,132 @@ use uuid::Uuid;
 use crate::app_error::AppError;
 use crate::markdown_utils::process_markdown_content;
 use crate::models::actor::{Actor, ActorType};
+use crate::models::comment::{
+    create_comment_from_activitypub, delete_comment_by_iri, find_comment_by_iri,
+};
 use crate::models::community::find_community_by_slug;
 use crate::models::follow;
 use crate::models::image::find_image_by_id;
 use crate::models::post::find_post_by_id;
 use crate::models::user::find_user_by_login_name;
 use crate::web::state::AppState;
+
+// Custom deserializers for flexible ActivityPub field formats
+fn string_or_vec_deser<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde_json::Value;
+    let v = Value::deserialize(deserializer)?;
+    match v {
+        Value::String(s) => Ok(vec![s]),
+        Value::Array(arr) => {
+            let mut result = Vec::new();
+            for item in arr {
+                if let Value::String(s) = item {
+                    result.push(s);
+                }
+            }
+            Ok(result)
+        }
+        _ => Ok(Vec::new()),
+    }
+}
+
+fn content_or_contents_deser<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde_json::Value;
+    let v = Value::deserialize(deserializer)?;
+    match v {
+        Value::String(s) => Ok(Some(s)),
+        Value::Array(arr) => {
+            // Take the first string from the array if available
+            for item in arr {
+                if let Value::String(s) = item {
+                    return Ok(Some(s));
+                }
+            }
+            Ok(None)
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Extract content from ActivityPub Note object
+/// Returns (markdown_content, html_content)
+fn extract_note_content(note: &Note) -> (String, Option<String>) {
+    // Try to get HTML content from contents field or content field
+    let raw_html_content = note.content.clone();
+
+    // Sanitize HTML content if present using ammonia defaults
+    let html_content = raw_html_content.map(|html| {
+        let sanitized = ammonia::clean(&html);
+
+        tracing::debug!("Sanitized HTML content: original length {}, sanitized length {}",
+                       html.len(), sanitized.len());
+
+        if html != sanitized {
+            tracing::info!("HTML content was sanitized - potentially dangerous content removed");
+        }
+
+        sanitized
+    });
+
+    // Try to get markdown content from source field
+    let markdown_content = if let Some(source) = &note.source {
+        // Parse source as object with content and mediaType
+        if let Ok(source_obj) = serde_json::from_value::<serde_json::Map<String, Value>>(source.clone()) {
+            if let (Some(Value::String(content)), Some(Value::String(media_type))) =
+                (source_obj.get("content"), source_obj.get("mediaType")) {
+                if media_type == "text/markdown" || media_type == "text/plain" {
+                    content.clone()
+                } else {
+                    // Fallback to sanitized HTML content if available, or "No content"
+                    html_content.clone().unwrap_or_else(|| "No content".to_string())
+                }
+            } else {
+                // Fallback to sanitized HTML content if available, or "No content"
+                html_content.clone().unwrap_or_else(|| "No content".to_string())
+            }
+        } else {
+            // Fallback to sanitized HTML content if available, or "No content"
+            html_content.clone().unwrap_or_else(|| "No content".to_string())
+        }
+    } else {
+        // No source field, use sanitized HTML content as fallback for markdown too
+        html_content.clone().unwrap_or_else(|| "No content".to_string())
+    };
+
+    (markdown_content, html_content)
+}
+
+fn tag_or_vec_deser<'de, D>(deserializer: D) -> Result<Vec<Tag>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde_json::Value;
+    let v = Value::deserialize(deserializer)?;
+    match v {
+        Value::Object(_) => {
+            // Single tag object
+            let tag: Tag = serde_json::from_value(v).map_err(serde::de::Error::custom)?;
+            Ok(vec![tag])
+        }
+        Value::Array(arr) => {
+            // Array of tag objects
+            let mut result = Vec::new();
+            for item in arr {
+                if let Ok(tag) = serde_json::from_value::<Tag>(item) {
+                    result.push(tag);
+                }
+            }
+            Ok(result)
+        }
+        _ => Ok(Vec::new()),
+    }
+}
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -416,8 +537,26 @@ pub async fn activitypub_post_user_inbox(
     data: Data<AppState>,
     activity_data: ActivityData,
 ) -> impl IntoResponse {
-    receive_activity::<WithContext<PersonAcceptedActivities>, Actor, AppState>(activity_data, &data)
-        .await
+    tracing::info!("=== USER INBOX RECEIVED ACTIVITY ===");
+
+    let result = receive_activity::<WithContext<PersonAcceptedActivities>, Actor, AppState>(
+        activity_data,
+        &data,
+    )
+    .await;
+
+    if let Err(ref e) = result {
+        tracing::error!("Activity processing failed: {:?}", e);
+        let error_str = format!("{:?}", e);
+        if error_str.contains("data did not match any variant") {
+            tracing::error!("This appears to be an enum variant matching error - the activity JSON structure doesn't match any of our defined variants");
+            tracing::error!("This usually means there's a field mismatch in our Create, Follow, Undo, Update, or Delete structs");
+        }
+    } else {
+        tracing::info!("Activity processed successfully");
+    }
+
+    result
 }
 
 pub async fn activitypub_post_community_inbox(
@@ -433,6 +572,7 @@ pub async fn activitypub_post_community_inbox(
 #[serde(untagged)]
 #[enum_delegate::implement(ActivityHandler)]
 pub enum PersonAcceptedActivities {
+    Create(Create),
     Follow(Follow),
     Undo(Undo),
     Update(Update),
@@ -672,17 +812,42 @@ pub struct Attachment {
 #[serde(rename_all = "camelCase")]
 pub struct Note {
     pub id: Url,
-    r#type: NoteType,
-    attributed_to: ObjectId<Actor>,
-    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    r#type: Option<NoteType>,
+    #[serde(alias = "attributedTo", alias = "attribution", skip_serializing_if = "Option::is_none")]
+    attributed_to: Option<ObjectId<Actor>>,
+    #[serde(alias = "contents", skip_serializing_if = "Option::is_none", deserialize_with = "content_or_contents_deser")]
+    content: Option<String>,
+    #[serde(alias = "tos", default)]
     to: Vec<String>,
+    #[serde(default, deserialize_with = "string_or_vec_deser")]
     cc: Vec<String>,
-    published: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    published: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     updated: Option<String>,
-    url: Url,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    url: Option<Url>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     attachment: Vec<Attachment>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "inReplyTo")]
+    in_reply_to: Option<Url>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "replyTarget")]
+    reply_target: Option<Url>,
+    #[serde(alias = "tags", skip_serializing_if = "Vec::is_empty", default, deserialize_with = "tag_or_vec_deser")]
+    tag: Vec<Tag>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source: Option<serde_json::Value>,
+    #[serde(flatten)]
+    extra: std::collections::HashMap<String, serde_json::Value>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Tag {
+    r#type: String,
+    href: Option<Url>,
+    name: Option<String>,
 }
 
 impl Note {
@@ -698,15 +863,20 @@ impl Note {
     ) -> Note {
         Note {
             id,
-            r#type: Default::default(),
-            attributed_to,
-            content,
+            r#type: Some(Default::default()),
+            attributed_to: Some(attributed_to),
+            content: Some(content),
             to,
             cc,
-            published,
+            published: Some(published),
             updated: None,
-            url,
+            url: Some(url),
             attachment,
+            in_reply_to: None,
+            reply_target: None,
+            tag: Vec::new(),
+            source: None,
+            extra: std::collections::HashMap::new(),
         }
     }
 
@@ -723,15 +893,20 @@ impl Note {
     ) -> Note {
         Note {
             id,
-            r#type: Default::default(),
-            attributed_to,
-            content,
+            r#type: Some(Default::default()),
+            attributed_to: Some(attributed_to),
+            content: Some(content),
             to,
             cc,
-            published,
+            published: Some(published),
             updated: Some(updated),
-            url,
+            url: Some(url),
             attachment,
+            in_reply_to: None,
+            reply_target: None,
+            tag: Vec::new(),
+            source: None,
+            extra: std::collections::HashMap::new(),
         }
     }
 }
@@ -743,9 +918,14 @@ pub struct Create {
     object: Note,
     r#type: CreateType,
     id: Url,
+    #[serde(default)]
     to: Vec<String>,
+    #[serde(default, deserialize_with = "string_or_vec_deser")]
     cc: Vec<String>,
-    published: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    published: Option<String>,
+    #[serde(flatten)]
+    extra: std::collections::HashMap<String, serde_json::Value>,
 }
 
 impl Create {
@@ -764,7 +944,8 @@ impl Create {
             id,
             to,
             cc,
-            published,
+            published: Some(published),
+            extra: std::collections::HashMap::new(),
         }
     }
 }
@@ -786,11 +967,108 @@ impl ActivityHandler for Create {
         Ok(())
     }
 
-    async fn receive(self, _data: &Data<Self::DataType>) -> Result<(), Self::Error> {
-        // Create activities are typically sent outbound, not received
-        // If we wanted to handle incoming Create activities (e.g., from other servers),
-        // we would implement the logic here to store the post/note
-        tracing::info!("Received Create activity: {:?}", self);
+    async fn receive(self, data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        tracing::info!("=== RECEIVED CREATE ACTIVITY ===");
+        tracing::info!("Actor: {}", self.actor.inner());
+        tracing::info!("Object ID: {}", self.object.id);
+        tracing::info!(
+            "Object content preview: {}",
+            self.object.content.as_ref().map(|c| {
+                if c.len() > 100 {
+                    format!("{}...", &c[..100])
+                } else {
+                    c.clone()
+                }
+            }).unwrap_or_else(|| "No content".to_string())
+        );
+        tracing::info!("in_reply_to: {:?}", self.object.in_reply_to);
+        tracing::info!("reply_target: {:?}", self.object.reply_target);
+        tracing::info!("================================");
+
+        let db = &data.app_data().db_pool;
+        let mut tx = db.begin().await?;
+
+        // Check if this is a reply to a local post
+        // Support both in_reply_to and reply_target (different ActivityPub implementations use different names)
+        let reply_target_url = self
+            .object
+            .in_reply_to
+            .as_ref()
+            .or(self.object.reply_target.as_ref());
+
+        if let Some(reply_url) = reply_target_url {
+            let reply_url_str = reply_url.to_string();
+
+            // Check if this is replying to a local post URL pattern
+            // Support both user post URLs (https://domain/@username/post-id) and AP post URLs (https://domain/ap/posts/post-id)
+            let user_post_prefix = format!("https://{}/@", data.app_data().config.domain);
+            let ap_post_prefix = format!("https://{}/ap/posts/", data.app_data().config.domain);
+
+            let post_id = if reply_url_str.starts_with(&user_post_prefix) {
+                // Extract from URLs like https://domain/@username/post-id
+                let path_part = &reply_url_str[user_post_prefix.len()..];
+                if let Some(slash_pos) = path_part.find('/') {
+                    Some(&path_part[slash_pos + 1..])
+                } else {
+                    None
+                }
+            } else if reply_url_str.starts_with(&ap_post_prefix) {
+                // Extract from URLs like https://domain/ap/posts/post-id
+                Some(&reply_url_str[ap_post_prefix.len()..])
+            } else {
+                None
+            };
+
+            if let Some(post_id_str) = post_id {
+                if let Ok(post_id) = Uuid::parse_str(post_id_str) {
+                    // Verify the post exists
+                    if let Some(_post) = find_post_by_id(&mut tx, post_id).await? {
+                        // Get the actor who sent this comment
+                        let actor = Actor::read_from_id(self.actor.inner().clone(), data).await?;
+
+                        if let Some(actor) = actor {
+                            // Extract both markdown and HTML content from the ActivityPub note
+                            let (markdown_content, html_content) = extract_note_content(&self.object);
+
+                            let comment = create_comment_from_activitypub(
+                                &mut tx,
+                                post_id,
+                                actor.id,
+                                markdown_content,
+                                html_content,
+                                self.object.id.to_string(),
+                            )
+                            .await;
+
+                            match comment {
+                                Ok(_) => {
+                                    tracing::info!(
+                                        "Created comment from ActivityPub mention for post {}",
+                                        post_id
+                                    );
+                                    tx.commit().await?;
+                                }
+                                Err(e) => {
+                                    tracing::error!(
+                                        "Failed to create comment from ActivityPub mention: {:?}",
+                                        e
+                                    );
+                                    // Don't return error, just log it
+                                }
+                            }
+                        } else {
+                            tracing::warn!(
+                                "Could not find actor for Create activity: {}",
+                                self.actor.inner()
+                            );
+                        }
+                    } else {
+                        tracing::debug!("Post {} not found for ActivityPub mention", post_id);
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }
@@ -1297,8 +1575,9 @@ impl ActivityHandler for Delete {
         let db = &data.app_data().db_pool;
         let mut tx = db.begin().await?;
 
-        // Check if this is a post deletion by trying to parse the object URL
         let object_url = self.object.to_string();
+
+        // Check if this is a post deletion by trying to parse the object URL
         if let Some(post_id_str) = object_url.strip_prefix(&format!(
             "https://{}/ap/posts/",
             data.app_data().config.domain
@@ -1314,6 +1593,42 @@ impl ActivityHandler for Delete {
                     );
                 }
                 tx.commit().await?;
+            }
+        } else {
+            // Check if this is a comment deletion by IRI
+            // Try to find a comment with this IRI
+            if let Some(comment) = find_comment_by_iri(&mut tx, &object_url).await? {
+                // Verify that the actor attempting deletion owns the comment
+                let deleting_actor = Actor::read_from_id(self.actor.inner().clone(), data).await?;
+
+                if let Some(deleting_actor) = deleting_actor {
+                    if comment.actor_id == deleting_actor.id {
+                        // Actor owns the comment, proceed with deletion
+                        if delete_comment_by_iri(&mut tx, &object_url).await? {
+                            tracing::info!("Deleted comment with IRI: {}", object_url);
+                            tx.commit().await?;
+                        } else {
+                            tracing::warn!("Failed to delete comment with IRI: {}", object_url);
+                        }
+                    } else {
+                        tracing::warn!(
+                            "Actor {} attempted to delete comment {} owned by different actor {}",
+                            deleting_actor.id,
+                            object_url,
+                            comment.actor_id
+                        );
+                    }
+                } else {
+                    tracing::warn!(
+                        "Could not find deleting actor for Delete activity: {}",
+                        self.actor.inner()
+                    );
+                }
+            } else {
+                tracing::debug!(
+                    "No local object found for Delete activity IRI: {}",
+                    object_url
+                );
             }
         }
 

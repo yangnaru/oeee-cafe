@@ -10,7 +10,13 @@
         <a href="{{ comment.actor_handle }}">{{ comment.actor_name }}</a>
         <span class="muted">{{ comment.actor_handle }}</span>
       </p>
-      <div>{{ comment.content|markdown|safe }}</div>
+      <div>
+        {% if comment.content_html %}
+          {{ comment.content_html|safe }}
+        {% else %}
+          {{ comment.content|markdown|safe }}
+        {% endif %}
+      </div>
     </div>
   {% endfor %}
 {% endmacro %}

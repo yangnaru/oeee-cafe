@@ -10,6 +10,7 @@ pub struct Comment {
     pub post_id: Uuid,
     pub actor_id: Uuid,
     pub content: String,
+    pub content_html: Option<String>,
     pub iri: Option<String>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -19,6 +20,7 @@ pub struct CommentDraft {
     pub post_id: Uuid,
     pub actor_id: Uuid,
     pub content: String,
+    pub content_html: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -27,6 +29,7 @@ pub struct SerializableComment {
     pub post_id: Uuid,
     pub actor_id: Uuid,
     pub content: String,
+    pub content_html: Option<String>,
     pub iri: Option<String>,
     pub actor_name: String,
     pub actor_handle: String,
@@ -40,6 +43,7 @@ pub struct NotificationComment {
     pub post_id: Uuid,
     pub actor_id: Uuid,
     pub content: String,
+    pub content_html: Option<String>,
     pub iri: Option<String>,
     pub actor_name: String,
     pub actor_handle: String,
@@ -65,6 +69,7 @@ pub async fn find_comments_by_post_id(
             comments.updated_at,
             comments.created_at,
             comments.content,
+            comments.content_html,
             comments.iri,
             actors.name AS actor_name,
             actors.handle AS actor_handle
@@ -85,6 +90,7 @@ pub async fn find_comments_by_post_id(
             post_id: comment.post_id,
             actor_id: comment.actor_id,
             content: comment.content,
+            content_html: comment.content_html,
             iri: comment.iri,
             actor_name: comment.actor_name,
             actor_handle: comment.actor_handle,
@@ -108,6 +114,7 @@ pub async fn find_comments_to_posts_by_author(
             comments.updated_at,
             comments.created_at,
             comments.content,
+            comments.content_html,
             comments.iri,
             actors.name AS actor_name,
             actors.handle AS actor_handle,
@@ -149,6 +156,7 @@ pub async fn find_latest_comments_in_community(
             comments.updated_at,
             comments.created_at,
             comments.content,
+            comments.content_html,
             comments.iri,
             actors.name AS actor_name,
             actors.handle AS actor_handle,
@@ -185,13 +193,76 @@ pub async fn create_comment(
     let comment = sqlx::query_as!(
         Comment,
         r#"
-        INSERT INTO comments (post_id, actor_id, content)
-        VALUES ($1, $2, $3)
+        INSERT INTO comments (post_id, actor_id, content, content_html)
+        VALUES ($1, $2, $3, $4)
         RETURNING *
         "#,
         draft.post_id,
         draft.actor_id,
-        draft.content
+        draft.content,
+        draft.content_html
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(comment)
+}
+
+pub async fn find_comment_by_iri(
+    tx: &mut Transaction<'_, Postgres>,
+    iri: &str,
+) -> Result<Option<Comment>> {
+    let comment = sqlx::query_as!(
+        Comment,
+        r#"
+        SELECT * FROM comments
+        WHERE iri = $1
+        "#,
+        iri
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    Ok(comment)
+}
+
+pub async fn delete_comment_by_iri(
+    tx: &mut Transaction<'_, Postgres>,
+    iri: &str,
+) -> Result<bool> {
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM comments
+        WHERE iri = $1
+        "#,
+        iri
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+pub async fn create_comment_from_activitypub(
+    tx: &mut Transaction<'_, Postgres>,
+    post_id: Uuid,
+    actor_id: Uuid,
+    content: String,
+    content_html: Option<String>,
+    iri: String,
+) -> Result<Comment> {
+    let comment = sqlx::query_as!(
+        Comment,
+        r#"
+        INSERT INTO comments (post_id, actor_id, content, content_html, iri)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+        "#,
+        post_id,
+        actor_id,
+        content,
+        content_html,
+        iri
     )
     .fetch_one(&mut **tx)
     .await?;

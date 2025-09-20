@@ -83,7 +83,12 @@
               {% else %}
                 {{ ftl_get_message("post-no-title") }}
               {% endif %}
-            </a>: {{ comment.content }}
+            </a>:
+            {% if comment.content_html %}
+              {{ comment.content_html|safe }}
+            {% else %}
+              {{ comment.content }}
+            {% endif %}
           </div>
         {% endfor %}
       </div>
