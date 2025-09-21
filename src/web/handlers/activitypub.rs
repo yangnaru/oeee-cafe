@@ -16,7 +16,6 @@ use activitystreams_kinds::activity::{
 };
 use activitystreams_kinds::actor::GroupType;
 use activitystreams_kinds::object::NoteType;
-use ammonia;
 use axum::extract::{Path, Query};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
@@ -28,6 +27,66 @@ use uuid::Uuid;
 
 use crate::app_error::AppError;
 use crate::markdown_utils::process_markdown_content;
+
+fn extract_note_content(note: &Note) -> (String, Option<String>) {
+    // Try to get HTML content from contents field or content field
+    let raw_html_content = note.content.clone();
+
+    // Sanitize HTML content if present using ammonia defaults
+    let html_content = raw_html_content.map(|html| {
+        let sanitized = ammonia::clean(&html);
+
+        tracing::debug!(
+            "Sanitized HTML content: original length {}, sanitized length {}",
+            html.len(),
+            sanitized.len()
+        );
+
+        if html != sanitized {
+            tracing::info!("HTML content was sanitized - potentially dangerous content removed");
+        }
+
+        sanitized
+    });
+
+    // Try to get markdown content from source field
+    let markdown_content = if let Some(source) = &note.source {
+        // Parse source as object with content and mediaType
+        if let Ok(source_obj) =
+            serde_json::from_value::<serde_json::Map<String, Value>>(source.clone())
+        {
+            if let (Some(Value::String(content)), Some(Value::String(media_type))) =
+                (source_obj.get("content"), source_obj.get("mediaType"))
+            {
+                if media_type == "text/markdown" || media_type == "text/plain" {
+                    content.clone()
+                } else {
+                    // Fallback to sanitized HTML content if available, or "No content"
+                    html_content
+                        .clone()
+                        .unwrap_or_else(|| "No content".to_string())
+                }
+            } else {
+                // Fallback to sanitized HTML content if available, or "No content"
+                html_content
+                    .clone()
+                    .unwrap_or_else(|| "No content".to_string())
+            }
+        } else {
+            // Fallback to sanitized HTML content if available, or "No content"
+            html_content
+                .clone()
+                .unwrap_or_else(|| "No content".to_string())
+        }
+    } else {
+        // No source field, use sanitized HTML content as fallback for markdown too
+        html_content
+            .clone()
+            .unwrap_or_else(|| "No content".to_string())
+    };
+
+    (markdown_content, html_content)
+}
 use crate::models::actor::{Actor, ActorType};
 use crate::models::comment::{
     create_comment_from_activitypub, delete_comment_by_iri, find_comment_by_iri,
@@ -61,6 +120,22 @@ where
     }
 }
 
+fn actor_from_signature_deser<'de, D>(deserializer: D) -> Result<Option<ObjectId<Actor>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde_json::Value;
+
+    // First try to deserialize as a direct actor field
+    match ObjectId::<Actor>::deserialize(deserializer) {
+        Ok(actor_id) => Ok(Some(actor_id)),
+        Err(_) => {
+            // If that fails, return None and we'll try to extract from signature elsewhere
+            Ok(None)
+        }
+    }
+}
+
 fn content_or_contents_deser<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -80,54 +155,6 @@ where
         }
         _ => Ok(None),
     }
-}
-
-/// Extract content from ActivityPub Note object
-/// Returns (markdown_content, html_content)
-fn extract_note_content(note: &Note) -> (String, Option<String>) {
-    // Try to get HTML content from contents field or content field
-    let raw_html_content = note.content.clone();
-
-    // Sanitize HTML content if present using ammonia defaults
-    let html_content = raw_html_content.map(|html| {
-        let sanitized = ammonia::clean(&html);
-
-        tracing::debug!("Sanitized HTML content: original length {}, sanitized length {}",
-                       html.len(), sanitized.len());
-
-        if html != sanitized {
-            tracing::info!("HTML content was sanitized - potentially dangerous content removed");
-        }
-
-        sanitized
-    });
-
-    // Try to get markdown content from source field
-    let markdown_content = if let Some(source) = &note.source {
-        // Parse source as object with content and mediaType
-        if let Ok(source_obj) = serde_json::from_value::<serde_json::Map<String, Value>>(source.clone()) {
-            if let (Some(Value::String(content)), Some(Value::String(media_type))) =
-                (source_obj.get("content"), source_obj.get("mediaType")) {
-                if media_type == "text/markdown" || media_type == "text/plain" {
-                    content.clone()
-                } else {
-                    // Fallback to sanitized HTML content if available, or "No content"
-                    html_content.clone().unwrap_or_else(|| "No content".to_string())
-                }
-            } else {
-                // Fallback to sanitized HTML content if available, or "No content"
-                html_content.clone().unwrap_or_else(|| "No content".to_string())
-            }
-        } else {
-            // Fallback to sanitized HTML content if available, or "No content"
-            html_content.clone().unwrap_or_else(|| "No content".to_string())
-        }
-    } else {
-        // No source field, use sanitized HTML content as fallback for markdown too
-        html_content.clone().unwrap_or_else(|| "No content".to_string())
-    };
-
-    (markdown_content, html_content)
 }
 
 fn tag_or_vec_deser<'de, D>(deserializer: D) -> Result<Vec<Tag>, D::Error>
@@ -209,6 +236,7 @@ impl Object for Actor {
         let mut tx = db.begin().await?;
 
         let actor = Actor::find_by_iri(&mut tx, object_id.to_string()).await?;
+        tx.commit().await?;
         Ok(actor)
     }
 
@@ -221,7 +249,7 @@ impl Object for Actor {
 
         let endpoints = serde_json::json!({
             "type": "as:Endpoints",
-            "sharedInbox": format!("https://{}/inbox", self.instance_host)
+            "sharedInbox": format!("https://{}/ap/inbox", self.instance_host)
         });
 
         match self.r#type {
@@ -315,6 +343,105 @@ impl Object for Actor {
 
         // Parse instance host from the actor ID URL
         let actor_url = id.inner();
+        let instance_host = actor_url
+            .host_str()
+            .ok_or_else(|| anyhow::anyhow!("Could not extract host from actor URL"))?
+            .to_string();
+
+        // Create handle components
+        let handle_host = instance_host.clone();
+        let handle = format!("@{}@{}", preferred_username, handle_host);
+
+        // Get shared inbox URL from endpoints if available, otherwise use main inbox
+        let shared_inbox_url = endpoints
+            .get("sharedInbox")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| inbox.as_str())
+            .to_string();
+
+        Ok(Actor {
+            name,
+            iri: id.to_string(),
+            inbox_url: inbox.to_string(),
+            public_key_pem: public_key.public_key_pem,
+            private_key_pem: None,
+            id: Uuid::new_v4(),
+            url: url.to_string(),
+            r#type: actor_type,
+            username: preferred_username.clone(),
+            instance_host,
+            handle_host,
+            handle,
+            user_id: None,
+            community_id: None,
+            bio_html: String::new(),
+            automatically_approves_followers: !manually_approves_followers,
+            shared_inbox_url,
+            followers_url: followers.to_string(),
+            sensitive: false,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            published_at: chrono::Utc::now(),
+        })
+    }
+}
+
+impl Actor {
+    async fn from_activitypub_person(
+        person: Person,
+        _app_data: &crate::web::state::AppState,
+    ) -> Result<Self, AppError> {
+        Actor::from_activitypub_object_common(
+            person.id.inner().clone(),
+            person.inbox,
+            person.public_key,
+            person.endpoints,
+            person.followers,
+            person.manually_approves_followers,
+            person.name,
+            person.preferred_username,
+            person.url,
+            ActorType::Person,
+            _app_data,
+        )
+        .await
+    }
+
+    async fn from_activitypub_group(
+        group: Group,
+        _app_data: &crate::web::state::AppState,
+    ) -> Result<Self, AppError> {
+        Actor::from_activitypub_object_common(
+            group.id.inner().clone(),
+            group.inbox,
+            group.public_key,
+            group.endpoints,
+            group.followers,
+            group.manually_approves_followers,
+            group.name,
+            group.preferred_username,
+            group.url,
+            ActorType::Group,
+            _app_data,
+        )
+        .await
+    }
+
+    async fn from_activitypub_object_common(
+        id: Url,
+        inbox: Url,
+        public_key: PublicKey,
+        endpoints: serde_json::Value,
+        followers: Url,
+        manually_approves_followers: bool,
+        name: String,
+        preferred_username: String,
+        url: Url,
+        actor_type: ActorType,
+        _app_data: &crate::web::state::AppState,
+    ) -> Result<Self, AppError> {
+        // Parse instance host from the actor ID URL
+        let actor_url = &id;
         let instance_host = actor_url
             .host_str()
             .ok_or_else(|| anyhow::anyhow!("Could not extract host from actor URL"))?
@@ -537,7 +664,16 @@ pub async fn activitypub_post_user_inbox(
     data: Data<AppState>,
     activity_data: ActivityData,
 ) -> impl IntoResponse {
+    tracing::warn!("🔔 USER INBOX: Request received at /ap/users/*/inbox");
     tracing::info!("=== USER INBOX RECEIVED ACTIVITY ===");
+
+    // Enhanced debug logging to diagnose Delete activity issues
+    tracing::info!("=== DEBUG: About to call receive_activity function ===");
+    tracing::info!("=== DEBUG: If you don't see any more logs after this, the issue is in receive_activity itself ===");
+
+    // Debug: Log that we received an activity (we can't access body directly due to privacy)
+    tracing::info!("Attempting to process ActivityPub activity");
+    tracing::debug!("Available activity types in enum: Create, Follow, Undo, Update, Delete");
 
     let result = receive_activity::<WithContext<PersonAcceptedActivities>, Actor, AppState>(
         activity_data,
@@ -545,12 +681,20 @@ pub async fn activitypub_post_user_inbox(
     )
     .await;
 
+    tracing::info!("=== DEBUG: receive_activity function completed ===");
+
     if let Err(ref e) = result {
         tracing::error!("Activity processing failed: {:?}", e);
         let error_str = format!("{:?}", e);
         if error_str.contains("data did not match any variant") {
             tracing::error!("This appears to be an enum variant matching error - the activity JSON structure doesn't match any of our defined variants");
             tracing::error!("This usually means there's a field mismatch in our Create, Follow, Undo, Update, or Delete structs");
+            tracing::error!("Available activity types: Create, Follow, Undo, Update, Delete");
+            // Check if this might be a Delete activity with problematic fields
+            if error_str.contains("Delete") {
+                tracing::error!("This appears to be a Delete activity that failed to deserialize");
+                tracing::error!("Common issues: URL fragments in ID field, missing fields, or Tombstone object format");
+            }
         }
     } else {
         tracing::info!("Activity processed successfully");
@@ -563,8 +707,71 @@ pub async fn activitypub_post_community_inbox(
     data: Data<AppState>,
     activity_data: ActivityData,
 ) -> impl IntoResponse {
+    tracing::warn!("🔔 COMMUNITY INBOX: Request received at /ap/communities/*/inbox");
     receive_activity::<WithContext<GroupAcceptedActivities>, Actor, AppState>(activity_data, &data)
         .await
+}
+
+pub async fn activitypub_post_user_followers(
+    Path(login_name): Path<String>,
+    data: Data<AppState>,
+) -> impl IntoResponse {
+    tracing::warn!(
+        "🔔 USER FOLLOWERS: Request received at /ap/users/{}/followers",
+        login_name
+    );
+
+    let domain = &data.app_data().config.domain;
+    let followers_url = format!("https://{}/ap/users/{}/followers", domain, login_name);
+
+    // Return empty OrderedCollection following ActivityPub spec
+    let collection = serde_json::json!({
+        "type": "OrderedCollection",
+        "id": followers_url,
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "totalItems": 0,
+    });
+
+    Json(collection)
+}
+
+pub async fn activitypub_post_shared_inbox(
+    data: Data<AppState>,
+    activity_data: ActivityData,
+) -> impl IntoResponse {
+    tracing::warn!("🔔 SHARED INBOX: Request received at /ap/inbox");
+    tracing::info!("=== SHARED INBOX RECEIVED ACTIVITY ===");
+    tracing::info!("=== DEBUG: About to call receive_activity function for shared inbox ===");
+    tracing::info!("=== DEBUG: If you don't see any more logs after this, the issue is in receive_activity itself ===");
+
+    // Use the same PersonAcceptedActivities as user inbox for now
+    let result = receive_activity::<WithContext<PersonAcceptedActivities>, Actor, AppState>(
+        activity_data,
+        &data,
+    )
+    .await;
+
+    tracing::info!("=== DEBUG: shared inbox receive_activity function completed ===");
+
+    if let Err(ref e) = result {
+        tracing::error!("Shared inbox activity processing failed: {:?}", e);
+        let error_str = format!("{:?}", e);
+        if error_str.contains("data did not match any variant") {
+            tracing::error!("This appears to be an enum variant matching error in shared inbox - the activity JSON structure doesn't match any of our defined variants");
+            tracing::error!("This usually means there's a field mismatch in our Create, Follow, Undo, Update, or Delete structs");
+            tracing::error!(
+                "Available activity types: Create, Follow, Undo, Update, Delete, Unknown"
+            );
+            // Check if this might be a Delete activity with problematic fields
+            if error_str.contains("Delete") {
+                tracing::error!("This appears to be a Delete activity that failed to deserialize in shared inbox");
+                tracing::error!("Common issues: URL fragments in ID field, missing fields, or Tombstone object format");
+            }
+        }
+    } else {
+        tracing::info!("Shared inbox activity processed successfully");
+    }
+    result
 }
 
 /// List of all activities which this actor can receive.
@@ -577,6 +784,73 @@ pub enum PersonAcceptedActivities {
     Undo(Undo),
     Update(Update),
     Delete(Delete),
+    Unknown(UnknownActivity),
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct UnknownActivity {
+    id: Url,
+    actor: ObjectId<Actor>,
+    #[serde(flatten)]
+    data: serde_json::Value,
+}
+
+#[async_trait::async_trait]
+impl ActivityHandler for UnknownActivity {
+    type DataType = AppState;
+    type Error = AppError;
+
+    fn id(&self) -> &Url {
+        &self.id
+    }
+
+    fn actor(&self) -> &Url {
+        self.actor.inner()
+    }
+
+    async fn verify(&self, _data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn receive(self, _data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        tracing::info!("=== RECEIVED UNKNOWN ACTIVITY ===");
+        tracing::info!(
+            "Raw activity JSON: {}",
+            serde_json::to_string_pretty(&self.data)
+                .unwrap_or_else(|_| "Failed to serialize".to_string())
+        );
+
+        // Check if this looks like a Delete activity
+        if let Some(activity_type) = self.data.get("type").and_then(|v| v.as_str()) {
+            tracing::info!("Unknown activity type: {}", activity_type);
+
+            if activity_type == "Delete" {
+                tracing::error!("=== DELETE ACTIVITY REACHED UNKNOWN HANDLER ===");
+                tracing::error!("This means the Delete struct is not deserializing properly");
+                tracing::error!(
+                    "Delete activity JSON: {}",
+                    serde_json::to_string_pretty(&self.data)
+                        .unwrap_or_else(|_| "Failed to serialize".to_string())
+                );
+
+                // Try to manually deserialize this as a Delete to see what fails
+                if let Ok(json_str) = serde_json::to_string(&self.data) {
+                    match serde_json::from_str::<Delete>(&json_str) {
+                        Ok(_) => {
+                            tracing::error!(
+                                "STRANGE: Delete deserialization worked when tried manually!"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!("Delete deserialization failed: {:?}", e);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -814,9 +1088,17 @@ pub struct Note {
     pub id: Url,
     #[serde(skip_serializing_if = "Option::is_none")]
     r#type: Option<NoteType>,
-    #[serde(alias = "attributedTo", alias = "attribution", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        alias = "attributedTo",
+        alias = "attribution",
+        skip_serializing_if = "Option::is_none"
+    )]
     attributed_to: Option<ObjectId<Actor>>,
-    #[serde(alias = "contents", skip_serializing_if = "Option::is_none", deserialize_with = "content_or_contents_deser")]
+    #[serde(
+        alias = "contents",
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "content_or_contents_deser"
+    )]
     content: Option<String>,
     #[serde(alias = "tos", default)]
     to: Vec<String>,
@@ -834,7 +1116,12 @@ pub struct Note {
     in_reply_to: Option<Url>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "replyTarget")]
     reply_target: Option<Url>,
-    #[serde(alias = "tags", skip_serializing_if = "Vec::is_empty", default, deserialize_with = "tag_or_vec_deser")]
+    #[serde(
+        alias = "tags",
+        skip_serializing_if = "Vec::is_empty",
+        default,
+        deserialize_with = "tag_or_vec_deser"
+    )]
     tag: Vec<Tag>,
     #[serde(skip_serializing_if = "Option::is_none")]
     source: Option<serde_json::Value>,
@@ -973,13 +1260,17 @@ impl ActivityHandler for Create {
         tracing::info!("Object ID: {}", self.object.id);
         tracing::info!(
             "Object content preview: {}",
-            self.object.content.as_ref().map(|c| {
-                if c.len() > 100 {
-                    format!("{}...", &c[..100])
-                } else {
-                    c.clone()
-                }
-            }).unwrap_or_else(|| "No content".to_string())
+            self.object
+                .content
+                .as_ref()
+                .map(|c| {
+                    if c.len() > 100 {
+                        format!("{}...", &c[..100])
+                    } else {
+                        c.clone()
+                    }
+                })
+                .unwrap_or_else(|| "No content".to_string())
         );
         tracing::info!("in_reply_to: {:?}", self.object.in_reply_to);
         tracing::info!("reply_target: {:?}", self.object.reply_target);
@@ -1023,44 +1314,76 @@ impl ActivityHandler for Create {
                 if let Ok(post_id) = Uuid::parse_str(post_id_str) {
                     // Verify the post exists
                     if let Some(_post) = find_post_by_id(&mut tx, post_id).await? {
-                        // Get the actor who sent this comment
+                        // Get the actor who sent this comment, fetching from remote if needed
                         let actor = Actor::read_from_id(self.actor.inner().clone(), data).await?;
 
-                        if let Some(actor) = actor {
-                            // Extract both markdown and HTML content from the ActivityPub note
-                            let (markdown_content, html_content) = extract_note_content(&self.object);
-
-                            let comment = create_comment_from_activitypub(
-                                &mut tx,
-                                post_id,
-                                actor.id,
-                                markdown_content,
-                                html_content,
-                                self.object.id.to_string(),
-                            )
-                            .await;
-
-                            match comment {
-                                Ok(_) => {
-                                    tracing::info!(
-                                        "Created comment from ActivityPub mention for post {}",
-                                        post_id
-                                    );
-                                    tx.commit().await?;
-                                }
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Failed to create comment from ActivityPub mention: {:?}",
-                                        e
-                                    );
-                                    // Don't return error, just log it
-                                }
-                            }
+                        let actor = if let Some(actor) = actor {
+                            actor
                         } else {
-                            tracing::warn!(
-                                "Could not find actor for Create activity: {}",
+                            // Actor not found locally, fetch from remote and persist
+                            tracing::info!(
+                                "Actor not found locally, fetching from remote: {}",
                                 self.actor.inner()
                             );
+
+                            match self.actor.dereference(data).await {
+                                Ok(remote_actor) => {
+                                    tracing::info!(
+                                        "Successfully fetched remote actor: {}",
+                                        self.actor.inner()
+                                    );
+
+                                    // Persist the remote actor
+                                    let persisted_actor =
+                                        Actor::create_or_update_actor(&mut tx, &remote_actor)
+                                            .await?;
+                                    tracing::info!(
+                                        "Persisted new actor: {} ({})",
+                                        persisted_actor.handle,
+                                        persisted_actor.iri
+                                    );
+                                    persisted_actor
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "Failed to fetch remote actor {}: {:?}",
+                                        self.actor.inner(),
+                                        e
+                                    );
+                                    tx.rollback().await?;
+                                    return Ok(());
+                                }
+                            }
+                        };
+
+                        // Create the comment from the ActivityPub note
+                        // Extract both markdown and HTML content from the ActivityPub note
+                        let (markdown_content, html_content) = extract_note_content(&self.object);
+                        let comment = create_comment_from_activitypub(
+                            &mut tx,
+                            post_id,
+                            actor.id,
+                            markdown_content,
+                            html_content,
+                            self.object.id.to_string(),
+                        )
+                        .await;
+
+                        match comment {
+                            Ok(_) => {
+                                tracing::info!(
+                                    "Created comment from ActivityPub mention for post {}",
+                                    post_id
+                                );
+                                tx.commit().await?;
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    "Failed to create comment from ActivityPub mention: {:?}",
+                                    e
+                                );
+                                // Don't return error, just log it
+                            }
                         }
                     } else {
                         tracing::debug!("Post {} not found for ActivityPub mention", post_id);
@@ -1494,10 +1817,16 @@ pub async fn send_delete_activity(
     let to = vec!["https://www.w3.org/ns/activitystreams#Public".to_string()];
     let cc = vec![format!("{}/followers", actor.iri)];
 
+    // Create Tombstone object
+    let tombstone = Tombstone {
+        id: object_url,
+        r#type: "Tombstone".to_string(),
+    };
+
     // Create Delete activity
     let delete_activity = Delete::new(
         ObjectId::parse(&actor.iri)?,
-        object_url,
+        tombstone,
         activity_id,
         to,
         cc,
@@ -1519,33 +1848,49 @@ pub async fn send_delete_activity(
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct Delete {
-    actor: ObjectId<Actor>,
-    object: Url,
-    r#type: DeleteType,
+pub struct Tombstone {
     id: Url,
+    r#type: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Delete {
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "actor_from_signature_deser")]
+    actor: Option<ObjectId<Actor>>,
+    object: Tombstone,
+    r#type: DeleteType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<Url>,
+    #[serde(default, deserialize_with = "string_or_vec_deser")]
     to: Vec<String>,
+    #[serde(default, deserialize_with = "string_or_vec_deser")]
     cc: Vec<String>,
-    published: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    published: Option<String>,
+    // Add signature field to extract actor from
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signature: Option<serde_json::Value>,
 }
 
 impl Delete {
     pub fn new(
         actor: ObjectId<Actor>,
-        object: Url,
+        object: Tombstone,
         id: Url,
         to: Vec<String>,
         cc: Vec<String>,
         published: String,
     ) -> Delete {
         Delete {
-            actor,
+            actor: Some(actor),
             object,
             r#type: Default::default(),
-            id,
+            id: Some(id),
             to,
             cc,
-            published,
+            published: Some(published),
+            signature: None,
         }
     }
 }
@@ -1556,11 +1901,23 @@ impl ActivityHandler for Delete {
     type Error = AppError;
 
     fn id(&self) -> &Url {
-        &self.id
+        // For Delete activities without explicit ID, we could generate one or use the object ID
+        // For now, return a placeholder URL that will need to be handled properly
+        self.id.as_ref().unwrap_or_else(|| {
+            // This is a fallback - we'll need to handle this case properly
+            &self.object.id
+        })
     }
 
     fn actor(&self) -> &Url {
-        self.actor.inner()
+        // If actor is not provided, use object ID as fallback
+        // We'll extract the real actor from signature in the receive method
+        if let Some(actor) = &self.actor {
+            actor.inner()
+        } else {
+            // Fallback to object ID for now - we'll handle actor extraction in receive()
+            &self.object.id
+        }
     }
 
     async fn verify(&self, _data: &Data<Self::DataType>) -> Result<(), Self::Error> {
@@ -1568,14 +1925,47 @@ impl ActivityHandler for Delete {
     }
 
     async fn receive(self, data: &Data<Self::DataType>) -> Result<(), Self::Error> {
-        // Delete activities notify followers about object deletion
-        // We would typically mark the object as deleted in our local copy
-        tracing::info!("Received Delete activity: {:?}", self);
+        tracing::info!("=== RECEIVED DELETE ACTIVITY ===");
+
+        // Try to get actor URL from direct field or extract from signature
+        let actor_url = if let Some(actor) = &self.actor {
+            tracing::info!("Actor: {}", actor.inner());
+            Some(actor.inner().clone())
+        } else {
+            tracing::info!("Actor: None (missing from activity)");
+            // Try to extract from signature
+            if let Some(signature) = &self.signature {
+                if let Some(creator) = signature.get("creator").and_then(|v| v.as_str()) {
+                    if let Ok(mut creator_url) = creator.parse::<Url>() {
+                        creator_url.set_fragment(None); // Remove #key-2 fragment
+                        tracing::info!("Extracted actor from signature: {}", creator_url);
+                        Some(creator_url)
+                    } else {
+                        tracing::warn!("Failed to parse creator URL from signature: {}", creator);
+                        None
+                    }
+                } else {
+                    tracing::warn!("No creator field found in signature");
+                    None
+                }
+            } else {
+                tracing::warn!("No signature field found in Delete activity");
+                None
+            }
+        };
+
+        tracing::info!("Object: {}", self.object.id);
+        if let Some(id) = &self.id {
+            tracing::info!("Activity ID: {}", id);
+        } else {
+            tracing::info!("Activity ID: None (missing from activity)");
+        }
+        tracing::info!("================================");
 
         let db = &data.app_data().db_pool;
         let mut tx = db.begin().await?;
 
-        let object_url = self.object.to_string();
+        let object_url = self.object.id.to_string();
 
         // Check if this is a post deletion by trying to parse the object URL
         if let Some(post_id_str) = object_url.strip_prefix(&format!(
@@ -1599,7 +1989,12 @@ impl ActivityHandler for Delete {
             // Try to find a comment with this IRI
             if let Some(comment) = find_comment_by_iri(&mut tx, &object_url).await? {
                 // Verify that the actor attempting deletion owns the comment
-                let deleting_actor = Actor::read_from_id(self.actor.inner().clone(), data).await?;
+                let deleting_actor = if let Some(actor_url) = &actor_url {
+                    Actor::read_from_id(actor_url.clone(), data).await?
+                } else {
+                    tracing::warn!("Delete activity missing actor field and could not extract from signature - cannot verify ownership");
+                    None
+                };
 
                 if let Some(deleting_actor) = deleting_actor {
                     if comment.actor_id == deleting_actor.id {
@@ -1619,10 +2014,14 @@ impl ActivityHandler for Delete {
                         );
                     }
                 } else {
-                    tracing::warn!(
-                        "Could not find deleting actor for Delete activity: {}",
-                        self.actor.inner()
-                    );
+                    if let Some(actor_url) = &actor_url {
+                        tracing::warn!(
+                            "Could not find deleting actor for Delete activity: {}",
+                            actor_url
+                        );
+                    } else {
+                        tracing::warn!("Delete activity missing actor field and could not extract from signature");
+                    }
                 }
             } else {
                 tracing::debug!(

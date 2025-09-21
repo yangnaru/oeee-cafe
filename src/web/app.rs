@@ -7,7 +7,8 @@ use crate::web::handlers::account::{
 };
 use crate::web::handlers::activitypub::{
     activitypub_get_community, activitypub_get_post, activitypub_get_user,
-    activitypub_post_community_inbox, activitypub_post_user_inbox, activitypub_webfinger,
+    activitypub_post_community_inbox, activitypub_post_shared_inbox,
+    activitypub_post_user_followers, activitypub_post_user_inbox, activitypub_webfinger,
 };
 use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::collaborate::{
@@ -172,9 +173,14 @@ impl App {
                 post(activitypub_post_user_inbox),
             )
             .route(
+                "/ap/users/:login_name/followers",
+                get(activitypub_post_user_followers),
+            )
+            .route(
                 "/ap/communities/:community_id/inbox",
                 post(activitypub_post_community_inbox),
             )
+            .route("/ap/inbox", post(activitypub_post_shared_inbox))
             .layer(FederationMiddleware::new(activitypub_data));
 
         let app = Router::new()
