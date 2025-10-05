@@ -2870,12 +2870,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "minijinja-contrib"
-version = "1.0.12"
+name = "minijinja"
+version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f10ebf8d8361da08f565e209c36d5e427d8886fb215bfe4007d8bef1e9d379c"
+checksum = "a9f264d75233323f4b7d2f03aefe8a990690cdebfbfe26ea86bcbaec5e9ac990"
 dependencies = [
- "minijinja",
+ "serde",
+]
+
+[[package]]
+name = "minijinja-contrib"
+version = "2.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "182ba1438db4679ddfa03792c183bdc2b9ce26b58e7d41a749e59b06497cf136"
+dependencies = [
+ "minijinja 2.12.0",
  "serde",
  "time",
  "time-tz",
@@ -3097,7 +3106,7 @@ dependencies = [
  "lazy_static",
  "lettre",
  "markdown",
- "minijinja",
+ "minijinja 1.0.12",
  "minijinja-contrib",
  "rand 0.8.5",
  "redis",
@@ -5009,6 +5018,7 @@ checksum = "5dfd88e563464686c916c7e46e623e520ddc6d79fa6641390f2e3fa86e83e885"
 dependencies = [
  "deranged",
  "itoa",
+ "js-sys",
  "num-conv",
  "powerfmt",
  "serde",
@@ -5034,9 +5044,9 @@ dependencies = [
 
 [[package]]
 name = "time-tz"
-version = "1.0.3"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a422f65dfdf08a81317d54fa00b45dc58cbccab69be78c1447391cc39ae8c9d4"
+checksum = "733bc522e97980eb421cbf381160ff225bd14262a48a739110f6653c6258d625"
 dependencies = [
  "cfg-if",
  "parse-zoneinfo",
@@ -5045,6 +5055,7 @@ dependencies = [
  "serde",
  "serde-xml-rs",
  "time",
+ "wasm-bindgen",
 ]
 
 [[package]]
