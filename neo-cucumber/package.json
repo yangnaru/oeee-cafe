@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@lingui/core": "^5.4.1",
-    "@lingui/react": "^5.4.1",
+    "@lingui/react": "^5.5.1",
     "@sentry/react": "^10.12.0",
     "@tailwindcss/vite": "^4.1.14",
     "react": "^19.1.1",
