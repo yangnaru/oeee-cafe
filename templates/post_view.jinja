@@ -102,7 +102,7 @@
                 <div class="post-menu">
                   <button hx-get="/posts/{{ post_id }}/edit">{{ ftl_get_message("edit") }}</button>
                   <form hx-delete="/posts/{{ post_id }}"
-                        hx-confirm="{{ ftl_get_message("post-delete-confirm") }}"
+                        hx-confirm="{{ ftl_get_message('post-delete-confirm') }}"
                         hx-target="body">
                     <button type="submit">{{ ftl_get_message("delete") }}</button>
                   </form>
@@ -110,6 +110,7 @@
               {% endif %}
             </div>
           {% endblock post_edit_block %}
+          <div class="post-reactions-container">{% include "post_reactions.jinja" %}</div>
           <div class="post-share">
             <a href="https://twitter.com/share?ref_src=twsrc%5Etfw"
                class="twitter-share-button"

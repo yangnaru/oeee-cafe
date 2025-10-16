@@ -10,4 +10,5 @@ pub mod instance;
 pub mod link;
 pub mod nodeinfo;
 pub mod post;
+pub mod reaction;
 pub mod user;

@@ -87,7 +87,7 @@ fn extract_note_content(note: &Note) -> (String, Option<String>) {
 
     (markdown_content, html_content)
 }
-use crate::models::actor::{Actor, ActorType};
+use crate::models::actor::{create_actor_for_user, Actor, ActorType};
 use crate::models::comment::{
     create_comment_from_activitypub, delete_comment_by_iri, find_comment_by_iri,
 };
@@ -95,7 +95,7 @@ use crate::models::community::find_community_by_slug;
 use crate::models::follow;
 use crate::models::image::find_image_by_id;
 use crate::models::post::find_post_by_id;
-use crate::models::user::find_user_by_login_name;
+use crate::models::user::{find_user_by_id, find_user_by_login_name};
 use crate::web::state::AppState;
 
 // Custom deserializers for flexible ActivityPub field formats
@@ -124,8 +124,6 @@ fn actor_from_signature_deser<'de, D>(deserializer: D) -> Result<Option<ObjectId
 where
     D: serde::Deserializer<'de>,
 {
-    use serde_json::Value;
-
     // First try to deserialize as a direct actor field
     match ObjectId::<Actor>::deserialize(deserializer) {
         Ok(actor_id) => Ok(Some(actor_id)),
@@ -623,12 +621,23 @@ pub async fn activitypub_get_post(
     if let Some(post) = find_post_by_id(&mut tx, post_uuid).await? {
         let author_id = Uuid::parse_str(post.get("author_id").unwrap().as_ref().unwrap())?;
 
-        // Find the author's actor
+        // Find the author's actor, create if it doesn't exist
         let author_actor = Actor::find_by_user_id(&mut tx, author_id).await?;
-        if author_actor.is_none() {
-            return Ok((StatusCode::NOT_FOUND, "Author actor not found").into_response());
-        }
-        let author_actor = author_actor.unwrap();
+        let author_actor = if let Some(actor) = author_actor {
+            actor
+        } else {
+            // Actor doesn't exist, try to find the user and create the actor
+            if let Some(user) = find_user_by_id(&mut tx, author_id).await? {
+                tracing::info!(
+                    "Creating missing actor for user {} (id: {})",
+                    user.login_name,
+                    user.id
+                );
+                create_actor_for_user(&mut tx, &user, &data.app_data().config).await?
+            } else {
+                return Ok((StatusCode::NOT_FOUND, "User not found").into_response());
+            }
+        };
 
         // Use the shared function to create the Note
         let note = create_note_from_post(
@@ -639,6 +648,9 @@ pub async fn activitypub_get_post(
             &data.app_data().config.r2_public_endpoint_url,
         )
         .await?;
+
+        // Commit the transaction to persist any actor creations
+        tx.commit().await?;
 
         let context = [
             "https://www.w3.org/ns/activitystreams",
@@ -784,6 +796,8 @@ pub enum PersonAcceptedActivities {
     Undo(Undo),
     Update(Update),
     Delete(Delete),
+    Like(Like),
+    EmojiReact(EmojiReact),
     Unknown(UnknownActivity),
 }
 
@@ -1002,20 +1016,28 @@ impl ActivityHandler for Accept {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum UndoObject {
+    Follow(Box<Follow>),
+    Like(Box<Like>),
+    EmojiReact(Box<EmojiReact>),
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Undo {
-    actor: ObjectId<Actor>,
-    object: Follow,
-    r#type: UndoType,
-    id: Url,
+    pub actor: ObjectId<Actor>,
+    pub object: UndoObject,
+    pub r#type: UndoType,
+    pub id: Url,
 }
 
 impl Undo {
     pub fn new(actor: ObjectId<Actor>, object: Follow, id: Url) -> Undo {
         Undo {
             actor,
-            object,
+            object: UndoObject::Follow(Box::new(object)),
             r#type: Default::default(),
             id,
         }
@@ -1040,33 +1062,65 @@ impl ActivityHandler for Undo {
     }
 
     async fn receive(self, data: &Data<Self::DataType>) -> Result<(), Self::Error> {
-        tracing::info!("receive: {:?} {:?}", self.actor, self.object);
+        tracing::info!("=== RECEIVED UNDO ACTIVITY ===");
+        tracing::info!("Actor: {}", self.actor.inner());
 
-        // Remove the follow relationship from the database
         let db = &data.app_data().db_pool;
         let mut tx = db.begin().await?;
 
-        // Find the target actor being unfollowed
-        let following_actor = Actor::find_by_iri(&mut tx, self.object.object.to_string()).await?;
-        let following_actor =
-            following_actor.ok_or_else(|| anyhow::anyhow!("Target actor not found"))?;
+        match self.object {
+            UndoObject::Follow(follow) => {
+                tracing::info!("Undo type: Follow");
 
-        // Find the follower actor
-        let follower_actor = Actor::find_by_iri(&mut tx, self.object.actor.to_string()).await?;
-        let follower_actor =
-            follower_actor.ok_or_else(|| anyhow::anyhow!("Follower actor not found"))?;
+                // Find the target actor being unfollowed
+                let following_actor = Actor::find_by_iri(&mut tx, follow.object.to_string()).await?;
+                let following_actor =
+                    following_actor.ok_or_else(|| anyhow::anyhow!("Target actor not found"))?;
 
-        // Remove the follow relationship
-        follow::unfollow_by_actor_ids(&mut tx, follower_actor.id, following_actor.id).await?;
-        tracing::info!(
-            "Removed follow relationship: {} -> {}",
-            follower_actor.iri,
-            following_actor.iri
-        );
+                // Find the follower actor
+                let follower_actor = Actor::find_by_iri(&mut tx, follow.actor.to_string()).await?;
+                let follower_actor =
+                    follower_actor.ok_or_else(|| anyhow::anyhow!("Follower actor not found"))?;
 
-        // Commit the transaction
-        tx.commit().await?;
+                // Remove the follow relationship
+                follow::unfollow_by_actor_ids(&mut tx, follower_actor.id, following_actor.id).await?;
+                tracing::info!(
+                    "Removed follow relationship: {} -> {}",
+                    follower_actor.iri,
+                    following_actor.iri
+                );
 
+                tx.commit().await?;
+            }
+            UndoObject::Like(like) => {
+                tracing::info!("Undo type: Like (removing ❤️ reaction)");
+                tracing::info!("Reaction IRI: {}", like.id);
+
+                // Delete reaction by IRI
+                use crate::models::reaction::delete_reaction_by_iri;
+                if delete_reaction_by_iri(&mut tx, like.id.as_str()).await? {
+                    tracing::info!("Deleted ❤️ reaction with IRI: {}", like.id);
+                    tx.commit().await?;
+                } else {
+                    tracing::warn!("Failed to delete reaction with IRI: {}", like.id);
+                }
+            }
+            UndoObject::EmojiReact(react) => {
+                tracing::info!("Undo type: EmojiReact (removing {} reaction)", react.content);
+                tracing::info!("Reaction IRI: {}", react.id);
+
+                // Delete reaction by IRI
+                use crate::models::reaction::delete_reaction_by_iri;
+                if delete_reaction_by_iri(&mut tx, react.id.as_str()).await? {
+                    tracing::info!("Deleted {} reaction with IRI: {}", react.content, react.id);
+                    tx.commit().await?;
+                } else {
+                    tracing::warn!("Failed to delete reaction with IRI: {}", react.id);
+                }
+            }
+        }
+
+        tracing::info!("================================");
         Ok(())
     }
 }
@@ -2029,6 +2083,264 @@ impl ActivityHandler for Delete {
                     object_url
                 );
             }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Like {
+    pub actor: ObjectId<Actor>,
+    #[serde(rename = "object")]
+    pub object: Url,
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub id: Url,
+    #[serde(default)]
+    pub to: Vec<String>,
+    #[serde(default)]
+    pub cc: Vec<String>,
+}
+
+#[async_trait::async_trait]
+impl ActivityHandler for Like {
+    type DataType = AppState;
+    type Error = AppError;
+
+    fn id(&self) -> &Url {
+        &self.id
+    }
+
+    fn actor(&self) -> &Url {
+        self.actor.inner()
+    }
+
+    async fn verify(&self, _data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn receive(self, data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        tracing::info!("=== RECEIVED LIKE ACTIVITY ===");
+        tracing::info!("Actor: {}", self.actor.inner());
+        tracing::info!("Object: {}", self.object);
+        tracing::info!("Converting Like to ❤️ reaction");
+        tracing::info!("================================");
+
+        let db = &data.app_data().db_pool;
+        let mut tx = db.begin().await?;
+
+        // Dereference the actor
+        let actor = self.actor.dereference(data).await?;
+        let persisted_actor = Actor::create_or_update_actor(&mut tx, &actor).await?;
+
+        // Parse post IRI to extract post_id
+        let object_url = self.object.to_string();
+
+        // Try to extract post ID from either URL format:
+        // https://domain/@username/post-id or https://domain/ap/posts/post-id
+        let user_post_prefix = format!("https://{}/@", data.app_data().config.domain);
+        let ap_post_prefix = format!("https://{}/ap/posts/", data.app_data().config.domain);
+
+        let post_id_str = if object_url.starts_with(&user_post_prefix) {
+            // Extract from URLs like https://domain/@username/post-id
+            let path_part = &object_url[user_post_prefix.len()..];
+            path_part.find('/').map(|pos| &path_part[pos + 1..])
+        } else if object_url.starts_with(&ap_post_prefix) {
+            // Extract from URLs like https://domain/ap/posts/post-id
+            Some(&object_url[ap_post_prefix.len()..])
+        } else {
+            None
+        };
+
+        if let Some(post_id_str) = post_id_str {
+            if let Ok(post_id) = Uuid::parse_str(post_id_str) {
+                // Verify post exists
+                if find_post_by_id(&mut tx, post_id).await?.is_some() {
+                    // Create reaction using Like's IRI (for idempotency)
+                    use crate::models::reaction::create_reaction_from_activitypub;
+                    match create_reaction_from_activitypub(
+                        &mut tx,
+                        self.id.to_string(),
+                        post_id,
+                        persisted_actor.id,
+                        "❤️".to_string(),
+                    )
+                    .await
+                    {
+                        Ok(_) => {
+                            tracing::info!(
+                                "Created ❤️ reaction from Like activity for post {}",
+                                post_id
+                            );
+                            tx.commit().await?;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to create reaction from Like: {:?}", e);
+                            tx.rollback().await?;
+                        }
+                    }
+                } else {
+                    tracing::debug!("Post {} not found for Like activity", post_id);
+                }
+            } else {
+                tracing::warn!("Failed to parse post ID from Like object: {}", post_id_str);
+            }
+        } else {
+            tracing::debug!("Like object URL doesn't match local post pattern: {}", object_url);
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmojiReact {
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "actor_from_signature_deser")]
+    pub actor: Option<ObjectId<Actor>>,
+    #[serde(rename = "object")]
+    pub object: Url,
+    pub content: String,
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub id: Url,
+    #[serde(default, deserialize_with = "string_or_vec_deser")]
+    pub to: Vec<String>,
+    #[serde(default, deserialize_with = "string_or_vec_deser")]
+    pub cc: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<serde_json::Value>,
+}
+
+#[async_trait::async_trait]
+impl ActivityHandler for EmojiReact {
+    type DataType = AppState;
+    type Error = AppError;
+
+    fn id(&self) -> &Url {
+        &self.id
+    }
+
+    fn actor(&self) -> &Url {
+        // If actor is not provided, use object ID as fallback
+        // We'll extract the real actor from signature in the receive method
+        if let Some(actor) = &self.actor {
+            actor.inner()
+        } else {
+            // Fallback to object ID for now - we'll handle actor extraction in receive()
+            &self.object
+        }
+    }
+
+    async fn verify(&self, _data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    async fn receive(self, data: &Data<Self::DataType>) -> Result<(), Self::Error> {
+        tracing::info!("=== RECEIVED EMOJIREACT ACTIVITY ===");
+
+        // Try to get actor URL from direct field or extract from signature
+        let actor_url = if let Some(actor) = &self.actor {
+            tracing::info!("Actor: {}", actor.inner());
+            Some(actor.inner().clone())
+        } else {
+            tracing::info!("Actor: None (missing from activity)");
+            // Try to extract from signature
+            if let Some(signature) = &self.signature {
+                if let Some(creator) = signature.get("creator").and_then(|v| v.as_str()) {
+                    if let Ok(mut creator_url) = creator.parse::<Url>() {
+                        creator_url.set_fragment(None); // Remove #main-key fragment
+                        tracing::info!("Extracted actor from signature: {}", creator_url);
+                        Some(creator_url)
+                    } else {
+                        tracing::warn!("Failed to parse creator URL from signature: {}", creator);
+                        None
+                    }
+                } else {
+                    tracing::warn!("No creator field found in signature");
+                    None
+                }
+            } else {
+                tracing::warn!("No signature field found in EmojiReact activity");
+                None
+            }
+        };
+
+        if actor_url.is_none() {
+            tracing::error!("Cannot process EmojiReact without actor");
+            return Ok(());
+        }
+        let actor_url = actor_url.unwrap();
+
+        tracing::info!("Object: {}", self.object);
+        tracing::info!("Emoji: {}", self.content);
+        tracing::info!("================================");
+
+        let db = &data.app_data().db_pool;
+        let mut tx = db.begin().await?;
+
+        // Dereference the actor using the URL we extracted
+        let actor_obj_id = ObjectId::<Actor>::parse(&actor_url.to_string())?;
+        let actor = actor_obj_id.dereference(data).await?;
+        let persisted_actor = Actor::create_or_update_actor(&mut tx, &actor).await?;
+
+        // Parse post IRI to extract post_id
+        let object_url = self.object.to_string();
+
+        // Try to extract post ID from either URL format:
+        // https://domain/@username/post-id or https://domain/ap/posts/post-id
+        let user_post_prefix = format!("https://{}/@", data.app_data().config.domain);
+        let ap_post_prefix = format!("https://{}/ap/posts/", data.app_data().config.domain);
+
+        let post_id_str = if object_url.starts_with(&user_post_prefix) {
+            // Extract from URLs like https://domain/@username/post-id
+            let path_part = &object_url[user_post_prefix.len()..];
+            path_part.find('/').map(|pos| &path_part[pos + 1..])
+        } else if object_url.starts_with(&ap_post_prefix) {
+            // Extract from URLs like https://domain/ap/posts/post-id
+            Some(&object_url[ap_post_prefix.len()..])
+        } else {
+            None
+        };
+
+        if let Some(post_id_str) = post_id_str {
+            if let Ok(post_id) = Uuid::parse_str(post_id_str) {
+                // Verify post exists
+                if find_post_by_id(&mut tx, post_id).await?.is_some() {
+                    // Create reaction using EmojiReact's IRI and emoji content
+                    use crate::models::reaction::create_reaction_from_activitypub;
+                    match create_reaction_from_activitypub(
+                        &mut tx,
+                        self.id.to_string(),
+                        post_id,
+                        persisted_actor.id,
+                        self.content.clone(),
+                    )
+                    .await
+                    {
+                        Ok(_) => {
+                            tracing::info!(
+                                "Created {} reaction from EmojiReact activity for post {}",
+                                self.content,
+                                post_id
+                            );
+                            tx.commit().await?;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to create reaction from EmojiReact: {:?}", e);
+                            tx.rollback().await?;
+                        }
+                    }
+                } else {
+                    tracing::debug!("Post {} not found for EmojiReact activity", post_id);
+                }
+            } else {
+                tracing::warn!("Failed to parse post ID from EmojiReact object: {}", post_id_str);
+            }
+        } else {
+            tracing::debug!("EmojiReact object URL doesn't match local post pattern: {}", object_url);
         }
 
         Ok(())

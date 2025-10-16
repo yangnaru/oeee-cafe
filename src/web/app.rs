@@ -27,10 +27,11 @@ use crate::web::handlers::handler_404;
 use crate::web::handlers::home::{home, my_timeline};
 use crate::web::handlers::notifications::list_notifications;
 use crate::web::handlers::post::{
-    do_create_comment, do_post_edit_community, draft_posts, hx_delete_post, hx_do_edit_post,
-    hx_edit_post, post_edit_community, post_publish, post_publish_form, post_relay_view,
-    post_relay_view_by_login_name, post_replay_view, post_replay_view_by_login_name,
-    post_view_by_login_name, redirect_post_to_login_name,
+    add_reaction, do_create_comment, do_post_edit_community, draft_posts, hx_delete_post,
+    hx_do_edit_post, hx_edit_post, post_edit_community, post_publish, post_publish_form,
+    post_reactions_detail, post_relay_view, post_relay_view_by_login_name, post_replay_view,
+    post_replay_view_by_login_name, post_view_by_login_name, redirect_post_to_login_name,
+    remove_reaction,
 };
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
@@ -119,6 +120,8 @@ impl App {
                 post(verify_email_verification_code),
             )
             .route("/comments", post(do_create_comment))
+            .route("/posts/:post_id/reactions/add", post(add_reaction))
+            .route("/posts/:post_id/reactions/remove", post(remove_reaction))
             .route("/communities/new", get(create_community_form))
             .route("/logout", post(do_logout))
             .route("/draw", get(start_draw_get))
@@ -204,6 +207,10 @@ impl App {
             .route("/@:login_name/settings", get(profile_settings))
             .route("/@:login_name/guestbook", get(guestbook))
             .route("/@:login_name/:post_id", get(post_view_by_login_name))
+            .route(
+                "/@:login_name/:post_id/reactions",
+                get(post_reactions_detail),
+            )
             .route(
                 "/@:login_name/:post_id/replay",
                 get(post_replay_view_by_login_name),
