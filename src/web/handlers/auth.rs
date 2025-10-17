@@ -1,6 +1,6 @@
 use crate::app_error::AppError;
 use crate::models::user::{create_user, AuthSession, Credentials, UserDraft};
-use crate::web::handlers::get_bundle;
+use crate::web::handlers::{get_bundle, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::extract::Query;
 use axum::response::{IntoResponse, Redirect};
@@ -21,14 +21,12 @@ pub struct NextUrl {
 
 pub async fn signup(
     messages: Messages,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Query(NextUrl { next }): Query<NextUrl>,
     State(state): State<crate::web::state::AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     let template: minijinja::Template<'_, '_> = state.env.get_template("signup.jinja")?;
 
-    let bundle = get_bundle(&accept_language, None);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered: String = template.render(context! {
         messages => messages.into_iter().collect::<Vec<_>>(),
         next => next,
@@ -101,7 +99,7 @@ pub async fn do_signup(
 
 pub async fn login(
     messages: Messages,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Query(NextUrl { next }): Query<NextUrl>,
     State(state): State<crate::web::state::AppState>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -109,8 +107,6 @@ pub async fn login(
 
     let collected_messages: Vec<axum_messages::Message> = messages.into_iter().collect();
 
-    let bundle = get_bundle(&accept_language, None);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered: String = template.render(context! {
         messages => collected_messages,
         next => next,

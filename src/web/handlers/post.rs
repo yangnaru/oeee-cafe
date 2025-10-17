@@ -4,10 +4,10 @@ use crate::models::comment::{create_comment, extract_mentions, find_comments_by_
 use crate::models::community::{find_community_by_id, get_known_communities};
 use crate::models::follow;
 use crate::models::image::find_image_by_id;
-use crate::models::notification::{create_notification, get_unread_count, CreateNotificationParams, NotificationType};
+use crate::models::notification::{create_notification, CreateNotificationParams, NotificationType};
 use crate::models::post::{
     delete_post_with_activity, edit_post, edit_post_community, find_draft_posts_by_author_id,
-    find_post_by_id, get_draft_post_count, increment_post_viewer_count, publish_post,
+    find_post_by_id, increment_post_viewer_count, publish_post,
 };
 use crate::models::reaction::{create_reaction, delete_reaction, find_reactions_by_post_id, get_reaction_counts, ReactionDraft};
 use crate::models::user::AuthSession;
@@ -16,7 +16,8 @@ use crate::web::handlers::activitypub::{
     create_note_from_post, create_updated_note_from_post, generate_object_id, Announce, Create,
     Note, UpdateNote,
 };
-use crate::web::handlers::{get_bundle, parse_id_with_legacy_support, ParsedId};
+use crate::web::context::CommonContext;
+use crate::web::handlers::{handler_404, parse_id_with_legacy_support, ParsedId, ExtractFtlLang};
 use crate::web::state::AppState;
 use activitypub_federation::fetch::object_id::ObjectId;
 use anyhow::Error;
@@ -30,8 +31,6 @@ use axum::{extract::State, http::StatusCode, response::Html, Form};
 use minijinja::context;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-use super::{handler_404, ExtractAcceptLanguage};
 
 // Helper function to get community @slug URL from UUID
 async fn get_community_slug_url(
@@ -246,7 +245,7 @@ async fn send_post_to_community_followers(
 pub async fn post_relay_view(
     auth_session: AuthSession,
     State(state): State<AppState>,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&id, "/posts", &state)? {
@@ -263,7 +262,7 @@ pub async fn post_relay_view(
             StatusCode::NOT_FOUND,
             handler_404(
                 auth_session,
-                ExtractAcceptLanguage(accept_language),
+                ExtractFtlLang(ftl_lang),
                 State(state),
             )
             .await?,
@@ -275,17 +274,8 @@ pub async fn post_relay_view(
         state.env.get_template("draw_post_neo.jinja").unwrap();
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
 
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let community_id = Uuid::parse_str(
         post.clone()
@@ -297,26 +287,18 @@ pub async fn post_relay_view(
     )
     .unwrap();
     let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         parent_post => post.clone().unwrap(),
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         community_name => community.name,
         width => post.clone().unwrap().get("image_width").unwrap().as_ref().unwrap().parse::<u32>()?,
         height => post.unwrap().get("image_height").unwrap().as_ref().unwrap().parse::<u32>()?,
         background_color => community.background_color,
         foreground_color => community.foreground_color,
         community_id => community_id.to_string(),
-        draft_post_count,
-        unread_notification_count,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
     })?;
 
@@ -327,7 +309,7 @@ pub async fn post_view(
     auth_session: AuthSession,
     headers: HeaderMap,
     State(state): State<AppState>,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&id, "/posts", &state)? {
@@ -348,7 +330,7 @@ pub async fn post_view(
                 StatusCode::NOT_FOUND,
                 handler_404(
                     auth_session,
-                    ExtractAcceptLanguage(accept_language),
+                    ExtractFtlLang(ftl_lang),
                     State(state),
                 )
                 .await?,
@@ -390,17 +372,8 @@ pub async fn post_view(
             .unwrap(),
     )
     .unwrap();
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
 
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     // Get collaborative session participants if this post is from a collaborative session
     let collaborative_participants: Vec<CollaborativeParticipant> = sqlx::query!(
@@ -437,15 +410,8 @@ pub async fn post_view(
     let community_id = community_id.to_string();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja").unwrap();
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
 
     if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
-        let ftl_lang = bundle.locales.first().unwrap().to_string();
         let rendered = template
             .eval_to_state(context! {
                 current_user => auth_session.user,
@@ -459,12 +425,10 @@ pub async fn post_view(
             .unwrap();
         Ok(Html(rendered).into_response())
     } else {
-        let ftl_lang = bundle.locales.first().unwrap().to_string();
         let rendered = template
             .render(context! {
                 current_user => auth_session.user,
                 default_community_id => state.config.default_community_id.clone(),
-                r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
                 post => {
                     post.as_ref()
                 },
@@ -476,8 +440,8 @@ pub async fn post_view(
                 parent_post_author_login_name => parent_post_author_login_name.clone(),
                 post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
                 community_id,
-                draft_post_count,
-                unread_notification_count,
+                draft_post_count => common_ctx.draft_post_count,
+                unread_notification_count => common_ctx.unread_notification_count,
                 base_url => state.config.base_url.clone(),
                 domain => state.config.domain.clone(),
                 comments,
@@ -492,7 +456,7 @@ pub async fn post_view(
 
 pub async fn post_replay_view(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -519,17 +483,7 @@ pub async fn post_replay_view(
     )
     .unwrap();
 
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
-
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let community_id = community_id.to_string();
 
@@ -548,25 +502,17 @@ pub async fn post_replay_view(
     };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename).unwrap();
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
             default_community_id => state.config.default_community_id.clone(),
-            r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
             post => {
                 post.as_ref()
             },
             post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
             community_id,
-            draft_post_count,
-            unread_notification_count,
+            draft_post_count => common_ctx.draft_post_count,
+            unread_notification_count => common_ctx.unread_notification_count,
             ftl_lang,
         })
         .unwrap();
@@ -575,7 +521,7 @@ pub async fn post_replay_view(
 
 pub async fn post_publish_form(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -590,7 +536,7 @@ pub async fn post_publish_form(
             StatusCode::NOT_FOUND,
             handler_404(
                 auth_session,
-                ExtractAcceptLanguage(accept_language),
+                ExtractFtlLang(ftl_lang),
                 State(state),
             )
             .await?,
@@ -615,17 +561,7 @@ pub async fn post_publish_form(
         return Ok(Redirect::to(&format!("/posts/{}", id)).into_response());
     }
 
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
-
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let community_id = Uuid::parse_str(
         post.clone()
@@ -638,24 +574,16 @@ pub async fn post_publish_form(
     let link = get_community_slug_url(&mut tx, community_id).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         post_id => id,
         link,
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         post => {
             post
         },
-        draft_post_count,
-        unread_notification_count,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
     })?;
 
@@ -799,41 +727,24 @@ pub async fn post_publish(
 
 pub async fn draft_posts(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
 
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let posts =
         find_draft_posts_by_author_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("draft_posts.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         posts => posts,
-        draft_post_count,
-        unread_notification_count,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang,
     })?;
 
@@ -854,17 +765,10 @@ pub struct CollaborativeParticipant {
 
 pub async fn do_create_comment(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Form(form): Form<CreateCommentForm>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
@@ -950,7 +854,7 @@ pub async fn do_create_comment(
 
 pub async fn post_edit_community(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -1001,17 +905,9 @@ pub async fn post_edit_community(
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("post_edit_community.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         post,
         post_id => id,
         known_communities_with_community_id,
@@ -1061,7 +957,7 @@ pub async fn do_post_edit_community(
 
 pub async fn hx_edit_post(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -1088,13 +984,6 @@ pub async fn hx_edit_post(
     }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_edit.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -1116,7 +1005,7 @@ pub struct EditPostForm {
 
 pub async fn hx_do_edit_post(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(id): Path<String>,
     Form(form): Form<EditPostForm>,
@@ -1180,13 +1069,6 @@ pub async fn hx_do_edit_post(
     }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .eval_to_state(context! {
             current_user => auth_session.user,
@@ -1299,7 +1181,7 @@ pub async fn post_view_by_login_name(
     auth_session: AuthSession,
     headers: HeaderMap,
     State(state): State<AppState>,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Path((login_name, post_id)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&post_id, &format!("/@{}", login_name), &state)? {
@@ -1325,7 +1207,7 @@ pub async fn post_view_by_login_name(
                 StatusCode::NOT_FOUND,
                 handler_404(
                     auth_session,
-                    ExtractAcceptLanguage(accept_language),
+                    ExtractFtlLang(ftl_lang),
                     State(state),
                 )
                 .await?,
@@ -1368,17 +1250,8 @@ pub async fn post_view_by_login_name(
             .unwrap(),
     )
     .unwrap();
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
 
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     // Get collaborative session participants if this post is from a collaborative session
     let collaborative_participants: Vec<CollaborativeParticipant> = sqlx::query!(
@@ -1415,13 +1288,6 @@ pub async fn post_view_by_login_name(
     let community_id = community_id.to_string();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja").unwrap();
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
 
     if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
         let rendered = template
@@ -1441,7 +1307,6 @@ pub async fn post_view_by_login_name(
             .render(context! {
                 current_user => auth_session.user,
                 default_community_id => state.config.default_community_id.clone(),
-                r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
                 post => {
                     post.as_ref()
                 },
@@ -1453,8 +1318,8 @@ pub async fn post_view_by_login_name(
                 parent_post_author_login_name => parent_post_author_login_name.clone(),
                 post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
                 community_id,
-                draft_post_count,
-                unread_notification_count,
+                draft_post_count => common_ctx.draft_post_count,
+                unread_notification_count => common_ctx.unread_notification_count,
                 base_url => state.config.base_url.clone(),
                 domain => state.config.domain.clone(),
                 comments,
@@ -1565,7 +1430,7 @@ async fn send_post_update_to_followers(
 pub async fn post_relay_view_by_login_name(
     auth_session: AuthSession,
     State(state): State<AppState>,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Path((login_name, post_id)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&post_id, &format!("/@{}", login_name), &state)? {
@@ -1590,7 +1455,7 @@ pub async fn post_relay_view_by_login_name(
                 StatusCode::NOT_FOUND,
                 handler_404(
                     auth_session,
-                    ExtractAcceptLanguage(accept_language),
+                    ExtractFtlLang(ftl_lang),
                     State(state),
                 )
                 .await?,
@@ -1612,39 +1477,22 @@ pub async fn post_relay_view_by_login_name(
     )
     .unwrap();
     let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
 
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .render(context! {
             parent_post => post.clone().unwrap(),
             current_user => auth_session.user,
             default_community_id => state.config.default_community_id.clone(),
-            r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
             community_name => community.name,
             width => post.clone().unwrap().get("image_width").unwrap().as_ref().unwrap().parse::<u32>()?,
             height => post.unwrap().get("image_height").unwrap().as_ref().unwrap().parse::<u32>()?,
             background_color => community.background_color,
             foreground_color => community.foreground_color,
             community_id => community_id.to_string(),
-            draft_post_count,
-            unread_notification_count,
+            draft_post_count => common_ctx.draft_post_count,
+            unread_notification_count => common_ctx.unread_notification_count,
             ftl_lang
         })
         .unwrap();
@@ -1653,7 +1501,7 @@ pub async fn post_relay_view_by_login_name(
 
 pub async fn post_replay_view_by_login_name(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path((login_name, post_id)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -1690,17 +1538,7 @@ pub async fn post_replay_view_by_login_name(
     )
     .unwrap();
 
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
-
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let community_id = community_id.to_string();
 
@@ -1719,24 +1557,16 @@ pub async fn post_replay_view_by_login_name(
     };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename).unwrap();
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
-            r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
             post => {
                 post.as_ref()
             },
             post_id => post_id,
             community_id,
-            draft_post_count,
-            unread_notification_count,
+            draft_post_count => common_ctx.draft_post_count,
+            unread_notification_count => common_ctx.unread_notification_count,
             ftl_lang
         })
         .unwrap();
@@ -2000,7 +1830,7 @@ pub async fn remove_reaction(
 
 pub async fn post_reactions_detail(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path((login_name, post_id)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -2019,7 +1849,7 @@ pub async fn post_reactions_detail(
             StatusCode::NOT_FOUND,
             handler_404(
                 auth_session,
-                ExtractAcceptLanguage(accept_language),
+                ExtractFtlLang(ftl_lang),
                 State(state),
             )
             .await?,
@@ -2036,17 +1866,7 @@ pub async fn post_reactions_detail(
     // Get all reactions for this post
     let reactions = find_reactions_by_post_id(&mut tx, uuid).await?;
 
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
-
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     tx.commit().await?;
 
@@ -2104,13 +1924,6 @@ pub async fn post_reactions_detail(
         .collect();
 
     let template = state.env.get_template("post_reactions_detail.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -2118,8 +1931,8 @@ pub async fn post_reactions_detail(
         post_id => post_id,
         login_name => login_name,
         grouped_reactions => grouped_reactions,
-        draft_post_count,
-        unread_notification_count,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
     })?;
 

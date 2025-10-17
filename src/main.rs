@@ -92,6 +92,9 @@ fn main() {
             }
             env.add_function("ftl_get_message", ftl_get_message);
 
+            // Add global variables
+            env.add_global("r2_public_endpoint_url", cfg.r2_public_endpoint_url.clone());
+
             env.set_loader(path_loader(&template_path));
 
             let db_pool = cfg.connect_database().await.unwrap_or_else(|e| {

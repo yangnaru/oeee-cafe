@@ -1,4 +1,3 @@
-use super::{get_bundle, ExtractAcceptLanguage};
 use crate::app_error::AppError;
 use axum::{
     extract::{Path, State},
@@ -19,44 +18,35 @@ use crate::{
         },
         user::AuthSession,
     },
-    web::state::AppState,
+    web::{context::CommonContext, handlers::ExtractFtlLang, state::AppState},
 };
 
 pub async fn list_notifications(
     auth_session: AuthSession,
     State(state): State<AppState>,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     messages: Messages,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
 
     let user = auth_session.user.clone().unwrap();
 
     // Fetch notifications using the new notification system
     let notifications = fetch_notifications(&mut tx, user.id, 50, 0).await?;
 
-    // Get unread count for header
-    let unread_notification_count = get_unread_count(&mut tx, user.id).await?;
+    // Get common context (includes unread_notification_count and draft_post_count)
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     tx.commit().await?;
 
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let template: minijinja::Template<'_, '_> = state.env.get_template("notifications.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         notifications => notifications,
-        unread_notification_count => unread_notification_count,
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
     })?;
 
@@ -66,7 +56,7 @@ pub async fn list_notifications(
 /// Mark a specific notification as read
 pub async fn mark_notification_read(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(notification_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -89,18 +79,9 @@ pub async fn mark_notification_read(
 
     if let Some(notification) = notification {
         // Render the notification using the notification_item template
-        let user_preferred_language = auth_session
-            .user
-            .clone()
-            .map(|u| u.preferred_language)
-            .unwrap_or_else(|| None);
-        let bundle = get_bundle(&accept_language, user_preferred_language);
-        let ftl_lang = bundle.locales.first().unwrap().to_string();
-
         let template = state.env.get_template("notification_item.jinja")?;
         let rendered = template.render(context! {
             notification,
-            r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
             ftl_lang,
         })?;
 

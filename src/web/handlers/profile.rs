@@ -9,13 +9,12 @@ use crate::models::guestbook_entry::{
 use crate::models::link::{
     create_link, delete_link, find_links_by_user_id, update_link_order, LinkDraft,
 };
-use crate::models::notification::{create_notification, get_unread_count, CreateNotificationParams, NotificationType};
+use crate::models::notification::{create_notification, CreateNotificationParams, NotificationType};
 use crate::models::post::{
     find_published_posts_by_author_id, find_published_public_posts_by_author_id,
-    get_draft_post_count,
 };
 use crate::models::user::{find_user_by_id, find_user_by_login_name, AuthSession};
-use crate::web::handlers::get_bundle;
+use crate::web::context::CommonContext;
 use crate::web::state::AppState;
 use axum::extract::Path;
 use axum::response::IntoResponse;
@@ -25,11 +24,11 @@ use minijinja::context;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::ExtractAcceptLanguage;
+use super::ExtractFtlLang;
 
 pub async fn do_follow_profile(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -73,13 +72,6 @@ pub async fn do_follow_profile(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("unfollow_button.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -92,7 +84,7 @@ pub async fn do_follow_profile(
 
 pub async fn do_unfollow_profile(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -113,13 +105,6 @@ pub async fn do_unfollow_profile(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("follow_button.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -132,7 +117,7 @@ pub async fn do_unfollow_profile(
 
 pub async fn profile(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -155,17 +140,7 @@ pub async fn profile(
         .filter(|post| post.community_is_private)
         .collect::<Vec<_>>();
 
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
-
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let mut is_current_user_following = false;
     if let Some(current_user) = auth_session.user.clone() {
@@ -194,13 +169,6 @@ pub async fn profile(
         .collect::<Vec<_>>();
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -210,11 +178,10 @@ pub async fn profile(
         followings,
         user,
         domain => state.config.domain.clone(),
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         public_community_posts,
         private_community_posts,
-        draft_post_count,
-        unread_notification_count,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang,
     })?;
 
@@ -223,7 +190,7 @@ pub async fn profile(
 
 pub async fn profile_iframe(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -238,17 +205,9 @@ pub async fn profile_iframe(
     let posts = find_published_public_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_iframe.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         user,
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         posts,
         ftl_lang,
     })?;
@@ -258,7 +217,7 @@ pub async fn profile_iframe(
 
 pub async fn profile_banners_iframe(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -274,19 +233,11 @@ pub async fn profile_banners_iframe(
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("profile_banners_iframe.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         followings,
         user,
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ftl_lang,
     })?;
 
@@ -295,7 +246,7 @@ pub async fn profile_banners_iframe(
 
 pub async fn do_move_link_down(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -326,13 +277,6 @@ pub async fn do_move_link_down(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
@@ -345,7 +289,7 @@ pub async fn do_move_link_down(
 
 pub async fn do_move_link_up(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -376,13 +320,6 @@ pub async fn do_move_link_up(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
@@ -401,7 +338,7 @@ pub struct AddLinkForm {
 
 pub async fn do_delete_link(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -430,13 +367,6 @@ pub async fn do_delete_link(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
@@ -449,7 +379,7 @@ pub async fn do_delete_link(
 
 pub async fn do_add_link(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
     Form(form): Form<AddLinkForm>,
@@ -483,13 +413,6 @@ pub async fn do_add_link(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template
         .eval_to_state(context! {
             user => auth_session.user,
@@ -502,7 +425,7 @@ pub async fn do_add_link(
 
 pub async fn profile_settings(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
@@ -517,33 +440,16 @@ pub async fn profile_settings(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
-
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let links = find_links_by_user_id(&mut tx, user.clone().unwrap().id).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
-        draft_post_count,
-        unread_notification_count,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
         links,
         user,
         ftl_lang,
@@ -559,7 +465,7 @@ pub struct AddGuestbookEntryReplyForm {
 
 pub async fn do_reply_guestbook_entry(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path((login_name, entry_id)): Path<(String, Uuid)>,
     Form(form): Form<AddGuestbookEntryReplyForm>,
@@ -620,13 +526,6 @@ pub async fn do_reply_guestbook_entry(
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("guestbook_entry_reply.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -679,7 +578,7 @@ pub async fn do_delete_guestbook_entry(
 
 pub async fn do_write_guestbook_entry(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
     Form(form): Form<CreateGuestbookEntryForm>,
@@ -731,13 +630,6 @@ pub async fn do_write_guestbook_entry(
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook_entry.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
@@ -750,7 +642,7 @@ pub async fn do_write_guestbook_entry(
 
 pub async fn guestbook(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -767,17 +659,7 @@ pub async fn guestbook(
             .await
             .unwrap();
 
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
-
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let banner = match user.clone().unwrap().banner_id {
         Some(banner_id) => Some(find_banner_by_id(&mut tx, banner_id).await?),
@@ -791,21 +673,13 @@ pub async fn guestbook(
     }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook.jinja")?;
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         banner,
         user,
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        draft_post_count,
-        unread_notification_count,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
         is_following => is_current_user_following,
         guestbook_entries,
         ftl_lang,

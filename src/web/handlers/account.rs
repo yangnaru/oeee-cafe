@@ -2,13 +2,12 @@ use crate::app_error::AppError;
 use crate::models::email_verification_challenge::{
     create_email_verification_challenge, find_email_verification_challenge_by_id,
 };
-use crate::models::notification::get_unread_count;
-use crate::models::post::get_draft_post_count;
 use crate::models::user::{
     find_user_by_id, update_password, update_user_email_verified_at,
     update_user_preferred_language, update_user_with_activity, AuthSession, Language,
 };
-use crate::web::handlers::get_bundle;
+use crate::web::context::CommonContext;
+use crate::web::handlers::{get_bundle, ExtractAcceptLanguage, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
@@ -22,8 +21,6 @@ use rand::{thread_rng, Rng};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use super::ExtractAcceptLanguage;
-
 #[derive(Deserialize)]
 pub struct EmailVerificationChallengeResponseForm {
     pub challenge_id: Uuid,
@@ -32,30 +29,15 @@ pub struct EmailVerificationChallengeResponseForm {
 
 pub async fn account(
     messages: Messages,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     auth_session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
 
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
-
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let languages = vec![
         ("ko", "한국어"),
@@ -63,14 +45,13 @@ pub async fn account(
         ("en", "English"),
         ("zh", "中文"),
     ];
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let template: minijinja::Template<'_, '_> = state.env.get_template("account.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         languages,
-        draft_post_count,
-        unread_notification_count,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
         messages => messages.into_iter().collect::<Vec<_>>(),
         ftl_lang
     })?;

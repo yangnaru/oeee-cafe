@@ -1,7 +1,7 @@
 use crate::app_error::AppError;
-use crate::models::notification::get_unread_count;
 use crate::models::user::AuthSession;
-use crate::web::handlers::{get_bundle, ExtractAcceptLanguage};
+use crate::web::context::CommonContext;
+use crate::web::handlers::{ExtractAcceptLanguage, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -94,7 +94,7 @@ pub async fn get_collaboration_meta(
 
 pub async fn collaborate_lobby(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     let user = match auth_session.user {
@@ -105,12 +105,12 @@ pub async fn collaborate_lobby(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let unread_notification_count = get_unread_count(&mut tx, user.id).await.unwrap_or(0);
+    let common_ctx = CommonContext::build(&mut tx, Some(user.id)).await?;
 
     let active_sessions = sqlx::query_as!(
         SessionWithCounts,
         r#"
-        SELECT 
+        SELECT
             cs.id,
             u.login_name as owner_login_name,
             cs.title,
@@ -121,8 +121,8 @@ pub async fn collaborate_lobby(
         FROM collaborative_sessions cs
         JOIN users u ON cs.owner_id = u.id
         JOIN communities c ON cs.community_id = c.id
-        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id 
-        WHERE cs.is_public = true 
+        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
+        WHERE cs.is_public = true
           AND cs.ended_at IS NULL
           AND c.is_private = false
         GROUP BY cs.id, u.login_name, cs.max_participants
@@ -135,9 +135,6 @@ pub async fn collaborate_lobby(
     .await?;
 
     let template = state.env.get_template("collaborate_lobby.jinja")?;
-    let user_preferred_language = user.preferred_language.clone();
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
 
     let rendered = template.render(context! {
         current_user => user,
@@ -147,7 +144,7 @@ pub async fn collaborate_lobby(
             ("300x300", "300×300"),
             ("1024x768", "1024×768"),
         ],
-        unread_notification_count,
+        unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
     })?;
 

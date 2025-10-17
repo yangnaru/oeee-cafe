@@ -1,8 +1,7 @@
 use crate::app_error::AppError;
 use crate::locale::LOCALES;
-use crate::models::notification::get_unread_count;
-use crate::models::post::get_draft_post_count;
 use crate::models::user::{AuthSession, Language};
+use crate::web::context::CommonContext;
 use anyhow;
 use anyhow::Result;
 use axum::extract::State;
@@ -45,36 +44,21 @@ pub mod profile;
 
 pub async fn handler_404(
     auth_session: AuthSession,
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let draft_post_count = match auth_session.user.clone() {
-        Some(user) => get_draft_post_count(&mut tx, user.id)
-            .await
-            .unwrap_or_default(),
-        None => 0,
-    };
 
-    let unread_notification_count = match auth_session.user.clone() {
-        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
-        None => 0,
-    };
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let user_preferred_language = auth_session
-        .user
-        .clone()
-        .map(|u| u.preferred_language)
-        .unwrap_or_else(|| None);
-    let bundle = get_bundle(&accept_language, user_preferred_language);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
     let template: minijinja::Template<'_, '_> = state.env.get_template("404.jinja")?;
     let rendered: String = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
-        draft_post_count,
-        unread_notification_count,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
     })?;
 
@@ -96,6 +80,43 @@ where
         } else {
             Ok(ExtractAcceptLanguage(HeaderValue::from_static("")))
         }
+    }
+}
+
+/// Extractor that provides the computed locale string for templates
+pub struct ExtractFtlLang(pub String);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for ExtractFtlLang
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        // Extract Accept-Language header
+        let accept_language = if let Some(accept_language) = parts.headers.get(ACCEPT_LANGUAGE) {
+            accept_language.clone()
+        } else {
+            HeaderValue::from_static("")
+        };
+
+        // Extract AuthSession to get user preferences
+        let auth_session = AuthSession::from_request_parts(parts, state)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to extract auth session"))?;
+
+        // Get user's preferred language
+        let user_preferred_language = auth_session
+            .user
+            .as_ref()
+            .and_then(|u| u.preferred_language.clone());
+
+        // Get the bundle and extract locale
+        let bundle = get_bundle(&accept_language, user_preferred_language);
+        let ftl_lang = bundle.locales.first().unwrap().to_string();
+
+        Ok(ExtractFtlLang(ftl_lang))
     }
 }
 
