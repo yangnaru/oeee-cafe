@@ -144,6 +144,7 @@ pub async fn collaborate_lobby(
             ("300x300", "300×300"),
             ("1024x768", "1024×768"),
         ],
+        draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
     })?;
