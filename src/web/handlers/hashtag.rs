@@ -23,8 +23,8 @@ pub async fn hashtag_view(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    // Normalize hashtag name (lowercase)
-    let normalized_name = hashtag_name.to_lowercase();
+    // Normalize hashtag name (convert hyphens to underscores, then lowercase)
+    let normalized_name = hashtag_name.replace('-', "_").to_lowercase();
 
     // Find the hashtag
     let hashtag = find_hashtag_by_name(&mut tx, &normalized_name).await?;
@@ -73,8 +73,11 @@ pub async fn hashtag_autocomplete(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
+    // Normalize search query (convert hyphens to underscores)
+    let normalized_query = params.q.replace('-', "_");
+
     // Search for hashtags matching the query
-    let hashtags = search_hashtags(&mut tx, &params.q, 10).await?;
+    let hashtags = search_hashtags(&mut tx, &normalized_query, 10).await?;
 
     tx.commit().await?;
 
@@ -111,8 +114,9 @@ pub async fn hashtag_discovery(
 
     // Get hashtags based on search query or show all
     let hashtags = if let Some(ref query) = params.q {
-        // Search mode
-        search_hashtags(&mut tx, query, 100).await?
+        // Search mode - normalize query (convert hyphens to underscores)
+        let normalized_query = query.replace('-', "_");
+        search_hashtags(&mut tx, &normalized_query, 100).await?
     } else {
         // Browse mode - get all hashtags sorted by chosen method
         match sort_by {

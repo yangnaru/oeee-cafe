@@ -15,15 +15,17 @@ pub struct Hashtag {
 }
 
 /// Parse hashtag input from user (comma or space-separated)
-/// Returns normalized (lowercase, trimmed) hashtag names with original display names
+/// Returns normalized (lowercase, trimmed, hyphens converted to underscores) hashtag names with original display names
 pub fn parse_hashtag_input(input: &str) -> Vec<(String, String)> {
     input
         .split(|c| c == ',' || c == ' ')
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .map(|s| {
-            let normalized = s.to_lowercase();
-            let display = s.to_string();
+            // Convert hyphens to underscores, then normalize to lowercase
+            let normalized = s.replace('-', "_").to_lowercase();
+            // Also replace hyphens in display name
+            let display = s.replace('-', "_");
             (normalized, display)
         })
         .collect()
