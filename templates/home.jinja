@@ -4,6 +4,21 @@
 {% endblock title %}
 {% block content %}
   <div class="center">
+    {% if trending_hashtags %}
+      <div class="trending-hashtags">
+        <h3>
+          <a href="/hashtags">{{ ftl_get_message("trending-hashtags") }}</a>
+        </h3>
+        <ul class="hashtag-list">
+          {% for hashtag in trending_hashtags %}
+            <li class="hashtag-item">
+              <a href="/hashtags/{{ hashtag.name }}">#{{ hashtag.display_name }}</a>
+              <span class="hashtag-post-count">({{ hashtag.post_count }})</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
     {% if non_official_public_community_posts| length > 0 %}
       <h2 class="home-section-title">{{ ftl_get_message("posts-from-public-communities") }}</h2>
       <div class="posts-grid">
@@ -18,21 +33,6 @@
             </a>
           </div>
         {% endfor %}
-      </div>
-    {% endif %}
-    {% if trending_hashtags %}
-      <div class="trending-hashtags">
-        <h3><a href="/hashtags">{{ ftl_get_message("trending-hashtags") }}</a></h3>
-        <ul class="hashtag-list">
-          {% for hashtag in trending_hashtags %}
-            <li class="hashtag-item">
-              <a href="/hashtags/{{ hashtag.name }}">
-                #{{ hashtag.display_name }}
-              </a>
-              <span class="hashtag-post-count">({{ hashtag.post_count }})</span>
-            </li>
-          {% endfor %}
-        </ul>
       </div>
     {% endif %}
     <h2 class="home-section-title">{{ ftl_get_message("latest-active-communities") }}</h2>
@@ -64,7 +64,7 @@
         </div>
       {% endfor %}
     {% else %}
-      <p>{{ ftl_get_message("timeline-empty")|safe }}</p>
+      <p>{{ ftl_get_message("timeline-empty") |safe }}</p>
     {% endif %}
   </div>
 {% endblock content %}
