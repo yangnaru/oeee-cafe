@@ -3,6 +3,7 @@ use crate::app_error::AppError;
 use crate::models::community::{
     get_active_public_communities_excluding_owner, get_user_communities_with_latest_9_posts,
 };
+use crate::models::notification::get_unread_count;
 use crate::models::post::{
     find_following_posts_by_user_id, find_public_community_posts_excluding_from_community_owner,
     get_draft_post_count,
@@ -40,6 +41,11 @@ pub async fn home(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let user = find_user_by_login_name(&mut tx, &state.config.official_account_login_name).await?;
     let official_communities_with_latest_posts = match user.clone() {
         Some(user) => get_user_communities_with_latest_9_posts(&mut tx, user.id).await?,
@@ -73,6 +79,7 @@ pub async fn home(
         official_communities_with_latest_posts,
         non_official_public_community_posts,
         draft_post_count,
+        unread_notification_count,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ftl_lang
     })?;
@@ -102,6 +109,9 @@ pub async fn my_timeline(
     let draft_post_count = get_draft_post_count(&mut tx, auth_session.user.clone().unwrap().id)
         .await
         .unwrap_or_default();
+    let unread_notification_count = get_unread_count(&mut tx, auth_session.user.clone().unwrap().id)
+        .await
+        .unwrap_or(0);
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("timeline.jinja")?;
     let rendered = template.render(context! {
@@ -110,6 +120,7 @@ pub async fn my_timeline(
         messages => messages.into_iter().collect::<Vec<_>>(),
         posts,
         draft_post_count,
+        unread_notification_count,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ftl_lang
     })?;

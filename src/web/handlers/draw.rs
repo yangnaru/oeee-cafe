@@ -1,6 +1,7 @@
 use crate::app_error::AppError;
 use crate::models::banner::{create_banner, BannerDraft};
 use crate::models::community::find_community_by_id;
+use crate::models::notification::get_unread_count;
 use crate::models::post::{create_post, get_draft_post_count, PostDraft, Tool};
 use crate::models::user::AuthSession;
 use crate::web::handlers::get_bundle;
@@ -66,6 +67,11 @@ pub async fn start_draw(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let community_id = Uuid::parse_str(&input.community_id).unwrap();
     let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
 
@@ -89,6 +95,7 @@ pub async fn start_draw(
         community_id => input.community_id,
         community_slug => community.slug,
         draft_post_count,
+        unread_notification_count,
         ftl_lang
     })?;
 

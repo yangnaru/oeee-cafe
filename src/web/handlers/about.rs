@@ -1,4 +1,5 @@
 use crate::app_error::AppError;
+use crate::models::notification::get_unread_count;
 use crate::models::post::get_draft_post_count;
 use crate::models::user::{find_users_with_public_posts_and_banner, AuthSession};
 use crate::web::handlers::get_bundle;
@@ -23,6 +24,11 @@ pub async fn about(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let users_with_public_posts_and_banner = find_users_with_public_posts_and_banner(&mut tx)
         .await
         .unwrap_or_default();
@@ -39,6 +45,7 @@ pub async fn about(
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         draft_post_count,
+        unread_notification_count,
         users_with_public_posts_and_banner,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ftl_lang,

@@ -1,4 +1,5 @@
 use crate::app_error::AppError;
+use crate::models::actor::Actor;
 use crate::models::banner::find_banner_by_id;
 use crate::models::follow::{find_followings_by_user_id, follow_user, is_following, unfollow_user};
 use crate::models::guestbook_entry::{
@@ -8,6 +9,7 @@ use crate::models::guestbook_entry::{
 use crate::models::link::{
     create_link, delete_link, find_links_by_user_id, update_link_order, LinkDraft,
 };
+use crate::models::notification::{create_notification, get_unread_count, CreateNotificationParams, NotificationType};
 use crate::models::post::{
     find_published_posts_by_author_id, find_published_public_posts_by_author_id,
     get_draft_post_count,
@@ -45,6 +47,29 @@ pub async fn do_follow_profile(
         user.clone().unwrap().id,
     )
     .await?;
+
+    // Create notification for the user being followed
+    let follower_actor = Actor::find_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    if let Some(follower_actor) = follower_actor {
+        match create_notification(
+            &mut tx,
+            CreateNotificationParams {
+                recipient_id: user.clone().unwrap().id,
+                actor_id: follower_actor.id,
+                notification_type: NotificationType::Follow,
+                post_id: None,
+                comment_id: None,
+                reaction_iri: None,
+                guestbook_entry_id: None,
+            },
+        )
+        .await
+        {
+            Ok(_) => tracing::info!("Created follow notification"),
+            Err(e) => tracing::warn!("Failed to create follow notification: {:?}", e),
+        }
+    }
+
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("unfollow_button.jinja")?;
@@ -137,6 +162,11 @@ pub async fn profile(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let mut is_current_user_following = false;
     if let Some(current_user) = auth_session.user.clone() {
         is_current_user_following =
@@ -184,6 +214,7 @@ pub async fn profile(
         public_community_posts,
         private_community_posts,
         draft_post_count,
+        unread_notification_count,
         ftl_lang,
     })?;
 
@@ -493,6 +524,11 @@ pub async fn profile_settings(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let links = find_links_by_user_id(&mut tx, user.clone().unwrap().id).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
@@ -507,6 +543,7 @@ pub async fn profile_settings(
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         draft_post_count,
+        unread_notification_count,
         links,
         user,
         ftl_lang,
@@ -556,6 +593,28 @@ pub async fn do_reply_guestbook_entry(
     let replied_at = add_guestbook_entry_reply(&mut tx, entry_id, form.content.clone()).await?;
     guestbook_entry.reply = Some(form.content);
     guestbook_entry.replied_at = Some(replied_at);
+
+    // Create notification for the guestbook entry author (person who originally wrote the entry)
+    let replier_actor = Actor::find_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    if let Some(replier_actor) = replier_actor {
+        match create_notification(
+            &mut tx,
+            CreateNotificationParams {
+                recipient_id: guestbook_entry.author_id,
+                actor_id: replier_actor.id,
+                notification_type: NotificationType::GuestbookReply,
+                post_id: None,
+                comment_id: None,
+                reaction_iri: None,
+                guestbook_entry_id: Some(entry_id),
+            },
+        )
+        .await
+        {
+            Ok(_) => tracing::info!("Created guestbook reply notification"),
+            Err(e) => tracing::warn!("Failed to create guestbook reply notification: {:?}", e),
+        }
+    }
 
     let _ = tx.commit().await;
 
@@ -644,6 +703,31 @@ pub async fn do_write_guestbook_entry(
         },
     )
     .await;
+
+    // Create notification for the guestbook owner
+    if let Ok(ref entry) = guestbook_entry {
+        let author_actor = Actor::find_by_user_id(&mut tx, current_user_id).await?;
+        if let Some(author_actor) = author_actor {
+            match create_notification(
+                &mut tx,
+                CreateNotificationParams {
+                    recipient_id,
+                    actor_id: author_actor.id,
+                    notification_type: NotificationType::GuestbookEntry,
+                    post_id: None,
+                    comment_id: None,
+                    reaction_iri: None,
+                    guestbook_entry_id: Some(entry.id),
+                },
+            )
+            .await
+            {
+                Ok(_) => tracing::info!("Created guestbook entry notification"),
+                Err(e) => tracing::warn!("Failed to create guestbook entry notification: {:?}", e),
+            }
+        }
+    }
+
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook_entry.jinja")?;
@@ -690,6 +774,11 @@ pub async fn guestbook(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let banner = match user.clone().unwrap().banner_id {
         Some(banner_id) => Some(find_banner_by_id(&mut tx, banner_id).await?),
         None => None,
@@ -716,6 +805,7 @@ pub async fn guestbook(
         user,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         draft_post_count,
+        unread_notification_count,
         is_following => is_current_user_following,
         guestbook_entries,
         ftl_lang,

@@ -21,6 +21,25 @@ community = 社区
 notifications = 通知
 
 no-notifications = 暂无通知
+notification-comment = 新评论
+notification-commented-on = 评论了
+notification-reaction = 新反应
+notification-reacted-with = 的反应
+notification-to-post = 对作品
+notification-follow = 新关注
+notification-followed-you = 关注了您
+notification-guestbook-entry = 新留言
+notification-wrote-guestbook = 写了留言
+notification-guestbook-reply = 留言回复
+notification-replied-guestbook = 回复了留言
+notification-mention = 提及
+notification-mentioned-in-comment = 在评论中提及了您
+notification-post-reply = 作品回复
+notification-replied-to-post = 回复了您的作品
+notification-mark-all-read = 全部标记为已读
+notification-mark-read = 标记为已读
+notification-delete = 删除
+notification-delete-confirm = 确定要删除此通知吗？
 
 sign-in = 登录
 sign-up = 注册

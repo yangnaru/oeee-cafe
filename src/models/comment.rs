@@ -269,3 +269,58 @@ pub async fn create_comment_from_activitypub(
 
     Ok(comment)
 }
+
+/// Extract @mentions from comment content
+/// Returns a list of login names (without the @ prefix)
+pub fn extract_mentions(content: &str) -> Vec<String> {
+    let mut mentions = std::collections::HashSet::new();
+    let mut chars = content.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '@' {
+            let mut username = String::new();
+
+            // Extract username: alphanumeric, hyphens, underscores
+            while let Some(&next_ch) = chars.peek() {
+                if next_ch.is_alphanumeric() || next_ch == '-' || next_ch == '_' {
+                    username.push(next_ch);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+
+            if !username.is_empty() {
+                mentions.insert(username);
+            }
+        }
+    }
+
+    mentions.into_iter().collect()
+}
+
+/// Find users by their login names
+pub async fn find_users_by_login_names(
+    tx: &mut Transaction<'_, Postgres>,
+    login_names: &[String],
+) -> Result<Vec<(Uuid, String)>> {
+    if login_names.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let users = sqlx::query!(
+        r#"
+        SELECT id, login_name
+        FROM users
+        WHERE login_name = ANY($1)
+        "#,
+        login_names
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(users
+        .into_iter()
+        .map(|u| (u.id, u.login_name))
+        .collect())
+}

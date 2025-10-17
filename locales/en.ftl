@@ -19,6 +19,25 @@ community = Community
 notifications = Notifications
 
 no-notifications = No notifications, yet.
+notification-comment = New comment
+notification-commented-on = commented on
+notification-reaction = New reaction
+notification-reacted-with = reacted with
+notification-to-post = to
+notification-follow = New follower
+notification-followed-you = started following you
+notification-guestbook-entry = New guestbook entry
+notification-wrote-guestbook = wrote on your guestbook
+notification-guestbook-reply = New guestbook reply
+notification-replied-guestbook = replied to your guestbook entry
+notification-mention = Mention
+notification-mentioned-in-comment = mentioned you in a comment on
+notification-post-reply = Post reply
+notification-replied-to-post = replied to your post
+notification-mark-all-read = Mark all as read
+notification-mark-read = Mark as read
+notification-delete = Delete
+notification-delete-confirm = Are you sure you want to delete this notification?
 
 sign-in = Sign in
 sign-up = Sign up

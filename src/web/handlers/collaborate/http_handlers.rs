@@ -1,4 +1,5 @@
 use crate::app_error::AppError;
+use crate::models::notification::get_unread_count;
 use crate::models::user::AuthSession;
 use crate::web::handlers::{get_bundle, ExtractAcceptLanguage};
 use crate::web::state::AppState;
@@ -104,6 +105,8 @@ pub async fn collaborate_lobby(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
+    let unread_notification_count = get_unread_count(&mut tx, user.id).await.unwrap_or(0);
+
     let active_sessions = sqlx::query_as!(
         SessionWithCounts,
         r#"
@@ -144,6 +147,7 @@ pub async fn collaborate_lobby(
             ("300x300", "300×300"),
             ("1024x768", "1024×768"),
         ],
+        unread_notification_count,
         ftl_lang
     })?;
 

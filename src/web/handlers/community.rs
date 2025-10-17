@@ -6,6 +6,7 @@ use crate::models::community::{
     get_participating_communities, get_public_communities, update_community_with_activity,
     CommunityDraft,
 };
+use crate::models::notification::get_unread_count;
 use crate::models::post::{find_published_posts_by_community_id, get_draft_post_count};
 use crate::models::user::AuthSession;
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
@@ -71,6 +72,11 @@ pub async fn community(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let template: minijinja::Template<'_, '_> = state.env.get_template("community.jinja").unwrap();
     let user_preferred_language = auth_session
         .user
@@ -103,6 +109,7 @@ pub async fn community(
         community_id => community_id,
         domain => state.config.domain.clone(),
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        unread_notification_count,
         comments => comments.iter().map(
             |comment| {
                 HashMap::<String, String>::from_iter(vec![
@@ -304,6 +311,11 @@ pub async fn communities(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let template: minijinja::Template<'_, '_> = state.env.get_template("communities.jinja")?;
     let user_preferred_language = auth_session
         .user
@@ -317,6 +329,7 @@ pub async fn communities(
         default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count,
+        unread_notification_count,
         official_communities,
         public_communities,
         participating_communities,
@@ -413,6 +426,11 @@ pub async fn create_community_form(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let template: minijinja::Template<'_, '_> = state.env.get_template("create_community.jinja")?;
     let user_preferred_language = auth_session
         .user
@@ -426,6 +444,7 @@ pub async fn create_community_form(
         default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count,
+        unread_notification_count,
         ftl_lang
     })?;
 
@@ -467,6 +486,11 @@ pub async fn hx_edit_community(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let template: minijinja::Template<'_, '_> = state.env.get_template("community_edit.jinja")?;
     let user_preferred_language = auth_session
         .user
@@ -480,6 +504,7 @@ pub async fn hx_edit_community(
         community,
         community_id => id,
         domain => state.config.domain.clone(),
+        unread_notification_count,
         ftl_lang
     })?;
 

@@ -21,6 +21,25 @@ community = コミュニティ
 notifications = お知らせ
 
 no-notifications = まだ通知がありません。
+notification-comment = 新しいコメント
+notification-commented-on = さんがコメントを残しました
+notification-reaction = 新しいリアクション
+notification-reacted-with = さんがリアクションしました
+notification-to-post = 投稿に
+notification-follow = 新しい同盟
+notification-followed-you = さんが同盟を結びました
+notification-guestbook-entry = 新しいゲストブック
+notification-wrote-guestbook = さんがゲストブックを残しました
+notification-guestbook-reply = ゲストブックの返信
+notification-replied-guestbook = さんがゲストブックに返信を残しました
+notification-mention = メンション
+notification-mentioned-in-comment = さんがコメントであなたを言及しました
+notification-post-reply = 絵の返信
+notification-replied-to-post = さんが絵に返信を描きました
+notification-mark-all-read = すべて既読にする
+notification-mark-read = 既読にする
+notification-delete = 削除
+notification-delete-confirm = 本当にこの通知を削除しますか？
 
 sign-in = ログイン
 sign-up = 会員登録

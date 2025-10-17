@@ -2,6 +2,7 @@ use crate::app_error::AppError;
 use crate::models::email_verification_challenge::{
     create_email_verification_challenge, find_email_verification_challenge_by_id,
 };
+use crate::models::notification::get_unread_count;
 use crate::models::post::get_draft_post_count;
 use crate::models::user::{
     find_user_by_id, update_password, update_user_email_verified_at,
@@ -44,6 +45,11 @@ pub async fn account(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -64,6 +70,7 @@ pub async fn account(
         default_community_id => state.config.default_community_id.clone(),
         languages,
         draft_post_count,
+        unread_notification_count,
         messages => messages.into_iter().collect::<Vec<_>>(),
         ftl_lang
     })?;

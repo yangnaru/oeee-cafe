@@ -94,6 +94,7 @@ use crate::models::comment::{
 use crate::models::community::find_community_by_slug;
 use crate::models::follow;
 use crate::models::image::find_image_by_id;
+use crate::models::notification::{create_notification, CreateNotificationParams, NotificationType};
 use crate::models::post::find_post_by_id;
 use crate::models::user::{find_user_by_id, find_user_by_login_name};
 use crate::web::state::AppState;
@@ -1366,8 +1367,14 @@ impl ActivityHandler for Create {
 
             if let Some(post_id_str) = post_id {
                 if let Ok(post_id) = Uuid::parse_str(post_id_str) {
-                    // Verify the post exists
-                    if let Some(_post) = find_post_by_id(&mut tx, post_id).await? {
+                    // Verify the post exists and get post author
+                    if let Some(post) = find_post_by_id(&mut tx, post_id).await? {
+                        // Get post author's user_id
+                        let post_author_user_id = post
+                            .get("author_id")
+                            .and_then(|id| id.as_ref())
+                            .and_then(|id_str| Uuid::parse_str(id_str).ok());
+
                         // Get the actor who sent this comment, fetching from remote if needed
                         let actor = Actor::read_from_id(self.actor.inner().clone(), data).await?;
 
@@ -1424,11 +1431,33 @@ impl ActivityHandler for Create {
                         .await;
 
                         match comment {
-                            Ok(_) => {
+                            Ok(comment) => {
                                 tracing::info!(
                                     "Created comment from ActivityPub mention for post {}",
                                     post_id
                                 );
+
+                                // Create notification for post author
+                                if let Some(post_author_id) = post_author_user_id {
+                                    match create_notification(
+                                        &mut tx,
+                                        CreateNotificationParams {
+                                            recipient_id: post_author_id,
+                                            actor_id: actor.id,
+                                            notification_type: NotificationType::Comment,
+                                            post_id: Some(post_id),
+                                            comment_id: Some(comment.id),
+                                            reaction_iri: None,
+                                            guestbook_entry_id: None,
+                                        },
+                                    )
+                                    .await
+                                    {
+                                        Ok(_) => tracing::info!("Created notification for comment from federated actor"),
+                                        Err(e) => tracing::warn!("Failed to create notification for comment: {:?}", e),
+                                    }
+                                }
+
                                 tx.commit().await?;
                             }
                             Err(e) => {
@@ -2156,8 +2185,14 @@ impl ActivityHandler for Like {
 
         if let Some(post_id_str) = post_id_str {
             if let Ok(post_id) = Uuid::parse_str(post_id_str) {
-                // Verify post exists
-                if find_post_by_id(&mut tx, post_id).await?.is_some() {
+                // Verify post exists and get post author
+                if let Some(post) = find_post_by_id(&mut tx, post_id).await? {
+                    // Get post author's user_id
+                    let post_author_user_id = post
+                        .get("author_id")
+                        .and_then(|id| id.as_ref())
+                        .and_then(|id_str| Uuid::parse_str(id_str).ok());
+
                     // Create reaction using Like's IRI (for idempotency)
                     use crate::models::reaction::create_reaction_from_activitypub;
                     match create_reaction_from_activitypub(
@@ -2169,11 +2204,33 @@ impl ActivityHandler for Like {
                     )
                     .await
                     {
-                        Ok(_) => {
+                        Ok(reaction) => {
                             tracing::info!(
                                 "Created ❤️ reaction from Like activity for post {}",
                                 post_id
                             );
+
+                            // Create notification for post author
+                            if let Some(post_author_id) = post_author_user_id {
+                                match create_notification(
+                                    &mut tx,
+                                    CreateNotificationParams {
+                                        recipient_id: post_author_id,
+                                        actor_id: persisted_actor.id,
+                                        notification_type: NotificationType::Reaction,
+                                        post_id: Some(post_id),
+                                        comment_id: None,
+                                        reaction_iri: Some(reaction.iri),
+                                        guestbook_entry_id: None,
+                                    },
+                                )
+                                .await
+                                {
+                                    Ok(_) => tracing::info!("Created notification for ❤️ reaction from federated actor"),
+                                    Err(e) => tracing::warn!("Failed to create notification for ❤️ reaction: {:?}", e),
+                                }
+                            }
+
                             tx.commit().await?;
                         }
                         Err(e) => {
@@ -2307,8 +2364,14 @@ impl ActivityHandler for EmojiReact {
 
         if let Some(post_id_str) = post_id_str {
             if let Ok(post_id) = Uuid::parse_str(post_id_str) {
-                // Verify post exists
-                if find_post_by_id(&mut tx, post_id).await?.is_some() {
+                // Verify post exists and get post author
+                if let Some(post) = find_post_by_id(&mut tx, post_id).await? {
+                    // Get post author's user_id
+                    let post_author_user_id = post
+                        .get("author_id")
+                        .and_then(|id| id.as_ref())
+                        .and_then(|id_str| Uuid::parse_str(id_str).ok());
+
                     // Create reaction using EmojiReact's IRI and emoji content
                     use crate::models::reaction::create_reaction_from_activitypub;
                     match create_reaction_from_activitypub(
@@ -2320,12 +2383,34 @@ impl ActivityHandler for EmojiReact {
                     )
                     .await
                     {
-                        Ok(_) => {
+                        Ok(reaction) => {
                             tracing::info!(
                                 "Created {} reaction from EmojiReact activity for post {}",
                                 self.content,
                                 post_id
                             );
+
+                            // Create notification for post author
+                            if let Some(post_author_id) = post_author_user_id {
+                                match create_notification(
+                                    &mut tx,
+                                    CreateNotificationParams {
+                                        recipient_id: post_author_id,
+                                        actor_id: persisted_actor.id,
+                                        notification_type: NotificationType::Reaction,
+                                        post_id: Some(post_id),
+                                        comment_id: None,
+                                        reaction_iri: Some(reaction.iri),
+                                        guestbook_entry_id: None,
+                                    },
+                                )
+                                .await
+                                {
+                                    Ok(_) => tracing::info!("Created notification for {} reaction from federated actor", self.content),
+                                    Err(e) => tracing::warn!("Failed to create notification for {} reaction: {:?}", self.content, e),
+                                }
+                            }
+
                             tx.commit().await?;
                         }
                         Err(e) => {

@@ -4,37 +4,23 @@
 {% endblock title %}
 {% block content %}
   <div class="center">
-    <h2>{{ ftl_get_message("notifications") }}</h2>
-    {% if comments %}
-      {% for (comment, post_id) in comments %}
-        <div class="comment notification-comment">
-          <a href="/@{{ comment.post_author_login_name }}/{{ post_id }}">
-            <img class="post-image notification-post-image"
-                 width="{{ comment.post_image_width }}"
-                 height="{{ comment.post_image_height }}"
-                 alt="{{ comment.post_title }}"
-                 src="{{ r2_public_endpoint_url|safe }}/image/{{ comment.post_image_filename[:2] }}/{{ comment.post_image_filename }}" />
-          </a>
-          <div>
-            <p>
-              {{ ftl_get_message("comment-created-at") }}: {{ comment.created_at|datetimeformat(format="short",
-               tz="Asia/Seoul") }}
-            </p>
-            <p>
-              {{ ftl_get_message("display-name") }}:
-              <a href="{{ comment.actor_handle }}">{{ comment.actor_name }}</a>
-              <span class="muted">{{ comment.actor_handle }}</span>
-            </p>
-            {% if comment.content_html %}
-              <div>{{ comment.content_html|safe }}</div>
-            {% else %}
-              <pre>{{ comment.content }}</pre>
-            {% endif %}
-          </div>
-        </div>
+    <div class="notifications-header">
+      <h2 class="notifications-title">{{ ftl_get_message("notifications") }}</h2>
+      {% if unread_notification_count > 0 %}
+        <button class="notification-mark-all-button"
+                hx-post="/notifications/mark-all-read"
+                hx-swap="none"
+                hx-on::after-request="window.location.reload()">
+          {{ ftl_get_message("notification-mark-all-read") }}
+        </button>
+      {% endif %}
+    </div>
+    {% if notifications %}
+      {% for notification in notifications %}
+        {% include "notification_item.jinja" %}
       {% endfor %}
     {% else %}
-      {{ ftl_get_message("no-notifications") }}
+      <p>{{ ftl_get_message("no-notifications") }}</p>
     {% endif %}
   </div>
 {% endblock content %}

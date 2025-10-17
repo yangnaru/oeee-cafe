@@ -1,0 +1,129 @@
+<div class="notification {% if not notification.read_at %}unread{% endif %}">
+  <div class="notification-actions">
+    {# Mark as read button #}
+    {% if not notification.read_at %}
+      <button class="notification-mark-read"
+              hx-post="/notifications/{{ notification.id }}/mark-read"
+              hx-target="closest .notification"
+              hx-swap="outerHTML">
+        {{ ftl_get_message("notification-mark-read") }}
+      </button>
+    {% endif %}
+    {# Delete button #}
+    <button class="notification-delete"
+            hx-delete="/notifications/{{ notification.id }}"
+            hx-target="closest .notification"
+            hx-swap="outerHTML"
+            hx-confirm="{{ ftl_get_message("notification-delete-confirm") }}">
+      {{ ftl_get_message("notification-delete") }}
+    </button>
+  </div>
+
+  <div class="notification-header">
+    <strong class="notification-type">
+      {% if notification.notification_type == "Comment" %}
+        {{ ftl_get_message("notification-comment") }}
+      {% elif notification.notification_type == "Reaction" %}
+        {{ ftl_get_message("notification-reaction") }}
+      {% elif notification.notification_type == "Follow" %}
+        {{ ftl_get_message("notification-follow") }}
+      {% elif notification.notification_type == "GuestbookEntry" %}
+        {{ ftl_get_message("notification-guestbook-entry") }}
+      {% elif notification.notification_type == "GuestbookReply" %}
+        {{ ftl_get_message("notification-guestbook-reply") }}
+      {% elif notification.notification_type == "Mention" %}
+        {{ ftl_get_message("notification-mention") }}
+      {% elif notification.notification_type == "PostReply" %}
+        {{ ftl_get_message("notification-post-reply") }}
+      {% endif %}
+    </strong>
+    <span class="notification-time muted">{{ notification.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}</span>
+  </div>
+
+  <div class="notification-body">
+    {# Post thumbnail for post-related notifications #}
+    {% if notification.post_image_filename and (notification.notification_type == "Comment" or notification.notification_type == "Reaction" or notification.notification_type == "Mention" or notification.notification_type == "PostReply") %}
+      <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}" class="notification-thumbnail">
+        <img class="post-image notification-post-image"
+             width="{{ notification.post_image_width }}"
+             height="{{ notification.post_image_height }}"
+             alt="{{ notification.post_title }}"
+             src="{{ r2_public_endpoint_url|safe }}/image/{{ notification.post_image_filename[:2] }}/{{ notification.post_image_filename }}" />
+      </a>
+    {% endif %}
+
+    <div class="notification-content">
+      {# Actor information #}
+      <p class="notification-actor">
+        <a href="{{ notification.actor_handle }}">{{ notification.actor_name }}</a>
+        <span class="muted">{{ notification.actor_handle }}</span>
+      </p>
+
+      {# Notification-specific content #}
+      {% if notification.notification_type == "Comment" %}
+        {% if notification.post_title %}
+          <p class="notification-action">
+            {{ ftl_get_message("notification-commented-on") }}
+            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+          </p>
+        {% endif %}
+        {% if notification.comment_content_html %}
+          <div class="notification-preview">{{ notification.comment_content_html|safe }}</div>
+        {% elif notification.comment_content %}
+          <pre class="notification-preview">{{ notification.comment_content }}</pre>
+        {% endif %}
+
+      {% elif notification.notification_type == "Reaction" %}
+        <p class="notification-action">
+          {{ ftl_get_message("notification-reacted-with") }} <span class="notification-emoji">{{ notification.reaction_emoji }}</span>
+          {% if notification.post_title %}
+            {{ ftl_get_message("notification-to-post") }}
+            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+          {% endif %}
+        </p>
+
+      {% elif notification.notification_type == "Follow" %}
+        <p class="notification-action">
+          {{ ftl_get_message("notification-followed-you") }}
+        </p>
+
+      {% elif notification.notification_type == "GuestbookEntry" %}
+        <p class="notification-action">
+          {{ ftl_get_message("notification-wrote-guestbook") }}
+        </p>
+        {% if notification.guestbook_content %}
+          <pre class="notification-preview">{{ notification.guestbook_content }}</pre>
+        {% endif %}
+
+      {% elif notification.notification_type == "GuestbookReply" %}
+        <p class="notification-action">
+          {{ ftl_get_message("notification-replied-guestbook") }}
+        </p>
+        {% if notification.guestbook_content %}
+          <pre class="notification-preview">{{ notification.guestbook_content }}</pre>
+        {% endif %}
+
+      {% elif notification.notification_type == "Mention" %}
+        {% if notification.post_title %}
+          <p class="notification-action">
+            {{ ftl_get_message("notification-mentioned-in-comment") }}
+            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+          </p>
+        {% endif %}
+        {% if notification.comment_content_html %}
+          <div class="notification-preview">{{ notification.comment_content_html|safe }}</div>
+        {% elif notification.comment_content %}
+          <pre class="notification-preview">{{ notification.comment_content }}</pre>
+        {% endif %}
+
+      {% elif notification.notification_type == "PostReply" %}
+        <p class="notification-action">
+          {{ ftl_get_message("notification-replied-to-post") }}
+          {% if notification.post_title %}
+            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+          {% endif %}
+        </p>
+      {% endif %}
+    </div>
+  </div>
+</div>

@@ -1,5 +1,6 @@
 use crate::app_error::AppError;
 use crate::locale::LOCALES;
+use crate::models::notification::get_unread_count;
 use crate::models::post::get_draft_post_count;
 use crate::models::user::{AuthSession, Language};
 use anyhow;
@@ -56,6 +57,11 @@ pub async fn handler_404(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -68,6 +74,7 @@ pub async fn handler_404(
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         draft_post_count,
+        unread_notification_count,
         ftl_lang
     })?;
 

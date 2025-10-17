@@ -25,7 +25,10 @@ use crate::web::handlers::draw::{
 };
 use crate::web::handlers::handler_404;
 use crate::web::handlers::home::{home, my_timeline};
-use crate::web::handlers::notifications::list_notifications;
+use crate::web::handlers::notifications::{
+    delete_notification_handler, get_unread_notification_count, list_notifications,
+    mark_all_notifications_read, mark_notification_read,
+};
 use crate::web::handlers::post::{
     add_reaction, do_create_comment, do_post_edit_community, draft_posts, hx_delete_post,
     hx_do_edit_post, hx_edit_post, post_edit_community, post_publish, post_publish_form,
@@ -107,6 +110,10 @@ impl App {
         let protected_router = Router::new()
             .route("/home", get(my_timeline))
             .route("/notifications", get(list_notifications))
+            .route("/notifications/unread-count", get(get_unread_notification_count))
+            .route("/notifications/mark-all-read", post(mark_all_notifications_read))
+            .route("/notifications/:notification_id/mark-read", post(mark_notification_read))
+            .route("/notifications/:notification_id", delete(delete_notification_handler))
             .route("/account", get(account))
             .route("/account", post(edit_account))
             .route("/account/password", post(edit_password))

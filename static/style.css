@@ -162,15 +162,131 @@ nav a:visited,
   flex-direction: row;
 }
 
-.notification-comment {
+/* Notifications */
+
+.notifications-header {
   display: flex;
-  flex-direction: row;
-  gap: 1em;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.notifications-title {
+  margin: 0;
+}
+
+.notification-mark-all-button {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  background-color: var(--main-bg-color);
+  border: 1px solid var(--main-border-color);
+  border-radius: 4px;
+  color: var(--main-text-color);
+}
+
+.notification-mark-all-button:hover {
+  background-color: var(--main-nav-bg-color);
+}
+
+.notification {
+  border: 1px solid var(--main-border-color);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+  background-color: var(--main-bg-color);
+}
+
+.notification.unread {
+  background-color: var(--main-nav-bg-color);
+  border-left: 3px solid var(--main-highlight-color);
+}
+
+.notification-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.notification-mark-read,
+.notification-delete {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  background-color: var(--main-bg-color);
+  border: 1px solid var(--main-border-color);
+  border-radius: 4px;
+  color: var(--main-text-color);
+}
+
+.notification-mark-read:hover {
+  background-color: var(--main-nav-bg-color);
+}
+
+.notification-delete:hover {
+  background-color: #ff6b6b;
+  border-color: #ff6b6b;
+  color: white;
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.notification-type {
+  font-size: 0.875rem;
+  color: var(--main-highlight-color);
+}
+
+.notification-time {
+  font-size: 0.75rem;
+}
+
+.notification-body {
+  display: flex;
+  gap: 1rem;
+}
+
+.notification-thumbnail {
+  flex-shrink: 0;
 }
 
 .notification-post-image {
   max-width: 100px;
   max-height: 100px;
+  object-fit: cover;
+  border: 1px solid var(--main-border-color);
+  border-radius: 4px;
+}
+
+.notification-content {
+  flex-grow: 1;
+}
+
+.notification-actor {
+  margin: 0 0 0.5rem 0;
+  font-weight: bold;
+}
+
+.notification-action {
+  margin: 0 0 0.5rem 0;
+}
+
+.notification-emoji {
+  font-size: 1.25rem;
+  vertical-align: middle;
+}
+
+.notification-preview {
+  margin: 0.5rem 0 0 0;
+  padding: 0.5rem;
+  background-color: var(--main-bg-color);
+  border: 1px solid var(--main-border-color);
+  border-radius: 4px;
+  font-size: 0.875rem;
 }
 
 .muted {

@@ -1,9 +1,10 @@
 use crate::app_error::AppError;
 use crate::models::actor::Actor;
-use crate::models::comment::{create_comment, find_comments_by_post_id, CommentDraft};
+use crate::models::comment::{create_comment, extract_mentions, find_comments_by_post_id, find_users_by_login_names, CommentDraft};
 use crate::models::community::{find_community_by_id, get_known_communities};
 use crate::models::follow;
 use crate::models::image::find_image_by_id;
+use crate::models::notification::{create_notification, get_unread_count, CreateNotificationParams, NotificationType};
 use crate::models::post::{
     delete_post_with_activity, edit_post, edit_post_community, find_draft_posts_by_author_id,
     find_post_by_id, get_draft_post_count, increment_post_viewer_count, publish_post,
@@ -281,6 +282,11 @@ pub async fn post_relay_view(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let community_id = Uuid::parse_str(
         post.clone()
             .unwrap()
@@ -310,6 +316,7 @@ pub async fn post_relay_view(
         foreground_color => community.foreground_color,
         community_id => community_id.to_string(),
         draft_post_count,
+        unread_notification_count,
         ftl_lang
     })?;
 
@@ -390,6 +397,11 @@ pub async fn post_view(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     // Get collaborative session participants if this post is from a collaborative session
     let collaborative_participants: Vec<CollaborativeParticipant> = sqlx::query!(
         r#"
@@ -465,6 +477,7 @@ pub async fn post_view(
                 post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
                 community_id,
                 draft_post_count,
+                unread_notification_count,
                 base_url => state.config.base_url.clone(),
                 domain => state.config.domain.clone(),
                 comments,
@@ -512,6 +525,12 @@ pub async fn post_replay_view(
             .unwrap_or_default(),
         None => 0,
     };
+
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let community_id = community_id.to_string();
 
     let template_filename = match post.clone().unwrap().get("replay_filename") {
@@ -547,6 +566,7 @@ pub async fn post_replay_view(
             post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
             community_id,
             draft_post_count,
+            unread_notification_count,
             ftl_lang,
         })
         .unwrap();
@@ -602,6 +622,11 @@ pub async fn post_publish_form(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let community_id = Uuid::parse_str(
         post.clone()
             .unwrap()
@@ -630,6 +655,7 @@ pub async fn post_publish_form(
             post
         },
         draft_post_count,
+        unread_notification_count,
         ftl_lang
     })?;
 
@@ -699,6 +725,37 @@ pub async fn post_publish(
     // Find the actor for this user to send ActivityPub activities
     let actor = Actor::find_by_user_id(&mut tx, user_id).await?;
 
+    // Check if this is a reply post and notify the parent post author
+    if let Some(parent_post_id_str) = post.clone().and_then(|p| p.get("parent_post_id").cloned()).and_then(|id| id) {
+        if let Ok(parent_post_id) = Uuid::parse_str(&parent_post_id_str) {
+            let parent_post = find_post_by_id(&mut tx, parent_post_id).await?;
+            let parent_author_id = parent_post
+                .as_ref()
+                .and_then(|p| p.get("author_id"))
+                .and_then(|id| id.as_ref())
+                .and_then(|id| Uuid::parse_str(id).ok());
+
+            if let (Some(actor), Some(parent_author_id)) = (&actor, parent_author_id) {
+                // Don't notify if replying to own post
+                if parent_author_id != user_id {
+                    let _ = create_notification(
+                        &mut tx,
+                        CreateNotificationParams {
+                            recipient_id: parent_author_id,
+                            actor_id: actor.id,
+                            notification_type: NotificationType::PostReply,
+                            post_id: Some(post_id),
+                            comment_id: None,
+                            reaction_iri: None,
+                            guestbook_entry_id: None,
+                        },
+                    )
+                    .await;
+                }
+            }
+        }
+    }
+
     let _ = tx.commit().await;
 
     // Send ActivityPub Create activity to followers if actor exists
@@ -753,6 +810,12 @@ pub async fn draft_posts(
             .unwrap_or_default(),
         None => 0,
     };
+
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let posts =
         find_draft_posts_by_author_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
 
@@ -770,6 +833,7 @@ pub async fn draft_posts(
         default_community_id => state.config.default_community_id.clone(),
         posts => posts,
         draft_post_count,
+        unread_notification_count,
         ftl_lang,
     })?;
 
@@ -811,7 +875,15 @@ pub async fn do_create_comment(
     let actor = Actor::find_by_user_id(&mut tx, user_id).await?
         .ok_or_else(|| anyhow::anyhow!("No actor found for user"))?;
 
-    let _ = create_comment(
+    // Get the post to find the author
+    let post = find_post_by_id(&mut tx, post_id).await?;
+    let post_author_id = post
+        .as_ref()
+        .and_then(|p| p.get("author_id"))
+        .and_then(|id| id.as_ref())
+        .and_then(|id| Uuid::parse_str(id).ok());
+
+    let comment = create_comment(
         &mut tx,
         CommentDraft {
             actor_id: actor.id,
@@ -820,7 +892,51 @@ pub async fn do_create_comment(
             content_html: None,
         },
     )
-    .await;
+    .await?;
+
+    // Create notification for the post author (don't notify if commenting on own post)
+    if let Some(post_author_id) = post_author_id {
+        if post_author_id != user_id {
+            let _ = create_notification(
+                &mut tx,
+                CreateNotificationParams {
+                    recipient_id: post_author_id,
+                    actor_id: actor.id,
+                    notification_type: NotificationType::Comment,
+                    post_id: Some(post_id),
+                    comment_id: Some(comment.id),
+                    reaction_iri: None,
+                    guestbook_entry_id: None,
+                },
+            )
+            .await;
+        }
+    }
+
+    // Extract @mentions from comment content and create notifications
+    let mentioned_login_names = extract_mentions(&comment.content);
+    if !mentioned_login_names.is_empty() {
+        let mentioned_users = find_users_by_login_names(&mut tx, &mentioned_login_names).await?;
+        for (mentioned_user_id, _login_name) in mentioned_users {
+            // Don't notify the commenter themselves
+            if mentioned_user_id != user_id {
+                let _ = create_notification(
+                    &mut tx,
+                    CreateNotificationParams {
+                        recipient_id: mentioned_user_id,
+                        actor_id: actor.id,
+                        notification_type: NotificationType::Mention,
+                        post_id: Some(post_id),
+                        comment_id: Some(comment.id),
+                        reaction_iri: None,
+                        guestbook_entry_id: None,
+                    },
+                )
+                .await;
+            }
+        }
+    }
+
     let comments = find_comments_by_post_id(&mut tx, post_id).await?;
     let _ = tx.commit().await;
 
@@ -1259,6 +1375,11 @@ pub async fn post_view_by_login_name(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     // Get collaborative session participants if this post is from a collaborative session
     let collaborative_participants: Vec<CollaborativeParticipant> = sqlx::query!(
         r#"
@@ -1333,6 +1454,7 @@ pub async fn post_view_by_login_name(
                 post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
                 community_id,
                 draft_post_count,
+                unread_notification_count,
                 base_url => state.config.base_url.clone(),
                 domain => state.config.domain.clone(),
                 comments,
@@ -1497,6 +1619,11 @@ pub async fn post_relay_view_by_login_name(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let user_preferred_language = auth_session
         .user
         .clone()
@@ -1517,6 +1644,7 @@ pub async fn post_relay_view_by_login_name(
             foreground_color => community.foreground_color,
             community_id => community_id.to_string(),
             draft_post_count,
+            unread_notification_count,
             ftl_lang
         })
         .unwrap();
@@ -1568,6 +1696,12 @@ pub async fn post_replay_view_by_login_name(
             .unwrap_or_default(),
         None => 0,
     };
+
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     let community_id = community_id.to_string();
 
     let template_filename = match post.clone().unwrap().get("replay_filename") {
@@ -1602,6 +1736,7 @@ pub async fn post_replay_view_by_login_name(
             post_id => post_id,
             community_id,
             draft_post_count,
+            unread_notification_count,
             ftl_lang
         })
         .unwrap();
@@ -1654,6 +1789,25 @@ pub async fn add_reaction(
         .and_then(|p| p.get("author_id"))
         .and_then(|id| id.as_ref())
         .and_then(|id| Uuid::parse_str(id).ok());
+
+    // Create notification for the post author (don't notify if reacting to own post)
+    if let Some(post_author_id) = post_author_id {
+        if post_author_id != user_id {
+            let _ = create_notification(
+                &mut tx,
+                CreateNotificationParams {
+                    recipient_id: post_author_id,
+                    actor_id: actor.id,
+                    notification_type: NotificationType::Reaction,
+                    post_id: Some(post_id),
+                    comment_id: None,
+                    reaction_iri: Some(reaction.iri.clone()),
+                    guestbook_entry_id: None,
+                },
+            )
+            .await;
+        }
+    }
 
     let user_actor_id = Some(actor.id);
     let reaction_counts = get_reaction_counts(&mut tx, post_id, user_actor_id).await?;
@@ -1889,6 +2043,11 @@ pub async fn post_reactions_detail(
         None => 0,
     };
 
+    let unread_notification_count = match auth_session.user.clone() {
+        Some(user) => get_unread_count(&mut tx, user.id).await.unwrap_or(0),
+        None => 0,
+    };
+
     tx.commit().await?;
 
     // Group reactions by emoji
@@ -1960,6 +2119,7 @@ pub async fn post_reactions_detail(
         login_name => login_name,
         grouped_reactions => grouped_reactions,
         draft_post_count,
+        unread_notification_count,
         ftl_lang
     })?;
 
