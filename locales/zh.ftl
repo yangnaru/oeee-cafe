@@ -81,10 +81,28 @@ post-publish = 发布
 post-move-community = 移动到此社区
 post-delete-confirm = 确定要删除这幅画吗？
 post-relay-enabled-notice = 这幅画可以接续创作。点击画作试试看！
+post-hashtags = 标签
+post-hashtags-placeholder = 艺术, 绘画, 素描
+post-hashtags-hint = 用逗号或空格分隔标签
 
 allow-relay = 允许接续创作
 sensitive = 敏感内容
 draft-post = 草稿作品
+
+# Hashtags
+trending-hashtags = 热门标签
+hashtag-post-count = 篇作品
+hashtag-no-posts = 暂无使用此标签的作品
+hashtag-discovery = 发现标签
+hashtag-search-placeholder = 搜索标签...
+search = 搜索
+search-results-for = 搜索结果
+no-hashtags-found = 未找到标签
+sort-by = 排序
+sort-trending = 热门
+sort-popular = 最多使用
+sort-recent = 最近活跃
+sort-alphabetical = 字母顺序
 
 # Collaborative drawing
 collaborate-title = 协作绘画会话

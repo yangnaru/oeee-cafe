@@ -81,10 +81,28 @@ post-publish = 게시
 post-move-community = 이 커뮤니티로 이동
 post-delete-confirm = 정말 이 그림을 삭제하시겠습니까?
 post-relay-enabled-notice = 이 그림은 이어 그릴수 있습니다. 그림을 눌러 보세요!
+post-hashtags = 해시태그
+post-hashtags-placeholder = 그림, 일러스트, 스케치
+post-hashtags-hint = 쉼표나 공백으로 태그 구분
 
 allow-relay = 릴레이 그림 허용
 sensitive = 민감한 내용
 draft-post = 임시 보관된 그림
+
+# Hashtags
+trending-hashtags = 인기 해시태그
+hashtag-post-count = 개의 게시물
+hashtag-no-posts = 이 해시태그가 달린 게시물이 아직 없습니다
+hashtag-discovery = 해시태그 찾아보기
+hashtag-search-placeholder = 해시태그 검색...
+search = 검색
+search-results-for = 검색 결과
+no-hashtags-found = 해시태그를 찾을 수 없습니다
+sort-by = 정렬
+sort-trending = 인기순
+sort-popular = 많이 사용된 순
+sort-recent = 최근 활동순
+sort-alphabetical = 가나다순
 
 # Collaborative drawing
 collaborate-title = 함께 그리기 세션

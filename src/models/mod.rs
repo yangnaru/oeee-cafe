@@ -5,6 +5,7 @@ pub mod community;
 pub mod email_verification_challenge;
 pub mod follow;
 pub mod guestbook_entry;
+pub mod hashtag;
 pub mod image;
 pub mod instance;
 pub mod link;

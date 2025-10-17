@@ -9,6 +9,14 @@
         <label>{{ ftl_get_message("post-description") }}:</label>
         <textarea name="content">{{ post.content }}</textarea>
     </div>
+    <div class="form-group">
+        <label>{{ ftl_get_message("post-hashtags") }}:</label>
+        <input type="text"
+               name="hashtags"
+               value="{{ hashtags }}"
+               placeholder="{{ ftl_get_message("post-hashtags-placeholder") }}">
+        <span class="form-hint">{{ ftl_get_message("post-hashtags-hint") }}</span>
+    </div>
     <div>
         <label>{{ ftl_get_message("sensitive") }}:</label>
         <input type="checkbox"

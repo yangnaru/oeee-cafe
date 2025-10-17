@@ -79,10 +79,28 @@ post-publish = Publish
 post-move-community = Move to this community
 post-delete-confirm = Are you sure you want to delete this post?
 post-relay-enabled-notice = You can continue drawing on this canvas. Click on the image!
+post-hashtags = Hashtags
+post-hashtags-placeholder = art, drawing, sketch
+post-hashtags-hint = Separate tags with commas or spaces
 
 allow-relay = Allow relay posts
 sensitive = Sensitive
 draft-post = Draft post
+
+# Hashtags
+trending-hashtags = Trending Hashtags
+hashtag-post-count = posts
+hashtag-no-posts = No posts with this hashtag yet
+hashtag-discovery = Discover Hashtags
+hashtag-search-placeholder = Search hashtags...
+search = Search
+search-results-for = Search results for
+no-hashtags-found = No hashtags found
+sort-by = Sort by
+sort-trending = Trending
+sort-popular = Popular
+sort-recent = Recent
+sort-alphabetical = A-Z
 
 # Collaborative drawing
 collaborate-title = Collaborative Drawing Sessions

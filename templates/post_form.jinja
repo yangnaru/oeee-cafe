@@ -1,4 +1,32 @@
 {% extends "base.jinja" %}
+{% block head %}
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Handle hashtag autocomplete clicks
+      document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('hashtag-autocomplete-item')) {
+          const input = document.getElementById('hashtags-input');
+          const hashtag = e.target.dataset.hashtag;
+          const currentValue = input.value;
+
+          // Split by comma or space and get all tags except the last one being typed
+          const tags = currentValue.split(/[,\s]+/).filter(t => t.trim());
+          tags.pop(); // Remove the last incomplete tag
+
+          // Add the selected hashtag and join back
+          tags.push(hashtag);
+          input.value = tags.join(', ') + ', ';
+
+          // Clear the suggestions
+          document.getElementById('hashtag-suggestions').innerHTML = '';
+
+          // Focus back on input
+          input.focus();
+        }
+      });
+    });
+  </script>
+{% endblock head %}
 {% block content %}
   <div class="center">
     <p>{{ ftl_get_message("post-created-at") }}: {{ post.created_at }}</p>
@@ -20,6 +48,23 @@
       <p>
         <label for="content">{{ ftl_get_message("post-description") }}:</label>
         <textarea name="content"></textarea>
+      </p>
+      <p>
+        <label for="hashtags">{{ ftl_get_message("post-hashtags") }}:</label>
+        <div class="hashtag-input-container">
+          <input type="text"
+                 id="hashtags-input"
+                 name="hashtags"
+                 placeholder="{{ ftl_get_message("post-hashtags-placeholder") }}"
+                 autocomplete="off"
+                 hx-get="/api/hashtags/autocomplete"
+                 hx-trigger="keyup changed delay:300ms"
+                 hx-target="#hashtag-suggestions"
+                 hx-include="[name='hashtags']"
+                 hx-vals='js:{q: document.getElementById("hashtags-input").value.split(/[,\s]+/).pop()}' />
+          <div id="hashtag-suggestions" class="hashtag-autocomplete"></div>
+        </div>
+        <span class="form-hint">{{ ftl_get_message("post-hashtags-hint") }}</span>
       </p>
       <p>
         <label for="is_sensitive">{{ ftl_get_message("sensitive") }}:</label>

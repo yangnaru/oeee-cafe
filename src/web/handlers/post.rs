@@ -1,25 +1,35 @@
 use crate::app_error::AppError;
 use crate::models::actor::Actor;
-use crate::models::comment::{create_comment, extract_mentions, find_comments_by_post_id, find_users_by_login_names, CommentDraft};
+use crate::models::comment::{
+    create_comment, extract_mentions, find_comments_by_post_id, find_users_by_login_names,
+    CommentDraft,
+};
 use crate::models::community::{find_community_by_id, get_known_communities};
 use crate::models::follow;
+use crate::models::hashtag::{
+    get_hashtags_for_post, link_post_to_hashtags, parse_hashtag_input, unlink_post_hashtags,
+};
 use crate::models::image::find_image_by_id;
-use crate::models::notification::{create_notification, CreateNotificationParams, NotificationType};
+use crate::models::notification::{
+    create_notification, CreateNotificationParams, NotificationType,
+};
 use crate::models::post::{
     delete_post_with_activity, edit_post, edit_post_community, find_draft_posts_by_author_id,
     find_post_by_id, increment_post_viewer_count, publish_post,
 };
-use crate::models::reaction::{create_reaction, delete_reaction, find_reactions_by_post_id, get_reaction_counts, ReactionDraft};
+use crate::models::reaction::{
+    create_reaction, delete_reaction, find_reactions_by_post_id, get_reaction_counts, ReactionDraft,
+};
 use crate::models::user::AuthSession;
-use activitypub_federation::traits::Actor as ActivityPubActor;
+use crate::web::context::CommonContext;
 use crate::web::handlers::activitypub::{
     create_note_from_post, create_updated_note_from_post, generate_object_id, Announce, Create,
     Note, UpdateNote,
 };
-use crate::web::context::CommonContext;
-use crate::web::handlers::{handler_404, parse_id_with_legacy_support, ParsedId, ExtractFtlLang};
+use crate::web::handlers::{handler_404, parse_id_with_legacy_support, ExtractFtlLang, ParsedId};
 use crate::web::state::AppState;
 use activitypub_federation::fetch::object_id::ObjectId;
+use activitypub_federation::traits::Actor as ActivityPubActor;
 use anyhow::Error;
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::types::{Delete, ObjectIdentifier};
@@ -260,12 +270,7 @@ pub async fn post_relay_view(
     if post.is_none() {
         return Ok((
             StatusCode::NOT_FOUND,
-            handler_404(
-                auth_session,
-                ExtractFtlLang(ftl_lang),
-                State(state),
-            )
-            .await?,
+            handler_404(auth_session, ExtractFtlLang(ftl_lang), State(state)).await?,
         )
             .into_response());
     }
@@ -275,7 +280,8 @@ pub async fn post_relay_view(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let community_id = Uuid::parse_str(
         post.clone()
@@ -328,12 +334,7 @@ pub async fn post_view(
         None => {
             return Ok((
                 StatusCode::NOT_FOUND,
-                handler_404(
-                    auth_session,
-                    ExtractFtlLang(ftl_lang),
-                    State(state),
-                )
-                .await?,
+                handler_404(auth_session, ExtractFtlLang(ftl_lang), State(state)).await?,
             )
                 .into_response());
         }
@@ -373,7 +374,8 @@ pub async fn post_view(
     )
     .unwrap();
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     // Get collaborative session participants if this post is from a collaborative session
     let collaborative_participants: Vec<CollaborativeParticipant> = sqlx::query!(
@@ -399,11 +401,22 @@ pub async fn post_view(
 
     // Get reaction counts for this post
     let user_actor_id = if let Some(ref user) = auth_session.user {
-        Actor::find_by_user_id(&mut tx, user.id).await.ok().flatten().map(|actor| actor.id)
+        Actor::find_by_user_id(&mut tx, user.id)
+            .await
+            .ok()
+            .flatten()
+            .map(|actor| actor.id)
     } else {
         None
     };
-    let reaction_counts = get_reaction_counts(&mut tx, uuid, user_actor_id).await.unwrap_or_default();
+    let reaction_counts = get_reaction_counts(&mut tx, uuid, user_actor_id)
+        .await
+        .unwrap_or_default();
+
+    // Get hashtags for this post
+    let hashtags = get_hashtags_for_post(&mut tx, uuid)
+        .await
+        .unwrap_or_default();
 
     tx.commit().await?;
 
@@ -447,6 +460,7 @@ pub async fn post_view(
                 comments,
                 collaborative_participants,
                 reaction_counts,
+                hashtags,
                 ftl_lang
             })
             .unwrap();
@@ -483,7 +497,8 @@ pub async fn post_replay_view(
     )
     .unwrap();
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let community_id = community_id.to_string();
 
@@ -534,12 +549,7 @@ pub async fn post_publish_form(
     if post.is_none() {
         return Ok((
             StatusCode::NOT_FOUND,
-            handler_404(
-                auth_session,
-                ExtractFtlLang(ftl_lang),
-                State(state),
-            )
-            .await?,
+            handler_404(auth_session, ExtractFtlLang(ftl_lang), State(state)).await?,
         )
             .into_response());
     }
@@ -561,7 +571,8 @@ pub async fn post_publish_form(
         return Ok(Redirect::to(&format!("/posts/{}", id)).into_response());
     }
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let community_id = Uuid::parse_str(
         post.clone()
@@ -597,6 +608,7 @@ pub struct PostPublishForm {
     content: String,
     is_sensitive: Option<String>,
     allow_relay: Option<String>,
+    hashtags: Option<String>,
 }
 
 pub async fn post_publish(
@@ -650,11 +662,23 @@ pub async fn post_publish(
     )
     .await;
 
+    // Handle hashtags if provided
+    if let Some(hashtags_input) = &form.hashtags {
+        if !hashtags_input.trim().is_empty() {
+            let hashtag_names = parse_hashtag_input(hashtags_input);
+            let _ = link_post_to_hashtags(&mut tx, post_id, &hashtag_names).await;
+        }
+    }
+
     // Find the actor for this user to send ActivityPub activities
     let actor = Actor::find_by_user_id(&mut tx, user_id).await?;
 
     // Check if this is a reply post and notify the parent post author
-    if let Some(parent_post_id_str) = post.clone().and_then(|p| p.get("parent_post_id").cloned()).and_then(|id| id) {
+    if let Some(parent_post_id_str) = post
+        .clone()
+        .and_then(|p| p.get("parent_post_id").cloned())
+        .and_then(|id| id)
+    {
         if let Ok(parent_post_id) = Uuid::parse_str(&parent_post_id_str) {
             let parent_post = find_post_by_id(&mut tx, parent_post_id).await?;
             let parent_author_id = parent_post
@@ -733,7 +757,8 @@ pub async fn draft_posts(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let posts =
         find_draft_posts_by_author_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
@@ -769,14 +794,14 @@ pub async fn do_create_comment(
     State(state): State<AppState>,
     Form(form): Form<CreateCommentForm>,
 ) -> Result<impl IntoResponse, AppError> {
-
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user_id = auth_session.user.unwrap().id;
     let post_id = Uuid::parse_str(&form.post_id).unwrap();
 
     // Get the actor for this user
-    let actor = Actor::find_by_user_id(&mut tx, user_id).await?
+    let actor = Actor::find_by_user_id(&mut tx, user_id)
+        .await?
         .ok_or_else(|| anyhow::anyhow!("No actor found for user"))?;
 
     // Get the post to find the author
@@ -983,12 +1008,25 @@ pub async fn hx_edit_post(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
+    // Get existing hashtags for this post
+    let hashtags = get_hashtags_for_post(&mut tx, post_uuid)
+        .await
+        .unwrap_or_default();
+    let hashtags_string = hashtags
+        .iter()
+        .map(|h| h.display_name.clone())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    tx.commit().await?;
+
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_edit.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         post,
         post_id => id,
+        hashtags => hashtags_string,
         ftl_lang
     })?;
 
@@ -1001,6 +1039,7 @@ pub struct EditPostForm {
     pub content: String,
     pub is_sensitive: Option<String>,
     pub allow_relay: Option<String>,
+    pub hashtags: Option<String>,
 }
 
 pub async fn hx_do_edit_post(
@@ -1040,6 +1079,16 @@ pub async fn hx_do_edit_post(
         form.allow_relay == Some("on".to_string()),
     )
     .await;
+
+    // Handle hashtags: first unlink existing ones, then link new ones
+    let _ = unlink_post_hashtags(&mut tx, post_uuid).await;
+    if let Some(hashtags_input) = &form.hashtags {
+        if !hashtags_input.trim().is_empty() {
+            let hashtag_names = parse_hashtag_input(hashtags_input);
+            let _ = link_post_to_hashtags(&mut tx, post_uuid, &hashtag_names).await;
+        }
+    }
+
     let post = find_post_by_id(&mut tx, post_uuid).await?;
 
     // Find the actor for this user to send ActivityPub activities
@@ -1171,6 +1220,9 @@ pub async fn hx_delete_post(
     let community_id = Uuid::parse_str(&community_id)?;
     let community_url = get_community_slug_url(&mut tx, community_id).await?;
 
+    // Unlink hashtags before deleting post to properly decrement post_count
+    let _ = unlink_post_hashtags(&mut tx, post_uuid).await;
+
     delete_post_with_activity(&mut tx, post_uuid, Some(&state)).await?;
     tx.commit().await?;
 
@@ -1205,12 +1257,7 @@ pub async fn post_view_by_login_name(
         None => {
             return Ok((
                 StatusCode::NOT_FOUND,
-                handler_404(
-                    auth_session,
-                    ExtractFtlLang(ftl_lang),
-                    State(state),
-                )
-                .await?,
+                handler_404(auth_session, ExtractFtlLang(ftl_lang), State(state)).await?,
             )
                 .into_response());
         }
@@ -1251,7 +1298,8 @@ pub async fn post_view_by_login_name(
     )
     .unwrap();
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     // Get collaborative session participants if this post is from a collaborative session
     let collaborative_participants: Vec<CollaborativeParticipant> = sqlx::query!(
@@ -1277,11 +1325,22 @@ pub async fn post_view_by_login_name(
 
     // Get reaction counts for this post
     let user_actor_id = if let Some(ref user) = auth_session.user {
-        Actor::find_by_user_id(&mut tx, user.id).await.ok().flatten().map(|actor| actor.id)
+        Actor::find_by_user_id(&mut tx, user.id)
+            .await
+            .ok()
+            .flatten()
+            .map(|actor| actor.id)
     } else {
         None
     };
-    let reaction_counts = get_reaction_counts(&mut tx, uuid, user_actor_id).await.unwrap_or_default();
+    let reaction_counts = get_reaction_counts(&mut tx, uuid, user_actor_id)
+        .await
+        .unwrap_or_default();
+
+    // Get hashtags for this post
+    let hashtags = get_hashtags_for_post(&mut tx, uuid)
+        .await
+        .unwrap_or_default();
 
     tx.commit().await?;
 
@@ -1325,6 +1384,7 @@ pub async fn post_view_by_login_name(
                 comments,
                 collaborative_participants,
                 reaction_counts,
+                hashtags,
                 ftl_lang
             })
             .unwrap();
@@ -1453,12 +1513,7 @@ pub async fn post_relay_view_by_login_name(
         None => {
             return Ok((
                 StatusCode::NOT_FOUND,
-                handler_404(
-                    auth_session,
-                    ExtractFtlLang(ftl_lang),
-                    State(state),
-                )
-                .await?,
+                handler_404(auth_session, ExtractFtlLang(ftl_lang), State(state)).await?,
             )
                 .into_response());
         }
@@ -1478,7 +1533,8 @@ pub async fn post_relay_view_by_login_name(
     .unwrap();
     let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let rendered = template
         .render(context! {
@@ -1538,7 +1594,8 @@ pub async fn post_replay_view_by_login_name(
     )
     .unwrap();
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let community_id = community_id.to_string();
 
@@ -1590,7 +1647,8 @@ pub async fn add_reaction(
     let post_id = Uuid::parse_str(&post_id)?;
 
     // Get the actor for this user
-    let actor = Actor::find_by_user_id(&mut tx, user_id).await?
+    let actor = Actor::find_by_user_id(&mut tx, user_id)
+        .await?
         .ok_or_else(|| anyhow::anyhow!("No actor found for user"))?;
 
     let reaction = create_reaction(
@@ -1661,7 +1719,9 @@ pub async fn add_reaction(
                 );
 
                 let emoji_react = EmojiReact {
-                    actor: Some(activitypub_federation::fetch::object_id::ObjectId::parse(&actor.iri)?),
+                    actor: Some(activitypub_federation::fetch::object_id::ObjectId::parse(
+                        &actor.iri,
+                    )?),
                     object: post_url.parse()?,
                     content: form.emoji.clone(),
                     r#type: "EmojiReact".to_string(),
@@ -1696,8 +1756,7 @@ pub async fn add_reaction(
         }
     }
 
-    let template: minijinja::Template<'_, '_> =
-        state.env.get_template("post_reactions.jinja")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_reactions.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         reaction_counts => reaction_counts,
@@ -1724,7 +1783,8 @@ pub async fn remove_reaction(
     let post_id = Uuid::parse_str(&post_id)?;
 
     // Get the actor for this user
-    let actor = Actor::find_by_user_id(&mut tx, user_id).await?
+    let actor = Actor::find_by_user_id(&mut tx, user_id)
+        .await?
         .ok_or_else(|| anyhow::anyhow!("No actor found for user"))?;
 
     // Find the reaction before deleting (need IRI for Undo activity)
@@ -1764,7 +1824,9 @@ pub async fn remove_reaction(
 
                 if let Some(post_author_actor) = post_author_actor {
                     // Build EmojiReact activity (the object being undone)
-                    use crate::web::handlers::activitypub::{EmojiReact, generate_object_id, Undo, UndoObject};
+                    use crate::web::handlers::activitypub::{
+                        generate_object_id, EmojiReact, Undo, UndoObject,
+                    };
 
                     let post_url = format!(
                         "https://{}/@{}/{}",
@@ -1772,7 +1834,9 @@ pub async fn remove_reaction(
                     );
 
                     let emoji_react = EmojiReact {
-                        actor: Some(activitypub_federation::fetch::object_id::ObjectId::parse(&actor.iri)?),
+                        actor: Some(activitypub_federation::fetch::object_id::ObjectId::parse(
+                            &actor.iri,
+                        )?),
                         object: post_url.parse()?,
                         content: form.emoji.clone(),
                         r#type: "EmojiReact".to_string(),
@@ -1785,18 +1849,21 @@ pub async fn remove_reaction(
                     // Build Undo activity
                     let undo_id = generate_object_id(&state.config.domain)?;
                     let undo = Undo {
-                        actor: activitypub_federation::fetch::object_id::ObjectId::parse(&actor.iri)?,
+                        actor: activitypub_federation::fetch::object_id::ObjectId::parse(
+                            &actor.iri,
+                        )?,
                         object: UndoObject::EmojiReact(Box::new(emoji_react)),
                         r#type: activitystreams_kinds::activity::UndoType::Undo,
                         id: undo_id,
                     };
 
                     // Create federation config
-                    let federation_config = activitypub_federation::config::FederationConfig::builder()
-                        .domain(&state.config.domain)
-                        .app_data(state.clone())
-                        .build()
-                        .await?;
+                    let federation_config =
+                        activitypub_federation::config::FederationConfig::builder()
+                            .domain(&state.config.domain)
+                            .app_data(state.clone())
+                            .build()
+                            .await?;
                     let federation_data = federation_config.to_request_data();
 
                     // Send to post author's inbox
@@ -1817,8 +1884,7 @@ pub async fn remove_reaction(
         }
     }
 
-    let template: minijinja::Template<'_, '_> =
-        state.env.get_template("post_reactions.jinja")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_reactions.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         reaction_counts => reaction_counts,
@@ -1847,12 +1913,7 @@ pub async fn post_reactions_detail(
     if post.is_none() {
         return Ok((
             StatusCode::NOT_FOUND,
-            handler_404(
-                auth_session,
-                ExtractFtlLang(ftl_lang),
-                State(state),
-            )
-            .await?,
+            handler_404(auth_session, ExtractFtlLang(ftl_lang), State(state)).await?,
         )
             .into_response());
     }
@@ -1866,7 +1927,8 @@ pub async fn post_reactions_detail(
     // Get all reactions for this post
     let reactions = find_reactions_by_post_id(&mut tx, uuid).await?;
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     tx.commit().await?;
 

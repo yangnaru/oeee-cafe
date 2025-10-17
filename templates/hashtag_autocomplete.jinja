@@ -1,0 +1,9 @@
+{% if hashtags %}
+  <ul class="hashtag-autocomplete-list">
+    {% for hashtag in hashtags %}
+      <li class="hashtag-autocomplete-item" data-hashtag="{{ hashtag.display_name }}">
+        #{{ hashtag.display_name }} <span class="hashtag-post-count">({{ hashtag.post_count }})</span>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}

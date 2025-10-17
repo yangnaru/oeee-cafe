@@ -81,10 +81,28 @@ post-publish = 公開
 post-move-community = このコミュニティに移動する
 post-delete-confirm = 本当にこの画像を削除しますか？
 post-relay-enabled-notice = この画像は継続して描くことができます。画像をクリックしてみてください！
+post-hashtags = ハッシュタグ
+post-hashtags-placeholder = イラスト, お絵かき, スケッチ
+post-hashtags-hint = カンマまたはスペースでタグを区切る
 
 allow-relay = リレー描画を許可
 sensitive = 敏感な内容
 draft-post = 一時保管された図
+
+# Hashtags
+trending-hashtags = トレンドハッシュタグ
+hashtag-post-count = 件の投稿
+hashtag-no-posts = このハッシュタグがついた投稿はまだありません
+hashtag-discovery = ハッシュタグを探す
+hashtag-search-placeholder = ハッシュタグを検索...
+search = 検索
+search-results-for = 検索結果
+no-hashtags-found = ハッシュタグが見つかりませんでした
+sort-by = 並べ替え
+sort-trending = トレンド
+sort-popular = 人気順
+sort-recent = 最近の活動順
+sort-alphabetical = 五十音順
 
 # Collaborative drawing
 collaborate-title = 協調お絵かき セッション

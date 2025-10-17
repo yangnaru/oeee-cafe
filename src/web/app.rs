@@ -24,6 +24,7 @@ use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
 };
 use crate::web::handlers::handler_404;
+use crate::web::handlers::hashtag::{hashtag_autocomplete, hashtag_discovery, hashtag_view};
 use crate::web::handlers::home::{home, my_timeline};
 use crate::web::handlers::notifications::{
     delete_notification_handler, get_unread_notification_count, list_notifications,
@@ -110,10 +111,22 @@ impl App {
         let protected_router = Router::new()
             .route("/home", get(my_timeline))
             .route("/notifications", get(list_notifications))
-            .route("/notifications/unread-count", get(get_unread_notification_count))
-            .route("/notifications/mark-all-read", post(mark_all_notifications_read))
-            .route("/notifications/:notification_id/mark-read", post(mark_notification_read))
-            .route("/notifications/:notification_id", delete(delete_notification_handler))
+            .route(
+                "/notifications/unread-count",
+                get(get_unread_notification_count),
+            )
+            .route(
+                "/notifications/mark-all-read",
+                post(mark_all_notifications_read),
+            )
+            .route(
+                "/notifications/:notification_id/mark-read",
+                post(mark_notification_read),
+            )
+            .route(
+                "/notifications/:notification_id",
+                delete(delete_notification_handler),
+            )
             .route("/account", get(account))
             .route("/account", post(edit_account))
             .route("/account/password", post(edit_password))
@@ -201,6 +214,9 @@ impl App {
             .route("/communities/:id", put(hx_do_edit_community))
             .route("/communities/:id/edit", get(hx_edit_community))
             .route("/communities/:id/embed", get(community_iframe))
+            .route("/hashtags", get(hashtag_discovery))
+            .route("/hashtags/:hashtag_name", get(hashtag_view))
+            .route("/api/hashtags/autocomplete", get(hashtag_autocomplete))
             .route("/@:login_name", get(profile))
             .route("/@:login_name/embed", get(profile_iframe))
             .route("/@:login_name/banners/embed", get(profile_banners_iframe))

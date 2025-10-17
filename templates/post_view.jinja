@@ -98,6 +98,13 @@
                 {{ ftl_get_message("post-description") }}:
                 <div class="post-content">{{ post.content|markdown|safe }}</div>
               </p>
+              {% if hashtags %}
+                <div class="post-hashtags">
+                  {% for hashtag in hashtags %}
+                    <a href="/hashtags/{{ hashtag.name }}" class="hashtag-link">#{{ hashtag.display_name }}</a>
+                  {% endfor %}
+                </div>
+              {% endif %}
               {% if current_user.id == post.author_id %}
                 <div class="post-menu">
                   <button hx-get="/posts/{{ post_id }}/edit">{{ ftl_get_message("edit") }}</button>

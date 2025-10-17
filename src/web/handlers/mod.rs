@@ -37,6 +37,7 @@ pub mod collaborate;
 pub mod collaborate_cleanup;
 pub mod community;
 pub mod draw;
+pub mod hashtag;
 pub mod home;
 pub mod notifications;
 pub mod post;
@@ -104,7 +105,12 @@ where
         // Extract AuthSession to get user preferences
         let auth_session = AuthSession::from_request_parts(parts, state)
             .await
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to extract auth session"))?;
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to extract auth session",
+                )
+            })?;
 
         // Get user's preferred language
         let user_preferred_language = auth_session
