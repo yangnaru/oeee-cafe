@@ -29,11 +29,12 @@
                   <div class="community-move-card-header">
                     <div>
                       <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
+                      <a href="/communities/@{{ community.slug }}" class="muted" style="margin-left: 8px; text-decoration: none;">@{{ community.slug }}</a>
                       {% if community.is_private %}
                         <span class="community-private-badge">{{ ftl_get_message("private-community") }}</span>
                       {% endif %}
                     </div>
-                    <p class="community-owner-handle muted">@{{ community.owner_login_name }}</p>
+                    <p class="community-owner-handle muted">by <a href="/@{{ community.owner_login_name }}">@{{ community.owner_login_name }}</a></p>
                   </div>
                   {% if community.description %}
                     <p class="community-description">{{ community.description }}</p>
@@ -150,11 +151,12 @@
                   <div class="community-move-card-header">
                     <div>
                       <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
+                      <a href="/communities/@{{ community.slug }}" class="muted" style="margin-left: 8px; text-decoration: none;">@{{ community.slug }}</a>
                       {% if community.is_private %}
                         <span class="community-private-badge">{{ ftl_get_message("private-community") }}</span>
                       {% endif %}
                     </div>
-                    <p class="community-owner-handle muted">@{{ community.owner_login_name }}</p>
+                    <p class="community-owner-handle muted">by <a href="/@{{ community.owner_login_name }}">@{{ community.owner_login_name }}</a></p>
                   </div>
                   {% if community.description %}
                     <p class="community-description">{{ community.description }}</p>
