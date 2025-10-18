@@ -137,6 +137,9 @@ block head %} {{ super() }}
         form.append("width", {{ width }});
         form.append("height", {{ height }});
         form.append("tool", "cucumber");
+{% if parent_post_id %}
+        form.append("parent_post_id", "{{ parent_post_id }}");
+{% endif %}
 
         fetch("/draw/finish", {
           method: "POST",

@@ -65,6 +65,58 @@
                alt="{{ post.title }}"
                src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
         {% endif %}
+        {% if current_user %}
+          <div class="post-reply-actions">
+            {% if post.image_tool == "neo" and post.allow_relay == "true" %}
+              <button type="button" onclick="window.location.href='/@{{ post.login_name }}/{{ post_id }}/relay'">{{ ftl_get_message("post-relay") }}</button>
+            {% endif %}
+            <button type="button" onclick="document.getElementById('reply-form-{{ post_id }}').style.display = document.getElementById('reply-form-{{ post_id }}').style.display === 'none' ? 'block' : 'none'">{{ ftl_get_message("post-reply-with-drawing") }}</button>
+            <fieldset id="reply-form-{{ post_id }}" style="display: none; margin-top: 10px;">
+              <legend>{{ ftl_get_message("post-reply-select-tool") }}</legend>
+              <form action="/draw" method="post">
+                <input type="hidden" name="parent_post_id" value="{{ post_id }}" />
+                <input type="hidden" name="community_id" value="{{ post.community_id }}" />
+                <select name="tool">
+                  <option value="neo" selected>PaintBBS NEO</option>
+                  <option value="tegaki">Tegaki</option>
+                  <option value="cucumber">Cucumber</option>
+                </select>
+                <select name="width">
+                  <option value="300" selected>300</option>
+                  <option value="350">350</option>
+                  <option value="400">400</option>
+                  <option value="450">450</option>
+                  <option value="500">500</option>
+                  <option value="550">550</option>
+                  <option value="600">600</option>
+                  <option value="650">650</option>
+                  <option value="700">700</option>
+                  <option value="750">750</option>
+                  <option value="800">800</option>
+                  <option value="850">850</option>
+                  <option value="900">900</option>
+                  <option value="950">950</option>
+                  <option value="1000">1000</option>
+                </select>
+                X
+                <select name="height">
+                  <option value="300" selected>300</option>
+                  <option value="350">350</option>
+                  <option value="400">400</option>
+                  <option value="450">450</option>
+                  <option value="500">500</option>
+                  <option value="550">550</option>
+                  <option value="600">600</option>
+                  <option value="650">650</option>
+                  <option value="700">700</option>
+                  <option value="750">750</option>
+                  <option value="800">800</option>
+                </select>
+                <input type="submit" value="Start Drawing" />
+              </form>
+            </fieldset>
+          </div>
+        {% endif %}
         <div class="center">
           <p>
             {{ ftl_get_message("post-author") }}: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted fediverse-handle">@{{ post.login_name }}@{{ domain }}</span>

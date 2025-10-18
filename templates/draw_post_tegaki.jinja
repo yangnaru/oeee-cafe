@@ -48,6 +48,9 @@
         form.append("width", image.width);
         form.append("height", image.height);
         form.append("tool", "tegaki");
+{% if parent_post_id %}
+        form.append("parent_post_id", "{{ parent_post_id }}");
+{% endif %}
 
         // post form using fetch
         fetch("/draw/finish", {

@@ -48,6 +48,8 @@
 
       {% if parent_post %}
       form.append("parent_post_id", "{{ parent_post.id }}");
+      {% elif parent_post_id %}
+      form.append("parent_post_id", "{{ parent_post_id }}");
       {% endif %}
 
       // post form using fetch

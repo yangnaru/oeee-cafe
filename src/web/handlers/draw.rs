@@ -1,7 +1,7 @@
 use crate::app_error::AppError;
 use crate::models::banner::{create_banner, BannerDraft};
 use crate::models::community::find_community_by_id;
-use crate::models::post::{create_post, PostDraft, Tool};
+use crate::models::post::{create_post, find_post_by_id, PostDraft, Tool};
 use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
 use crate::web::handlers::ExtractFtlLang;
@@ -37,6 +37,7 @@ pub struct Input {
     height: String,
     tool: String,
     community_id: String,
+    parent_post_id: Option<String>,
 }
 
 pub async fn start_draw_get() -> Redirect {
@@ -65,6 +66,18 @@ pub async fn start_draw(
     let community_id = Uuid::parse_str(&input.community_id).unwrap();
     let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
 
+    // Query parent post if parent_post_id is provided
+    let parent_post = if let Some(ref parent_post_id) = input.parent_post_id {
+        let parent_uuid = Uuid::parse_str(parent_post_id).ok();
+        if let Some(uuid) = parent_uuid {
+            find_post_by_id(&mut tx, uuid).await?
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
@@ -77,6 +90,8 @@ pub async fn start_draw(
         foreground_color => community.foreground_color,
         community_id => input.community_id,
         community_slug => community.slug,
+        parent_post => parent_post,
+        parent_post_id => input.parent_post_id,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
