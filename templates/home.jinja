@@ -33,8 +33,10 @@
           <ul class="hashtag-list">
             {% for hashtag in trending_hashtags %}
               <li class="hashtag-item">
-                <a href="/hashtags/{{ hashtag.name }}">#{{ hashtag.display_name }}</a>
-                <span class="hashtag-post-count">({{ hashtag.post_count }})</span>
+                <a href="/hashtags/{{ hashtag.name }}">
+                  #{{ hashtag.display_name }}
+                  <span class="hashtag-post-count">({{ hashtag.post_count }})</span>
+                </a>
               </li>
             {% endfor %}
           </ul>
@@ -51,11 +53,9 @@
         <div class="community-badges">
           {# Note: Limited to 10 communities for performance. Consider pagination for larger lists. #}
           {% for (community, id) in active_public_communities[:10] %}
-            <div class="community-badge">
-              <a href="/communities/@{{ community.slug }}">
-                {{ community.name }} <span class="community-post-count">({{ community.posts_count }})</span>
-              </a>
-            </div>
+            <a href="/communities/@{{ community.slug }}" class="community-badge">
+              {{ community.name }} <span class="community-post-count">({{ community.posts_count }})</span>
+            </a>
           {% endfor %}
         </div>
       </section>

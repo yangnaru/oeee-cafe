@@ -1,7 +1,8 @@
 use super::ExtractFtlLang;
 use crate::app_error::AppError;
 use crate::models::community::{
-    get_active_public_communities_excluding_owner, get_user_communities_with_latest_9_posts,
+    get_active_public_communities_excluding_owner, get_public_communities,
+    get_user_communities_with_latest_9_posts,
 };
 use crate::models::hashtag::get_trending_hashtags;
 use crate::models::post::{
@@ -43,7 +44,7 @@ pub async fn home(
     };
     let active_public_communities = match user {
         Some(user) => get_active_public_communities_excluding_owner(&mut tx, user.id).await?,
-        None => Vec::new(),
+        None => get_public_communities(&mut tx).await?,
     };
 
     let active_public_communities: Vec<_> = active_public_communities
