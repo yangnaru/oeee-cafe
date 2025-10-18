@@ -486,3 +486,43 @@ pub async fn get_community_stats(
         total_comments: stats.total_comments,
     })
 }
+
+/// Struct for community member stats
+pub struct CommunityMembersCount {
+    pub community_id: Uuid,
+    pub members_count: Option<i64>,
+}
+
+/// Fetch members count (unique contributors) for multiple communities
+pub async fn get_communities_members_count(
+    tx: &mut Transaction<'_, Postgres>,
+    community_ids: &[Uuid],
+) -> Result<Vec<CommunityMembersCount>> {
+    if community_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let result = sqlx::query!(
+        r#"
+        SELECT
+            p.community_id,
+            COUNT(DISTINCT p.author_id) as members_count
+        FROM posts p
+        WHERE p.community_id = ANY($1)
+            AND p.published_at IS NOT NULL
+            AND p.deleted_at IS NULL
+        GROUP BY p.community_id
+        "#,
+        community_ids
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(result
+        .into_iter()
+        .map(|row| CommunityMembersCount {
+            community_id: row.community_id,
+            members_count: row.members_count,
+        })
+        .collect())
+}

@@ -414,6 +414,73 @@ pub async fn find_published_posts_by_community_id(
         .collect())
 }
 
+/// Struct for recent post thumbnails in community cards
+pub struct CommunityRecentPost {
+    pub id: Uuid,
+    pub community_id: Uuid,
+    pub image_filename: String,
+    pub image_width: i32,
+    pub image_height: i32,
+    pub author_login_name: String,
+}
+
+/// Fetch recent posts (up to `limit` per community) for multiple communities
+pub async fn find_recent_posts_by_communities(
+    tx: &mut Transaction<'_, Postgres>,
+    community_ids: &[Uuid],
+    limit: i64,
+) -> Result<Vec<CommunityRecentPost>> {
+    if community_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let result = sqlx::query!(
+        r#"
+        SELECT
+            ranked.id,
+            ranked.community_id,
+            ranked.image_filename,
+            ranked.image_width,
+            ranked.image_height,
+            ranked.author_login_name
+        FROM (
+            SELECT
+                p.id,
+                p.community_id,
+                i.image_filename,
+                i.width as image_width,
+                i.height as image_height,
+                u.login_name as author_login_name,
+                ROW_NUMBER() OVER (PARTITION BY p.community_id ORDER BY p.published_at DESC) as rn
+            FROM posts p
+            INNER JOIN images i ON p.image_id = i.id
+            INNER JOIN users u ON p.author_id = u.id
+            WHERE p.community_id = ANY($1)
+                AND p.published_at IS NOT NULL
+                AND p.deleted_at IS NULL
+        ) ranked
+        WHERE ranked.rn <= $2
+        ORDER BY ranked.community_id, ranked.rn
+        "#,
+        community_ids,
+        limit
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(result
+        .into_iter()
+        .map(|row| CommunityRecentPost {
+            id: row.id,
+            community_id: row.community_id,
+            image_filename: row.image_filename,
+            image_width: row.image_width,
+            image_height: row.image_height,
+            author_login_name: row.author_login_name,
+        })
+        .collect())
+}
+
 pub async fn create_post(
     tx: &mut Transaction<'_, Postgres>,
     post_draft: PostDraft,

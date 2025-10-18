@@ -2,11 +2,11 @@ use crate::app_error::AppError;
 use crate::models::actor::create_actor_for_community;
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
-    create_community, find_community_by_id, find_community_by_slug, get_community_stats,
+    create_community, find_community_by_id, find_community_by_slug, get_communities_members_count, get_community_stats,
     get_own_communities, get_participating_communities, get_public_communities,
     update_community_with_activity, CommunityDraft,
 };
-use crate::models::post::find_published_posts_by_community_id;
+use crate::models::post::{find_published_posts_by_community_id, find_recent_posts_by_communities};
 use crate::models::user::AuthSession;
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
 use crate::web::state::AppState;
@@ -209,51 +209,17 @@ pub async fn communities(
     all_community_ids.sort();
     all_community_ids.dedup();
 
-    // Fetch recent posts (3 per community) for all communities in a single batch query
-    let recent_posts = if !all_community_ids.is_empty() {
-        sqlx::query!(
-            r#"
-            SELECT
-                ranked.id,
-                ranked.community_id,
-                ranked.image_filename,
-                ranked.image_width,
-                ranked.image_height,
-                ranked.author_login_name
-            FROM (
-                SELECT
-                    p.id,
-                    p.community_id,
-                    i.image_filename,
-                    i.width as image_width,
-                    i.height as image_height,
-                    u.login_name as author_login_name,
-                    ROW_NUMBER() OVER (PARTITION BY p.community_id ORDER BY p.published_at DESC) as rn
-                FROM posts p
-                INNER JOIN images i ON p.image_id = i.id
-                INNER JOIN users u ON p.author_id = u.id
-                WHERE p.community_id = ANY($1)
-                    AND p.published_at IS NOT NULL
-                    AND p.deleted_at IS NULL
-            ) ranked
-            WHERE ranked.rn <= 3
-            ORDER BY ranked.community_id, ranked.rn
-            "#,
-            &all_community_ids
-        )
-        .fetch_all(&mut *tx)
-        .await?
-    } else {
-        Vec::new()
-    };
+    // Fetch recent posts (3 per community) for all communities
+    let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 3).await?;
 
     // Fetch members count (unique contributors) and posts count for all communities
+    let members_stats = get_communities_members_count(&mut tx, &all_community_ids).await?;
+
     let community_stats = if !all_community_ids.is_empty() {
         sqlx::query!(
             r#"
             SELECT
                 p.community_id,
-                COUNT(DISTINCT p.author_id) as members_count,
                 COUNT(p.id) as posts_count
             FROM posts p
             WHERE p.community_id = ANY($1)
@@ -304,10 +270,15 @@ pub async fn communities(
         }));
     }
 
-    // Create stats lookup map
-    let mut stats_by_community: StdHashMap<Uuid, (Option<i64>, Option<i64>)> = StdHashMap::new();
+    // Create stats lookup maps
+    let mut members_by_community: StdHashMap<Uuid, Option<i64>> = StdHashMap::new();
+    for stat in members_stats {
+        members_by_community.insert(stat.community_id, stat.members_count);
+    }
+
+    let mut posts_count_by_community: StdHashMap<Uuid, Option<i64>> = StdHashMap::new();
     for stat in community_stats {
-        stats_by_community.insert(stat.community_id, (stat.members_count, stat.posts_count));
+        posts_count_by_community.insert(stat.community_id, stat.posts_count);
     }
 
     // Create owner login lookup map
@@ -321,7 +292,8 @@ pub async fn communities(
         .into_iter()
         .map(|community| {
             let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
-            let (members_count, posts_count) = stats_by_community.get(&community.id).cloned().unwrap_or((None, None));
+            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
+            let posts_count = posts_count_by_community.get(&community.id).cloned().unwrap_or(None);
             let owner_login_name = owner_login_by_id.get(&community.owner_id).cloned().unwrap_or_default();
 
             serde_json::json!({
@@ -343,7 +315,7 @@ pub async fn communities(
         .iter()
         .map(|community| {
             let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
-            let (members_count, _) = stats_by_community.get(&community.id).cloned().unwrap_or((None, None));
+            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
 
             serde_json::json!({
                 "id": community.id.to_string(),
@@ -376,7 +348,8 @@ pub async fn communities(
         .into_iter()
         .map(|community| {
             let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
-            let (members_count, posts_count) = stats_by_community.get(&community.id).cloned().unwrap_or((None, None));
+            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
+            let posts_count = posts_count_by_community.get(&community.id).cloned().unwrap_or(None);
             let owner_login_name = owner_login_by_id.get(&community.owner_id).cloned().unwrap_or_default();
 
             serde_json::json!({

@@ -2,12 +2,13 @@ use super::ExtractFtlLang;
 use crate::app_error::AppError;
 use crate::models::comment::find_latest_comments_from_public_communities;
 use crate::models::community::{
-    get_active_public_communities_excluding_owner, get_public_communities,
+    get_active_public_communities_excluding_owner, get_communities_members_count, get_public_communities,
     get_user_communities_with_latest_9_posts,
 };
 use crate::models::hashtag::get_trending_hashtags;
 use crate::models::post::{
     find_following_posts_by_user_id, find_public_community_posts_excluding_from_community_owner,
+    find_recent_posts_by_communities,
 };
 use crate::models::user::{find_user_by_login_name, AuthSession};
 use crate::web::context::CommonContext;
@@ -43,16 +44,55 @@ pub async fn home(
         }
         None => Vec::new(),
     };
-    let active_public_communities = match user {
+    let active_public_communities_raw = match user {
         Some(user) => get_active_public_communities_excluding_owner(&mut tx, user.id).await?,
         None => get_public_communities(&mut tx).await?,
     };
 
-    let active_public_communities: Vec<_> = active_public_communities
+    // Fetch recent posts and stats for active communities
+    let community_ids: Vec<uuid::Uuid> = active_public_communities_raw.iter().map(|c| c.id).collect();
+
+    let recent_posts = find_recent_posts_by_communities(&mut tx, &community_ids, 3).await?;
+    let community_stats = get_communities_members_count(&mut tx, &community_ids).await?;
+
+    // Group posts by community_id
+    use std::collections::HashMap;
+    let mut posts_by_community: HashMap<uuid::Uuid, Vec<serde_json::Value>> = HashMap::new();
+    for post in recent_posts {
+        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
+        posts.push(serde_json::json!({
+            "id": post.id.to_string(),
+            "image_filename": post.image_filename,
+            "image_width": post.image_width,
+            "image_height": post.image_height,
+            "author_login_name": post.author_login_name,
+        }));
+    }
+
+    // Create stats lookup map
+    let mut stats_by_community: HashMap<uuid::Uuid, Option<i64>> = HashMap::new();
+    for stat in community_stats {
+        stats_by_community.insert(stat.community_id, stat.members_count);
+    }
+
+    // Build active communities with all metadata
+    let active_public_communities: Vec<serde_json::Value> = active_public_communities_raw
         .into_iter()
         .map(|community| {
-            let id = community.id.to_string();
-            (community, id)
+            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
+            let members_count = stats_by_community.get(&community.id).cloned().unwrap_or(None);
+
+            serde_json::json!({
+                "id": community.id.to_string(),
+                "name": community.name,
+                "slug": community.slug,
+                "description": community.description,
+                "is_private": community.is_private,
+                "owner_login_name": community.owner_login_name,
+                "posts_count": community.posts_count,
+                "members_count": members_count,
+                "recent_posts": recent_posts,
+            })
         })
         .collect();
 

@@ -1,5 +1,6 @@
 {% extends "base.jinja" %}
 {% import "comment_card_macro.jinja" as comment_card_macro %}
+{% import "community_card_macro.jinja" as community_card_macro %}
 
 {# Macro for rendering post grid items - reusable across different sections #}
 {% macro post_grid_item(post, r2_public_endpoint_url) %}
@@ -63,12 +64,10 @@
         <h2 id="active-communities-heading" class="home-section-title">
           {{ ftl_get_message("latest-active-communities") }}
         </h2>
-        <div class="community-badges">
+        <div class="community-list">
           {# Note: Limited to 10 communities for performance. Consider pagination for larger lists. #}
-          {% for (community, id) in active_public_communities[:10] %}
-            <a href="/communities/@{{ community.slug }}" class="community-badge">
-              {{ community.name }} <span class="community-post-count">({{ community.posts_count }})</span>
-            </a>
+          {% for community in active_public_communities[:10] %}
+            {{ community_card_macro.community_card(community, ftl_get_message) }}
           {% endfor %}
         </div>
       </section>
