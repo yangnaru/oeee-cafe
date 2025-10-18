@@ -102,28 +102,6 @@
 
         {# RIGHT COLUMN: Info #}
         <div class="post-detail-right">
-          {# Header: Title and Hashtags #}
-          <div class="post-header">
-            {% block post_edit_block %}
-              <div hx-target="this" hx-swap="outerHTML">
-                <h1 class="post-title">
-                  {% if post.title %}
-                    {{ post.title }}
-                  {% else %}
-                    {{ ftl_get_message("post-no-title") }}
-                  {% endif %}
-                </h1>
-                {% if hashtags %}
-                  <div class="post-hashtags">
-                    {% for hashtag in hashtags %}
-                      <a href="/hashtags/{{ hashtag.name }}" class="hashtag-link">#{{ hashtag.display_name }}</a>
-                    {% endfor %}
-                  </div>
-                {% endif %}
-              </div>
-            {% endblock post_edit_block %}
-          </div>
-
           {# Author Info #}
           <div class="post-author-info">
             <div>
@@ -158,10 +136,32 @@
             <p>HIT: {{ post.viewer_count }}</p>
           </div>
 
-          {# Description #}
-          {% if post.content %}
-            <div class="post-content">{{ post.content|markdown|safe }}</div>
-          {% endif %}
+          {# Header: Title, Hashtags, and Description #}
+          {% block post_edit_block %}
+            <div id="post-edit-container" hx-target="this" hx-swap="outerHTML">
+              <div class="post-header">
+                <h1 class="post-title">
+                  {% if post.title %}
+                    {{ post.title }}
+                  {% else %}
+                    {{ ftl_get_message("post-no-title") }}
+                  {% endif %}
+                </h1>
+                {% if hashtags %}
+                  <div class="post-hashtags">
+                    {% for hashtag in hashtags %}
+                      <a href="/hashtags/{{ hashtag.name }}" class="hashtag-link">#{{ hashtag.display_name }}</a>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+
+              {# Description #}
+              {% if post.content %}
+                <div class="post-content">{{ post.content|markdown|safe }}</div>
+              {% endif %}
+            </div>
+          {% endblock post_edit_block %}
 
           {# Actions #}
           <div class="post-actions">
@@ -180,7 +180,7 @@
                   }
                 ">{{ ftl_get_message("post-share") }}</button>
                 {% if current_user.id == post.author_id %}
-                  <button hx-get="/posts/{{ post_id }}/edit">{{ ftl_get_message("edit") }}</button>
+                  <button hx-get="/posts/{{ post_id }}/edit" hx-target="#post-edit-container" hx-swap="outerHTML">{{ ftl_get_message("edit") }}</button>
                   <form hx-delete="/posts/{{ post_id }}"
                         hx-confirm="{{ ftl_get_message('post-delete-confirm') }}"
                         hx-target="body"

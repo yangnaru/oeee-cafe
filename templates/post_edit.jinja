@@ -1,7 +1,8 @@
-<form hx-put="/posts/{{ post_id }}"
+<form id="post-edit-container"
+      hx-put="/posts/{{ post_id }}"
       hx-target="this"
       hx-swap="outerHTML">
-    <div>
+    <div class="form-group">
         <label>{{ ftl_get_message("post-title") }}:</label>
         <input type="text" name="title" value="{{ post.title }}">
     </div>
@@ -17,20 +18,22 @@
                placeholder="{{ ftl_get_message("post-hashtags-placeholder") }}">
         <span class="form-hint">{{ ftl_get_message("post-hashtags-hint") }}</span>
     </div>
-    <div>
-        <label>{{ ftl_get_message("sensitive") }}:</label>
+    <div class="form-group form-group-checkbox">
         <input type="checkbox"
                name="is_sensitive"
+               id="is_sensitive"
                {% if post.is_sensitive == "true" %}checked{% endif %}>
+        <label for="is_sensitive">{{ ftl_get_message("sensitive") }}</label>
     </div>
-    <div>
-        <label>{{ ftl_get_message("allow-relay") }}:</label>
+    <div class="form-group form-group-checkbox">
         <input type="checkbox"
                name="allow_relay"
+               id="allow_relay"
                {% if post.allow_relay == "true" %}checked{% endif %}>
+        <label for="allow_relay">{{ ftl_get_message("allow-relay") }}</label>
     </div>
-    <div class="post-menu">
-        <button class="btn" hx-get="/posts/{{ post_id }}">{{ ftl_get_message("cancel") }}</button>
-        <button class="btn">{{ ftl_get_message("save") }}</button>
+    <div class="form-actions">
+        <button type="button" class="btn" hx-get="/posts/{{ post_id }}" hx-target="#post-edit-container" hx-swap="outerHTML">{{ ftl_get_message("cancel") }}</button>
+        <button type="submit" class="btn">{{ ftl_get_message("save") }}</button>
     </div>
 </form>

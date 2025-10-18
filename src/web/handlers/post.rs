@@ -494,6 +494,7 @@ pub async fn post_view(
                     post.as_ref()
                 },
                 post_id => id,
+                hashtags,
                 ftl_lang
             })?
             .render_block("post_edit_block")
@@ -1352,6 +1353,11 @@ pub async fn hx_do_edit_post(
 
     let post = find_post_by_id(&mut tx, post_uuid).await?;
 
+    // Get hashtags for this post
+    let hashtags = get_hashtags_for_post(&mut tx, post_uuid)
+        .await
+        .unwrap_or_default();
+
     // Find the actor for this user to send ActivityPub activities
     let actor = Actor::find_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
 
@@ -1385,6 +1391,7 @@ pub async fn hx_do_edit_post(
             default_community_id => state.config.default_community_id.clone(),
             post,
             post_id => id,
+            hashtags,
             ftl_lang
         })?
         .render_block("post_edit_block")?;
@@ -1681,6 +1688,7 @@ pub async fn post_view_by_login_name(
                     post.as_ref()
                 },
                 post_id => post_id,
+                hashtags,
                 ftl_lang
             })?
             .render_block("post_edit_block")
