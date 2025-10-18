@@ -82,6 +82,7 @@ post-relay-enabled-notice = You can continue drawing on this canvas. Click on th
 post-relay = Relay
 post-reply-with-drawing = Reply with Drawing
 post-reply-select-tool = Select tool and canvas size
+post-child-posts = Replies
 post-hashtags = Hashtags
 post-hashtags-placeholder = art, drawing, sketch
 post-hashtags-hint = Separate tags with commas or spaces

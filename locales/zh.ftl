@@ -84,6 +84,7 @@ post-relay-enabled-notice = 这幅画可以接续创作。点击画作试试看�
 post-relay = 接力
 post-reply-with-drawing = 用画回复
 post-reply-select-tool = 选择工具和画布尺寸
+post-child-posts = 回复
 post-hashtags = 标签
 post-hashtags-placeholder = 艺术, 绘画, 素描
 post-hashtags-hint = 用逗号或空格分隔标签

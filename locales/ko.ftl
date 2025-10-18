@@ -84,6 +84,7 @@ post-relay-enabled-notice = 이 그림은 이어 그릴수 있습니다. 그림�
 post-relay = 이어그리기
 post-reply-with-drawing = 그림으로 답글
 post-reply-select-tool = 도구와 캔버스 크기 선택
+post-child-posts = 답글
 post-hashtags = 해시태그
 post-hashtags-placeholder = 그림, 일러스트, 스케치
 post-hashtags-hint = 쉼표나 공백으로 태그 구분

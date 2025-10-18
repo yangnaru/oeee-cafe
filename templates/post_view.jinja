@@ -1,4 +1,38 @@
 {% import "comments_macro.jinja" as comments_macro %}
+
+{% macro render_child_post(child, depth) %}
+  <div class="child-post-item" style="margin-left: {{ depth * 20 }}px; margin-bottom: 15px; padding: 10px; border-left: 2px solid #ddd;">
+    <div style="display: flex; gap: 10px; align-items: flex-start;">
+      <a href="/@{{ child.user_login_name }}/{{ child.id }}" style="flex-shrink: 0;">
+        <img src="{{ r2_public_endpoint_url }}/image/{{ child.image_filename[:2] }}/{{ child.image_filename }}"
+             alt="{{ child.title or 'No title' }}"
+             style="max-width: 100px; height: auto; border: 1px solid #ccc;">
+      </a>
+      <div style="flex-grow: 1;">
+        <div>
+          <a href="/@{{ child.user_login_name }}/{{ child.id }}" style="font-weight: bold;">
+            {% if child.title %}{{ child.title }}{% else %}{{ ftl_get_message("post-no-title") }}{% endif %}
+          </a>
+        </div>
+        <div style="color: #666; font-size: 0.9em;">
+          by <a href="/@{{ child.user_login_name }}">{{ child.user_display_name }}</a>
+          {% if child.published_at_formatted %}
+            · {{ child.published_at_formatted }}
+          {% endif %}
+          {% if child.comments_count > 0 %}
+            · {{ child.comments_count }} {{ ftl_get_message("post-comments") }}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% if child.children %}
+      {% for grandchild in child.children %}
+        {{ render_child_post(grandchild, depth + 1) }}
+      {% endfor %}
+    {% endif %}
+  </div>
+{% endmacro %}
+
 {% extends "base.jinja" %}
 {% block title %}
   {{ super() }} |
@@ -200,6 +234,14 @@
           {% endif %}
         </div>
       </div>
+      {% if child_posts %}
+        <div class="post-child-posts">
+          <h2>{{ ftl_get_message("post-child-posts") }}</h2>
+          {% for child in child_posts %}
+            {{ render_child_post(child, 0) }}
+          {% endfor %}
+        </div>
+      {% endif %}
     </div>
   </div>
 {% endblock content %}

@@ -84,6 +84,7 @@ post-relay-enabled-notice = この画像は継続して描くことができま�
 post-relay = リレー
 post-reply-with-drawing = 絵で返信
 post-reply-select-tool = ツールとキャンバスサイズを選択
+post-child-posts = 返信
 post-hashtags = ハッシュタグ
 post-hashtags-placeholder = イラスト, お絵かき, スケッチ
 post-hashtags-hint = カンマまたはスペースでタグを区切る

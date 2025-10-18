@@ -91,6 +91,22 @@ pub struct SerializableDraftPost {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Serialize)]
+pub struct SerializableThreadedPost {
+    pub id: Uuid,
+    pub title: Option<String>,
+    pub author_id: Uuid,
+    pub user_login_name: String,
+    pub user_display_name: String,
+    pub image_filename: String,
+    pub image_width: i32,
+    pub image_height: i32,
+    pub published_at: Option<DateTime<Utc>>,
+    pub published_at_formatted: Option<String>,
+    pub comments_count: i64,
+    pub children: Vec<SerializableThreadedPost>,
+}
+
 impl Post {
     pub fn path(&self) -> String {
         format!("/posts/{}", self.id)
@@ -609,6 +625,230 @@ pub async fn find_post_by_id(
         );
         map
     }))
+}
+
+pub async fn find_child_posts_by_parent_id(
+    tx: &mut Transaction<'_, Postgres>,
+    parent_post_id: Uuid,
+) -> Result<Vec<SerializableThreadedPost>> {
+    let q = query!(
+        "
+            SELECT
+                posts.id,
+                posts.title,
+                posts.author_id,
+                users.login_name,
+                users.display_name,
+                images.image_filename,
+                images.width,
+                images.height,
+                posts.published_at
+            FROM posts
+            LEFT JOIN images ON posts.image_id = images.id
+            LEFT JOIN users ON posts.author_id = users.id
+            WHERE posts.parent_post_id = $1
+            AND posts.published_at IS NOT NULL
+            AND posts.deleted_at IS NULL
+            ORDER BY posts.published_at ASC
+        ",
+        parent_post_id
+    );
+    let result = q.fetch_all(&mut **tx).await?;
+
+    Ok(result
+        .into_iter()
+        .map(|row| {
+            // Format the published_at date
+            let published_at_formatted = row.published_at.as_ref().map(|dt| {
+                use chrono::TimeZone;
+                let seoul = chrono_tz::Asia::Seoul;
+                let seoul_time = seoul.from_utc_datetime(&dt.naive_utc());
+                seoul_time.format("%Y-%m-%d %H:%M").to_string()
+            });
+
+            SerializableThreadedPost {
+                id: row.id,
+                title: row.title,
+                author_id: row.author_id,
+                user_login_name: row.login_name,
+                user_display_name: row.display_name,
+                image_filename: row.image_filename,
+                image_width: row.width,
+                image_height: row.height,
+                published_at: row.published_at,
+                published_at_formatted,
+                comments_count: 0, // Will be populated by build_thread_tree
+                children: Vec::new(), // Will be populated by build_thread_tree
+            }
+        })
+        .collect())
+}
+
+pub async fn build_thread_tree(
+    tx: &mut Transaction<'_, Postgres>,
+    parent_post_id: Uuid,
+) -> Result<Vec<SerializableThreadedPost>> {
+    use std::collections::HashMap;
+
+    // Use recursive CTE to fetch all descendants in a single query
+    let rows = query!(
+        r#"
+            WITH RECURSIVE post_tree AS (
+                -- Base case: direct children
+                SELECT
+                    posts.id,
+                    posts.title,
+                    posts.author_id,
+                    posts.parent_post_id,
+                    users.login_name,
+                    users.display_name,
+                    images.image_filename,
+                    images.width,
+                    images.height,
+                    posts.published_at,
+                    COALESCE(comment_counts.count, 0) as comments_count
+                FROM posts
+                LEFT JOIN images ON posts.image_id = images.id
+                LEFT JOIN users ON posts.author_id = users.id
+                LEFT JOIN (
+                    SELECT post_id, COUNT(*) as count
+                    FROM comments
+                    GROUP BY post_id
+                ) comment_counts ON posts.id = comment_counts.post_id
+                WHERE posts.parent_post_id = $1
+                AND posts.published_at IS NOT NULL
+                AND posts.deleted_at IS NULL
+
+                UNION ALL
+
+                -- Recursive case: children of children
+                SELECT
+                    p.id,
+                    p.title,
+                    p.author_id,
+                    p.parent_post_id,
+                    u.login_name,
+                    u.display_name,
+                    i.image_filename,
+                    i.width,
+                    i.height,
+                    p.published_at,
+                    COALESCE(cc.count, 0) as comments_count
+                FROM posts p
+                LEFT JOIN images i ON p.image_id = i.id
+                LEFT JOIN users u ON p.author_id = u.id
+                LEFT JOIN (
+                    SELECT post_id, COUNT(*) as count
+                    FROM comments
+                    GROUP BY post_id
+                ) cc ON p.id = cc.post_id
+                INNER JOIN post_tree pt ON p.parent_post_id = pt.id
+                WHERE p.published_at IS NOT NULL
+                AND p.deleted_at IS NULL
+            )
+            SELECT * FROM post_tree
+            ORDER BY published_at ASC
+        "#,
+        parent_post_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Build a map to track children for each parent
+    let mut children_map: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    let mut post_data: HashMap<Uuid, (Option<String>, Uuid, String, String, String, i32, i32, Option<chrono::DateTime<chrono::Utc>>, i64)> = HashMap::new();
+
+    for row in &rows {
+        // Skip posts with missing required data
+        let Some(id) = row.id else { continue };
+        let Some(author_id) = row.author_id else { continue };
+        let Some(login_name) = &row.login_name else { continue };
+        let Some(display_name) = &row.display_name else { continue };
+        let Some(image_filename) = &row.image_filename else { continue };
+        let Some(width) = row.width else { continue };
+        let Some(height) = row.height else { continue };
+        let Some(comments_count) = row.comments_count else { continue };
+
+        post_data.insert(
+            id,
+            (
+                row.title.clone(),
+                author_id,
+                login_name.clone(),
+                display_name.clone(),
+                image_filename.clone(),
+                width,
+                height,
+                row.published_at,
+                comments_count,
+            ),
+        );
+
+        if let Some(parent_id) = row.parent_post_id {
+            children_map.entry(parent_id).or_insert_with(Vec::new).push(id);
+        }
+    }
+
+    // Recursive function to build tree for a given post ID
+    fn build_subtree(
+        post_id: Uuid,
+        post_data: &HashMap<Uuid, (Option<String>, Uuid, String, String, String, i32, i32, Option<chrono::DateTime<chrono::Utc>>, i64)>,
+        children_map: &HashMap<Uuid, Vec<Uuid>>,
+    ) -> Option<SerializableThreadedPost> {
+        let (title, author_id, login_name, display_name, image_filename, width, height, published_at, comments_count) = post_data.get(&post_id)?;
+
+        // Format the published_at date
+        let published_at_formatted = published_at.as_ref().map(|dt| {
+            use chrono::TimeZone;
+            let seoul = chrono_tz::Asia::Seoul;
+            let seoul_time = seoul.from_utc_datetime(&dt.naive_utc());
+            seoul_time.format("%Y-%m-%d %H:%M").to_string()
+        });
+
+        let children = children_map
+            .get(&post_id)
+            .map(|child_ids| {
+                child_ids
+                    .iter()
+                    .filter_map(|child_id| build_subtree(*child_id, post_data, children_map))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Some(SerializableThreadedPost {
+            id: post_id,
+            title: title.clone(),
+            author_id: *author_id,
+            user_login_name: login_name.clone(),
+            user_display_name: display_name.clone(),
+            image_filename: image_filename.clone(),
+            image_width: *width,
+            image_height: *height,
+            published_at: *published_at,
+            published_at_formatted,
+            comments_count: *comments_count,
+            children,
+        })
+    }
+
+    // Build trees for all root posts (direct children of parent_post_id)
+    let result: Vec<SerializableThreadedPost> = rows
+        .iter()
+        .filter_map(|row| {
+            let id = row.id?;
+            if row.parent_post_id == Some(parent_post_id) {
+                build_subtree(id, &post_data, &children_map)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(result)
 }
 
 pub async fn publish_post(

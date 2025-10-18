@@ -14,7 +14,7 @@ use crate::models::notification::{
     create_notification, CreateNotificationParams, NotificationType,
 };
 use crate::models::post::{
-    delete_post_with_activity,
+    build_thread_tree, delete_post_with_activity,
     edit_post, edit_post_community, find_draft_posts_by_author_id, find_post_by_id,
     increment_post_viewer_count, publish_post,
 };
@@ -419,6 +419,11 @@ pub async fn post_view(
         .await
         .unwrap_or_default();
 
+    // Get child posts (threaded replies)
+    let child_posts = build_thread_tree(&mut tx, uuid)
+        .await
+        .unwrap_or_default();
+
     tx.commit().await?;
 
     let community_id = community_id.to_string();
@@ -462,6 +467,7 @@ pub async fn post_view(
                 collaborative_participants,
                 reaction_counts,
                 hashtags,
+                child_posts,
                 ftl_lang
             })
             .unwrap();
@@ -1349,6 +1355,11 @@ pub async fn post_view_by_login_name(
         .await
         .unwrap_or_default();
 
+    // Get child posts (threaded replies)
+    let child_posts = build_thread_tree(&mut tx, uuid)
+        .await
+        .unwrap_or_default();
+
     tx.commit().await?;
 
     let community_id = community_id.to_string();
@@ -1392,6 +1403,7 @@ pub async fn post_view_by_login_name(
                 collaborative_participants,
                 reaction_counts,
                 hashtags,
+                child_posts,
                 ftl_lang
             })
             .unwrap();
