@@ -50,6 +50,7 @@ pub struct NotificationComment {
     pub iri: Option<String>,
     pub actor_name: String,
     pub actor_handle: String,
+    pub actor_login_name: Option<String>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub post_title: Option<String>,
@@ -130,6 +131,7 @@ pub async fn find_comments_to_posts_by_author(
             comments.iri,
             actors.name AS actor_name,
             actors.handle AS actor_handle,
+            comment_authors.login_name AS "actor_login_name?",
             posts.title AS post_title,
             post_authors.login_name AS post_author_login_name,
             images.image_filename AS post_image_filename,
@@ -137,6 +139,7 @@ pub async fn find_comments_to_posts_by_author(
             images.height AS post_image_height
         FROM comments
         LEFT JOIN actors ON comments.actor_id = actors.id
+        LEFT JOIN users AS comment_authors ON actors.user_id = comment_authors.id
         LEFT JOIN posts ON comments.post_id = posts.id
         LEFT JOIN users AS post_authors ON posts.author_id = post_authors.id
         LEFT JOIN images ON posts.image_id = images.id
@@ -172,6 +175,7 @@ pub async fn find_latest_comments_in_community(
             comments.iri,
             actors.name AS actor_name,
             actors.handle AS actor_handle,
+            comment_authors.login_name AS "actor_login_name?",
             posts.title AS post_title,
             post_authors.login_name AS post_author_login_name,
             images.image_filename AS post_image_filename,
@@ -179,6 +183,7 @@ pub async fn find_latest_comments_in_community(
             images.height AS post_image_height
         FROM comments
         LEFT JOIN actors ON comments.actor_id = actors.id
+        LEFT JOIN users AS comment_authors ON actors.user_id = comment_authors.id
         LEFT JOIN posts ON comments.post_id = posts.id
         LEFT JOIN users AS post_authors ON posts.author_id = post_authors.id
         LEFT JOIN images ON posts.image_id = images.id
