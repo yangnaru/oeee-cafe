@@ -188,87 +188,214 @@ pub async fn communities(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let own_communities = match auth_session.user.clone() {
+    // Fetch all communities
+    let own_communities_raw = match auth_session.user.clone() {
         Some(user) => get_own_communities(&mut tx, user.id).await?,
         None => vec![],
     };
 
-    let own_communities = own_communities
-        .iter()
-        .map(|community| {
-            let name = community.name.clone();
-            let description = community.description.clone();
-            let is_private = community.is_private;
-            let updated_at = community.updated_at.to_string();
-            let created_at = community.created_at.to_string();
-            let link = format!("/communities/@{}", community.slug);
-            HashMap::<String, String>::from_iter(vec![
-                ("name".to_string(), name),
-                ("description".to_string(), description),
-                ("is_private".to_string(), is_private.to_string()),
-                ("updated_at".to_string(), updated_at),
-                ("created_at".to_string(), created_at),
-                ("link".to_string(), link),
-            ])
-        })
-        .collect::<Vec<_>>();
+    let public_communities_raw = get_public_communities(&mut tx).await?;
 
-    let public_communities = get_public_communities(&mut tx)
-        .await?
-        .iter()
-        .map(|community| {
-            let name = community.name.clone();
-            let description = community.description.clone();
-            let is_private = community.is_private;
-            let updated_at = community.updated_at.to_string();
-            let created_at = community.created_at.to_string();
-            let link = format!("/communities/@{}", community.slug);
-            HashMap::<String, String>::from_iter(vec![
-                ("name".to_string(), name),
-                (
-                    "owner_login_name".to_string(),
-                    community.owner_login_name.clone(),
-                ),
-                ("description".to_string(), description),
-                ("is_private".to_string(), is_private.to_string()),
-                ("updated_at".to_string(), updated_at),
-                ("created_at".to_string(), created_at),
-                ("link".to_string(), link),
-            ])
-        })
-        .collect::<Vec<_>>();
-
-    let official_communities = public_communities
-        .iter()
-        .filter(|c| c["owner_login_name"] == state.config.official_account_login_name)
-        .cloned()
-        .collect::<Vec<_>>();
-
-    let participating_communities = match auth_session.user.clone() {
-        Some(user) => get_participating_communities(&mut tx, user.id)
-            .await?
-            .iter()
-            .map(|community| {
-                let name = community.name.clone();
-                let description = community.description.clone();
-                let is_private = community.is_private;
-                let updated_at = community.updated_at.to_string();
-                let created_at = community.created_at.to_string();
-                let link = format!("/communities/@{}", community.slug);
-                HashMap::<String, String>::from_iter(vec![
-                    ("name".to_string(), name),
-                    ("description".to_string(), description),
-                    ("is_private".to_string(), is_private.to_string()),
-                    ("updated_at".to_string(), updated_at),
-                    ("created_at".to_string(), created_at),
-                    ("link".to_string(), link),
-                ])
-            })
-            .collect::<Vec<_>>(),
+    let participating_communities_raw = match auth_session.user.clone() {
+        Some(user) => get_participating_communities(&mut tx, user.id).await?,
         None => vec![],
     };
 
+    // Collect all community IDs for batch queries
+    let mut all_community_ids: Vec<Uuid> = Vec::new();
+    all_community_ids.extend(own_communities_raw.iter().map(|c| c.id));
+    all_community_ids.extend(public_communities_raw.iter().map(|c| c.id));
+    all_community_ids.extend(participating_communities_raw.iter().map(|c| c.id));
+    all_community_ids.sort();
+    all_community_ids.dedup();
+
+    // Fetch recent posts (3 per community) for all communities in a single batch query
+    let recent_posts = if !all_community_ids.is_empty() {
+        sqlx::query!(
+            r#"
+            SELECT
+                ranked.id,
+                ranked.community_id,
+                ranked.image_filename,
+                ranked.image_width,
+                ranked.image_height,
+                ranked.author_login_name
+            FROM (
+                SELECT
+                    p.id,
+                    p.community_id,
+                    i.image_filename,
+                    i.width as image_width,
+                    i.height as image_height,
+                    u.login_name as author_login_name,
+                    ROW_NUMBER() OVER (PARTITION BY p.community_id ORDER BY p.published_at DESC) as rn
+                FROM posts p
+                INNER JOIN images i ON p.image_id = i.id
+                INNER JOIN users u ON p.author_id = u.id
+                WHERE p.community_id = ANY($1)
+                    AND p.published_at IS NOT NULL
+                    AND p.deleted_at IS NULL
+            ) ranked
+            WHERE ranked.rn <= 3
+            ORDER BY ranked.community_id, ranked.rn
+            "#,
+            &all_community_ids
+        )
+        .fetch_all(&mut *tx)
+        .await?
+    } else {
+        Vec::new()
+    };
+
+    // Fetch members count (unique contributors) and posts count for all communities
+    let community_stats = if !all_community_ids.is_empty() {
+        sqlx::query!(
+            r#"
+            SELECT
+                p.community_id,
+                COUNT(DISTINCT p.author_id) as members_count,
+                COUNT(p.id) as posts_count
+            FROM posts p
+            WHERE p.community_id = ANY($1)
+                AND p.published_at IS NOT NULL
+                AND p.deleted_at IS NULL
+            GROUP BY p.community_id
+            "#,
+            &all_community_ids
+        )
+        .fetch_all(&mut *tx)
+        .await?
+    } else {
+        Vec::new()
+    };
+
+    // Fetch owner login names for own and participating communities
+    let owner_ids: Vec<Uuid> = own_communities_raw.iter()
+        .chain(participating_communities_raw.iter())
+        .map(|c| c.owner_id)
+        .collect();
+
+    let owner_logins = if !owner_ids.is_empty() {
+        sqlx::query!(
+            r#"
+            SELECT id, login_name
+            FROM users
+            WHERE id = ANY($1)
+            "#,
+            &owner_ids
+        )
+        .fetch_all(&mut *tx)
+        .await?
+    } else {
+        Vec::new()
+    };
+
+    // Group posts by community_id
+    use std::collections::HashMap as StdHashMap;
+    let mut posts_by_community: StdHashMap<Uuid, Vec<serde_json::Value>> = StdHashMap::new();
+    for post in recent_posts {
+        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
+        posts.push(serde_json::json!({
+            "id": post.id.to_string(),
+            "image_filename": post.image_filename,
+            "image_width": post.image_width,
+            "image_height": post.image_height,
+            "author_login_name": post.author_login_name,
+        }));
+    }
+
+    // Create stats lookup map
+    let mut stats_by_community: StdHashMap<Uuid, (Option<i64>, Option<i64>)> = StdHashMap::new();
+    for stat in community_stats {
+        stats_by_community.insert(stat.community_id, (stat.members_count, stat.posts_count));
+    }
+
+    // Create owner login lookup map
+    let mut owner_login_by_id: StdHashMap<Uuid, String> = StdHashMap::new();
+    for owner in owner_logins {
+        owner_login_by_id.insert(owner.id, owner.login_name);
+    }
+
+    // Build own_communities with all metadata
+    let own_communities: Vec<serde_json::Value> = own_communities_raw
+        .into_iter()
+        .map(|community| {
+            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
+            let (members_count, posts_count) = stats_by_community.get(&community.id).cloned().unwrap_or((None, None));
+            let owner_login_name = owner_login_by_id.get(&community.owner_id).cloned().unwrap_or_default();
+
+            serde_json::json!({
+                "id": community.id.to_string(),
+                "name": community.name,
+                "slug": community.slug,
+                "description": community.description,
+                "is_private": community.is_private,
+                "owner_login_name": owner_login_name,
+                "posts_count": posts_count,
+                "members_count": members_count,
+                "recent_posts": recent_posts,
+            })
+        })
+        .collect();
+
+    // Build public_communities with all metadata
+    let public_communities: Vec<serde_json::Value> = public_communities_raw
+        .iter()
+        .map(|community| {
+            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
+            let (members_count, _) = stats_by_community.get(&community.id).cloned().unwrap_or((None, None));
+
+            serde_json::json!({
+                "id": community.id.to_string(),
+                "name": community.name,
+                "slug": community.slug,
+                "description": community.description,
+                "is_private": community.is_private,
+                "owner_login_name": community.owner_login_name,
+                "posts_count": community.posts_count,
+                "members_count": members_count,
+                "recent_posts": recent_posts,
+            })
+        })
+        .collect();
+
+    // Filter official communities
+    let official_communities: Vec<serde_json::Value> = public_communities
+        .iter()
+        .filter(|c| {
+            c.get("owner_login_name")
+                .and_then(|v| v.as_str())
+                .map(|name| name == state.config.official_account_login_name)
+                .unwrap_or(false)
+        })
+        .cloned()
+        .collect();
+
+    // Build participating_communities with all metadata
+    let participating_communities: Vec<serde_json::Value> = participating_communities_raw
+        .into_iter()
+        .map(|community| {
+            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
+            let (members_count, posts_count) = stats_by_community.get(&community.id).cloned().unwrap_or((None, None));
+            let owner_login_name = owner_login_by_id.get(&community.owner_id).cloned().unwrap_or_default();
+
+            serde_json::json!({
+                "id": community.id.to_string(),
+                "name": community.name,
+                "slug": community.slug,
+                "description": community.description,
+                "is_private": community.is_private,
+                "owner_login_name": owner_login_name,
+                "posts_count": posts_count,
+                "members_count": members_count,
+                "recent_posts": recent_posts,
+            })
+        })
+        .collect();
+
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+
+    tx.commit().await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("communities.jinja")?;
     let rendered = template.clone().render(context! {
@@ -281,6 +408,7 @@ pub async fn communities(
         public_communities,
         participating_communities,
         own_communities,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ftl_lang
     })?;
 
