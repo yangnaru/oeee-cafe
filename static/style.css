@@ -153,7 +153,8 @@ nav a:visited,
   margin-bottom: 12px;
   background-color: var(--main-bg-color);
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .comment:last-of-type {
@@ -658,6 +659,45 @@ nav a:visited,
 @media (max-width: 768px) {
   .post-detail-container {
     flex-direction: column;
+  }
+
+  /* Comments section responsive */
+  .post-comments {
+    padding: 12px;
+  }
+
+  .post-comments h2 {
+    font-size: 1.1em;
+  }
+
+  .comment {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .comment-header {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .comment-timestamp {
+    margin-left: 0;
+    width: 100%;
+    order: 3;
+  }
+
+  .comment-handle {
+    flex-shrink: 0;
+  }
+
+  #comments form {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #comments button[type="submit"] {
+    width: 100%;
+    padding: 12px 20px;
   }
 }
 
