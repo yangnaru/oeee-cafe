@@ -5,26 +5,26 @@
       <a href="/@{{ login_name }}/{{ post_id }}/reactions">
         {{ total_count }}
         {% if total_count == 1 %}
-          reaction
+          {{ ftl_get_message("post-reaction") }}
         {% else %}
-          reactions
+          {{ ftl_get_message("post-reactions") }}
         {% endif %}
       </a>
     {% elif post %}
       <a href="/@{{ post.login_name }}/{{ post_id }}/reactions">
         {{ total_count }}
         {% if total_count == 1 %}
-          reaction
+          {{ ftl_get_message("post-reaction") }}
         {% else %}
-          reactions
+          {{ ftl_get_message("post-reactions") }}
         {% endif %}
       </a>
     {% else %}
       {{ total_count }}
       {% if total_count == 1 %}
-        reaction
+        {{ ftl_get_message("post-reaction") }}
       {% else %}
-        reactions
+        {{ ftl_get_message("post-reactions") }}
       {% endif %}
     {% endif %}
   </span>

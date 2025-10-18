@@ -33,6 +33,9 @@ pub struct SerializableComment {
     pub iri: Option<String>,
     pub actor_name: String,
     pub actor_handle: String,
+    pub actor_url: String,
+    pub actor_login_name: Option<String>,
+    pub is_local: bool,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
 }
@@ -72,11 +75,14 @@ pub async fn find_comments_by_post_id(
             comments.content_html,
             comments.iri,
             actors.name AS actor_name,
-            actors.handle AS actor_handle
+            actors.handle AS actor_handle,
+            actors.url AS actor_url,
+            users.login_name AS "user_login_name?"
         FROM comments
         LEFT JOIN actors ON comments.actor_id = actors.id
+        LEFT JOIN users ON actors.user_id = users.id
         WHERE post_id = $1
-        ORDER BY created_at DESC
+        ORDER BY created_at ASC
         "#,
         post_id
     )
@@ -85,17 +91,23 @@ pub async fn find_comments_by_post_id(
 
     Ok(comments
         .into_iter()
-        .map(|comment| SerializableComment {
-            id: comment.id,
-            post_id: comment.post_id,
-            actor_id: comment.actor_id,
-            content: comment.content,
-            content_html: comment.content_html,
-            iri: comment.iri,
-            actor_name: comment.actor_name,
-            actor_handle: comment.actor_handle,
-            updated_at: comment.updated_at,
-            created_at: comment.created_at,
+        .map(|comment| {
+            let is_local = comment.user_login_name.is_some();
+            SerializableComment {
+                id: comment.id,
+                post_id: comment.post_id,
+                actor_id: comment.actor_id,
+                content: comment.content,
+                content_html: comment.content_html,
+                iri: comment.iri,
+                actor_name: comment.actor_name,
+                actor_handle: comment.actor_handle,
+                actor_url: comment.actor_url,
+                actor_login_name: comment.user_login_name.clone(),
+                is_local,
+                updated_at: comment.updated_at,
+                created_at: comment.created_at,
+            }
         })
         .collect())
 }

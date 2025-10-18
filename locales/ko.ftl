@@ -85,9 +85,14 @@ post-relay = 이어그리기
 post-reply-with-drawing = 그림으로 답글
 post-reply-select-tool = 도구와 캔버스 크기 선택
 post-child-posts = 답글
+post-replying-to = 답글 대상:
 post-hashtags = 해시태그
 post-hashtags-placeholder = 그림, 일러스트, 스케치
 post-hashtags-hint = 쉼표나 공백으로 태그 구분
+post-reaction = 반응
+post-reactions = 반응
+post-share = 공유
+post-share-copied = 링크가 클립보드에 복사되었습니다!
 
 allow-relay = 릴레이 그림 허용
 sensitive = 민감한 내용

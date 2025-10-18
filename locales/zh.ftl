@@ -85,9 +85,14 @@ post-relay = 接力
 post-reply-with-drawing = 用画回复
 post-reply-select-tool = 选择工具和画布尺寸
 post-child-posts = 回复
+post-replying-to = 回复给:
 post-hashtags = 标签
 post-hashtags-placeholder = 艺术, 绘画, 素描
 post-hashtags-hint = 用逗号或空格分隔标签
+post-reaction = 反应
+post-reactions = 反应
+post-share = 分享
+post-share-copied = 链接已复制到剪贴板！
 
 allow-relay = 允许接续创作
 sensitive = 敏感内容

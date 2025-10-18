@@ -1,33 +1,39 @@
 {% import "comments_macro.jinja" as comments_macro %}
 
-{% macro render_child_post(child, depth) %}
-  <div class="child-post-item" style="margin-left: {{ depth * 20 }}px; margin-bottom: 15px; padding: 10px; border-left: 2px solid #ddd;">
-    <div style="display: flex; gap: 10px; align-items: flex-start;">
-      <a href="/@{{ child.user_login_name }}/{{ child.id }}" style="flex-shrink: 0;">
-        <img src="{{ r2_public_endpoint_url }}/image/{{ child.image_filename[:2] }}/{{ child.image_filename }}"
-             alt="{{ child.title or 'No title' }}"
+{% macro render_post_card(post, depth) %}
+  <div style="margin-left: {{ depth * 20 }}px; margin-bottom: 15px;">
+    <a href="/@{{ post.user_login_name }}/{{ post.id }}" class="post-card" style="text-decoration: none; color: inherit; display: block; border: 1px solid var(--main-border-color); padding: 15px;">
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+             alt="{{ post.title or 'No title' }}"
              style="max-width: 100px; height: auto; border: 1px solid #ccc;">
-      </a>
-      <div style="flex-grow: 1;">
-        <div>
-          <a href="/@{{ child.user_login_name }}/{{ child.id }}" style="font-weight: bold;">
-            {% if child.title %}{{ child.title }}{% else %}{{ ftl_get_message("post-no-title") }}{% endif %}
-          </a>
-        </div>
-        <div style="color: #666; font-size: 0.9em;">
-          by <a href="/@{{ child.user_login_name }}">{{ child.user_display_name }}</a>
-          {% if child.published_at_formatted %}
-            · {{ child.published_at_formatted }}
+        <div style="flex-grow: 1;">
+          <div>
+            <span style="font-weight: bold;">
+              {% if post.title %}{{ post.title }}{% else %}{{ ftl_get_message("post-no-title") }}{% endif %}
+            </span>
+          </div>
+          {% if post.content %}
+            <div style="color: #666; font-size: 0.85em; margin-top: 4px; line-height: 1.3;">
+              {{ post.content[:100] }}{% if post.content|length > 100 %}...{% endif %}
+            </div>
           {% endif %}
-          {% if child.comments_count > 0 %}
-            · {{ child.comments_count }} {{ ftl_get_message("post-comments") }}
-          {% endif %}
+          <div style="color: #666; font-size: 0.9em; margin-top: 4px;">
+            by <span style="font-weight: normal;">{{ post.user_display_name }}</span>
+            <span class="muted">{{ post.user_actor_handle }}</span>
+            {% if post.published_at_formatted %}
+              · {{ post.published_at_formatted }}
+            {% endif %}
+            {% if post.comments_count > 0 %}
+              · {{ post.comments_count }} {{ ftl_get_message("post-comments") }}
+            {% endif %}
+          </div>
         </div>
       </div>
-    </div>
-    {% if child.children %}
-      {% for grandchild in child.children %}
-        {{ render_child_post(grandchild, depth + 1) }}
+    </a>
+    {% if post.children %}
+      {% for child in post.children %}
+        {{ render_post_card(child, depth + 1) }}
       {% endfor %}
     {% endif %}
   </div>
@@ -65,165 +71,181 @@
 {% block content %}
   <div class="center">
     <div class="post-sidebar">
-      <div class="post-main">
-        <p>{{ ftl_get_message("post-published-at") }}: {{ post.published_at }}</p>
-        <p>
-          {{ ftl_get_message("post-duration") }}: {{ post.paint_duration }}
-          {% if post.replay_filename %}
-            <a href="/@{{ post.login_name }}/{{ post_id }}/replay">{{ ftl_get_message("post-replay") }}</a>
-          {% endif %}
-        </p>
-        <p>HIT: {{ post.viewer_count }}</p>
-        <p>
-          {{ ftl_get_message("community") }}:
-          <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
-          {% if current_user.id == post.author_id -%}
-            (<a href="/posts/{{ post_id }}/edit/community">{{ ftl_get_message("edit") }}</a>)
-          {%- endif %}
-        </p>
-        {% if post.image_tool == "neo" and post.allow_relay == "true" %}
-          <a href="/@{{ post.login_name }}/{{ post_id }}/relay">
+      {# Parent post #}
+      {% if parent_post_data %}
+        <div class="parent-post-section">
+          <h3 class="section-heading">{{ ftl_get_message("post-replying-to") }}</h3>
+          {{ render_post_card(parent_post_data, 0) }}
+        </div>
+      {% endif %}
+
+      {# Two-column layout: Image on left, Info on right #}
+      <div class="post-detail-container">
+        {# LEFT COLUMN: Image #}
+        <div class="post-detail-left">
+          {% if post.image_tool == "neo" and post.allow_relay == "true" %}
+            <a href="/@{{ post.login_name }}/{{ post_id }}/relay">
+              <img class="post-image-full"
+                   width="{{ post.image_width }}"
+                   height="{{ post.image_height }}"
+                   alt="{{ post.title }}"
+                   src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+            </a>
+          {% else %}
             <img class="post-image-full"
                  width="{{ post.image_width }}"
                  height="{{ post.image_height }}"
                  alt="{{ post.title }}"
                  src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
-          </a>
-          <p>
-            <i>{{ ftl_get_message("post-relay-enabled-notice") }}</i>
-          </p>
-        {% else %}
-          <img class="post-image-full"
-               width="{{ post.image_width }}"
-               height="{{ post.image_height }}"
-               alt="{{ post.title }}"
-               src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
-        {% endif %}
-        {% if current_user %}
-          <div class="post-reply-actions">
-            {% if post.image_tool == "neo" and post.allow_relay == "true" %}
-              <button type="button" onclick="window.location.href='/@{{ post.login_name }}/{{ post_id }}/relay'">{{ ftl_get_message("post-relay") }}</button>
-            {% endif %}
-            <button type="button" onclick="document.getElementById('reply-form-{{ post_id }}').style.display = document.getElementById('reply-form-{{ post_id }}').style.display === 'none' ? 'block' : 'none'">{{ ftl_get_message("post-reply-with-drawing") }}</button>
-            <fieldset id="reply-form-{{ post_id }}" style="display: none; margin-top: 10px;">
-              <legend>{{ ftl_get_message("post-reply-select-tool") }}</legend>
-              <form action="/draw" method="post">
-                <input type="hidden" name="parent_post_id" value="{{ post_id }}" />
-                <input type="hidden" name="community_id" value="{{ post.community_id }}" />
-                <select name="tool">
-                  <option value="neo" selected>PaintBBS NEO</option>
-                  <option value="tegaki">Tegaki</option>
-                  <option value="cucumber">Cucumber</option>
-                </select>
-                <select name="width">
-                  <option value="300" selected>300</option>
-                  <option value="350">350</option>
-                  <option value="400">400</option>
-                  <option value="450">450</option>
-                  <option value="500">500</option>
-                  <option value="550">550</option>
-                  <option value="600">600</option>
-                  <option value="650">650</option>
-                  <option value="700">700</option>
-                  <option value="750">750</option>
-                  <option value="800">800</option>
-                  <option value="850">850</option>
-                  <option value="900">900</option>
-                  <option value="950">950</option>
-                  <option value="1000">1000</option>
-                </select>
-                X
-                <select name="height">
-                  <option value="300" selected>300</option>
-                  <option value="350">350</option>
-                  <option value="400">400</option>
-                  <option value="450">450</option>
-                  <option value="500">500</option>
-                  <option value="550">550</option>
-                  <option value="600">600</option>
-                  <option value="650">650</option>
-                  <option value="700">700</option>
-                  <option value="750">750</option>
-                  <option value="800">800</option>
-                </select>
-                <input type="submit" value="Start Drawing" />
-              </form>
-            </fieldset>
-          </div>
-        {% endif %}
-        <div class="center">
-          <p>
-            {{ ftl_get_message("post-author") }}: <a href="/@{{ post.login_name }}">{{ post.display_name }}</a> <span class="muted fediverse-handle">@{{ post.login_name }}@{{ domain }}</span>
-          </p>
-          {% if collaborative_participants %}
-            <div class="collaborative-participants">
-              <p>
-                <strong>{{ ftl_get_message("post-collaborative-participants") }}:</strong>
-              </p>
-              <ul>
-                {% for participant in collaborative_participants %}
-                  <li>
-                    <a href="/@{{ participant.login_name }}">@{{ participant.display_name }}</a>
-                  </li>
-                {% endfor %}
-              </ul>
-            </div>
           {% endif %}
-          {% block post_edit_block %}
-            <div hx-target="this" hx-swap="outerHTML">
-              <p>
-                {{ ftl_get_message("post-title") }}:
-                {% if post.title %}
-                  {{ post.title }}
-                {% else %}
-                  {{ ftl_get_message("post-no-title") }}
+        </div>
+
+        {# RIGHT COLUMN: Info #}
+        <div class="post-detail-right">
+          {# Header: Title and Hashtags #}
+          <div class="post-header">
+            {% block post_edit_block %}
+              <div hx-target="this" hx-swap="outerHTML">
+                <h1 class="post-title">
+                  {% if post.title %}
+                    {{ post.title }}
+                  {% else %}
+                    {{ ftl_get_message("post-no-title") }}
+                  {% endif %}
+                </h1>
+                {% if hashtags %}
+                  <div class="post-hashtags">
+                    {% for hashtag in hashtags %}
+                      <a href="/hashtags/{{ hashtag.name }}" class="hashtag-link">#{{ hashtag.display_name }}</a>
+                    {% endfor %}
+                  </div>
                 {% endif %}
-                {% if parent_post_id %}<a href="/@{{ parent_post_author_login_name }}/{{ parent_post_id }}">↵</a>{% endif %}
-              </p>
-              <p>
-                {{ ftl_get_message("post-description") }}:
-                <div class="post-content">{{ post.content|markdown|safe }}</div>
-              </p>
-              {% if hashtags %}
-                <div class="post-hashtags">
-                  {% for hashtag in hashtags %}
-                    <a href="/hashtags/{{ hashtag.name }}" class="hashtag-link">#{{ hashtag.display_name }}</a>
-                  {% endfor %}
-                </div>
+              </div>
+            {% endblock post_edit_block %}
+          </div>
+
+          {# Author Info #}
+          <div class="post-author-info">
+            <div>
+              <strong>{{ ftl_get_message("post-author") }}:</strong>
+              <a href="/@{{ post.login_name }}">{{ post.display_name }}</a>
+              <span class="muted fediverse-handle">@{{ post.login_name }}@{{ domain }}</span>
+            </div>
+            {% if collaborative_participants %}
+              <div class="collaborative-participants">
+                <strong>{{ ftl_get_message("post-collaborative-participants") }}:</strong>
+                {% for participant in collaborative_participants %}
+                  <a href="/@{{ participant.login_name }}">@{{ participant.display_name }}</a>{% if not loop.last %}, {% endif %}
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+
+          {# Metadata #}
+          <div class="post-metadata">
+            <p>{{ ftl_get_message("post-published-at") }}: {{ post.published_at }}</p>
+            <p>
+              {{ ftl_get_message("post-duration") }}: {{ post.paint_duration }}
+              {% if post.replay_filename %}
+                · <a href="/@{{ post.login_name }}/{{ post_id }}/replay">{{ ftl_get_message("post-replay") }}</a>
               {% endif %}
+            </p>
+            <p>{{ ftl_get_message("community") }}: <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
               {% if current_user.id == post.author_id %}
-                <div class="post-menu">
+                (<a href="/posts/{{ post_id }}/edit/community">{{ ftl_get_message("edit") }}</a>)
+              {% endif %}
+            </p>
+            <p>HIT: {{ post.viewer_count }}</p>
+          </div>
+
+          {# Description #}
+          {% if post.content %}
+            <div class="post-content">{{ post.content|markdown|safe }}</div>
+          {% endif %}
+
+          {# Actions #}
+          <div class="post-actions">
+            {% if current_user %}
+              <div class="post-action-buttons">
+                {% if post.image_tool == "neo" and post.allow_relay == "true" %}
+                  <button type="button" onclick="window.location.href='/@{{ post.login_name }}/{{ post_id }}/relay'">{{ ftl_get_message("post-relay") }}</button>
+                {% endif %}
+                <button type="button" onclick="document.getElementById('reply-form-{{ post_id }}').style.display = document.getElementById('reply-form-{{ post_id }}').style.display === 'none' ? 'block' : 'none'">{{ ftl_get_message("post-reply-with-drawing") }}</button>
+                <button type="button" onclick="
+                  const url = '{{ base_url|safe }}/@{{ post.login_name }}/{{ post_id }}';
+                  if (navigator.share) {
+                    navigator.share({ title: '{{ post.title|default(ftl_get_message("post-no-title"))|safe }}', url: url });
+                  } else {
+                    navigator.clipboard.writeText(url).then(() => alert('{{ ftl_get_message("post-share-copied") }}'));
+                  }
+                ">{{ ftl_get_message("post-share") }}</button>
+                {% if current_user.id == post.author_id %}
                   <button hx-get="/posts/{{ post_id }}/edit">{{ ftl_get_message("edit") }}</button>
                   <form hx-delete="/posts/{{ post_id }}"
                         hx-confirm="{{ ftl_get_message('post-delete-confirm') }}"
-                        hx-target="body">
+                        hx-target="body"
+                        style="display: inline;">
                     <button type="submit">{{ ftl_get_message("delete") }}</button>
                   </form>
-                </div>
-              {% endif %}
-            </div>
-          {% endblock post_edit_block %}
-          <div class="post-reactions-container">{% include "post_reactions.jinja" %}</div>
-          <div class="post-share">
-            <a href="https://twitter.com/share?ref_src=twsrc%5Etfw"
-               class="twitter-share-button"
-               data-text="{%- if post.title -%}{{ post.title }}{%- else -%}{{ ftl_get_message("post-no-title") }}{%- endif -%}"
-               data-hashtags="oeee_cafe"
-               data-related="oeee_cafe"
-               data-show-count="false">Tweet</a><script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+                {% endif %}
+              </div>
+              <fieldset id="reply-form-{{ post_id }}" style="display: none;">
+                <legend>{{ ftl_get_message("post-reply-select-tool") }}</legend>
+                <form action="/draw" method="post">
+                  <input type="hidden" name="parent_post_id" value="{{ post_id }}" />
+                  <input type="hidden" name="community_id" value="{{ post.community_id }}" />
+                  <select name="tool">
+                    <option value="neo" selected>PaintBBS NEO</option>
+                    <option value="tegaki">Tegaki</option>
+                    <option value="cucumber">Cucumber</option>
+                  </select>
+                  <select name="width">
+                    <option value="300" selected>300</option>
+                    <option value="350">350</option>
+                    <option value="400">400</option>
+                    <option value="450">450</option>
+                    <option value="500">500</option>
+                    <option value="550">550</option>
+                    <option value="600">600</option>
+                    <option value="650">650</option>
+                    <option value="700">700</option>
+                    <option value="750">750</option>
+                    <option value="800">800</option>
+                    <option value="850">850</option>
+                    <option value="900">900</option>
+                    <option value="950">950</option>
+                    <option value="1000">1000</option>
+                  </select>
+                  X
+                  <select name="height">
+                    <option value="300" selected>300</option>
+                    <option value="350">350</option>
+                    <option value="400">400</option>
+                    <option value="450">450</option>
+                    <option value="500">500</option>
+                    <option value="550">550</option>
+                    <option value="600">600</option>
+                    <option value="650">650</option>
+                    <option value="700">700</option>
+                    <option value="750">750</option>
+                    <option value="800">800</option>
+                  </select>
+                  <input type="submit" value="Start Drawing" />
+                </form>
+              </fieldset>
+            {% endif %}
           </div>
         </div>
       </div>
+
+      {# Full-width sections below #}
+      <div class="post-full-width-section">
+        <div class="post-reactions-container">{% include "post_reactions.jinja" %}</div>
+      </div>
+
       <div class="post-comments">
         <h2>{{ ftl_get_message("post-comments") }}</h2>
         <div id="comments">
-          {% if current_user %}
-            <form hx-post="/comments" hx-swap="outerHTML" hx-target="#comments">
-              <input type="hidden" name="post_id" value="{{ post_id }}">
-              <textarea name="content"></textarea>
-              <button type="submit">{{ ftl_get_message("post-comment") }}</button>
-            </form>
-          {% endif %}
           {% if comments %}
             {{ comments_macro.comments(comments) }}
           {% else %}
@@ -232,13 +254,21 @@
               {% if not current_user %}{{ ftl_get_message("post-no-comments-signin") }}{% endif %}
             </p>
           {% endif %}
+          {% if current_user %}
+            <form hx-post="/comments" hx-swap="outerHTML" hx-target="#comments">
+              <input type="hidden" name="post_id" value="{{ post_id }}">
+              <textarea name="content"></textarea>
+              <button type="submit">{{ ftl_get_message("post-comment") }}</button>
+            </form>
+          {% endif %}
         </div>
       </div>
+
       {% if child_posts %}
         <div class="post-child-posts">
           <h2>{{ ftl_get_message("post-child-posts") }}</h2>
           {% for child in child_posts %}
-            {{ render_child_post(child, 0) }}
+            {{ render_post_card(child, 0) }}
           {% endfor %}
         </div>
       {% endif %}

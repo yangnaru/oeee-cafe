@@ -85,9 +85,14 @@ post-relay = リレー
 post-reply-with-drawing = 絵で返信
 post-reply-select-tool = ツールとキャンバスサイズを選択
 post-child-posts = 返信
+post-replying-to = 返信先:
 post-hashtags = ハッシュタグ
 post-hashtags-placeholder = イラスト, お絵かき, スケッチ
 post-hashtags-hint = カンマまたはスペースでタグを区切る
+post-reaction = リアクション
+post-reactions = リアクション
+post-share = 共有
+post-share-copied = リンクがクリップボードにコピーされました！
 
 allow-relay = リレー描画を許可
 sensitive = 敏感な内容

@@ -95,9 +95,11 @@ pub struct SerializableDraftPost {
 pub struct SerializableThreadedPost {
     pub id: Uuid,
     pub title: Option<String>,
+    pub content: Option<String>,
     pub author_id: Uuid,
     pub user_login_name: String,
     pub user_display_name: String,
+    pub user_actor_handle: String,
     pub image_filename: String,
     pub image_width: i32,
     pub image_height: i32,
@@ -636,9 +638,11 @@ pub async fn find_child_posts_by_parent_id(
             SELECT
                 posts.id,
                 posts.title,
+                posts.content,
                 posts.author_id,
                 users.login_name,
                 users.display_name,
+                actors.handle as actor_handle,
                 images.image_filename,
                 images.width,
                 images.height,
@@ -646,6 +650,7 @@ pub async fn find_child_posts_by_parent_id(
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN users ON posts.author_id = users.id
+            LEFT JOIN actors ON actors.user_id = users.id
             WHERE posts.parent_post_id = $1
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
@@ -669,9 +674,11 @@ pub async fn find_child_posts_by_parent_id(
             SerializableThreadedPost {
                 id: row.id,
                 title: row.title,
+                content: row.content,
                 author_id: row.author_id,
                 user_login_name: row.login_name,
                 user_display_name: row.display_name,
+                user_actor_handle: row.actor_handle,
                 image_filename: row.image_filename,
                 image_width: row.width,
                 image_height: row.height,
@@ -698,10 +705,12 @@ pub async fn build_thread_tree(
                 SELECT
                     posts.id,
                     posts.title,
+                    posts.content,
                     posts.author_id,
                     posts.parent_post_id,
                     users.login_name,
                     users.display_name,
+                    actors.handle as actor_handle,
                     images.image_filename,
                     images.width,
                     images.height,
@@ -710,6 +719,7 @@ pub async fn build_thread_tree(
                 FROM posts
                 LEFT JOIN images ON posts.image_id = images.id
                 LEFT JOIN users ON posts.author_id = users.id
+                LEFT JOIN actors ON actors.user_id = users.id
                 LEFT JOIN (
                     SELECT post_id, COUNT(*) as count
                     FROM comments
@@ -725,10 +735,12 @@ pub async fn build_thread_tree(
                 SELECT
                     p.id,
                     p.title,
+                    p.content,
                     p.author_id,
                     p.parent_post_id,
                     u.login_name,
                     u.display_name,
+                    a.handle as actor_handle,
                     i.image_filename,
                     i.width,
                     i.height,
@@ -737,6 +749,7 @@ pub async fn build_thread_tree(
                 FROM posts p
                 LEFT JOIN images i ON p.image_id = i.id
                 LEFT JOIN users u ON p.author_id = u.id
+                LEFT JOIN actors a ON a.user_id = u.id
                 LEFT JOIN (
                     SELECT post_id, COUNT(*) as count
                     FROM comments
@@ -760,7 +773,7 @@ pub async fn build_thread_tree(
 
     // Build a map to track children for each parent
     let mut children_map: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
-    let mut post_data: HashMap<Uuid, (Option<String>, Uuid, String, String, String, i32, i32, Option<chrono::DateTime<chrono::Utc>>, i64)> = HashMap::new();
+    let mut post_data: HashMap<Uuid, (Option<String>, Option<String>, Uuid, String, String, String, String, i32, i32, Option<chrono::DateTime<chrono::Utc>>, i64)> = HashMap::new();
 
     for row in &rows {
         // Skip posts with missing required data
@@ -768,6 +781,7 @@ pub async fn build_thread_tree(
         let Some(author_id) = row.author_id else { continue };
         let Some(login_name) = &row.login_name else { continue };
         let Some(display_name) = &row.display_name else { continue };
+        let Some(actor_handle) = &row.actor_handle else { continue };
         let Some(image_filename) = &row.image_filename else { continue };
         let Some(width) = row.width else { continue };
         let Some(height) = row.height else { continue };
@@ -777,9 +791,11 @@ pub async fn build_thread_tree(
             id,
             (
                 row.title.clone(),
+                row.content.clone(),
                 author_id,
                 login_name.clone(),
                 display_name.clone(),
+                actor_handle.clone(),
                 image_filename.clone(),
                 width,
                 height,
@@ -796,10 +812,10 @@ pub async fn build_thread_tree(
     // Recursive function to build tree for a given post ID
     fn build_subtree(
         post_id: Uuid,
-        post_data: &HashMap<Uuid, (Option<String>, Uuid, String, String, String, i32, i32, Option<chrono::DateTime<chrono::Utc>>, i64)>,
+        post_data: &HashMap<Uuid, (Option<String>, Option<String>, Uuid, String, String, String, String, i32, i32, Option<chrono::DateTime<chrono::Utc>>, i64)>,
         children_map: &HashMap<Uuid, Vec<Uuid>>,
     ) -> Option<SerializableThreadedPost> {
-        let (title, author_id, login_name, display_name, image_filename, width, height, published_at, comments_count) = post_data.get(&post_id)?;
+        let (title, content, author_id, login_name, display_name, actor_handle, image_filename, width, height, published_at, comments_count) = post_data.get(&post_id)?;
 
         // Format the published_at date
         let published_at_formatted = published_at.as_ref().map(|dt| {
@@ -822,9 +838,11 @@ pub async fn build_thread_tree(
         Some(SerializableThreadedPost {
             id: post_id,
             title: title.clone(),
+            content: content.clone(),
             author_id: *author_id,
             user_login_name: login_name.clone(),
             user_display_name: display_name.clone(),
+            user_actor_handle: actor_handle.clone(),
             image_filename: image_filename.clone(),
             image_width: *width,
             image_height: *height,

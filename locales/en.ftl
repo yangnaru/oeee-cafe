@@ -83,9 +83,14 @@ post-relay = Relay
 post-reply-with-drawing = Reply with Drawing
 post-reply-select-tool = Select tool and canvas size
 post-child-posts = Replies
+post-replying-to = Replying to:
 post-hashtags = Hashtags
 post-hashtags-placeholder = art, drawing, sketch
 post-hashtags-hint = Separate tags with commas or spaces
+post-reaction = reaction
+post-reactions = reactions
+post-share = Share
+post-share-copied = Link copied to clipboard!
 
 allow-relay = Allow relay posts
 sensitive = Sensitive

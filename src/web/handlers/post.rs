@@ -16,7 +16,7 @@ use crate::models::notification::{
 use crate::models::post::{
     build_thread_tree, delete_post_with_activity,
     edit_post, edit_post_community, find_draft_posts_by_author_id, find_post_by_id,
-    increment_post_viewer_count, publish_post,
+    increment_post_viewer_count, publish_post, SerializableThreadedPost,
 };
 use crate::models::reaction::{
     create_reaction, delete_reaction, find_reactions_by_post_id, get_reaction_counts, ReactionDraft,
@@ -344,24 +344,80 @@ pub async fn post_view(
     let comments = find_comments_by_post_id(&mut tx, uuid).await.unwrap();
 
     // Get parent post data if it exists
-    let parent_post_author_login_name = if let Some(parent_post_id_str) = post
+    let (parent_post_author_login_name, parent_post_data) = if let Some(parent_post_id_str) = post
         .clone()
         .unwrap()
         .get("parent_post_id")
         .and_then(|id| id.as_ref())
     {
         if let Ok(parent_uuid) = Uuid::parse_str(parent_post_id_str) {
-            find_post_by_id(&mut tx, parent_uuid)
-                .await
-                .unwrap_or(None)
-                .and_then(|parent_post| parent_post.get("login_name").cloned())
-                .flatten()
-                .unwrap_or_default()
+            let parent_result = sqlx::query!(
+                r#"
+                SELECT
+                    posts.id,
+                    posts.title,
+                    posts.content,
+                    posts.author_id,
+                    users.login_name AS "login_name?",
+                    users.display_name AS "display_name?",
+                    actors.handle as "actor_handle?",
+                    images.image_filename AS "image_filename?",
+                    images.width AS "width?",
+                    images.height AS "height?",
+                    posts.published_at,
+                    COALESCE(comment_counts.count, 0) as comments_count
+                FROM posts
+                LEFT JOIN images ON posts.image_id = images.id
+                LEFT JOIN users ON posts.author_id = users.id
+                LEFT JOIN actors ON actors.user_id = users.id
+                LEFT JOIN (
+                    SELECT post_id, COUNT(*) as count
+                    FROM comments
+                    GROUP BY post_id
+                ) comment_counts ON posts.id = comment_counts.post_id
+                WHERE posts.id = $1
+                "#,
+                parent_uuid
+            )
+            .fetch_optional(&mut *tx)
+            .await;
+
+            match parent_result {
+                Ok(Some(row)) => {
+                    let login_name = row.login_name.clone().unwrap_or_default();
+                    let published_at_formatted = row.published_at.as_ref().map(|dt| {
+                        use chrono::TimeZone;
+                        let seoul = chrono_tz::Asia::Seoul;
+                        let seoul_time = seoul.from_utc_datetime(&dt.naive_utc());
+                        seoul_time.format("%Y-%m-%d %H:%M").to_string()
+                    });
+
+                    let parent_post = SerializableThreadedPost {
+                        id: row.id,
+                        title: row.title,
+                        content: row.content,
+                        author_id: row.author_id,
+                        user_login_name: row.login_name.unwrap_or_default(),
+                        user_display_name: row.display_name.unwrap_or_default(),
+                        user_actor_handle: row.actor_handle.unwrap_or_default(),
+                        image_filename: row.image_filename.unwrap_or_default(),
+                        image_width: row.width.unwrap_or(0),
+                        image_height: row.height.unwrap_or(0),
+                        published_at: row.published_at,
+                        published_at_formatted,
+                        comments_count: row.comments_count.unwrap_or(0),
+                        children: Vec::new(),
+                    };
+
+                    (login_name, Some(parent_post))
+                }
+                _ => (String::new(), None)
+            }
         } else {
-            String::new()
+            (String::new(), None)
         }
     } else {
-        String::new()
+        (String::new(), None)
     };
 
     let community_id = Uuid::parse_str(
@@ -457,6 +513,7 @@ pub async fn post_view(
                     .map(|uuid| uuid.to_string())
                     .unwrap_or_default(),
                 parent_post_author_login_name => parent_post_author_login_name.clone(),
+                parent_post_data,
                 post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
                 community_id,
                 draft_post_count => common_ctx.draft_post_count,
@@ -1280,24 +1337,83 @@ pub async fn post_view_by_login_name(
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
 
     // Get parent post data if it exists
-    let parent_post_author_login_name = if let Some(parent_post_id_str) = post
+    let (parent_post_author_login_name, parent_post_data) = if let Some(parent_post_id_str) = post
         .clone()
         .unwrap()
         .get("parent_post_id")
         .and_then(|id| id.as_ref())
     {
         if let Ok(parent_uuid) = Uuid::parse_str(parent_post_id_str) {
-            find_post_by_id(&mut tx, parent_uuid)
-                .await
-                .unwrap_or(None)
-                .and_then(|parent_post| parent_post.get("login_name").cloned())
-                .flatten()
-                .unwrap_or_default()
+            // Fetch full parent post data
+            let parent_result = sqlx::query!(
+                r#"
+                SELECT
+                    posts.id,
+                    posts.title,
+                    posts.content,
+                    posts.author_id,
+                    users.login_name AS "login_name?",
+                    users.display_name AS "display_name?",
+                    actors.handle as "actor_handle?",
+                    images.image_filename AS "image_filename?",
+                    images.width AS "width?",
+                    images.height AS "height?",
+                    posts.published_at,
+                    COALESCE(comment_counts.count, 0) as comments_count
+                FROM posts
+                LEFT JOIN images ON posts.image_id = images.id
+                LEFT JOIN users ON posts.author_id = users.id
+                LEFT JOIN actors ON actors.user_id = users.id
+                LEFT JOIN (
+                    SELECT post_id, COUNT(*) as count
+                    FROM comments
+                    GROUP BY post_id
+                ) comment_counts ON posts.id = comment_counts.post_id
+                WHERE posts.id = $1
+                "#,
+                parent_uuid
+            )
+            .fetch_optional(&mut *tx)
+            .await;
+
+            match parent_result {
+                Ok(Some(row)) => {
+                    let login_name = row.login_name.clone().unwrap_or_default();
+
+                    // Format the published_at date
+                    let published_at_formatted = row.published_at.as_ref().map(|dt| {
+                        use chrono::TimeZone;
+                        let seoul = chrono_tz::Asia::Seoul;
+                        let seoul_time = seoul.from_utc_datetime(&dt.naive_utc());
+                        seoul_time.format("%Y-%m-%d %H:%M").to_string()
+                    });
+
+                    let parent_post = SerializableThreadedPost {
+                        id: row.id,
+                        title: row.title,
+                        content: row.content,
+                        author_id: row.author_id,
+                        user_login_name: row.login_name.unwrap_or_default(),
+                        user_display_name: row.display_name.unwrap_or_default(),
+                        user_actor_handle: row.actor_handle.unwrap_or_default(),
+                        image_filename: row.image_filename.unwrap_or_default(),
+                        image_width: row.width.unwrap_or(0),
+                        image_height: row.height.unwrap_or(0),
+                        published_at: row.published_at,
+                        published_at_formatted,
+                        comments_count: row.comments_count.unwrap_or(0),
+                        children: Vec::new(),
+                    };
+
+                    (login_name, Some(parent_post))
+                }
+                _ => (String::new(), None)
+            }
         } else {
-            String::new()
+            (String::new(), None)
         }
     } else {
-        String::new()
+        (String::new(), None)
     };
 
     let community_id = Uuid::parse_str(
@@ -1393,6 +1509,7 @@ pub async fn post_view_by_login_name(
                     .map(|uuid| uuid.to_string())
                     .unwrap_or_default(),
                 parent_post_author_login_name => parent_post_author_login_name.clone(),
+                parent_post_data,
                 post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
                 community_id,
                 draft_post_count => common_ctx.draft_post_count,
