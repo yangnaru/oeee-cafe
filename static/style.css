@@ -150,11 +150,16 @@ nav a:visited,
 .comment {
   border: 1px solid var(--main-border-color);
   padding: 8px;
+  margin-bottom: 8px;
   background-color: var(--main-bg-color);
   display: flex;
   flex-direction: row;
   gap: 8px;
   align-items: flex-start;
+}
+
+.comment:last-child {
+  margin-bottom: 0;
 }
 
 .comment-thumbnail {
@@ -187,6 +192,11 @@ nav a:visited,
 }
 
 .comment-card-link:last-of-type {
+  margin-bottom: 0;
+}
+
+/* Remove double margin when comment is inside comment-card-link */
+.comment-card-link .comment {
   margin-bottom: 0;
 }
 
