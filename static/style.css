@@ -804,3 +804,35 @@ nav a:visited,
 .community-badges {
   grid-template-columns: repeat(2, 1fr);
 }
+
+/* Infinite Scroll Loading Indicator */
+
+.infinite-scroll-sentinel {
+  grid-column: 1 / -1;
+  padding: 32px;
+  text-align: center;
+  color: var(--main-text-color);
+  opacity: 0;
+}
+
+.infinite-scroll-sentinel.htmx-request {
+  opacity: 1;
+}
+
+.loading-indicator {
+  display: none;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.htmx-request .loading-indicator {
+  display: inline-block;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}

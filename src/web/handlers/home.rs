@@ -10,9 +10,11 @@ use crate::models::post::{
 use crate::models::user::{find_user_by_login_name, AuthSession};
 use crate::web::context::CommonContext;
 use crate::web::state::AppState;
+use axum::extract::Query;
 use axum::response::IntoResponse;
 use axum::{extract::State, response::Html};
 use axum_messages::Messages;
+use serde::Deserialize;
 
 use minijinja::context;
 
@@ -35,7 +37,7 @@ pub async fn home(
     };
     let non_official_public_community_posts = match user.clone() {
         Some(user) => {
-            find_public_community_posts_excluding_from_community_owner(&mut tx, user.id).await?
+            find_public_community_posts_excluding_from_community_owner(&mut tx, user.id, 18, 0).await?
         }
         None => Vec::new(),
     };
@@ -98,6 +100,40 @@ pub async fn my_timeline(
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct LoadMoreQuery {
+    offset: i64,
+}
+
+pub async fn load_more_public_posts(
+    _auth_session: AuthSession,
+    State(state): State<AppState>,
+    Query(query): Query<LoadMoreQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let user = find_user_by_login_name(&mut tx, &state.config.official_account_login_name).await?;
+    let posts = match user {
+        Some(user) => {
+            find_public_community_posts_excluding_from_community_owner(&mut tx, user.id, 18, query.offset).await?
+        }
+        None => Vec::new(),
+    };
+
+    tx.commit().await?;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("home_posts_fragment.jinja")?;
+    let rendered = template.render(context! {
+        posts,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        offset => query.offset + 18,
+        has_more => posts.len() == 18,
     })?;
 
     Ok(Html(rendered).into_response())

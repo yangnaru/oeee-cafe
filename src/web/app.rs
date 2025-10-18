@@ -25,7 +25,7 @@ use crate::web::handlers::draw::{
 };
 use crate::web::handlers::handler_404;
 use crate::web::handlers::hashtag::{hashtag_autocomplete, hashtag_discovery, hashtag_view};
-use crate::web::handlers::home::{home, my_timeline};
+use crate::web::handlers::home::{home, load_more_public_posts, my_timeline};
 use crate::web::handlers::notifications::{
     delete_notification_handler, get_unread_notification_count, list_notifications,
     mark_all_notifications_read, mark_notification_read,
@@ -208,6 +208,7 @@ impl App {
 
         let app = Router::new()
             .route("/", get(home))
+            .route("/api/home/posts", get(load_more_public_posts))
             .route("/communities", get(communities))
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))

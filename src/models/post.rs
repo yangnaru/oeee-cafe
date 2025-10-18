@@ -736,6 +736,8 @@ pub async fn find_public_community_posts(
 pub async fn find_public_community_posts_excluding_from_community_owner(
     tx: &mut Transaction<'_, Postgres>,
     community_owner_id: Uuid,
+    limit: i64,
+    offset: i64,
 ) -> Result<Vec<SerializablePostForHome>> {
     let q = query!(
         "
@@ -764,9 +766,12 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
             AND posts.deleted_at IS NULL
             AND communities.owner_id != $1
             ORDER BY posts.published_at DESC
-            LIMIT 9
+            LIMIT $2
+            OFFSET $3
         ",
-        community_owner_id
+        community_owner_id,
+        limit,
+        offset
     );
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result

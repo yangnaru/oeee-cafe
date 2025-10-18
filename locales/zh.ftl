@@ -138,6 +138,7 @@ official-communities-nil = 暂无官方社区
 active-communities-nil = 暂无活跃的公开社区
 no-active-communities = 目前没有活跃的社区。
 no-posts-in-community = 该社区暂无作品。
+loading-more-posts = 加载更多作品...
 create-community = 创建社区
 new-community = 新社区
 community-name = 社区名称

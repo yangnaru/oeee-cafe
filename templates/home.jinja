@@ -42,20 +42,6 @@
       </section>
     {% endif %}
 
-    {# Posts from Public Communities Section #}
-    {% if non_official_public_community_posts and non_official_public_community_posts|length > 0 %}
-      <section role="region" aria-labelledby="public-posts-heading">
-        <h2 id="public-posts-heading" class="home-section-title">
-          {{ ftl_get_message("posts-from-public-communities") }}
-        </h2>
-        <div class="posts-grid">
-          {% for post in non_official_public_community_posts %}
-            {{ post_grid_item(post, r2_public_endpoint_url) }}
-          {% endfor %}
-        </div>
-      </section>
-    {% endif %}
-
     {# Latest Active Communities Section #}
     {% if active_public_communities and active_public_communities|length > 0 %}
       <section role="region" aria-labelledby="active-communities-heading">
@@ -95,7 +81,6 @@
                 {{ post_grid_item(post, r2_public_endpoint_url) }}
               {% endfor %}
             </div>
-            {# Future enhancement: Add "Load More" or pagination here #}
           {% else %}
             <p class="empty-state">{{ ftl_get_message("no-posts-in-community") }}</p>
           {% endif %}
@@ -104,6 +89,29 @@
     {% else %}
       <section role="region">
         <p class="empty-state">{{ ftl_get_message("timeline-empty") | safe }}</p>
+      </section>
+    {% endif %}
+
+    {# Posts from Public Communities Section - MOVED TO BOTTOM with Infinite Scroll #}
+    {% if non_official_public_community_posts and non_official_public_community_posts|length > 0 %}
+      <section role="region" aria-labelledby="public-posts-heading">
+        <h2 id="public-posts-heading" class="home-section-title">
+          {{ ftl_get_message("posts-from-public-communities") }}
+        </h2>
+        <div class="posts-grid" id="public-posts-grid">
+          {% for post in non_official_public_community_posts %}
+            {{ post_grid_item(post, r2_public_endpoint_url) }}
+          {% endfor %}
+          {# Infinite scroll sentinel - triggers when scrolled into view #}
+          {% if non_official_public_community_posts|length == 18 %}
+            <div class="infinite-scroll-sentinel"
+                 hx-get="/api/home/posts?offset=18"
+                 hx-trigger="revealed"
+                 hx-swap="outerHTML">
+              <span class="loading-indicator">{{ ftl_get_message("loading-more-posts") }}</span>
+            </div>
+          {% endif %}
+        </div>
       </section>
     {% endif %}
   </div>

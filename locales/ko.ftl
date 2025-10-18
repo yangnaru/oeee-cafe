@@ -138,6 +138,7 @@ official-communities-nil = 공식 커뮤니티가 없습니다.
 active-communities-nil = 활동 중인 공개 커뮤니티가 없습니다.
 no-active-communities = 현재 활동 중인 커뮤니티가 없습니다.
 no-posts-in-community = 아직 이 커뮤니티에 게시된 그림이 없습니다.
+loading-more-posts = 더 많은 그림 불러오는 중...
 create-community = 커뮤니티 만들기
 new-community = 새 커뮤니티
 community-name = 커뮤니티 이름

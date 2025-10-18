@@ -1,0 +1,26 @@
+{# Fragment template for infinite scroll - renders post grid items #}
+{% for post in posts %}
+  <div class="posts-grid-item">
+    <a href="/@{{ post.user_login_name }}/{{ post.id }}"
+       aria-label="{{ post.title }} by {{ post.user_login_name }}">
+      <img width="{{ post.image_width }}"
+           height="{{ post.image_height }}"
+           alt="{{ post.title }}"
+           src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+           loading="lazy"
+           decoding="async"
+           class="{% if post.is_sensitive %}sensitive{% endif %}"
+           {% if post.is_sensitive %}aria-label="Sensitive content: {{ post.title }}"{% endif %} />
+    </a>
+  </div>
+{% endfor %}
+
+{# Sentinel element for infinite scroll - triggers when scrolled into view #}
+{% if has_more %}
+  <div class="infinite-scroll-sentinel"
+       hx-get="/api/home/posts?offset={{ offset }}"
+       hx-trigger="revealed"
+       hx-swap="outerHTML">
+    <span class="loading-indicator">{{ ftl_get_message("loading-more-posts") }}</span>
+  </div>
+{% endif %}
