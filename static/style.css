@@ -101,7 +101,6 @@ nav a:visited,
 .posts-grid-item {
   overflow: hidden;
   border: 1px solid var(--main-border-color);
-  transition: all 0.2s ease;
 }
 
 .posts-grid-item:hover {
@@ -431,7 +430,6 @@ nav a:visited,
 .community-badge {
   padding: 12px;
   border: solid 1px var(--main-border-color);
-  transition: all 0.2s ease;
   font-size: 14px;
   line-height: 1.4;
 }
@@ -520,7 +518,6 @@ nav a:visited,
   display: flex;
   align-items: center;
   gap: 4px;
-  transition: all 0.2s ease;
   min-width: 50px;
   justify-content: center;
 }
@@ -565,7 +562,6 @@ nav a:visited,
   padding: 4px 10px;
   font-size: 14px;
   text-decoration: none;
-  transition: all 0.2s ease;
 }
 
 .hashtag-link:hover {
@@ -607,7 +603,6 @@ nav a:visited,
   text-decoration: none;
   padding: 4px 8px;
   border: 1px solid var(--main-border-color);
-  transition: all 0.2s ease;
   font-size: 14px;
   font-weight: 500;
 }
@@ -747,7 +742,6 @@ nav a:visited,
 
 .hashtag-discovery-item {
   border: 1px solid var(--main-border-color);
-  transition: all 0.2s ease;
 }
 
 .hashtag-discovery-item:hover {
