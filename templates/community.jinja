@@ -10,10 +10,12 @@
 {% block content %}
   <div class="center">
     {% block community_edit_block %}
-      <div hx-target="this" hx-swap="outerHTML">
-        <h2>{{ community.name }}</h2>
-        <p style="color: #666; font-size: 14px; margin: 5px 0; user-select: all">@{{ community.slug }}@{{ domain }}</p>
-        <p>{{ community.description }}</p>
+      <div hx-target="this" hx-swap="outerHTML" class="community-header">
+        <div>
+          <h2>{{ community.name }}</h2>
+          <p class="community-handle">@{{ community.slug }}@{{ domain }}</p>
+        </div>
+        <p class="community-description">{{ community.description }}</p>
         {% if current_user.id == community.owner_id %}
           <div class="community-menu">
             <button hx-get="/communities/{{ community_id }}/edit">{{ ftl_get_message("edit") }}</button>
@@ -21,16 +23,29 @@
         {% endif %}
       </div>
     {% endblock community_edit_block %}
-    {% if current_user %}
-      {% if community.background_color %}
-        <form action="/draw" method="post">
-          <input type="hidden" name="community_id" value="{{ community_id }}" />
-          <input type="hidden" name="tool" value="cucumber" />
-          <input type="hidden" name="width" value="640" />
-          <input type="hidden" name="height" value="480" />
-          <input type="submit" value="{{ ftl_get_message("community-drawing-new") }}" />
-        </form>
-      {% else %}
+
+    {% if stats %}
+      <div class="community-stats-card">
+        <div class="community-stats-content">
+          <strong>{{ ftl_get_message("community-stats") }}:</strong>
+          {{ stats.total_posts }} {{ ftl_get_message("community-stats-posts") }} ·
+          {{ stats.total_contributors }} {{ ftl_get_message("community-stats-contributors") }} ·
+          {{ stats.total_comments }} {{ ftl_get_message("community-stats-comments") }}
+        </div>
+        {% if current_user and community.background_color %}
+          <form action="/draw" method="post" class="community-stats-draw-form">
+            <input type="hidden" name="community_id" value="{{ community_id }}" />
+            <input type="hidden" name="tool" value="cucumber" />
+            <input type="hidden" name="width" value="640" />
+            <input type="hidden" name="height" value="480" />
+            <input type="submit" value="{{ ftl_get_message("community-drawing-new") }}" />
+          </form>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if current_user and not community.background_color %}
+      <div class="community-drawing-card">
         <form action="/draw" method="post">
           <input type="hidden" name="community_id" value="{{ community_id }}" />
           <select name="tool" title="{{ ftl_get_message("community-drawing-tool") }}">
@@ -54,7 +69,7 @@
             <option value="950">950</option>
             <option value="1000">1000</option>
           </select>
-          X
+          <span>×</span>
           <select name="height" title="{{ ftl_get_message("community-drawing-height") }}">
             <option value="300" selected>300</option>
             <option value="350">350</option>
@@ -70,50 +85,77 @@
           </select>
           <input type="submit" value="{{ ftl_get_message("community-drawing-new") }}" />
         </form>
-      {% endif %}
+      </div>
     {% endif %}
     {% if comments %}
-      <h3>{{ ftl_get_message("recent-comments") }}</h3>
-      <div class="comment-list">
+      <div class="community-section">
+        <div class="community-section-header">
+          <h3 class="community-section-title">{{ ftl_get_message("recent-comments") }}</h3>
+          {% if stats.total_comments > 5 %}
+            <a href="/communities/@{{ community.slug }}/comments" class="community-section-link">{{ ftl_get_message("view-all-comments") }}</a>
+          {% endif %}
+        </div>
         {% for comment in comments %}
-          <div class="comment-list-item">
-            {% if comment.actor_login_name %}
-              <a href="/@{{ comment.actor_login_name }}">{{ comment.actor_name }}</a>
-            {% else %}
-              <span>{{ comment.actor_name }}</span>
-            {% endif %}
-             → <a href="/@{{ comment.post_author_login_name }}/{{ comment.post_id }}">
-              {% if comment.post_title %}
-                {{ comment.post_title }}
-              {% else %}
-                {{ ftl_get_message("post-no-title") }}
+          <a href="/@{{ comment.post_author_login_name }}/{{ comment.post_id }}" class="comment-card-link">
+            <div class="comment">
+              {% if comment.post_image_filename %}
+                <div class="comment-thumbnail">
+                  <img src="{{ r2_public_endpoint_url }}/image/{{ comment.post_image_filename[:2] }}/{{ comment.post_image_filename }}"
+                       alt="{{ comment.post_title }}"
+                       width="{{ comment.post_image_width }}"
+                       height="{{ comment.post_image_height }}">
+                </div>
               {% endif %}
-            </a>:
-            {% if comment.content_html %}
-              {{ comment.content_html|safe }}
-            {% else %}
-              {{ comment.content }}
-            {% endif %}
-          </div>
+              <div class="comment-body">
+                <div class="comment-header">
+                  {% if comment.is_local %}
+                    <span class="comment-author">{{ comment.actor_name }}</span>
+                  {% else %}
+                    <span class="comment-author">{{ comment.actor_name }}</span>
+                  {% endif %}
+                  <span class="muted comment-handle">{{ comment.actor_handle }}</span>
+                  <span class="muted comment-timestamp">{{ comment.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}</span>
+                </div>
+                <div class="comment-content">
+                  {% if comment.content_html %}
+                    {{ comment.content_html|safe }}
+                  {% else %}
+                    {{ comment.content|markdown|safe }}
+                  {% endif %}
+                </div>
+                {% if comment.post_title %}
+                  <div class="comment-post-reference">
+                    → {{ comment.post_title }}
+                  </div>
+                {% else %}
+                  <div class="comment-post-reference">
+                    → {{ ftl_get_message("post-no-title") }}
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+          </a>
         {% endfor %}
       </div>
     {% endif %}
-    <h3>{{ ftl_get_message("recent-drawings") }}</h3>
-    {% if posts %}
-      <div class="posts-grid">
-        {% for post in posts %}
-          <div class="posts-grid-item">
-            <a href="/@{{ post.user_login_name }}/{{ post.id }}">
-              <img alt="{{ post.title }}"
-                   width="{{ post.image_width }}"
-                   height="{{ post.image_height }}"
-                   src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
-            </a>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p>{{ ftl_get_message("community-no-posts") }}</p>
-    {% endif %}
+    <div class="community-section">
+      <h3 class="community-section-title">{{ ftl_get_message("recent-drawings") }}</h3>
+      {% if posts %}
+        <div class="posts-grid">
+          {% for post in posts %}
+            <div class="posts-grid-item">
+              <a href="/@{{ post.user_login_name }}/{{ post.id }}">
+                <img alt="{{ post.title }}"
+                     width="{{ post.image_width }}"
+                     height="{{ post.image_height }}"
+                     src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p>{{ ftl_get_message("community-no-posts") }}</p>
+      {% endif %}
+    </div>
   </div>
 {% endblock content %}

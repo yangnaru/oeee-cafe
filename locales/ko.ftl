@@ -58,6 +58,13 @@ participating-community = 참여 중인 커뮤니티
 latest-active-public-community = 최근 활동 공개 커뮤니티
 recent-drawings = 최근 그림
 recent-comments = 최근 댓글
+view-all-comments = 모든 댓글 보기
+no-comments-yet = 아직 댓글이 없습니다
+
+community-stats = 커뮤니티 통계
+community-stats-posts = 게시물
+community-stats-contributors = 기여자
+community-stats-comments = 댓글
 
 edit = 수정
 save = 저장

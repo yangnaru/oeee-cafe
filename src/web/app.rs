@@ -17,8 +17,8 @@ use crate::web::handlers::collaborate::{
 };
 use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
-    communities, community, community_iframe, create_community_form, do_create_community,
-    hx_do_edit_community, hx_edit_community,
+    communities, community, community_comments, community_iframe, create_community_form,
+    do_create_community, hx_do_edit_community, hx_edit_community,
 };
 use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
@@ -214,6 +214,7 @@ impl App {
             .route("/communities/:id", get(community))
             .route("/communities/:id", put(hx_do_edit_community))
             .route("/communities/:id/edit", get(hx_edit_community))
+            .route("/communities/:id/comments", get(community_comments))
             .route("/communities/:id/embed", get(community_iframe))
             .route("/hashtags", get(hashtag_discovery))
             .route("/hashtags/:hashtag_name", get(hashtag_view))

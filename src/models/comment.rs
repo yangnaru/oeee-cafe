@@ -50,7 +50,9 @@ pub struct NotificationComment {
     pub iri: Option<String>,
     pub actor_name: String,
     pub actor_handle: String,
+    pub actor_url: String,
     pub actor_login_name: Option<String>,
+    pub is_local: bool,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub post_title: Option<String>,
@@ -131,7 +133,9 @@ pub async fn find_comments_to_posts_by_author(
             comments.iri,
             actors.name AS actor_name,
             actors.handle AS actor_handle,
+            actors.url AS actor_url,
             comment_authors.login_name AS "actor_login_name?",
+            CASE WHEN comment_authors.id IS NOT NULL THEN true ELSE false END AS "is_local!",
             posts.title AS post_title,
             post_authors.login_name AS post_author_login_name,
             images.image_filename AS post_image_filename,
@@ -175,7 +179,9 @@ pub async fn find_latest_comments_in_community(
             comments.iri,
             actors.name AS actor_name,
             actors.handle AS actor_handle,
+            actors.url AS actor_url,
             comment_authors.login_name AS "actor_login_name?",
+            CASE WHEN comment_authors.id IS NOT NULL THEN true ELSE false END AS "is_local!",
             posts.title AS post_title,
             post_authors.login_name AS post_author_login_name,
             images.image_filename AS post_image_filename,
@@ -189,9 +195,9 @@ pub async fn find_latest_comments_in_community(
         LEFT JOIN images ON posts.image_id = images.id
         WHERE posts.community_id = $1
         AND posts.published_at IS NOT NULL
-        AND actors.user_id != posts.author_id
+        AND (actors.user_id IS NULL OR actors.user_id != posts.author_id)
         AND posts.deleted_at IS NULL
-        ORDER BY created_at DESC
+        ORDER BY comments.created_at DESC
         LIMIT $2
         "#,
         community_id,

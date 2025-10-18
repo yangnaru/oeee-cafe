@@ -56,6 +56,13 @@ participating-community = Participating communities
 latest-active-public-community = Recently active public communities
 recent-drawings = Recent posts
 recent-comments = Recent comments
+view-all-comments = View all comments
+no-comments-yet = No comments yet
+
+community-stats = Community stats
+community-stats-posts = posts
+community-stats-contributors = contributors
+community-stats-comments = comments
 
 edit = Edit
 save = Save

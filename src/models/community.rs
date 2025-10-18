@@ -66,6 +66,13 @@ pub struct CommunityDraft {
     pub is_private: bool,
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct CommunityStats {
+    pub total_posts: i64,
+    pub total_contributors: i64,
+    pub total_comments: i64,
+}
+
 pub async fn get_own_communities(
     tx: &mut Transaction<'_, Postgres>,
     owner_id: Uuid,
@@ -440,9 +447,9 @@ pub async fn get_communities_for_collaboration(
     let q = query_as!(
         Community,
         r#"
-        SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, 
+        SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at,
                background_color, foreground_color
-        FROM communities 
+        FROM communities
         WHERE is_private = false OR owner_id = $1
         ORDER BY name ASC
         "#,
@@ -450,4 +457,32 @@ pub async fn get_communities_for_collaboration(
     );
 
     Ok(q.fetch_all(&mut **tx).await?)
+}
+
+// Get statistics for a community
+pub async fn get_community_stats(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+) -> Result<CommunityStats> {
+    let stats = sqlx::query!(
+        r#"
+        SELECT
+            COUNT(DISTINCT CASE WHEN posts.published_at IS NOT NULL AND posts.deleted_at IS NULL THEN posts.id END) AS "total_posts!",
+            COUNT(DISTINCT CASE WHEN posts.published_at IS NOT NULL AND posts.deleted_at IS NULL THEN posts.author_id END) AS "total_contributors!",
+            COUNT(DISTINCT comments.id) AS "total_comments!"
+        FROM communities
+        LEFT JOIN posts ON communities.id = posts.community_id
+        LEFT JOIN comments ON posts.id = comments.post_id
+        WHERE communities.id = $1
+        "#,
+        community_id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(CommunityStats {
+        total_posts: stats.total_posts,
+        total_contributors: stats.total_contributors,
+        total_comments: stats.total_comments,
+    })
 }

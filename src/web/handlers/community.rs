@@ -2,9 +2,9 @@ use crate::app_error::AppError;
 use crate::models::actor::create_actor_for_community;
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
-    create_community, find_community_by_id, find_community_by_slug, get_own_communities,
-    get_participating_communities, get_public_communities, update_community_with_activity,
-    CommunityDraft,
+    create_community, find_community_by_id, find_community_by_slug, get_community_stats,
+    get_own_communities, get_participating_communities, get_public_communities,
+    update_community_with_activity, CommunityDraft,
 };
 use crate::models::post::find_published_posts_by_community_id;
 use crate::models::user::AuthSession;
@@ -67,6 +67,7 @@ pub async fn community(
     let community_uuid = community.as_ref().unwrap().id;
     let posts = find_published_posts_by_community_id(&mut tx, community_uuid).await?;
     let comments = find_latest_comments_in_community(&mut tx, community_uuid, 5).await?;
+    let stats = get_community_stats(&mut tx, community_uuid).await?;
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("community.jinja").unwrap();
@@ -93,21 +94,8 @@ pub async fn community(
         community_id => community_id,
         domain => state.config.domain.clone(),
         unread_notification_count => common_ctx.unread_notification_count,
-        comments => comments.iter().map(
-            |comment| {
-                HashMap::<String, String>::from_iter(vec![
-                    ("id".to_string(), comment.id.to_string().to_string()),
-                    ("actor_handle".to_string(), comment.actor_handle.clone().to_string()),
-                    ("actor_name".to_string(), comment.actor_name.clone().to_string()),
-                    ("actor_login_name".to_string(), comment.actor_login_name.clone().unwrap_or_default().to_string()),
-                    ("post_title".to_string(), comment.post_title.clone().unwrap_or_default().to_string()),
-                    ("post_author_login_name".to_string(), comment.post_author_login_name.clone().to_string()),
-                    ("post_id".to_string(), comment.post_id.to_string().to_string()),
-                    ("created_at".to_string(), comment.created_at.to_string()),
-                    ("content".to_string(), comment.content.clone().to_string()),
-                ])
-            }
-        ).collect::<Vec<_>>(),
+        comments => comments,
+        stats => stats,
         posts => posts.iter().map(|post| {
             HashMap::<String, String>::from_iter(vec![
                 ("id".to_string(), post.id.to_string()),
@@ -591,4 +579,59 @@ pub async fn hx_do_edit_community(
             Ok(Html(rendered).into_response())
         }
     }
+}
+
+pub async fn community_comments(
+    auth_session: AuthSession,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let community = if id.starts_with('@') {
+        // Handle @slug format
+        let slug = id.strip_prefix('@').unwrap().to_string();
+        find_community_by_slug(&mut tx, slug).await?
+    } else {
+        // Handle UUID format - redirect to @slug
+        let uuid = match parse_id_with_legacy_support(&id, "/communities", &state)? {
+            ParsedId::Uuid(uuid) => uuid,
+            ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+            ParsedId::InvalidId(error_response) => return Ok(error_response),
+        };
+        let community = find_community_by_id(&mut tx, uuid).await?;
+        if let Some(community) = &community {
+            // Redirect UUID to @slug format
+            return Ok(
+                Redirect::to(&format!("/communities/@{}/comments", community.slug)).into_response(),
+            );
+        } else {
+            None
+        }
+    };
+
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let community_uuid = community.as_ref().unwrap().id;
+    // Get more comments for the dedicated comments page (100 instead of 5)
+    let comments = find_latest_comments_in_community(&mut tx, community_uuid, 100).await?;
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community_comments.jinja")?;
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        default_community_id => state.config.default_community_id.clone(),
+        community => community,
+        comments => comments,
+        domain => state.config.domain.clone(),
+        unread_notification_count => common_ctx.unread_notification_count,
+        draft_post_count => common_ctx.draft_post_count,
+        ftl_lang,
+    })?;
+
+    Ok(Html(rendered).into_response())
 }
