@@ -1,4 +1,5 @@
 {% extends "base.jinja" %}
+{% import "comment_card_macro.jinja" as comment_card_macro %}
 {% block title %}
   {{ super() }} | {{ community.name }} | {{ ftl_get_message("recent-comments") }}
 {% endblock title %}
@@ -9,45 +10,7 @@
     </h2>
     {% if comments %}
       {% for comment in comments %}
-        <a href="/@{{ comment.post_author_login_name }}/{{ comment.post_id }}" class="comment-card-link">
-          <div class="comment">
-            {% if comment.post_image_filename %}
-              <div class="comment-thumbnail">
-                <img src="{{ r2_public_endpoint_url }}/image/{{ comment.post_image_filename[:2] }}/{{ comment.post_image_filename }}"
-                     alt="{{ comment.post_title }}"
-                     width="{{ comment.post_image_width }}"
-                     height="{{ comment.post_image_height }}">
-              </div>
-            {% endif %}
-            <div class="comment-body">
-              <div class="comment-header">
-                {% if comment.is_local %}
-                  <span class="comment-author">{{ comment.actor_name }}</span>
-                {% else %}
-                  <span class="comment-author">{{ comment.actor_name }}</span>
-                {% endif %}
-                <span class="muted comment-handle">{{ comment.actor_handle }}</span>
-                <span class="muted comment-timestamp">{{ comment.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}</span>
-              </div>
-              <div class="comment-content">
-                {% if comment.content_html %}
-                  {{ comment.content_html|safe }}
-                {% else %}
-                  {{ comment.content|markdown|safe }}
-                {% endif %}
-              </div>
-              {% if comment.post_title %}
-                <div class="comment-post-reference">
-                  → {{ comment.post_title }}
-                </div>
-              {% else %}
-                <div class="comment-post-reference">
-                  → {{ ftl_get_message("post-no-title") }}
-                </div>
-              {% endif %}
-            </div>
-          </div>
-        </a>
+        {{ comment_card_macro.comment_card(comment, r2_public_endpoint_url, ftl_get_message) }}
       {% endfor %}
     {% else %}
       <p>{{ ftl_get_message("no-comments-yet") }}</p>

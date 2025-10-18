@@ -185,9 +185,14 @@ nav a:visited,
   text-decoration: none;
   color: inherit;
   display: block;
+  cursor: pointer;
 }
 
 .comment-card-link:hover .comment {
+  border-color: var(--main-highlight-color);
+}
+
+.comment-card-link:focus .comment {
   border-color: var(--main-highlight-color);
 }
 
