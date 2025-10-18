@@ -1,0 +1,15 @@
+services:
+  oeee-cafe:
+    build: .
+    container_name: oeee-cafe
+    ports:
+      - "30000:3000"
+    volumes:
+      - ./config/prod.toml:/app/config.toml:ro
+    networks:
+      - oeee-cafe-network
+    restart: always
+
+networks:
+  oeee-cafe-network:
+    driver: bridge
