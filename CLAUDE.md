@@ -4,6 +4,8 @@
 
 Don't try to run the development server. Just run `cargo check` if you need to check if the code compiles.
 
+Don't run `cargo sqlx prepare`.
+
 When running cargo commands, use the environment variable `DATABASE_URL=postgresql:///oeee_cafe`.
 
 When running psql commands, specify the database name like `psql oeee_cafe`.
