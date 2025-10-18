@@ -58,6 +58,7 @@ participating-community = 참여 중인 커뮤니티
 latest-active-public-community = 최근 활동 공개 커뮤니티
 recent-drawings = 최근 그림
 recent-comments = 최근 댓글
+recent-comments-from-public-communities = 공개 커뮤니티의 최근 댓글
 view-all-comments = 모든 댓글 보기
 no-comments-yet = 아직 댓글이 없습니다
 

@@ -1,5 +1,6 @@
 use super::ExtractFtlLang;
 use crate::app_error::AppError;
+use crate::models::comment::find_latest_comments_from_public_communities;
 use crate::models::community::{
     get_active_public_communities_excluding_owner, get_public_communities,
     get_user_communities_with_latest_9_posts,
@@ -58,6 +59,9 @@ pub async fn home(
     // Get trending hashtags
     let trending_hashtags = get_trending_hashtags(&mut tx, 10).await?;
 
+    // Get recent comments from public communities
+    let recent_comments = find_latest_comments_from_public_communities(&mut tx, 5).await?;
+
     tx.commit().await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("home.jinja")?;
@@ -69,6 +73,7 @@ pub async fn home(
         official_communities_with_latest_posts,
         non_official_public_community_posts,
         trending_hashtags,
+        recent_comments,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang

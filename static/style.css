@@ -1043,6 +1043,10 @@ nav a:visited,
 
 /* Trending Hashtags Section Layout */
 
+.recent-comments-section {
+  margin-bottom: 24px;
+}
+
 .trending-hashtags-section {
   margin-bottom: 24px;
 }

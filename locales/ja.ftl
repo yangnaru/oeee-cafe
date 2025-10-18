@@ -58,6 +58,7 @@ participating-community = 参加中のコミュニティ
 latest-active-public-community = 最近の活動公開コミュニティ
 recent-drawings = 最近のお絵かき
 recent-comments = 最近のコメント
+recent-comments-from-public-communities = 公開コミュニティからの最近のコメント
 view-all-comments = すべてのコメントを見る
 no-comments-yet = まだコメントがありません
 

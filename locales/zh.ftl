@@ -58,6 +58,7 @@ participating-community = 参与的社区
 latest-active-public-community = 最近活跃的公开社区
 recent-drawings = 最近的作品
 recent-comments = 最近的评论
+recent-comments-from-public-communities = 来自公开社区的最近评论
 view-all-comments = 查看所有评论
 no-comments-yet = 暂无评论
 
