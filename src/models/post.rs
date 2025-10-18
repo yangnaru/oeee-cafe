@@ -78,6 +78,19 @@ pub struct SerializablePostForHome {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Serialize)]
+pub struct SerializableDraftPost {
+    pub id: Uuid,
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub community_id: Uuid,
+    pub community_name: String,
+    pub image_filename: String,
+    pub image_width: i32,
+    pub image_height: i32,
+    pub updated_at: DateTime<Utc>,
+}
+
 impl Post {
     pub fn path(&self) -> String {
         format!("/posts/{}", self.id)
@@ -286,49 +299,43 @@ pub async fn find_published_posts_by_author_id(
 pub async fn find_draft_posts_by_author_id(
     tx: &mut Transaction<'_, Postgres>,
     author_id: Uuid,
-) -> Result<Vec<SerializablePost>> {
-    let q = query!(
+) -> Result<Vec<SerializableDraftPost>> {
+    let result = query!(
         "
             SELECT
                 posts.id,
-                posts.author_id,
                 posts.title,
-                posts.viewer_count,
-                images.paint_duration,
-                images.stroke_count,
+                posts.content,
+                posts.community_id,
+                posts.updated_at,
                 images.image_filename,
                 images.width,
                 images.height,
-                images.replay_filename,
-                posts.published_at,
-                posts.created_at,
-                posts.updated_at
+                communities.name as community_name
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
-            WHERE author_id = $1
-            AND published_at IS NULL
+            LEFT JOIN communities ON posts.community_id = communities.id
+            WHERE posts.author_id = $1
+            AND posts.published_at IS NULL
             AND posts.deleted_at IS NULL
+            ORDER BY posts.updated_at DESC
         ",
         author_id
-    );
-    let result = q.fetch_all(&mut **tx).await?;
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
     Ok(result
         .into_iter()
-        .map(|row| SerializablePost {
+        .map(|row| SerializableDraftPost {
             id: row.id,
             title: row.title,
-            viewer_count: row.viewer_count,
-            author_id: row.author_id,
-            user_login_name: None,
-            paint_duration: row.paint_duration.microseconds.to_string(),
-            stroke_count: row.stroke_count,
+            content: row.content,
+            community_id: row.community_id,
+            community_name: row.community_name,
             image_filename: row.image_filename,
             image_width: row.width,
             image_height: row.height,
-            replay_filename: row.replay_filename,
-            is_sensitive: None,
-            published_at: row.published_at,
-            created_at: row.created_at,
             updated_at: row.updated_at,
         })
         .collect())

@@ -87,6 +87,10 @@ allow-relay = Allow relay posts
 sensitive = Sensitive
 draft-post = Draft post
 
+# Draft Management
+draft-posts-count = drafts
+draft-empty = You don't have any drafts yet
+
 # Hashtags
 trending-hashtags = Trending Hashtags
 hashtag-post-count = posts

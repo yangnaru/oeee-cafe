@@ -89,6 +89,10 @@ allow-relay = 允许接续创作
 sensitive = 敏感内容
 draft-post = 草稿作品
 
+# Draft Management
+draft-posts-count = 个草稿
+draft-empty = 您还没有草稿
+
 # Hashtags
 trending-hashtags = 热门标签
 hashtag-post-count = 篇作品

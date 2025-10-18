@@ -89,6 +89,10 @@ allow-relay = リレー描画を許可
 sensitive = 敏感な内容
 draft-post = 一時保管された図
 
+# Draft Management
+draft-posts-count = 件の下書き
+draft-empty = まだ下書きがありません
+
 # Hashtags
 trending-hashtags = トレンドハッシュタグ
 hashtag-post-count = 件の投稿

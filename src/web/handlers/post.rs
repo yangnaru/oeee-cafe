@@ -14,8 +14,9 @@ use crate::models::notification::{
     create_notification, CreateNotificationParams, NotificationType,
 };
 use crate::models::post::{
-    delete_post_with_activity, edit_post, edit_post_community, find_draft_posts_by_author_id,
-    find_post_by_id, increment_post_viewer_count, publish_post,
+    delete_post_with_activity,
+    edit_post, edit_post_community, find_draft_posts_by_author_id, find_post_by_id,
+    increment_post_viewer_count, publish_post,
 };
 use crate::models::reaction::{
     create_reaction, delete_reaction, find_reactions_by_post_id, get_reaction_counts, ReactionDraft,
@@ -760,8 +761,13 @@ pub async fn draft_posts(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let posts =
-        find_draft_posts_by_author_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let posts = find_draft_posts_by_author_id(
+        &mut tx,
+        auth_session.user.clone().unwrap().id,
+    )
+    .await?;
+
+    tx.commit().await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("draft_posts.jinja")?;
     let rendered = template.render(context! {
@@ -770,6 +776,7 @@ pub async fn draft_posts(
         posts => posts,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ftl_lang,
     })?;
 

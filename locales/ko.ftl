@@ -89,6 +89,10 @@ allow-relay = 릴레이 그림 허용
 sensitive = 민감한 내용
 draft-post = 임시 보관된 그림
 
+# Draft Management
+draft-posts-count = 개의 임시 보관함
+draft-empty = 아직 임시 보관된 그림이 없습니다
+
 # Hashtags
 trending-hashtags = 인기 해시태그
 hashtag-post-count = 개의 게시물

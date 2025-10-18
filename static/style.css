@@ -836,3 +836,137 @@ nav a:visited,
     opacity: 1;
   }
 }
+
+/* Draft Management Styles */
+
+.drafts-header {
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid var(--main-border-color);
+  background-color: var(--secondary-bg-color);
+}
+
+.drafts-header h2 {
+  margin: 0 0 8px 0;
+}
+
+.drafts-count {
+  color: var(--secondary-text-color);
+  font-size: 0.9em;
+  margin: 0;
+}
+
+.drafts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.draft-card {
+  border: 1px solid var(--main-border-color);
+  background-color: var(--secondary-bg-color);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.draft-card:hover {
+  border-color: var(--main-highlight-color);
+}
+
+.draft-card-header {
+  margin-bottom: 8px;
+}
+
+.draft-metadata {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.draft-community {
+  font-weight: 600;
+  color: var(--link-color);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.draft-community:hover {
+  text-decoration: underline;
+}
+
+.draft-date {
+  font-size: 0.85em;
+  color: var(--secondary-text-color);
+}
+
+.draft-image-link {
+  display: block;
+  position: relative;
+  overflow: hidden;
+}
+
+.draft-image {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.draft-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.draft-title {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.draft-description {
+  margin: 0;
+  font-size: 0.9em;
+  color: var(--secondary-text-color);
+  line-height: 1.4;
+}
+
+.draft-card-content-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.draft-card-content-link:hover .draft-title {
+  color: var(--link-color);
+}
+
+.drafts-empty {
+  text-align: center;
+  padding: 64px 32px;
+  background-color: var(--secondary-bg-color);
+  border: 1px solid var(--main-border-color);
+}
+
+.drafts-empty-message {
+  font-size: 1.1em;
+  color: var(--secondary-text-color);
+  margin-bottom: 24px;
+}
+
+.drafts-empty-cta {
+  display: inline-block;
+  padding: 12px 32px;
+  background-color: var(--link-color);
+  color: var(--secondary-bg-color);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.drafts-empty-cta:hover {
+  opacity: 0.9;
+}

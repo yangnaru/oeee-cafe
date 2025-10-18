@@ -31,11 +31,11 @@ use crate::web::handlers::notifications::{
     mark_all_notifications_read, mark_notification_read,
 };
 use crate::web::handlers::post::{
-    add_reaction, do_create_comment, do_post_edit_community, draft_posts, hx_delete_post,
-    hx_do_edit_post, hx_edit_post, post_edit_community, post_publish, post_publish_form,
-    post_reactions_detail, post_relay_view, post_relay_view_by_login_name, post_replay_view,
-    post_replay_view_by_login_name, post_view_by_login_name, redirect_post_to_login_name,
-    remove_reaction,
+    add_reaction, do_create_comment, do_post_edit_community,
+    draft_posts, hx_delete_post, hx_do_edit_post, hx_edit_post,
+    post_edit_community, post_publish, post_publish_form, post_reactions_detail, post_relay_view,
+    post_relay_view_by_login_name, post_replay_view, post_replay_view_by_login_name,
+    post_view_by_login_name, redirect_post_to_login_name, remove_reaction,
 };
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,

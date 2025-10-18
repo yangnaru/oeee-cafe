@@ -1,22 +1,63 @@
 {% extends "base.jinja" %}
 {% block title %}
-  {{ super() }} | {{ title }}
+  {{ super() }} | {{ ftl_get_message("drafts") }}
 {% endblock title %}
 {% block content %}
   <div class="center">
-    <h2>{{ ftl_get_message("drafts") }}</h2>
-    <div class="posts-grid">
-      {% for post in posts %}
-        <div class="posts-grid-item">
-          <h3>
-            <a href="/posts/{{ post.id }}/publish">{{ post.created_at|dateformat(format="short", tz="Asia/Seoul") }}</a>
-          </h3>
-          <img width="{{ post.image_width }}"
-               height="{{ post.image_height }}"
-               alt="{{ ftl_get_message("draft-post") }}"
-               src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
-        </div>
-      {% endfor %}
+    <div class="drafts-header">
+      <h2>{{ ftl_get_message("drafts") }}</h2>
+      <p class="drafts-count">{{ posts|length }} {{ ftl_get_message("draft-posts-count") }}</p>
     </div>
+
+    {# Draft posts grid #}
+    {% if posts|length > 0 %}
+      <div class="drafts-grid">
+        {% for post in posts %}
+          <div class="draft-card" data-post-id="{{ post.id }}">
+            <div class="draft-card-header">
+              <div class="draft-metadata">
+                <a href="/communities/{{ post.community_id }}" class="draft-community">
+                  {{ post.community_name }}
+                </a>
+                <span class="draft-date">
+                  {{ post.updated_at|dateformat(format="short", tz="Asia/Seoul") }}
+                </span>
+              </div>
+            </div>
+
+            <a href="/posts/{{ post.id }}/publish" class="draft-image-link">
+              <img width="{{ post.image_width }}"
+                   height="{{ post.image_height }}"
+                   alt="{{ post.title or ftl_get_message("post-no-title") }}"
+                   src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+                   loading="lazy"
+                   decoding="async"
+                   class="draft-image" />
+            </a>
+
+            <a href="/posts/{{ post.id }}/publish" class="draft-card-content-link">
+              <div class="draft-card-content">
+                <h3 class="draft-title">
+                  {{ post.title or ftl_get_message("post-no-title") }}
+                </h3>
+                {% if post.content %}
+                  <p class="draft-description">{{ post.content[:100] }}{% if post.content|length > 100 %}...{% endif %}</p>
+                {% endif %}
+              </div>
+            </a>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      {# Empty state #}
+      <div class="drafts-empty">
+        <p class="drafts-empty-message">
+          {{ ftl_get_message("draft-empty") }}
+        </p>
+        <a href="/draw" class="drafts-empty-cta">
+          {{ ftl_get_message("draw") }}
+        </a>
+      </div>
+    {% endif %}
   </div>
 {% endblock content %}
