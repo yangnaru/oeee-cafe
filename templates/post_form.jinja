@@ -29,57 +29,92 @@
 {% endblock head %}
 {% block content %}
   <div class="center">
-    <p>{{ ftl_get_message("post-created-at") }}: {{ post.created_at }}</p>
-    <p>{{ ftl_get_message("post-duration") }}: {{ post.paint_duration }}</p>
-    <img width="{{ post.image_width }}"
-         height="{{ post.image_height }}"
-         alt="{{ ftl_get_message("draft-post") }}"
-         src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+    <section class="post-preview-section">
+      <h2>{{ ftl_get_message("draft-post") }}</h2>
+      <div class="post-preview-meta">
+        <p>{{ ftl_get_message("post-created-at") }}: {{ post.created_at }}</p>
+        <p>{{ ftl_get_message("post-duration") }}: {{ post.paint_duration }}</p>
+        <p>
+          {{ ftl_get_message("community") }}:
+          <a href="{{ link }}">{{ post.community_name }}</a>
+        </p>
+      </div>
+      <div class="post-preview-image">
+        <img width="{{ post.image_width }}"
+             height="{{ post.image_height }}"
+             alt="{{ ftl_get_message("draft-post") }}"
+             src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+      </div>
+    </section>
     <form action="/posts/publish" method="post">
       <input type="hidden" name="post_id" value="{{ post.id }}" />
-      <p>
-        {{ ftl_get_message("community") }}:
-        <a href="{{ link }}">{{ post.community_name }}</a>
-      </p>
-      <p>
-        <label for="title">{{ ftl_get_message("post-title") }}:</label>
-        <input type="text" name="title" />
-      </p>
-      <p>
-        <label for="content">{{ ftl_get_message("post-description") }}:</label>
-        <textarea name="content"></textarea>
-      </p>
-      <p>
-        <label for="hashtags">{{ ftl_get_message("post-hashtags") }}:</label>
-        <div class="hashtag-input-container">
+      <fieldset>
+        <legend>{{ ftl_get_message("post-publish") }}</legend>
+        <div class="form-group">
+          <label for="title">{{ ftl_get_message("post-title") }}:</label>
           <input type="text"
-                 id="hashtags-input"
-                 name="hashtags"
-                 placeholder="{{ ftl_get_message("post-hashtags-placeholder") }}"
-                 autocomplete="off"
-                 hx-get="/api/hashtags/autocomplete"
-                 hx-trigger="keyup changed delay:300ms"
-                 hx-target="#hashtag-suggestions"
-                 hx-include="[name='hashtags']"
-                 hx-vals='js:{q: document.getElementById("hashtags-input").value.split(/[,\s]+/).pop()}' />
-          <div id="hashtag-suggestions" class="hashtag-autocomplete"></div>
+                 id="title"
+                 name="title"
+                 required
+                 minlength="1"
+                 maxlength="200"
+                 aria-required="true" />
         </div>
-        <span class="form-hint">{{ ftl_get_message("post-hashtags-hint") }}</span>
-      </p>
-      <p>
-        <label for="is_sensitive">{{ ftl_get_message("sensitive") }}:</label>
-        <input type="checkbox" name="is_sensitive" />
-      </p>
-      <div>
-        <label>{{ ftl_get_message("allow-relay") }}:</label>
-        <input type="checkbox" name="allow_relay" checked />
-      </div>
-      <input type="submit" value="{{ ftl_get_message("post-publish") }}" />
+        <div class="form-group">
+          <label for="content">{{ ftl_get_message("post-description") }}:</label>
+          <textarea id="content"
+                    name="content"
+                    required
+                    minlength="1"
+                    maxlength="5000"
+                    rows="5"
+                    aria-required="true"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="hashtags-input">{{ ftl_get_message("post-hashtags") }}:</label>
+          <div class="hashtag-input-container">
+            <input type="text"
+                   id="hashtags-input"
+                   name="hashtags"
+                   placeholder="{{ ftl_get_message("post-hashtags-placeholder") }}"
+                   autocomplete="off"
+                   maxlength="500"
+                   aria-describedby="hashtags-hint"
+                   hx-get="/api/hashtags/autocomplete"
+                   hx-trigger="keyup changed delay:300ms"
+                   hx-target="#hashtag-suggestions"
+                   hx-include="[name='hashtags']"
+                   hx-vals='js:{q: document.getElementById("hashtags-input").value.split(/[,\s]+/).pop()}' />
+            <div id="hashtag-suggestions"
+                 class="hashtag-autocomplete"
+                 role="listbox"
+                 aria-label="{{ ftl_get_message("post-hashtags") }}"></div>
+          </div>
+          <span id="hashtags-hint" class="form-hint">{{ ftl_get_message("post-hashtags-hint") }}</span>
+        </div>
+        <div class="form-group form-group-checkbox">
+          <input type="checkbox"
+                 id="is_sensitive"
+                 name="is_sensitive" />
+          <label for="is_sensitive">{{ ftl_get_message("sensitive") }}</label>
+        </div>
+        <div class="form-group form-group-checkbox">
+          <input type="checkbox"
+                 id="allow_relay"
+                 name="allow_relay"
+                 checked />
+          <label for="allow_relay">{{ ftl_get_message("allow-relay") }}</label>
+        </div>
+        <div class="form-actions">
+          <input type="submit" value="{{ ftl_get_message("post-publish") }}" />
+        </div>
+      </fieldset>
     </form>
     <form hx-delete="/posts/{{ post_id }}"
           hx-confirm="{{ ftl_get_message("post-delete-confirm") }}"
-          hx-target="body">
-      <button type="submit">{{ ftl_get_message("delete") }}</button>
+          hx-target="body"
+          class="delete-form">
+      <button type="submit" class="delete-button">{{ ftl_get_message("delete") }}</button>
     </form>
   </div>
 {% endblock content %}
