@@ -1,6 +1,13 @@
+# To use sccache caching, enable BuildKit before running docker-compose:
+#   export DOCKER_BUILDKIT=1
+#   export COMPOSE_DOCKER_CLI_BUILD=1
+# Or run with: DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose build
+
 services:
   oeee-cafe:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: oeee-cafe
     ports:
       - "30000:3000"

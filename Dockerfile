@@ -21,8 +21,11 @@ COPY src/ ./src/
 # Build with sccache
 ENV RUSTC_WRAPPER=sccache
 ENV SCCACHE_DIR=/sccache
-RUN --mount=type=cache,target=/sccache \
-    cargo build --release
+ENV SCCACHE_CACHE_SIZE="10G"
+RUN --mount=type=cache,target=/sccache,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo build --release && \
+    sccache --show-stats
 
 # Build cucumber
 FROM node:24-slim AS node-builder-cucumber
