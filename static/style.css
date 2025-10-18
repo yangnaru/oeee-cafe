@@ -95,11 +95,18 @@ nav a:visited,
 .posts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
+  gap: 8px;
+  margin: 16px 0;
 }
 
 .posts-grid-item {
   overflow: hidden;
+  border: 1px solid var(--main-border-color);
+  transition: all 0.2s ease;
+}
+
+.posts-grid-item:hover {
+  border-color: var(--main-highlight-color);
 }
 
 .posts-grid-item img {
@@ -180,7 +187,6 @@ nav a:visited,
   cursor: pointer;
   background-color: var(--main-bg-color);
   border: 1px solid var(--main-border-color);
-  border-radius: 4px;
   color: var(--main-text-color);
 }
 
@@ -192,7 +198,6 @@ nav a:visited,
   border: 1px solid var(--main-border-color);
   padding: 1rem;
   margin-bottom: 1rem;
-  border-radius: 4px;
   background-color: var(--main-bg-color);
 }
 
@@ -215,7 +220,6 @@ nav a:visited,
   cursor: pointer;
   background-color: var(--main-bg-color);
   border: 1px solid var(--main-border-color);
-  border-radius: 4px;
   color: var(--main-text-color);
 }
 
@@ -259,7 +263,6 @@ nav a:visited,
   max-height: 100px;
   object-fit: cover;
   border: 1px solid var(--main-border-color);
-  border-radius: 4px;
 }
 
 .notification-content {
@@ -285,7 +288,6 @@ nav a:visited,
   padding: 0.5rem;
   background-color: var(--main-bg-color);
   border: 1px solid var(--main-border-color);
-  border-radius: 4px;
   font-size: 0.875rem;
 }
 
@@ -410,22 +412,39 @@ nav a:visited,
 }
 
 .home-section-title {
-  padding: 8px;
+  padding: 12px 16px;
   background-color: var(--main-nav-bg-color);
   border-width: 1px;
   border-color: var(--main-border-color);
   border-style: solid;
+  margin: 24px 0 12px 0;
+  font-size: 1.2em;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .community-badges {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  gap: 12px;
+  margin: 16px 0;
 }
 
 .community-badge {
-  padding: 8px;
+  padding: 12px;
   border: solid 1px var(--main-border-color);
+  transition: all 0.2s ease;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.community-badge a {
+  font-weight: 500;
+}
+
+.community-badge:hover {
+  background-color: var(--main-nav-bg-color);
+  border-color: var(--main-highlight-color);
 }
 
 .fediverse-handle {
@@ -497,7 +516,6 @@ nav a:visited,
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
   border: 1px solid var(--main-border-color);
-  border-radius: 16px;
   padding: 6px 12px;
   font-size: 14px;
   cursor: pointer;
@@ -511,7 +529,6 @@ nav a:visited,
 
 .reaction-button:hover {
   background-color: var(--main-nav-bg-color);
-  transform: scale(1.05);
 }
 
 .reaction-button.reacted {
@@ -524,7 +541,6 @@ nav a:visited,
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
   border: 1px solid var(--main-border-color);
-  border-radius: 16px;
   padding: 6px 12px;
   font-size: 14px;
   display: flex;
@@ -548,7 +564,6 @@ nav a:visited,
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
   border: 1px solid var(--main-border-color);
-  border-radius: 12px;
   padding: 4px 10px;
   font-size: 14px;
   text-decoration: none;
@@ -557,18 +572,22 @@ nav a:visited,
 
 .hashtag-link:hover {
   background-color: var(--main-nav-bg-color);
-  transform: scale(1.05);
 }
 
 .trending-hashtags {
-  padding: 8px;
-  border: 1px solid var(--main-border-color);
-  margin: 8px 0;
+  padding: 16px;
+  border: 2px solid var(--main-border-color);
+  margin: 0 0 24px 0;
+  background-color: var(--main-bg-color);
 }
 
 .trending-hashtags h3 {
   margin-top: 0;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--main-border-color);
+  font-size: 1.1em;
+  font-weight: 600;
 }
 
 .hashtag-list {
@@ -577,7 +596,8 @@ nav a:visited,
   margin: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
+  line-height: 1.8;
 }
 
 .hashtag-item {
@@ -587,12 +607,24 @@ nav a:visited,
 .hashtag-item a {
   display: inline-block;
   text-decoration: none;
+  padding: 4px 8px;
+  border: 1px solid var(--main-border-color);
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.hashtag-item a:hover {
+  background-color: var(--main-nav-bg-color);
+  border-color: var(--main-highlight-color);
 }
 
 .hashtag-post-count {
   color: var(--main-text-color);
-  opacity: 0.7;
-  font-size: 12px;
+  opacity: 0.8;
+  font-size: 13px;
+  font-weight: 500;
+  margin-left: 4px;
 }
 
 .form-hint {
@@ -689,7 +721,6 @@ nav a:visited,
   border: 1px solid var(--main-border-color);
   text-decoration: none;
   font-size: 14px;
-  border-radius: 4px;
 }
 
 .hashtag-sort-controls a:hover {
@@ -718,13 +749,11 @@ nav a:visited,
 
 .hashtag-discovery-item {
   border: 1px solid var(--main-border-color);
-  border-radius: 4px;
   transition: all 0.2s ease;
 }
 
 .hashtag-discovery-item:hover {
   background-color: var(--main-nav-bg-color);
-  transform: translateY(-2px);
 }
 
 .hashtag-discovery-item a {
