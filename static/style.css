@@ -149,12 +149,13 @@ nav a:visited,
 
 .comment {
   border: 1px solid var(--main-border-color);
-  padding: 12px;
-  margin-bottom: 12px;
+  padding: 8px;
+  margin-bottom: 8px;
   background-color: var(--main-bg-color);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 8px;
+  align-items: flex-start;
 }
 
 .comment:last-of-type {
@@ -163,8 +164,8 @@ nav a:visited,
 
 .comment-thumbnail {
   flex-shrink: 0;
-  width: 80px;
-  height: 80px;
+  width: 60px;
+  height: 60px;
   overflow: hidden;
   border: 1px solid var(--main-border-color);
 }
@@ -198,8 +199,8 @@ nav a:visited,
 }
 
 .comment-post-reference {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid var(--main-border-color);
   font-size: 0.9em;
   color: #666;
@@ -209,9 +210,9 @@ nav a:visited,
 .comment-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 0.9em;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .comment-author {
