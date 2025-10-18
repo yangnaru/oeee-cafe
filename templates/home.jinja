@@ -1,70 +1,110 @@
 {% extends "base.jinja" %}
+
+{# Macro for rendering post grid items - reusable across different sections #}
+{% macro post_grid_item(post, r2_public_endpoint_url) %}
+  <div class="posts-grid-item">
+    <a href="/@{{ post.user_login_name }}/{{ post.id }}"
+       aria-label="{{ post.title }} by {{ post.user_login_name }}">
+      <img width="{{ post.image_width }}"
+           height="{{ post.image_height }}"
+           alt="{{ post.title }}"
+           src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+           loading="lazy"
+           decoding="async"
+           class="{% if post.is_sensitive %}sensitive{% endif %}"
+           {% if post.is_sensitive %}aria-label="Sensitive content: {{ post.title }}"{% endif %} />
+    </a>
+  </div>
+{% endmacro %}
+
 {% block title %}
   {{ ftl_get_message("brand") }}
 {% endblock title %}
+
 {% block content %}
   <div class="center">
+    {# Trending Hashtags Section #}
     {% if trending_hashtags %}
-      <div class="trending-hashtags">
-        <h3>
-          <a href="/hashtags">{{ ftl_get_message("trending-hashtags") }}</a>
-        </h3>
-        <ul class="hashtag-list">
-          {% for hashtag in trending_hashtags %}
-            <li class="hashtag-item">
-              <a href="/hashtags/{{ hashtag.name }}">#{{ hashtag.display_name }}</a>
-              <span class="hashtag-post-count">({{ hashtag.post_count }})</span>
-            </li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
-    {% if non_official_public_community_posts| length > 0 %}
-      <h2 class="home-section-title">{{ ftl_get_message("posts-from-public-communities") }}</h2>
-      <div class="posts-grid">
-        {% for post in non_official_public_community_posts %}
-          <div class="posts-grid-item">
-            <a href="/@{{ post.user_login_name }}/{{ post.id }}">
-              <img width="{{ post.image_width }}"
-                   height="{{ post.image_height }}"
-                   alt="{{ post.title }}"
-                   src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                   class="{% if post.is_sensitive %}sensitive{% endif %}" />
-            </a>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-    <h2 class="home-section-title">{{ ftl_get_message("latest-active-communities") }}</h2>
-    <div class="community-badges">
-      {% for (community, id) in active_public_communities[:10] %}
-        <div class="community-badge">
-          <a href="/communities/@{{ community.slug }}">{{ community.name }} ({{ community.posts_count }})</a>
+      <section class="trending-hashtags-section" role="region" aria-labelledby="trending-hashtags-heading">
+        <div class="trending-hashtags">
+          <h2 id="trending-hashtags-heading" class="home-section-title">
+            <a href="/hashtags">{{ ftl_get_message("trending-hashtags") }}</a>
+          </h2>
+          <ul class="hashtag-list">
+            {% for hashtag in trending_hashtags %}
+              <li class="hashtag-item">
+                <a href="/hashtags/{{ hashtag.name }}">#{{ hashtag.display_name }}</a>
+                <span class="hashtag-post-count">({{ hashtag.post_count }})</span>
+              </li>
+            {% endfor %}
+          </ul>
         </div>
-      {% endfor %}
-    </div>
-    {% if official_communities_with_latest_posts|length > 0 %}
-      {% for community in
-        official_communities_with_latest_posts %}
-        <h2 class="home-section-title">
-          <a href="/communities/@{{ community.slug }}">{{ community.name }}</a>
+      </section>
+    {% endif %}
+
+    {# Posts from Public Communities Section #}
+    {% if non_official_public_community_posts and non_official_public_community_posts|length > 0 %}
+      <section role="region" aria-labelledby="public-posts-heading">
+        <h2 id="public-posts-heading" class="home-section-title">
+          {{ ftl_get_message("posts-from-public-communities") }}
         </h2>
         <div class="posts-grid">
-          {% for post in community.posts %}
-            <div class="posts-grid-item">
-              <a href="/@{{ post.user_login_name }}/{{ post.id }}">
-                <img width="{{ post.image_width }}"
-                     height="{{ post.image_height }}"
-                     alt="{{ post.title }}"
-                     src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                     class="{% if post.is_sensitive %}sensitive{% endif %}" />
+          {% for post in non_official_public_community_posts %}
+            {{ post_grid_item(post, r2_public_endpoint_url) }}
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+    {# Latest Active Communities Section #}
+    {% if active_public_communities and active_public_communities|length > 0 %}
+      <section role="region" aria-labelledby="active-communities-heading">
+        <h2 id="active-communities-heading" class="home-section-title">
+          {{ ftl_get_message("latest-active-communities") }}
+        </h2>
+        <div class="community-badges">
+          {# Note: Limited to 10 communities for performance. Consider pagination for larger lists. #}
+          {% for (community, id) in active_public_communities[:10] %}
+            <div class="community-badge">
+              <a href="/communities/@{{ community.slug }}">
+                {{ community.name }} <span class="community-post-count">({{ community.posts_count }})</span>
               </a>
             </div>
           {% endfor %}
         </div>
+      </section>
+    {% else %}
+      <section role="region" aria-labelledby="active-communities-heading">
+        <h2 id="active-communities-heading" class="home-section-title">
+          {{ ftl_get_message("latest-active-communities") }}
+        </h2>
+        <p class="empty-state">{{ ftl_get_message("no-active-communities") }}</p>
+      </section>
+    {% endif %}
+
+    {# Official Communities with Latest Posts Section #}
+    {% if official_communities_with_latest_posts and official_communities_with_latest_posts|length > 0 %}
+      {% for community in official_communities_with_latest_posts %}
+        <section role="region" aria-labelledby="community-{{ community.slug }}-heading">
+          <h2 id="community-{{ community.slug }}-heading" class="home-section-title">
+            <a href="/communities/@{{ community.slug }}">{{ community.name }}</a>
+          </h2>
+          {% if community.posts and community.posts|length > 0 %}
+            <div class="posts-grid">
+              {% for post in community.posts %}
+                {{ post_grid_item(post, r2_public_endpoint_url) }}
+              {% endfor %}
+            </div>
+            {# Future enhancement: Add "Load More" or pagination here #}
+          {% else %}
+            <p class="empty-state">{{ ftl_get_message("no-posts-in-community") }}</p>
+          {% endif %}
+        </section>
       {% endfor %}
     {% else %}
-      <p>{{ ftl_get_message("timeline-empty") |safe }}</p>
+      <section role="region">
+        <p class="empty-state">{{ ftl_get_message("timeline-empty") | safe }}</p>
+      </section>
     {% endif %}
   </div>
 {% endblock content %}
