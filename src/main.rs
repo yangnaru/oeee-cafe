@@ -1,10 +1,13 @@
 use fluent::bundle::FluentBundle;
+use fluent::{FluentArgs, FluentValue};
 use minijinja::{path_loader, Environment, State};
 use oeee_cafe::locale::LOCALES;
 use oeee_cafe::web::app::App;
 use oeee_cafe::web::handlers::collaborate::redis_state::RedisStateManager;
 use oeee_cafe::web::state::AppState;
 use oeee_cafe::AppConfig;
+use serde_json;
+use std::collections::HashMap;
 use std::env::args;
 use std::path::PathBuf;
 use std::process::exit;
@@ -91,6 +94,69 @@ fn main() {
                 }
             }
             env.add_function("ftl_get_message", ftl_get_message);
+
+            fn ftl_format_pattern(
+                state: &State,
+                message_id: String,
+                params: minijinja::Value,
+            ) -> Result<String, minijinja::Error> {
+                // Get the current language from template context
+                let lang = match state.lookup("ftl_lang") {
+                    Some(lang_val) => lang_val.as_str().unwrap_or("ko").to_string(),
+                    None => "ko".to_string(),
+                };
+
+                // Get the appropriate Fluent resource
+                let ftl = LOCALES
+                    .get(&lang)
+                    .unwrap_or_else(|| LOCALES.get("ko").unwrap());
+
+                // Create bundle
+                let mut bundle = FluentBundle::new_concurrent(vec![lang.parse().unwrap()]);
+                bundle.add_resource(ftl).expect("Failed to add a resource.");
+
+                // Convert minijinja values to FluentArgs by deserializing to HashMap
+                let mut args = FluentArgs::new();
+
+                // Deserialize the params Value to a HashMap
+                if let Ok(map) = serde_json::from_value::<HashMap<String, serde_json::Value>>(
+                    serde_json::to_value(&params).map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::InvalidOperation,
+                            format!("Failed to serialize params: {}", e),
+                        )
+                    })?,
+                ) {
+                    for (key, value) in map {
+                        let fluent_value = match value {
+                            serde_json::Value::String(s) => FluentValue::from(s),
+                            serde_json::Value::Number(n) => {
+                                if let Some(i) = n.as_i64() {
+                                    FluentValue::from(i)
+                                } else if let Some(f) = n.as_f64() {
+                                    FluentValue::from(f)
+                                } else {
+                                    FluentValue::from(n.to_string())
+                                }
+                            }
+                            _ => FluentValue::from(value.to_string()),
+                        };
+                        args.set(key, fluent_value);
+                    }
+                }
+
+                // Get and format the message
+                match bundle.get_message(&message_id) {
+                    Some(message) => match message.value() {
+                        Some(pattern) => Ok(bundle
+                            .format_pattern(pattern, Some(&args), &mut vec![])
+                            .to_string()),
+                        None => Ok(message_id),
+                    },
+                    None => Ok(message_id),
+                }
+            }
+            env.add_function("ftl_format_pattern", ftl_format_pattern);
 
             // Add global variables
             env.add_global("r2_public_endpoint_url", cfg.r2_public_endpoint_url.clone());

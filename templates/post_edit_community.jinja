@@ -6,7 +6,7 @@
     {{ post.title }}
   {% else %}
     {{ ftl_get_message("post-no-title") }}
-  {% endif %}
+  {% endif %} | {{ ftl_get_message("post-move-community-title") }}
 {% endblock title %}
 {% block head %}
   <meta property="og:title" content="{{ post.title }}" />
@@ -29,40 +29,177 @@
 {% block content %}
   <div class="center">
     <div class="post-sidebar">
-      <div class="post-main">
-        <p>
-          {{ ftl_get_message("community") }}:
-          <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
-        </p>
-        <img class="post-image"
-             width="{{ post.image_width }}"
-             height="{{ post.image_height }}"
-             alt="{{ post.title }}"
-             src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+      <div class="post-move-header">
+        <h2>{{ ftl_get_message("post-move-community-title") }}</h2>
+        <a href="/@{{ post.login_name }}/{{ post_id }}" class="btn">{{ ftl_get_message("cancel") }}</a>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Community</th>
-            <th>Move</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for (community, community_id ) in known_communities_with_community_id %}
-            <tr>
-              <td>
-                <a href="/communities/@{{ community.slug }}">{{ community.name }}</a>
-              </td>
-              <td>
-                <form method="post" action="/posts/{{ post_id }}/edit/community">
-                  <input type="hidden" name="community_id" value="{{ community.id }}" />
-                  <input type="submit" value="{{ ftl_get_message("post-move-community") }}" />
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+
+      <div class="post-move-preview">
+        <h3 class="section-heading">{{ ftl_get_message("post-move-post-to-move") }}</h3>
+        <a href="/@{{ post.login_name }}/{{ post_id }}" class="post-move-preview-link">
+          <div class="post-move-preview-content">
+            <img class="post-move-preview-image"
+                 width="{{ post.image_width }}"
+                 height="{{ post.image_height }}"
+                 alt="{{ post.title }}"
+                 src="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+            <div class="post-move-preview-info">
+              <p class="post-move-preview-title">
+                {% if post.title %}
+                  {{ post.title }}
+                {% else %}
+                  {{ ftl_get_message("post-no-title") }}
+                {% endif %}
+              </p>
+            </div>
+          </div>
+        </a>
+      </div>
+
+      {% if current_community %}
+        <div class="community-current-section">
+          <h3 class="section-heading">{{ ftl_get_message("post-current-community") }}</h3>
+          <div class="community-move-card community-current-card">
+            <div class="community-move-card-content">
+              <div class="community-move-card-main">
+                <div class="community-move-card-header">
+                  <div>
+                    <a href="/communities/@{{ current_community.slug }}" class="community-name">{{ current_community.name }}</a>
+                    <span class="community-current-badge">{{ ftl_get_message("post-current-community") }}</span>
+                  </div>
+                  <p class="community-owner-handle muted">@{{ current_community.owner_login_name }}</p>
+                </div>
+                {% if current_community.description %}
+                  <p class="community-description">{{ current_community.description }}</p>
+                {% endif %}
+              </div>
+              <div class="community-move-card-thumbnails">
+                {% if current_community.recent_posts %}
+                  <div class="community-thumbnails">
+                    {% for post in current_community.recent_posts %}
+                      <a href="/@{{ post.author_login_name }}/{{ post.id }}" class="community-thumbnail-link">
+                        <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+                             alt=""
+                             class="community-thumbnail"
+                             width="{{ post.image_width }}"
+                             height="{{ post.image_height }}" />
+                      </a>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="community-move-section">
+        <h3 class="section-heading">{{ ftl_get_message("post-move-available") }}</h3>
+
+        <input type="text"
+               id="community-search"
+               class="community-move-search"
+               placeholder="{{ ftl_get_message('post-move-search-placeholder') }}"
+               autocomplete="off" />
+
+        <div id="community-list" class="community-list">
+          {% if available_communities %}
+            {% for community in available_communities %}
+              <div class="community-move-card" data-community-name="{{ community.name|lower }}" data-community-slug="{{ community.slug|lower }}" data-community-description="{{ community.description|lower if community.description else '' }}">
+                <div class="community-move-card-content">
+                  <div class="community-move-card-main">
+                    <div class="community-move-card-header">
+                      <div>
+                        <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
+                        {% if community.is_known %}
+                          <span class="community-known-badge">{{ ftl_get_message("participating-community") }}</span>
+                        {% endif %}
+                        {% if community.is_private %}
+                          <span class="community-private-badge">{{ ftl_get_message("private-community") }}</span>
+                        {% endif %}
+                      </div>
+                      <p class="community-owner-handle muted">@{{ community.owner_login_name }}</p>
+                    </div>
+                    {% if community.description %}
+                      <p class="community-description">{{ community.description }}</p>
+                    {% endif %}
+                    {% if community.posts_count %}
+                      <p class="community-stats-inline muted">
+                        {{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}
+                      </p>
+                    {% endif %}
+                    <form method="post"
+                          action="/@{{ post.login_name }}/{{ post_id }}/edit/community"
+                          onsubmit="return confirm('{{ ftl_format_pattern("post-move-confirm", {"communityName": community.name}) }}');"
+                          class="community-move-form">
+                      <input type="hidden" name="community_id" value="{{ community.id }}" />
+                      <button type="submit" class="btn btn-move">{{ ftl_get_message("post-move-community") }}</button>
+                    </form>
+                  </div>
+                  <div class="community-move-card-thumbnails">
+                    {% if community.recent_posts %}
+                      <div class="community-thumbnails">
+                        {% for post in community.recent_posts %}
+                          <a href="/@{{ post.author_login_name }}/{{ post.id }}" class="community-thumbnail-link">
+                            <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+                                 alt=""
+                                 class="community-thumbnail"
+                                 width="{{ post.image_width }}"
+                                 height="{{ post.image_height }}" />
+                          </a>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <p class="community-move-no-results">{{ ftl_get_message("post-move-no-results") }}</p>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </div>
+
+  <script>
+    // Client-side search filtering for instant feedback
+    document.getElementById('community-search').addEventListener('input', function(e) {
+      const query = e.target.value.toLowerCase().trim();
+      const cards = document.querySelectorAll('.community-move-card');
+      let visibleCount = 0;
+
+      cards.forEach(card => {
+        const name = card.getAttribute('data-community-name') || '';
+        const slug = card.getAttribute('data-community-slug') || '';
+        const description = card.getAttribute('data-community-description') || '';
+
+        if (query === '' || name.includes(query) || slug.includes(query) || description.includes(query)) {
+          card.style.display = '';
+          visibleCount++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      // Show/hide no results message
+      const noResults = document.querySelector('.community-move-no-results');
+      const communityList = document.getElementById('community-list');
+
+      if (visibleCount === 0 && query !== '') {
+        if (!noResults) {
+          const msg = document.createElement('p');
+          msg.className = 'community-move-no-results';
+          msg.textContent = '{{ ftl_get_message("post-move-no-results") }}';
+          communityList.appendChild(msg);
+        }
+      } else if (noResults) {
+        noResults.remove();
+      }
+    });
+  </script>
 {% endblock content %}

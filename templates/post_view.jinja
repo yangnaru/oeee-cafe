@@ -152,7 +152,7 @@
             </p>
             <p>{{ ftl_get_message("community") }}: <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
               {% if current_user.id == post.author_id %}
-                (<a href="/posts/{{ post_id }}/edit/community">{{ ftl_get_message("edit") }}</a>)
+                (<a href="/@{{ post.login_name }}/{{ post_id }}/edit/community">{{ ftl_get_message("edit") }}</a>)
               {% endif %}
             </p>
             <p>HIT: {{ post.viewer_count }}</p>

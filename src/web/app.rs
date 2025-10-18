@@ -156,8 +156,14 @@ impl App {
             .route("/posts/:id/relay", get(post_relay_view))
             .route("/posts/:id", put(hx_do_edit_post))
             .route("/posts/:id", delete(hx_delete_post))
-            .route("/posts/:id/edit/community", get(post_edit_community))
-            .route("/posts/:id/edit/community", post(do_post_edit_community))
+            .route(
+                "/@:login_name/:id/edit/community",
+                get(post_edit_community),
+            )
+            .route(
+                "/@:login_name/:id/edit/community",
+                post(do_post_edit_community),
+            )
             .route("/banners/draw", get(start_banner_draw))
             .route("/banners/draw/finish", post(banner_draw_finish))
             .route("/posts/:id/publish", get(post_publish_form))

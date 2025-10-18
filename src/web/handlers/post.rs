@@ -951,7 +951,7 @@ pub async fn post_edit_community(
     auth_session: AuthSession,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path((_login_name, id)): Path<(String, String)>,
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid = Uuid::parse_str(&id)?;
 
@@ -974,29 +974,215 @@ pub async fn post_edit_community(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
+    let current_community_id = Uuid::parse_str(
+        post.clone()
+            .unwrap()
+            .get("community_id")
+            .unwrap()
+            .as_ref()
+            .unwrap(),
+    )?;
+
+    // Get current community details with owner info
+    let current_community_result = sqlx::query!(
+        r#"
+        SELECT
+            c.id, c.owner_id, c.name, c.slug, c.description,
+            c.is_private, c.updated_at, c.created_at, c.background_color, c.foreground_color,
+            u.login_name AS "owner_login_name?"
+        FROM communities c
+        LEFT JOIN users u ON c.owner_id = u.id
+        WHERE c.id = $1
+        "#,
+        current_community_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    // Get recent posts for current community
+    let current_community_posts = sqlx::query!(
+        r#"
+        SELECT
+            p.id,
+            i.image_filename,
+            i.width as image_width,
+            i.height as image_height,
+            u.login_name as author_login_name
+        FROM posts p
+        INNER JOIN images i ON p.image_id = i.id
+        INNER JOIN users u ON p.author_id = u.id
+        WHERE p.community_id = $1
+            AND p.published_at IS NOT NULL
+            AND p.deleted_at IS NULL
+        ORDER BY p.published_at DESC
+        LIMIT 3
+        "#,
+        current_community_id
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+
+    let current_community_recent_posts: Vec<serde_json::Value> = current_community_posts
+        .into_iter()
+        .map(|post| {
+            serde_json::json!({
+                "id": post.id.to_string(),
+                "image_filename": post.image_filename,
+                "image_width": post.image_width,
+                "image_height": post.image_height,
+                "author_login_name": post.author_login_name,
+            })
+        })
+        .collect();
+
+    let current_community = current_community_result.map(|row| {
+        serde_json::json!({
+            "id": row.id.to_string(),
+            "owner_id": row.owner_id.to_string(),
+            "name": row.name,
+            "slug": row.slug,
+            "description": row.description,
+            "is_private": row.is_private,
+            "owner_login_name": row.owner_login_name.unwrap_or_else(|| String::from("")),
+            "recent_posts": current_community_recent_posts,
+        })
+    });
+
+    // Fetch both public and known communities
+    let public_communities = crate::models::community::get_public_communities(&mut tx).await?;
     let known_communities =
         get_known_communities(&mut tx, auth_session.user.clone().unwrap().id).await?;
-    let filtered_known_communities = known_communities
-        .iter()
-        .filter(|c| {
-            c.id != Uuid::parse_str(
-                post.clone()
-                    .unwrap()
-                    .get("community_id")
-                    .unwrap()
-                    .as_ref()
-                    .unwrap(),
-            )
-            .unwrap()
-        })
-        .collect::<Vec<_>>();
-    let known_communities_with_community_id = filtered_known_communities
-        .iter()
+
+    // Separate known and public-only communities, filtering out current community
+    use std::collections::HashSet;
+    let known_ids: HashSet<Uuid> = known_communities.iter().map(|c| c.id).collect();
+
+    // Get all community IDs for fetching recent posts
+    let mut all_community_ids: Vec<Uuid> = Vec::new();
+    for c in &known_communities {
+        if c.id != current_community_id {
+            all_community_ids.push(c.id);
+        }
+    }
+    for c in &public_communities {
+        if c.id != current_community_id && !known_ids.contains(&c.id) {
+            all_community_ids.push(c.id);
+        }
+    }
+
+    // Fetch recent posts (3 per community) for all communities in a single batch query
+    let recent_posts = if !all_community_ids.is_empty() {
+        sqlx::query!(
+            r#"
+            SELECT
+                ranked.id,
+                ranked.community_id,
+                ranked.image_filename,
+                ranked.image_width,
+                ranked.image_height,
+                ranked.author_login_name
+            FROM (
+                SELECT
+                    p.id,
+                    p.community_id,
+                    i.image_filename,
+                    i.width as image_width,
+                    i.height as image_height,
+                    u.login_name as author_login_name,
+                    ROW_NUMBER() OVER (PARTITION BY p.community_id ORDER BY p.published_at DESC) as rn
+                FROM posts p
+                INNER JOIN images i ON p.image_id = i.id
+                INNER JOIN users u ON p.author_id = u.id
+                WHERE p.community_id = ANY($1)
+                    AND p.published_at IS NOT NULL
+                    AND p.deleted_at IS NULL
+            ) ranked
+            WHERE ranked.rn <= 3
+            ORDER BY ranked.community_id, ranked.rn
+            "#,
+            &all_community_ids
+        )
+        .fetch_all(&mut *tx)
+        .await?
+    } else {
+        Vec::new()
+    };
+
+    // Group posts by community_id (already limited to 3 per community by the query)
+    use std::collections::HashMap;
+    let mut posts_by_community: HashMap<Uuid, Vec<serde_json::Value>> = HashMap::new();
+    for post in recent_posts {
+        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
+        posts.push(serde_json::json!({
+            "id": post.id.to_string(),
+            "image_filename": post.image_filename,
+            "image_width": post.image_width,
+            "image_height": post.image_height,
+            "author_login_name": post.author_login_name,
+        }));
+    }
+
+    let mut known_list: Vec<_> = known_communities
+        .into_iter()
+        .filter(|c| c.id != current_community_id)
         .map(|c| {
-            let community_id = c.id.to_string();
-            (c, community_id)
+            let recent_posts = posts_by_community.get(&c.id).cloned().unwrap_or_default();
+            serde_json::json!({
+                "id": c.id.to_string(),
+                "name": c.name,
+                "slug": c.slug,
+                "description": c.description,
+                "is_private": c.is_private,
+                "owner_login_name": c.owner_login_name,
+                "posts_count": null,
+                "is_known": true,
+                "recent_posts": recent_posts,
+            })
         })
-        .collect::<Vec<_>>();
+        .collect();
+
+    let mut public_list: Vec<_> = public_communities
+        .into_iter()
+        .filter(|c| c.id != current_community_id && !known_ids.contains(&c.id))
+        .map(|c| {
+            let recent_posts = posts_by_community.get(&c.id).cloned().unwrap_or_default();
+            serde_json::json!({
+                "id": c.id.to_string(),
+                "name": c.name,
+                "slug": c.slug,
+                "description": c.description,
+                "is_private": c.is_private,
+                "owner_login_name": c.owner_login_name,
+                "posts_count": c.posts_count,
+                "is_known": false,
+                "recent_posts": recent_posts,
+            })
+        })
+        .collect();
+
+    // Sort both lists alphabetically by name
+    known_list.sort_by(|a, b| {
+        a.get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .cmp(b.get("name").and_then(|v| v.as_str()).unwrap_or(""))
+    });
+
+    public_list.sort_by(|a, b| {
+        a.get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .cmp(b.get("name").and_then(|v| v.as_str()).unwrap_or(""))
+    });
+
+    // Concatenate: known communities first, then public communities
+    let mut available_communities = known_list;
+    available_communities.extend(public_list);
+
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+
+    tx.commit().await?;
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("post_edit_community.jinja")?;
@@ -1005,7 +1191,12 @@ pub async fn post_edit_community(
         default_community_id => state.config.default_community_id.clone(),
         post,
         post_id => id,
-        known_communities_with_community_id,
+        current_community,
+        available_communities,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        base_url => state.config.base_url.clone(),
         ftl_lang
     })?;
 
@@ -1020,7 +1211,7 @@ pub struct EditPostCommunityForm {
 pub async fn do_post_edit_community(
     auth_session: AuthSession,
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path((_login_name, id)): Path<(String, String)>,
     Form(form): Form<EditPostCommunityForm>,
 ) -> Result<impl IntoResponse, AppError> {
     let post_uuid = Uuid::parse_str(&id)?;
