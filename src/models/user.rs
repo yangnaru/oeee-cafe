@@ -392,7 +392,7 @@ pub async fn find_users_with_public_posts_and_banner(
         JOIN banners b ON u.banner_id = b.id
         JOIN images i ON b.image_id = i.id
         WHERE p.published_at IS NOT NULL
-        AND c.is_private = false
+        AND c.visibility = 'public'
         GROUP BY u.id, banner_image_filename
         ORDER BY count(p.id) DESC
         "#,

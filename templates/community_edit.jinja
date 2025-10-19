@@ -18,12 +18,37 @@
         <label>{{ ftl_get_message("community-description") }}:</label>
         <textarea name="description">{{ community.description }}</textarea>
     </div>
+    {% if community.visibility == "Private" %}
     <div>
-        <label>{{ ftl_get_message("private-community") }}:</label>
-        <input type="checkbox"
-               name="is_private"
-               {% if community.is_private == true %}checked{% endif %}>
+        <label>{{ ftl_get_message("community-visibility") }}:</label>
+        <input type="text" value="{{ ftl_get_message("visibility-private") }}" disabled>
+        <input type="hidden" name="visibility" value="private">
+        <br />
+        <small>{{ ftl_get_message("visibility-cannot-change") }}</small>
     </div>
+    {% else %}
+    <fieldset>
+        <legend>{{ ftl_get_message("community-visibility") }}:</legend>
+        <p>
+            <label>
+                <input type="radio" name="visibility" value="public"
+                       {% if community.visibility == "Public" %}checked{% endif %} />
+                {{ ftl_get_message("visibility-public") }}
+                <br />
+                <small>{{ ftl_get_message("visibility-public-description") }}</small>
+            </label>
+        </p>
+        <p>
+            <label>
+                <input type="radio" name="visibility" value="unlisted"
+                       {% if community.visibility == "Unlisted" %}checked{% endif %} />
+                {{ ftl_get_message("visibility-unlisted") }}
+                <br />
+                <small>{{ ftl_get_message("visibility-unlisted-description") }}</small>
+            </label>
+        </p>
+    </fieldset>
+    {% endif %}
     <div class="post-menu">
         <button class="btn" hx-get="/communities/{{ community_id }}">{{ ftl_get_message("cancel") }}</button>
         <button class="btn">{{ ftl_get_message("save") }}</button>

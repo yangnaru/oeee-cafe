@@ -174,6 +174,48 @@ community-description = 커뮤니티 설명
 private-community = 비공개 커뮤니티
 private-community-description = 커뮤니티 주소를 아는 사람만 찾아올 수 있습니다.
 
+community-visibility = 공개 범위
+visibility-public = 공개
+visibility-public-description = 누구나 찾아보고 볼 수 있습니다
+visibility-unlisted = 미등록
+visibility-unlisted-description = 링크를 아는 사람만 찾을 수 있습니다
+visibility-private = 비공개
+visibility-private-description = 멤버만 볼 수 있습니다
+visibility-cannot-change = 비공개 커뮤니티는 공개 범위를 변경할 수 없습니다
+
+community-badge-unlisted = 미등록
+community-badge-private = 비공개
+
+community-members = 멤버
+community-invite-user = 사용자 초대
+community-invite-username = 초대할 사용자 이름
+community-invite-button = 초대 보내기
+community-invite-success = 초대를 보냈습니다
+community-invite-error = 초대를 보내지 못했습니다
+community-invite-user-not-found = 사용자를 찾을 수 없습니다
+community-invite-already-member = 이미 멤버입니다
+community-invite-already-invited = 이미 대기 중인 초대가 있습니다
+community-remove-member = 멤버 제거
+community-remove-member-confirm = 정말 이 멤버를 제거하시겠습니까?
+community-retract-invitation = 초대 취소
+community-retract-invitation-confirm = 정말 이 초대를 취소하시겠습니까?
+community-member-role = 역할
+community-member-joined = 가입일
+community-member-role-owner = 소유자
+community-member-role-moderator = 운영자
+community-member-role-member = 멤버
+
+invitations = 초대
+invitations-pending = 대기 중인 초대
+invitations-none = 대기 중인 초대가 없습니다
+invitation-from = 초대한 사람
+invitation-to-community = 커뮤니티 가입 초대
+invitation-accept = 수락
+invitation-reject = 거절
+invitation-accepted = 초대를 수락했습니다
+invitation-rejected = 초대를 거절했습니다
+invitation-sent-at = 보낸 시각
+
 community-drawing-tool = 그림판
 community-drawing-width = 너비
 community-drawing-height = 높이

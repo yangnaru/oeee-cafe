@@ -70,12 +70,27 @@ pub async fn find_or_create_hashtag(
     }
 }
 
-/// Link a post to multiple hashtags and increment their post_counts
+/// Link a post to multiple hashtags and increment their post_counts (only for public communities)
 pub async fn link_post_to_hashtags(
     tx: &mut Transaction<'_, Postgres>,
     post_id: Uuid,
     hashtag_names: &[(String, String)], // (normalized_name, display_name) tuples
 ) -> Result<()> {
+    // Check if the post is in a public community
+    let is_public = sqlx::query!(
+        r#"
+        SELECT c.visibility = 'public' as "is_public!"
+        FROM posts p
+        JOIN communities c ON p.community_id = c.id
+        WHERE p.id = $1
+        "#,
+        post_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .map(|r| r.is_public)
+    .unwrap_or(false);
+
     for (name, display_name) in hashtag_names {
         // Find or create hashtag
         let hashtag = find_or_create_hashtag(tx, name, display_name).await?;
@@ -93,23 +108,40 @@ pub async fn link_post_to_hashtags(
         .execute(&mut **tx)
         .await;
 
-        // Increment post_count
-        sqlx::query!(
-            r#"
-            UPDATE hashtags
-            SET post_count = post_count + 1, updated_at = NOW()
-            WHERE id = $1
-            "#,
-            hashtag.id
-        )
-        .execute(&mut **tx)
-        .await?;
+        // Increment post_count only if the post is in a public community
+        if is_public {
+            sqlx::query!(
+                r#"
+                UPDATE hashtags
+                SET post_count = post_count + 1, updated_at = NOW()
+                WHERE id = $1
+                "#,
+                hashtag.id
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
     }
     Ok(())
 }
 
-/// Remove all hashtag associations for a post and decrement post_counts
+/// Remove all hashtag associations for a post and decrement post_counts (only for public communities)
 pub async fn unlink_post_hashtags(tx: &mut Transaction<'_, Postgres>, post_id: Uuid) -> Result<()> {
+    // Check if the post is in a public community
+    let is_public = sqlx::query!(
+        r#"
+        SELECT c.visibility = 'public' as "is_public!"
+        FROM posts p
+        JOIN communities c ON p.community_id = c.id
+        WHERE p.id = $1
+        "#,
+        post_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .map(|r| r.is_public)
+    .unwrap_or(false);
+
     // Get all hashtags for this post
     let hashtag_ids: Vec<Uuid> = sqlx::query!(
         r#"
@@ -133,18 +165,20 @@ pub async fn unlink_post_hashtags(tx: &mut Transaction<'_, Postgres>, post_id: U
     .execute(&mut **tx)
     .await?;
 
-    // Decrement post_count for each hashtag
-    for hashtag_id in hashtag_ids {
-        sqlx::query!(
-            r#"
-            UPDATE hashtags
-            SET post_count = GREATEST(post_count - 1, 0), updated_at = NOW()
-            WHERE id = $1
-            "#,
-            hashtag_id
-        )
-        .execute(&mut **tx)
-        .await?;
+    // Decrement post_count for each hashtag (only if post is in a public community)
+    if is_public {
+        for hashtag_id in hashtag_ids {
+            sqlx::query!(
+                r#"
+                UPDATE hashtags
+                SET post_count = GREATEST(post_count - 1, 0), updated_at = NOW()
+                WHERE id = $1
+                "#,
+                hashtag_id
+            )
+            .execute(&mut **tx)
+            .await?;
+        }
     }
 
     Ok(())
@@ -205,7 +239,7 @@ pub async fn find_posts_by_hashtag(
         WHERE h.name = $1
         AND posts.published_at IS NOT NULL
         AND posts.deleted_at IS NULL
-        AND c.is_private = false
+        AND c.visibility = 'public'
         ORDER BY posts.published_at DESC
         LIMIT $2
         "#,

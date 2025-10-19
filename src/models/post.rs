@@ -8,6 +8,8 @@ use sqlx::{postgres::types::PgInterval, query, Postgres, Transaction};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use super::community::CommunityVisibility;
+
 #[derive(Clone, Debug)]
 pub struct Post {
     pub id: Uuid,
@@ -56,7 +58,7 @@ pub struct SerializableProfilePost {
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
-    pub community_is_private: bool,
+    pub community_visibility: CommunityVisibility,
 }
 
 #[derive(Serialize)]
@@ -212,7 +214,7 @@ pub async fn find_published_public_posts_by_author_id(
     author_id: Uuid,
 ) -> Result<Vec<SerializableProfilePost>> {
     let q = query!(
-        "
+        r#"
             SELECT
                 posts.id,
                 posts.author_id,
@@ -227,16 +229,16 @@ pub async fn find_published_public_posts_by_author_id(
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at,
-                communities.is_private
+                communities.visibility as "visibility: CommunityVisibility"
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
             WHERE author_id = $1
-            AND communities.is_private = FALSE
+            AND communities.visibility = 'public'
             AND published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             ORDER BY published_at DESC
-        ",
+        "#,
         author_id
     );
     let result = q.fetch_all(&mut **tx).await?;
@@ -256,7 +258,7 @@ pub async fn find_published_public_posts_by_author_id(
             published_at: row.published_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
-            community_is_private: row.is_private,
+            community_visibility: row.visibility,
         })
         .collect())
 }
@@ -266,7 +268,7 @@ pub async fn find_published_posts_by_author_id(
     author_id: Uuid,
 ) -> Result<Vec<SerializableProfilePost>> {
     let q = query!(
-        "
+        r#"
             SELECT
                 posts.id,
                 posts.author_id,
@@ -281,7 +283,7 @@ pub async fn find_published_posts_by_author_id(
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at,
-                communities.is_private
+                communities.visibility as "visibility: CommunityVisibility"
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
@@ -289,7 +291,7 @@ pub async fn find_published_posts_by_author_id(
             AND published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             ORDER BY published_at DESC
-        ",
+        "#,
         author_id
     );
     let result = q.fetch_all(&mut **tx).await?;
@@ -309,7 +311,7 @@ pub async fn find_published_posts_by_author_id(
             published_at: row.published_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
-            community_is_private: row.is_private,
+            community_visibility: row.visibility,
         })
         .collect())
 }
@@ -1036,7 +1038,7 @@ pub async fn find_public_community_posts(
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
             LEFT JOIN users ON posts.author_id = users.id
-            WHERE communities.is_private = FALSE
+            WHERE communities.visibility = 'public'
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             ORDER BY posts.published_at DESC
@@ -1093,7 +1095,7 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
             LEFT JOIN users ON posts.author_id = users.id
-            WHERE communities.is_private = FALSE
+            WHERE communities.visibility = 'public'
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             AND communities.owner_id != $1
@@ -1158,7 +1160,7 @@ pub async fn find_following_posts_by_user_id(
             LEFT JOIN actors follower_actor ON follows.follower_actor_id = follower_actor.id
             LEFT JOIN communities ON posts.community_id = communities.id
             WHERE follower_actor.user_id = $1
-            AND communities.is_private = FALSE
+            AND communities.visibility = 'public'
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             ORDER BY posts.published_at DESC

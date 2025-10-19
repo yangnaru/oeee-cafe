@@ -18,7 +18,9 @@ use crate::web::handlers::collaborate::{
 use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
     communities, community, community_comments, community_iframe, create_community_form,
-    do_create_community, hx_do_edit_community, hx_edit_community,
+    do_accept_invitation, do_create_community, do_reject_invitation,
+    get_members, hx_do_edit_community, hx_edit_community, invite_user,
+    members_page, remove_member, retract_invitation,
 };
 use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
@@ -143,6 +145,14 @@ impl App {
             .route("/posts/:post_id/reactions/add", post(add_reaction))
             .route("/posts/:post_id/reactions/remove", post(remove_reaction))
             .route("/communities/new", get(create_community_form))
+            .route("/communities/@:slug/members", get(members_page))
+            .route("/communities/@:slug/members/:user_id", delete(remove_member))
+            .route("/communities/@:slug/invitations/:invitation_id", delete(retract_invitation))
+            .route("/communities/:id/members", get(get_members))
+            .route("/communities/:id/invite", post(invite_user))
+            .route("/communities/:id/members/:user_id", delete(remove_member))
+            .route("/invitations/:id/accept", post(do_accept_invitation))
+            .route("/invitations/:id/reject", post(do_reject_invitation))
             .route("/logout", post(do_logout))
             .route("/draw", get(start_draw_get))
             .route("/draw", post(start_draw))

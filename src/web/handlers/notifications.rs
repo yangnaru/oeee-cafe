@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     models::{
+        community::get_pending_invitations_for_user,
         notification::{
             delete_notification, get_notification_by_id, get_unread_count,
             list_notifications as fetch_notifications, mark_all_notifications_as_read,
@@ -35,6 +36,39 @@ pub async fn list_notifications(
     // Fetch notifications using the new notification system
     let notifications = fetch_notifications(&mut tx, user.id, 50, 0).await?;
 
+    // Fetch pending invitations
+    let invitations = get_pending_invitations_for_user(&mut tx, user.id).await?;
+
+    // Fetch community details for each invitation
+    let invitations_with_details: Vec<serde_json::Value> = {
+        let mut result = Vec::new();
+        for invitation in invitations {
+            let community = sqlx::query!(
+                "SELECT name, slug FROM communities WHERE id = $1",
+                invitation.community_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            let inviter = sqlx::query!(
+                "SELECT login_name, display_name FROM users WHERE id = $1",
+                invitation.inviter_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            result.push(serde_json::json!({
+                "id": invitation.id,
+                "community_name": community.name,
+                "community_slug": community.slug,
+                "inviter_login_name": inviter.login_name,
+                "inviter_display_name": inviter.display_name,
+                "created_at": invitation.created_at,
+            }));
+        }
+        result
+    };
+
     // Get common context (includes unread_notification_count and draft_post_count)
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
@@ -46,6 +80,7 @@ pub async fn list_notifications(
         default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         notifications => notifications,
+        invitations => invitations_with_details,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang

@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
             for community in communities {
                 println!("Name: {}", community.name);
                 println!("Description: {}", community.description);
-                println!("Private: {}", community.is_private);
+                println!("Visibility: {:?}", community.visibility);
                 println!("URL: {}{}", cfg.base_url, community.get_url());
                 println!();
             }

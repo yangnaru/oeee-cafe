@@ -91,7 +91,7 @@ use crate::models::actor::{create_actor_for_user, Actor, ActorType};
 use crate::models::comment::{
     create_comment_from_activitypub, delete_comment_by_iri, find_comment_by_iri,
 };
-use crate::models::community::find_community_by_slug;
+use crate::models::community::{find_community_by_id, find_community_by_slug, CommunityVisibility};
 use crate::models::follow;
 use crate::models::image::find_image_by_id;
 use crate::models::notification::{create_notification, CreateNotificationParams, NotificationType};
@@ -432,6 +432,12 @@ pub async fn activitypub_webfinger(
     // If no user found, try to find a community with this slug
     let community = find_community_by_slug(&mut tx, name.to_string()).await?;
     if let Some(community) = community {
+        // Only allow webfinger discovery for public and unlisted communities
+        // Private communities should not be discoverable via webfinger
+        if community.visibility == CommunityVisibility::Private {
+            return Ok((StatusCode::NOT_FOUND, "Community not found").into_response());
+        }
+
         let actor = Actor::find_by_community_id(&mut tx, community.id).await?;
         if let Some(actor) = actor {
             return Ok(Json(build_webfinger_response(
@@ -521,6 +527,21 @@ pub async fn activitypub_get_post(
     let post_uuid = Uuid::parse_str(&post_id)?;
 
     if let Some(post) = find_post_by_id(&mut tx, post_uuid).await? {
+        // Check community visibility - only expose posts from public and unlisted communities via ActivityPub
+        // Private community posts should not be accessible
+        let community_id = Uuid::parse_str(
+            post.get("community_id")
+                .and_then(|v| v.as_ref())
+                .ok_or_else(|| anyhow::anyhow!("community_id not found"))?,
+        )?;
+
+        let community = find_community_by_id(&mut tx, community_id).await?;
+        if let Some(community) = community {
+            if community.visibility == CommunityVisibility::Private {
+                return Ok((StatusCode::NOT_FOUND, "Post not found").into_response());
+            }
+        }
+
         let author_id = Uuid::parse_str(post.get("author_id").unwrap().as_ref().unwrap())?;
 
         // Find the author's actor, create if it doesn't exist

@@ -49,24 +49,28 @@
   {% endif %}
 {% endblock title %}
 {% block head %}
-  <link rel="alternate"
-        type="application/activity+json"
-        href="https://{{ domain }}/ap/posts/{{ post.id }}" />
-  <meta property="og:title" content="{{ post.title }}" />
-  <meta property="og:description" content="{{ post.content }}" />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="{{ base_url|safe }}/posts/{{ post_id }}" />
-  <meta property="og:image"
-        content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
-  <meta property="twitter:site" content="@oeee_cafe">
-  <meta property="twitter:domain" content="oeee.cafe">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta property="twitter:url"
-        content="{{ base_url|safe }}/posts/{{ post_id }}">
-  <meta name="twitter:title" content="{{ post.title }}">
-  <meta name="twitter:description" content="{{ post.content }}">
-  <meta name="twitter:image"
-        content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}">
+  {% if post_community and post_community.visibility != "Private" %}
+    <link rel="alternate"
+          type="application/activity+json"
+          href="https://{{ domain }}/ap/posts/{{ post.id }}" />
+    <meta property="og:title" content="{{ post.title }}" />
+    <meta property="og:description" content="{{ post.content }}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="{{ base_url|safe }}/posts/{{ post_id }}" />
+    <meta property="og:image"
+          content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+    <meta property="twitter:site" content="@oeee_cafe">
+    <meta property="twitter:domain" content="oeee.cafe">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta property="twitter:url"
+          content="{{ base_url|safe }}/posts/{{ post_id }}">
+    <meta name="twitter:title" content="{{ post.title }}">
+    <meta name="twitter:description" content="{{ post.content }}">
+    <meta name="twitter:image"
+          content="{{ r2_public_endpoint_url|safe }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}">
+  {% else %}
+    <meta name="robots" content="noindex, nofollow">
+  {% endif %}
 {% endblock head %}
 {% block content %}
   <div class="center">
@@ -129,7 +133,7 @@
               {% endif %}
             </p>
             <p>{{ ftl_get_message("community") }}: <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
-              {% if current_user.id == post.author_id %}
+              {% if current_user.id == post.author_id and (not post_community or post_community.visibility != "Private") %}
                 (<a href="/@{{ post.login_name }}/{{ post_id }}/edit/community">{{ ftl_get_message("edit") }}</a>)
               {% endif %}
             </p>

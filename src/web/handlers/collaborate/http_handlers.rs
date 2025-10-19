@@ -124,7 +124,7 @@ pub async fn collaborate_lobby(
         LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
         WHERE cs.is_public = true
           AND cs.ended_at IS NULL
-          AND c.is_private = false
+          AND c.visibility = 'public'
         GROUP BY cs.id, u.login_name, cs.max_participants
         HAVING COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) < cs.max_participants
         ORDER BY cs.last_activity DESC

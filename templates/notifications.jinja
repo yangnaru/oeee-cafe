@@ -15,11 +15,40 @@
         </button>
       {% endif %}
     </div>
+
+    {% if invitations %}
+    <div class="invitations-section">
+      <h3>{{ ftl_get_message("invitations-pending") }}</h3>
+      {% for invitation in invitations %}
+      <div class="invitation-item">
+        <div class="invitation-content">
+          <p>
+            <strong>{{ ftl_get_message("invitation-from") }}</strong>
+            <a href="/@{{ invitation.inviter_login_name }}">@{{ invitation.inviter_login_name }}</a>
+            {{ ftl_get_message("invitation-to-community") }}
+            <a href="/communities/@{{ invitation.community_slug }}">{{ invitation.community_name }}</a>
+          </p>
+          <p class="invitation-date muted">{{ invitation.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}</p>
+        </div>
+        <div class="invitation-actions">
+          <form method="post" action="/invitations/{{ invitation.id }}/accept" style="display:inline;">
+            <button type="submit" class="btn-accept">{{ ftl_get_message("invitation-accept") }}</button>
+          </form>
+          <form method="post" action="/invitations/{{ invitation.id }}/reject" style="display:inline;">
+            <button type="submit" class="btn-reject">{{ ftl_get_message("invitation-reject") }}</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     {% if notifications %}
+      <h3>{{ ftl_get_message("notifications") }}</h3>
       {% for notification in notifications %}
         {% include "notification_item.jinja" %}
       {% endfor %}
-    {% else %}
+    {% elif not invitations %}
       <p>{{ ftl_get_message("no-notifications") }}</p>
     {% endif %}
   </div>

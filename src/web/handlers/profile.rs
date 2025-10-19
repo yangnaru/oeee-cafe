@@ -131,13 +131,14 @@ pub async fn profile(
 
     let published_posts =
         find_published_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
+    use crate::models::community::CommunityVisibility;
     let public_community_posts = published_posts
         .iter()
-        .filter(|post| !post.community_is_private)
+        .filter(|post| post.community_visibility == CommunityVisibility::Public)
         .collect::<Vec<_>>();
     let private_community_posts = published_posts
         .iter()
-        .filter(|post| post.community_is_private)
+        .filter(|post| post.community_visibility != CommunityVisibility::Public)
         .collect::<Vec<_>>();
 
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;

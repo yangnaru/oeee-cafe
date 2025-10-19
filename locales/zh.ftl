@@ -174,6 +174,48 @@ community-description = 社区描述
 private-community = 私密社区
 private-community-description = 只有知道社区地址的人才能访问
 
+community-visibility = 可见性
+visibility-public = 公开
+visibility-public-description = 任何人都可以找到和查看
+visibility-unlisted = 未列出
+visibility-unlisted-description = 只有知道链接的人才能找到
+visibility-private = 私密
+visibility-private-description = 仅成员可查看（无联合）
+visibility-cannot-change = 私密社区无法更改可见性
+
+community-badge-unlisted = 未列出
+community-badge-private = 私密
+
+community-members = 成员
+community-invite-user = 邀请用户
+community-invite-username = 邀请用户名
+community-invite-button = 发送邀请
+community-invite-success = 邀请已发送
+community-invite-error = 发送邀请失败
+community-invite-user-not-found = 未找到用户
+community-invite-already-member = 该用户已是成员
+community-invite-already-invited = 该用户已有待处理的邀请
+community-remove-member = 移除成员
+community-remove-member-confirm = 确定要移除此成员吗？
+community-retract-invitation = 撤回邀请
+community-retract-invitation-confirm = 确定要撤回此邀请吗？
+community-member-role = 角色
+community-member-joined = 加入时间
+community-member-role-owner = 所有者
+community-member-role-moderator = 版主
+community-member-role-member = 成员
+
+invitations = 邀请
+invitations-pending = 待处理的邀请
+invitations-none = 没有待处理的邀请
+invitation-from = 邀请来自
+invitation-to-community = 加入社区
+invitation-accept = 接受
+invitation-reject = 拒绝
+invitation-accepted = 已接受邀请
+invitation-rejected = 已拒绝邀请
+invitation-sent-at = 发送时间
+
 community-drawing-tool = 画板
 community-drawing-width = 宽度
 community-drawing-height = 高度

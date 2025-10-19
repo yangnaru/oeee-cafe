@@ -5,9 +5,55 @@ use sqlx::query;
 use sqlx::query_as;
 use sqlx::Postgres;
 use sqlx::Transaction;
+use sqlx::Type;
 use uuid::Uuid;
 
 use super::post::SerializablePost;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[sqlx(type_name = "community_visibility", rename_all = "snake_case")]
+pub enum CommunityVisibility {
+    Public,
+    Unlisted,
+    Private,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[sqlx(type_name = "community_member_role", rename_all = "snake_case")]
+pub enum CommunityMemberRole {
+    Owner,
+    Moderator,
+    Member,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommunityMember {
+    pub id: Uuid,
+    pub community_id: Uuid,
+    pub user_id: Uuid,
+    pub role: CommunityMemberRole,
+    pub joined_at: DateTime<Utc>,
+    pub invited_by: Option<Uuid>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Type, PartialEq, Eq)]
+#[sqlx(type_name = "community_invitation_status", rename_all = "snake_case")]
+pub enum CommunityInvitationStatus {
+    Pending,
+    Accepted,
+    Rejected,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommunityInvitation {
+    pub id: Uuid,
+    pub community_id: Uuid,
+    pub inviter_id: Uuid,
+    pub invitee_id: Uuid,
+    pub status: CommunityInvitationStatus,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Community {
@@ -16,7 +62,7 @@ pub struct Community {
     pub name: String,
     pub slug: String,
     pub description: String,
-    pub is_private: bool,
+    pub visibility: CommunityVisibility,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub background_color: Option<String>,
@@ -31,7 +77,7 @@ pub struct PublicCommunity {
     pub name: String,
     pub slug: String,
     pub description: String,
-    pub is_private: bool,
+    pub visibility: CommunityVisibility,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub posts_count: Option<i64>,
@@ -47,7 +93,7 @@ pub struct PublicCommunityWithPosts {
     pub name: String,
     pub slug: String,
     pub description: String,
-    pub is_private: bool,
+    pub visibility: CommunityVisibility,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub posts: Vec<SerializablePost>,
@@ -63,7 +109,7 @@ pub struct CommunityDraft {
     pub name: String,
     pub slug: String,
     pub description: String,
-    pub is_private: bool,
+    pub visibility: CommunityVisibility,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -79,7 +125,7 @@ pub async fn get_own_communities(
 ) -> Result<Vec<Community>> {
     let q = query_as!(
         Community,
-        "SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE owner_id = $1",
+        r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE owner_id = $1"#,
         owner_id
     );
 
@@ -87,7 +133,7 @@ pub async fn get_own_communities(
 }
 
 pub async fn get_communities(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<Community>> {
-    let q = query_as!(Community, "SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities");
+    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities"#);
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
@@ -97,16 +143,16 @@ pub async fn get_public_communities(
     // Select communities ordered by latest published post
     let q = query_as!(
         PublicCommunity,
-        "
-            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.slug, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color, COALESCE(COUNT(posts.id), 0) AS posts_count
+        r#"
+            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.slug, communities.description, communities.visibility as "visibility: _", communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color, COALESCE(COUNT(posts.id), 0) AS posts_count
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             LEFT JOIN users ON communities.owner_id = users.id
-            WHERE communities.is_private = false
+            WHERE communities.visibility = 'public'
             GROUP BY communities.id, users.login_name
             HAVING MAX(posts.published_at) IS NOT NULL
             ORDER BY MAX(posts.published_at) DESC
-        "
+        "#
     );
 
     Ok(q.fetch_all(&mut **tx).await?)
@@ -118,16 +164,16 @@ pub async fn get_active_public_communities_excluding_owner(
 ) -> Result<Vec<PublicCommunity>> {
     let q = query_as!(
         PublicCommunity,
-        "
-            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.slug, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color, COUNT(posts.id) AS posts_count
+        r#"
+            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.slug, communities.description, communities.visibility as "visibility: _", communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color, COUNT(posts.id) AS posts_count
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             LEFT JOIN users ON communities.owner_id = users.id
-            WHERE communities.is_private = false AND communities.owner_id != $1
+            WHERE communities.visibility = 'public' AND communities.owner_id != $1
             GROUP BY communities.id, users.login_name
             HAVING MAX(posts.published_at) IS NOT NULL
             ORDER BY MAX(posts.published_at) DESC
-        ",
+        "#,
         community_owner_id
     );
 
@@ -141,7 +187,7 @@ pub async fn get_user_communities_with_latest_9_posts(
     // Select communities ordered by latest published post
     let communities = query_as!(
         PublicCommunity,
-        "
+        r#"
             SELECT
                 communities.id,
                 communities.owner_id,
@@ -149,7 +195,7 @@ pub async fn get_user_communities_with_latest_9_posts(
                 communities.name,
                 communities.slug,
                 communities.description,
-                communities.is_private,
+                communities.visibility as "visibility: _",
                 communities.updated_at,
                 communities.created_at,
                 communities.foreground_color,
@@ -159,11 +205,11 @@ pub async fn get_user_communities_with_latest_9_posts(
             LEFT JOIN users ON communities.owner_id = users.id
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             WHERE communities.owner_id = $1
-            AND communities.is_private = false
+            AND communities.visibility = 'public'
             GROUP BY communities.id, users.login_name
             ORDER BY MAX(posts.published_at) DESC
             LIMIT 9
-        ",
+        "#,
         community_owner_id
     )
     .fetch_all(&mut **tx)
@@ -230,7 +276,7 @@ pub async fn get_user_communities_with_latest_9_posts(
             name: community.name,
             slug: community.slug,
             description: community.description,
-            is_private: community.is_private,
+            visibility: community.visibility,
             updated_at: community.updated_at,
             created_at: community.created_at,
             posts,
@@ -248,7 +294,7 @@ pub struct KnownCommunity {
     pub name: String,
     pub slug: String,
     pub description: String,
-    pub is_private: bool,
+    pub visibility: CommunityVisibility,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub background_color: Option<String>,
@@ -262,19 +308,19 @@ pub async fn get_known_communities(
     // Select public communities and private communities that the user is owner of, and private communities that the user has posted in, ordered by latest published post
     let q = query_as!(
         KnownCommunity,
-        "
-            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.slug, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color
+        r#"
+            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.slug, communities.description, communities.visibility as "visibility: _", communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id
             LEFT JOIN users ON communities.owner_id = users.id
-            WHERE communities.is_private = false OR communities.id IN (
+            WHERE communities.visibility = 'public' OR communities.id IN (
                 SELECT DISTINCT community_id
                 FROM posts
                 WHERE author_id = $1
             ) OR communities.owner_id = $1
             GROUP BY communities.id, users.login_name
             ORDER BY MAX(posts.published_at) DESC
-        ",
+        "#,
         user_id
     );
 
@@ -285,21 +331,21 @@ pub async fn get_participating_communities(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
 ) -> Result<Vec<Community>> {
-    // Select communities that the user is owner of, or has posted in, ordered by latest published post
+    // Select communities that the user is a member of (including private communities), ordered by latest published post
     let q = query_as!(
         Community,
-        "
-            SELECT communities.id, communities.owner_id, communities.name, communities.slug, communities.description, communities.is_private, communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color
+        r#"
+            SELECT communities.id, communities.owner_id, communities.name, communities.slug, communities.description, communities.visibility as "visibility: _", communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id
             WHERE communities.id IN (
                 SELECT DISTINCT community_id
-                FROM posts
-                WHERE author_id = $1
-            ) OR communities.owner_id = $1
+                FROM community_members
+                WHERE user_id = $1
+            )
             GROUP BY communities.id
-            ORDER BY MAX(posts.published_at) DESC
-        ",
+            ORDER BY MAX(posts.published_at) DESC NULLS LAST
+        "#,
         user_id
     );
 
@@ -310,7 +356,7 @@ pub async fn find_community_by_id(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
 ) -> Result<Option<Community>> {
-    let q = query_as!(Community, "SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE id = $1", id);
+    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE id = $1"#, id);
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
@@ -318,7 +364,7 @@ pub async fn find_community_by_slug(
     tx: &mut Transaction<'_, Postgres>,
     slug: String,
 ) -> Result<Option<Community>> {
-    let q = query_as!(Community, "SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at, background_color, foreground_color FROM communities WHERE slug = $1", slug);
+    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE slug = $1"#, slug);
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
@@ -328,24 +374,33 @@ pub async fn create_community(
     community_draft: CommunityDraft,
 ) -> Result<Community> {
     let q = query!(
-        "
+        r#"
             INSERT INTO communities (
                 owner_id,
                 name,
                 slug,
                 description,
-                is_private
+                visibility
             )
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id, created_at, updated_at
-        ",
+        "#,
         owner_id,
         community_draft.name,
         community_draft.slug,
         community_draft.description,
-        community_draft.is_private,
+        community_draft.visibility as _,
     );
     let result = q.fetch_one(&mut **tx).await?;
+
+    // Add owner as a member
+    query!(
+        "INSERT INTO community_members (community_id, user_id, role) VALUES ($1, $2, 'owner')",
+        result.id,
+        owner_id
+    )
+    .execute(&mut **tx)
+    .await?;
 
     Ok(Community {
         id: result.id,
@@ -353,7 +408,7 @@ pub async fn create_community(
         name: community_draft.name,
         slug: community_draft.slug,
         description: community_draft.description,
-        is_private: community_draft.is_private,
+        visibility: community_draft.visibility,
         created_at: result.created_at,
         updated_at: result.updated_at,
         background_color: None,
@@ -367,32 +422,44 @@ pub async fn update_community(
     community_draft: CommunityDraft,
     config: Option<&crate::AppConfig>,
 ) -> Result<Community> {
+    // Check if visibility change is allowed (can't change between member_only and public/unlisted)
+    let current = find_community_by_id(tx, id).await?;
+    if let Some(current_community) = current {
+        let is_member_only = |v: CommunityVisibility| v == CommunityVisibility::Private;
+        if is_member_only(current_community.visibility) != is_member_only(community_draft.visibility) {
+            return Err(anyhow::anyhow!("Cannot change visibility between member_only and public/unlisted"));
+        }
+    }
+
     let q = query!(
-        "
+        r#"
             UPDATE communities
-            SET name = $2, slug = $3, description = $4, is_private = $5, updated_at = now()
+            SET name = $2, slug = $3, description = $4, visibility = $5, updated_at = now()
             WHERE id = $1
             RETURNING owner_id, created_at
-        ",
+        "#,
         id,
         community_draft.name,
         community_draft.slug,
         community_draft.description,
-        community_draft.is_private,
+        community_draft.visibility as _,
     );
     let result = q.fetch_one(&mut **tx).await?;
 
     // If config is provided, also update the corresponding community actor
+    // Only do this for non-member_only communities
     if let Some(config) = config {
-        let _ = super::actor::update_actor_for_community(
-            tx,
-            id,
-            community_draft.slug.clone(), // Use slug as username
-            community_draft.name.clone(),
-            community_draft.description.clone(),
-            config,
-        )
-        .await;
+        if community_draft.visibility != CommunityVisibility::Private {
+            let _ = super::actor::update_actor_for_community(
+                tx,
+                id,
+                community_draft.slug.clone(), // Use slug as username
+                community_draft.name.clone(),
+                community_draft.description.clone(),
+                config,
+            )
+            .await;
+        }
     }
 
     Ok(Community {
@@ -401,7 +468,7 @@ pub async fn update_community(
         name: community_draft.name,
         slug: community_draft.slug,
         description: community_draft.description,
-        is_private: community_draft.is_private,
+        visibility: community_draft.visibility,
         created_at: result.created_at,
         updated_at: Utc::now(),
         background_color: None,
@@ -439,7 +506,7 @@ pub async fn update_community_with_activity(
     Ok(community)
 }
 
-// Get communities a user can post to (public communities or private communities they own)
+// Get communities a user can post to (public communities, unlisted communities, or member_only communities they are a member of)
 pub async fn get_communities_for_collaboration(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
@@ -447,10 +514,12 @@ pub async fn get_communities_for_collaboration(
     let q = query_as!(
         Community,
         r#"
-        SELECT id, owner_id, name, slug, description, is_private, updated_at, created_at,
+        SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at,
                background_color, foreground_color
         FROM communities
-        WHERE is_private = false OR owner_id = $1
+        WHERE visibility IN ('public', 'unlisted') OR id IN (
+            SELECT community_id FROM community_members WHERE user_id = $1
+        )
         ORDER BY name ASC
         "#,
         user_id
@@ -525,4 +594,270 @@ pub async fn get_communities_members_count(
             members_count: row.members_count,
         })
         .collect())
+}
+
+// ========== Community Membership Functions ==========
+
+/// Get user's role in a community
+pub async fn get_user_role_in_community(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    community_id: Uuid,
+) -> Result<Option<CommunityMemberRole>> {
+    let result = query_as!(
+        CommunityMember,
+        r#"
+        SELECT id, community_id, user_id, role as "role: _", joined_at, invited_by
+        FROM community_members
+        WHERE user_id = $1 AND community_id = $2
+        "#,
+        user_id,
+        community_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    Ok(result.map(|m| m.role))
+}
+
+/// Check if user is a member of a community
+pub async fn is_user_member(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    community_id: Uuid,
+) -> Result<bool> {
+    let result = query!(
+        "SELECT EXISTS(SELECT 1 FROM community_members WHERE user_id = $1 AND community_id = $2) as \"exists!\"",
+        user_id,
+        community_id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(result.exists)
+}
+
+/// Get all members of a community
+pub async fn get_community_members(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+) -> Result<Vec<CommunityMember>> {
+    let members = query_as!(
+        CommunityMember,
+        r#"
+        SELECT id, community_id, user_id, role as "role: _", joined_at, invited_by
+        FROM community_members
+        WHERE community_id = $1
+        ORDER BY
+            CASE role
+                WHEN 'owner' THEN 1
+                WHEN 'moderator' THEN 2
+                WHEN 'member' THEN 3
+            END,
+            joined_at ASC
+        "#,
+        community_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(members)
+}
+
+/// Add a member to a community
+pub async fn add_community_member(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+    user_id: Uuid,
+    role: CommunityMemberRole,
+    invited_by: Option<Uuid>,
+) -> Result<CommunityMember> {
+    let member = query_as!(
+        CommunityMember,
+        r#"
+        INSERT INTO community_members (community_id, user_id, role, invited_by)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, community_id, user_id, role as "role: _", joined_at, invited_by
+        "#,
+        community_id,
+        user_id,
+        role as _,
+        invited_by
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(member)
+}
+
+/// Remove a member from a community
+pub async fn remove_community_member(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+    user_id: Uuid,
+) -> Result<()> {
+    query!(
+        "DELETE FROM community_members WHERE community_id = $1 AND user_id = $2",
+        community_id,
+        user_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+/// Update a member's role
+pub async fn update_member_role(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+    user_id: Uuid,
+    new_role: CommunityMemberRole,
+) -> Result<()> {
+    query!(
+        "UPDATE community_members SET role = $3 WHERE community_id = $1 AND user_id = $2",
+        community_id,
+        user_id,
+        new_role as _
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+// ========== Community Invitation Functions ==========
+
+/// Create an invitation
+pub async fn create_invitation(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+    inviter_id: Uuid,
+    invitee_id: Uuid,
+) -> Result<CommunityInvitation> {
+    // Delete any existing invitations for this user to this community
+    // This allows re-inviting users who previously accepted/rejected or left the community
+    sqlx::query!(
+        "DELETE FROM community_invitations WHERE community_id = $1 AND invitee_id = $2",
+        community_id,
+        invitee_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    let invitation = query_as!(
+        CommunityInvitation,
+        r#"
+        INSERT INTO community_invitations (community_id, inviter_id, invitee_id)
+        VALUES ($1, $2, $3)
+        RETURNING id, community_id, inviter_id, invitee_id, status as "status: _", created_at, updated_at
+        "#,
+        community_id,
+        inviter_id,
+        invitee_id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(invitation)
+}
+
+/// Get pending invitations for a user
+pub async fn get_pending_invitations_for_user(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<Vec<CommunityInvitation>> {
+    let invitations = query_as!(
+        CommunityInvitation,
+        r#"
+        SELECT id, community_id, inviter_id, invitee_id, status as "status: _", created_at, updated_at
+        FROM community_invitations
+        WHERE invitee_id = $1 AND status = 'pending'
+        ORDER BY created_at DESC
+        "#,
+        user_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(invitations)
+}
+
+/// Get pending invitations for a community
+pub async fn get_pending_invitations_for_community(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+) -> Result<Vec<CommunityInvitation>> {
+    let invitations = query_as!(
+        CommunityInvitation,
+        r#"
+        SELECT id, community_id, inviter_id, invitee_id, status as "status: _", created_at, updated_at
+        FROM community_invitations
+        WHERE community_id = $1 AND status = 'pending'
+        ORDER BY created_at DESC
+        "#,
+        community_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(invitations)
+}
+
+/// Get invitation by ID
+pub async fn get_invitation_by_id(
+    tx: &mut Transaction<'_, Postgres>,
+    invitation_id: Uuid,
+) -> Result<Option<CommunityInvitation>> {
+    let invitation = query_as!(
+        CommunityInvitation,
+        r#"
+        SELECT id, community_id, inviter_id, invitee_id, status as "status: _", created_at, updated_at
+        FROM community_invitations
+        WHERE id = $1
+        "#,
+        invitation_id
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    Ok(invitation)
+}
+
+/// Accept an invitation
+pub async fn accept_invitation(
+    tx: &mut Transaction<'_, Postgres>,
+    invitation_id: Uuid,
+) -> Result<()> {
+    query!(
+        r#"
+        UPDATE community_invitations
+        SET status = 'accepted', updated_at = now()
+        WHERE id = $1 AND status = 'pending'
+        "#,
+        invitation_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+/// Reject an invitation
+pub async fn reject_invitation(
+    tx: &mut Transaction<'_, Postgres>,
+    invitation_id: Uuid,
+) -> Result<()> {
+    query!(
+        r#"
+        UPDATE community_invitations
+        SET status = 'rejected', updated_at = now()
+        WHERE id = $1 AND status = 'pending'
+        "#,
+        invitation_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
 }

@@ -5,28 +5,108 @@
 {% block content %}
   <div class="center">
     <h2>{{ ftl_get_message("create-community") }}</h2>
-    <form method="post" action="/communities">
+    <form method="post" action="/communities" class="create-community-form">
+      <div class="form-field">
+        <label for="name">{{ ftl_get_message("community-name") }}:</label>
+        <input type="text" name="name" id="name" required />
+      </div>
+      <div class="form-field">
+        <label for="slug">ID:</label>
+        <input type="text" name="slug" id="slug" required />
+      </div>
+      <div class="form-field">
+        <label for="description">{{ ftl_get_message("community-description") }}:</label>
+        <textarea name="description" id="description" rows="4"></textarea>
+      </div>
       <fieldset>
-        <legend>{{ ftl_get_message("new-community") }}</legend>
+        <legend>{{ ftl_get_message("community-visibility") }}:</legend>
         <p>
-          <label for="name">{{ ftl_get_message("community-name") }}:</label>
-          <input name="name" id="name" />
+          <label>
+            <input type="radio" name="visibility" value="public" checked />
+            {{ ftl_get_message("visibility-public") }}
+            <br />
+            <small>{{ ftl_get_message("visibility-public-description") }}</small>
+          </label>
         </p>
         <p>
-          <label for="slug">ID:</label>
-          <input name="slug" id="slug" required />
+          <label>
+            <input type="radio" name="visibility" value="unlisted" />
+            {{ ftl_get_message("visibility-unlisted") }}
+            <br />
+            <small>{{ ftl_get_message("visibility-unlisted-description") }}</small>
+          </label>
         </p>
         <p>
-          <label for="email">{{ ftl_get_message("community-description") }}:</label>
-          <textarea name="description" id="description"></textarea>
-        </p>
-        <p>
-          <label for="is_private">{{ ftl_get_message("private-community") }}:</label>
-          <input type="checkbox" name="is_private" id="is_private" />
-          ({{ ftl_get_message("private-community-description") }})
+          <label>
+            <input type="radio" name="visibility" value="private" />
+            {{ ftl_get_message("visibility-private") }}
+            <br />
+            <small>{{ ftl_get_message("visibility-private-description") }}</small>
+          </label>
         </p>
       </fieldset>
       <input type="submit" value="{{ ftl_get_message("create-community") }}" />
     </form>
   </div>
+
+  <style>
+    .create-community-form {
+      max-width: 600px;
+    }
+
+    .create-community-form .form-field {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 1rem;
+    }
+
+    .create-community-form .form-field label {
+      margin-bottom: 0.25rem;
+      font-weight: 500;
+    }
+
+    .create-community-form .form-field input[type="text"],
+    .create-community-form .form-field textarea {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid var(--main-border-color);
+      font-family: inherit;
+      font-size: 1rem;
+    }
+
+    .create-community-form .form-field textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .create-community-form fieldset {
+      margin-top: 1.5rem;
+      margin-bottom: 1.5rem;
+      border: 1px solid var(--main-border-color);
+      padding: 1rem;
+    }
+
+    .create-community-form fieldset legend {
+      font-weight: 600;
+      padding: 0 0.5rem;
+    }
+
+    .create-community-form fieldset p {
+      margin: 0.75rem 0;
+    }
+
+    .create-community-form fieldset p:first-of-type {
+      margin-top: 0.5rem;
+    }
+
+    .create-community-form fieldset p:last-of-type {
+      margin-bottom: 0.5rem;
+    }
+
+    .create-community-form input[type="submit"] {
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+  </style>
 {% endblock content %}

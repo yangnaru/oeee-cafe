@@ -174,6 +174,48 @@ community-description = コミュニティの説明
 private-community = プライベートコミュニティ
 private-community-description = コミュニティの住所を知っている人だけがアクセスできます。
 
+community-visibility = 公開範囲
+visibility-public = 公開
+visibility-public-description = 誰でも見つけて表示できます
+visibility-unlisted = 未登録
+visibility-unlisted-description = リンクを知っている人だけが見つけられます
+visibility-private = プライベート
+visibility-private-description = メンバーのみ閲覧可能
+visibility-cannot-change = プライベートコミュニティは公開範囲を変更できません
+
+community-badge-unlisted = 未登録
+community-badge-private = プライベート
+
+community-members = メンバー
+community-invite-user = ユーザーを招待
+community-invite-username = 招待するユーザー名
+community-invite-button = 招待を送る
+community-invite-success = 招待を送りました
+community-invite-error = 招待の送信に失敗しました
+community-invite-user-not-found = ユーザーが見つかりません
+community-invite-already-member = すでにメンバーです
+community-invite-already-invited = すでに保留中の招待があります
+community-remove-member = メンバーを削除
+community-remove-member-confirm = 本当にこのメンバーを削除しますか？
+community-retract-invitation = 招待を取り消す
+community-retract-invitation-confirm = 本当にこの招待を取り消しますか？
+community-member-role = 役割
+community-member-joined = 参加日
+community-member-role-owner = オーナー
+community-member-role-moderator = モデレーター
+community-member-role-member = メンバー
+
+invitations = 招待
+invitations-pending = 保留中の招待
+invitations-none = 保留中の招待はありません
+invitation-from = 招待元
+invitation-to-community = コミュニティ参加招待
+invitation-accept = 承諾
+invitation-reject = 拒否
+invitation-accepted = 招待を承諾しました
+invitation-rejected = 招待を拒否しました
+invitation-sent-at = 送信日時
+
 community-drawing-tool = ツール
 community-drawing-width = 幅
 community-drawing-height = 高さ

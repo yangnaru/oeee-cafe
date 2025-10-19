@@ -17,9 +17,14 @@
           <p class="community-handle">@{{ community.slug }}@{{ domain }}</p>
         </div>
         <p class="community-description">{{ community.description }}</p>
-        {% if current_user.id == community.owner_id %}
+        {% if current_user %}
           <div class="community-menu">
-            <button hx-get="/communities/{{ community_id }}/edit">{{ ftl_get_message("edit") }}</button>
+            {% if current_user.id == community.owner_id %}
+              <button hx-get="/communities/{{ community_id }}/edit">{{ ftl_get_message("edit") }}</button>
+            {% endif %}
+            {% if community.visibility == "Private" %}
+              <a href="/communities/@{{ community.slug }}/members" class="btn">{{ ftl_get_message("community-members") }}</a>
+            {% endif %}
           </div>
         {% endif %}
       </div>

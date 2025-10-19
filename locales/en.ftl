@@ -172,6 +172,48 @@ community-description = Community description
 private-community = Private community
 private-community-description = Only people with the link to the community can find it.
 
+community-visibility = Visibility
+visibility-public = Public
+visibility-public-description = Anyone can find and view this community
+visibility-unlisted = Unlisted
+visibility-unlisted-description = Only people with the link can find it
+visibility-private = Private
+visibility-private-description = Only members can view
+visibility-cannot-change = Private communities cannot change visibility
+
+community-badge-unlisted = Unlisted
+community-badge-private = Private
+
+community-members = Members
+community-invite-user = Invite user
+community-invite-username = Username to invite
+community-invite-button = Send invitation
+community-invite-success = Invitation sent successfully
+community-invite-error = Failed to send invitation
+community-invite-user-not-found = User not found
+community-invite-already-member = User is already a member
+community-invite-already-invited = User already has a pending invitation
+community-remove-member = Remove member
+community-remove-member-confirm = Are you sure you want to remove this member?
+community-retract-invitation = Cancel invitation
+community-retract-invitation-confirm = Are you sure you want to retract this invitation?
+community-member-role = Role
+community-member-joined = Joined
+community-member-role-owner = Owner
+community-member-role-moderator = Moderator
+community-member-role-member = Member
+
+invitations = Invitations
+invitations-pending = Pending invitations
+invitations-none = You have no pending invitations
+invitation-from = Invitation from
+invitation-to-community = to join
+invitation-accept = Accept
+invitation-reject = Reject
+invitation-accepted = Invitation accepted
+invitation-rejected = Invitation rejected
+invitation-sent-at = Sent
+
 community-drawing-tool = Tool
 community-drawing-width = Width
 community-drawing-height = Height

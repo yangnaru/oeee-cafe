@@ -86,7 +86,7 @@ pub async fn home(
                 "name": community.name,
                 "slug": community.slug,
                 "description": community.description,
-                "is_private": community.is_private,
+                "visibility": community.visibility,
                 "owner_login_name": community.owner_login_name,
                 "posts_count": community.posts_count,
                 "members_count": members_count,

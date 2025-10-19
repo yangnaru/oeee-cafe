@@ -2,12 +2,16 @@ use crate::app_error::AppError;
 use crate::models::actor::create_actor_for_community;
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
-    create_community, find_community_by_id, find_community_by_slug, get_communities_members_count, get_community_stats,
-    get_own_communities, get_participating_communities, get_public_communities,
-    update_community_with_activity, CommunityDraft,
+    accept_invitation, add_community_member, create_community, create_invitation,
+    find_community_by_id, find_community_by_slug, get_communities_members_count,
+    get_community_members, get_community_stats, get_invitation_by_id, get_own_communities,
+    get_participating_communities, get_pending_invitations_for_community,
+    get_public_communities, get_user_role_in_community,
+    is_user_member, reject_invitation, remove_community_member, update_community_with_activity,
+    CommunityDraft, CommunityMemberRole, CommunityVisibility,
 };
 use crate::models::post::{find_published_posts_by_community_id, find_recent_posts_by_communities};
-use crate::models::user::AuthSession;
+use crate::models::user::{AuthSession, find_user_by_login_name};
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
 use crate::web::state::AppState;
 use axum::extract::Path;
@@ -21,9 +25,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::web::context::CommonContext;
-use crate::web::handlers::ExtractFtlLang;
-
-use super::{get_bundle, ExtractAcceptLanguage};
+use crate::web::handlers::{get_bundle, ExtractAcceptLanguage, ExtractFtlLang};
 
 pub async fn community(
     auth_session: AuthSession,
@@ -64,7 +66,24 @@ pub async fn community(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let community_uuid = community.as_ref().unwrap().id;
+    let community_ref = community.as_ref().unwrap();
+    let community_uuid = community_ref.id;
+
+    // Access control: For member_only communities, verify membership
+    if community_ref.visibility == CommunityVisibility::Private {
+        // Non-authenticated users cannot access member_only communities
+        let user_id = match &auth_session.user {
+            Some(user) => user.id,
+            None => return Ok(StatusCode::NOT_FOUND.into_response()),
+        };
+
+        // Check if user is a member
+        let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
+        if !is_member {
+            return Ok(StatusCode::NOT_FOUND.into_response());
+        }
+    }
+
     let posts = find_published_posts_by_community_id(&mut tx, community_uuid).await?;
     let comments = find_latest_comments_in_community(&mut tx, community_uuid, 5).await?;
     let stats = get_community_stats(&mut tx, community_uuid).await?;
@@ -152,7 +171,22 @@ pub async fn community_iframe(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let community_uuid = community.as_ref().unwrap().id;
+    let community_ref = community.as_ref().unwrap();
+    let community_uuid = community_ref.id;
+
+    // Access control: For member_only communities, verify membership
+    if community_ref.visibility == CommunityVisibility::Private {
+        let user_id = match &auth_session.user {
+            Some(user) => user.id,
+            None => return Ok(StatusCode::NOT_FOUND.into_response()),
+        };
+
+        let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
+        if !is_member {
+            return Ok(StatusCode::NOT_FOUND.into_response());
+        }
+    }
+
     let posts = find_published_posts_by_community_id(&mut tx, community_uuid).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("community_iframe.jinja")?;
@@ -301,7 +335,7 @@ pub async fn communities(
                 "name": community.name,
                 "slug": community.slug,
                 "description": community.description,
-                "is_private": community.is_private,
+                "visibility": community.visibility,
                 "owner_login_name": owner_login_name,
                 "posts_count": posts_count,
                 "members_count": members_count,
@@ -322,7 +356,7 @@ pub async fn communities(
                 "name": community.name,
                 "slug": community.slug,
                 "description": community.description,
-                "is_private": community.is_private,
+                "visibility": community.visibility,
                 "owner_login_name": community.owner_login_name,
                 "posts_count": community.posts_count,
                 "members_count": members_count,
@@ -357,7 +391,7 @@ pub async fn communities(
                 "name": community.name,
                 "slug": community.slug,
                 "description": community.description,
-                "is_private": community.is_private,
+                "visibility": community.visibility,
                 "owner_login_name": owner_login_name,
                 "posts_count": posts_count,
                 "members_count": members_count,
@@ -393,7 +427,7 @@ pub struct CreateCommunityForm {
     name: String,
     slug: String,
     description: String,
-    is_private: Option<String>,
+    visibility: String,
 }
 
 pub async fn do_create_community(
@@ -409,6 +443,15 @@ pub async fn do_create_community(
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
+
+    // Parse visibility from form
+    let visibility = match form.visibility.as_str() {
+        "public" => CommunityVisibility::Public,
+        "unlisted" => CommunityVisibility::Unlisted,
+        "private" => CommunityVisibility::Private,
+        _ => CommunityVisibility::Public, // Default to public
+    };
+
     let community = create_community(
         &mut tx,
         auth_session.user.clone().unwrap().id,
@@ -416,46 +459,52 @@ pub async fn do_create_community(
             name: form.name,
             slug: form.slug,
             description: form.description,
-            is_private: form.is_private == Some("on".to_string()),
+            visibility,
         },
     )
     .await?;
 
-    // Create actor for the community
-    match create_actor_for_community(&mut tx, &community, &state.config).await {
-        Ok(_) => {
-            let _ = tx.commit().await;
-            Ok(Redirect::to(&format!("/communities/@{}", community.slug)).into_response())
-        }
-        Err(e) => {
-            let _ = tx.rollback().await;
-            // Check if it's a unique constraint violation (handle conflict)
-            if let Some(db_error) = e.downcast_ref::<sqlx::Error>() {
-                if let sqlx::Error::Database(db_err) = db_error {
-                    if db_err.constraint().is_some() {
-                        let user_preferred_language = auth_session
-                            .user
-                            .clone()
-                            .map(|u| u.preferred_language)
-                            .unwrap_or_else(|| None);
-                        let bundle = get_bundle(&accept_language, user_preferred_language);
-                        let error_message = bundle.format_pattern(
-                            bundle
-                                .get_message("community-slug-conflict-error")
-                                .unwrap()
-                                .value()
-                                .unwrap(),
-                            None,
-                            &mut vec![],
-                        );
-                        messages.error(error_message.to_string());
-                        return Ok(Redirect::to("/communities/new").into_response());
+    // Create actor for the community (only for non-member_only communities)
+    if visibility != CommunityVisibility::Private {
+        match create_actor_for_community(&mut tx, &community, &state.config).await {
+            Ok(_) => {
+                let _ = tx.commit().await;
+                Ok(Redirect::to(&format!("/communities/@{}", community.slug)).into_response())
+            }
+            Err(e) => {
+                let _ = tx.rollback().await;
+                // Check if it's a unique constraint violation (handle conflict)
+                if let Some(db_error) = e.downcast_ref::<sqlx::Error>() {
+                    if let sqlx::Error::Database(db_err) = db_error {
+                        if db_err.constraint().is_some() {
+                            let user_preferred_language = auth_session
+                                .user
+                                .clone()
+                                .map(|u| u.preferred_language)
+                                .unwrap_or_else(|| None);
+                            let bundle = get_bundle(&accept_language, user_preferred_language);
+                            let error_message = bundle.format_pattern(
+                                bundle
+                                    .get_message("community-slug-conflict-error")
+                                    .unwrap()
+                                    .value()
+                                    .unwrap(),
+                                None,
+                                &mut vec![],
+                            );
+                            messages.error(error_message.to_string());
+                            return Ok(Redirect::to("/communities/new").into_response());
+                        }
                     }
                 }
+                // For other errors, re-throw
+                Err(e.into())
             }
-            // For other errors, re-throw
-            Err(e.into())
         }
+    } else {
+        // Member-only community, no actor needed
+        let _ = tx.commit().await;
+        Ok(Redirect::to(&format!("/communities/@{}", community.slug)).into_response())
     }
 }
 
@@ -568,11 +617,19 @@ pub async fn hx_do_edit_community(
     };
 
     // Update the community (with ActivityPub Update activity)
+    // Parse visibility from form
+    let visibility = match form.visibility.as_str() {
+        "public" => CommunityVisibility::Public,
+        "unlisted" => CommunityVisibility::Unlisted,
+        "private" => CommunityVisibility::Private,
+        _ => CommunityVisibility::Public, // Default to public
+    };
+
     let community_draft = CommunityDraft {
         name: form.name.clone(),
         slug: form.slug.clone(),
         description: form.description.clone(),
-        is_private: form.is_private == Some("on".to_string()),
+        visibility,
     };
 
     match update_community_with_activity(
@@ -717,7 +774,22 @@ pub async fn community_comments(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let community_uuid = community.as_ref().unwrap().id;
+    let community_ref = community.as_ref().unwrap();
+    let community_uuid = community_ref.id;
+
+    // Access control: For member_only communities, verify membership
+    if community_ref.visibility == CommunityVisibility::Private {
+        let user_id = match &auth_session.user {
+            Some(user) => user.id,
+            None => return Ok(StatusCode::NOT_FOUND.into_response()),
+        };
+
+        let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
+        if !is_member {
+            return Ok(StatusCode::NOT_FOUND.into_response());
+        }
+    }
+
     // Get more comments for the dedicated comments page (100 instead of 5)
     let comments = find_latest_comments_in_community(&mut tx, community_uuid, 100).await?;
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
@@ -736,3 +808,486 @@ pub async fn community_comments(
 
     Ok(Html(rendered).into_response())
 }
+
+// ========== Member Management Endpoints ==========
+
+/// List community members
+pub async fn get_members(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let community = community.unwrap();
+
+    // Only members can view member list
+    let user = match auth_session.user {
+        Some(user) => user,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let is_member = is_user_member(&mut tx, user.id, community.id).await?;
+    if !is_member {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    let members = get_community_members(&mut tx, community.id).await?;
+
+    // Fetch user details for each member
+    let members_with_details: Vec<serde_json::Value> = {
+        let mut result = Vec::new();
+        for member in members {
+            let user = sqlx::query!(
+                "SELECT login_name, display_name FROM users WHERE id = $1",
+                member.user_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            result.push(serde_json::json!({
+                "id": member.id,
+                "user_id": member.user_id,
+                "login_name": user.login_name,
+                "display_name": user.display_name,
+                "role": member.role,
+                "joined_at": member.joined_at,
+            }));
+        }
+        result
+    };
+
+    tx.commit().await?;
+
+    Ok(axum::Json(members_with_details).into_response())
+}
+
+/// Invite a user to a community
+#[derive(Deserialize)]
+pub struct InviteUserForm {
+    login_name: String,
+}
+
+pub async fn invite_user(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    messages: Messages,
+    Form(form): Form<InviteUserForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let user_preferred_language = auth_session
+        .user
+        .as_ref()
+        .and_then(|u| u.preferred_language.clone());
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let community = community.unwrap();
+
+    // Must be logged in
+    let inviter = match auth_session.user {
+        Some(user) => user,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    // Check if user is owner or moderator
+    let role = get_user_role_in_community(&mut tx, inviter.id, community.id).await?;
+    match role {
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        _ => return Ok(StatusCode::FORBIDDEN.into_response()),
+    }
+
+    // Find the invitee by login_name
+    let invitee = find_user_by_login_name(&mut tx, &form.login_name).await?;
+    if invitee.is_none() {
+        messages.error(
+            bundle.format_pattern(
+                bundle.get_message("community-invite-user-not-found").unwrap().value().unwrap(),
+                None,
+                &mut vec![],
+            ),
+        );
+        return Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response());
+    }
+    let invitee = invitee.unwrap();
+
+    // Check if user is already a member
+    let already_member = is_user_member(&mut tx, invitee.id, community.id).await?;
+    if already_member {
+        messages.error(
+            bundle.format_pattern(
+                bundle.get_message("community-invite-already-member").unwrap().value().unwrap(),
+                None,
+                &mut vec![],
+            ),
+        );
+        return Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response());
+    }
+
+    // Create invitation
+    match create_invitation(&mut tx, community.id, inviter.id, invitee.id).await {
+        Ok(_invitation) => {
+            tx.commit().await?;
+
+            messages.success(
+                bundle.format_pattern(
+                    bundle.get_message("community-invite-success").unwrap().value().unwrap(),
+                    None,
+                    &mut vec![],
+                ),
+            );
+
+            Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response())
+        }
+        Err(e) => {
+            // Check if this is a duplicate key constraint error
+            if let Some(db_err) = e.downcast_ref::<sqlx::Error>() {
+                if let sqlx::Error::Database(ref err) = db_err {
+                    if err.is_unique_violation() {
+                        messages.error(
+                            bundle.format_pattern(
+                                bundle.get_message("community-invite-already-invited").unwrap().value().unwrap(),
+                                None,
+                                &mut vec![],
+                            ),
+                        );
+                        return Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response());
+                    }
+                }
+            }
+            // For other errors, propagate them
+            Err(e.into())
+        }
+    }
+}
+
+/// Remove a member from a community
+pub async fn remove_member(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((slug, user_id)): Path<(String, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let community = community.unwrap();
+
+    // Must be logged in
+    let current_user = match auth_session.user {
+        Some(user) => user,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    // Check if current user is owner or moderator
+    let current_role = get_user_role_in_community(&mut tx, current_user.id, community.id).await?;
+    match current_role {
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        _ => return Ok(StatusCode::FORBIDDEN.into_response()),
+    }
+
+    // Cannot remove the owner
+    let target_role = get_user_role_in_community(&mut tx, user_id, community.id).await?;
+    if target_role == Some(CommunityMemberRole::Owner) {
+        return Ok((StatusCode::BAD_REQUEST, "Cannot remove community owner").into_response());
+    }
+
+    // Remove the member
+    remove_community_member(&mut tx, community.id, user_id).await?;
+
+    tx.commit().await?;
+
+    // Return empty HTML for HTMX to remove the row
+    Ok(Html(String::new()).into_response())
+}
+
+// ========== Invitation Endpoints ==========
+
+/// Accept an invitation
+pub async fn do_accept_invitation(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(invitation_id): Path<Uuid>,
+    messages: Messages,
+) -> Result<impl IntoResponse, AppError> {
+    let user = match &auth_session.user {
+        Some(user) => user,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let user_preferred_language = user.preferred_language.clone();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Get the invitation
+    let invitation = get_invitation_by_id(&mut tx, invitation_id).await?;
+    if invitation.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+    let invitation = invitation.unwrap();
+
+    // Verify the invitation is for the current user
+    if invitation.invitee_id != user.id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    // Get community info for validation
+    let _community = find_community_by_id(&mut tx, invitation.community_id).await?;
+    let _community = _community.ok_or_else(|| anyhow::anyhow!("Community not found"))?;
+
+    // Accept the invitation
+    accept_invitation(&mut tx, invitation_id).await?;
+
+    // Add user as a member
+    add_community_member(
+        &mut tx,
+        invitation.community_id,
+        user.id,
+        CommunityMemberRole::Member,
+        Some(invitation.inviter_id),
+    ).await?;
+
+    tx.commit().await?;
+
+    messages.success(
+        bundle.format_pattern(
+            bundle.get_message("invitation-accepted").unwrap().value().unwrap(),
+            None,
+            &mut vec![],
+        ),
+    );
+
+    Ok(Redirect::to("/notifications").into_response())
+}
+
+/// Reject an invitation
+pub async fn do_reject_invitation(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(invitation_id): Path<Uuid>,
+    messages: Messages,
+) -> Result<impl IntoResponse, AppError> {
+    let user = match &auth_session.user {
+        Some(user) => user,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let user_preferred_language = user.preferred_language.clone();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Get the invitation
+    let invitation = get_invitation_by_id(&mut tx, invitation_id).await?;
+    if invitation.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+    let invitation = invitation.unwrap();
+
+    // Verify the invitation is for the current user
+    if invitation.invitee_id != user.id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    // Reject the invitation
+    reject_invitation(&mut tx, invitation_id).await?;
+
+    tx.commit().await?;
+
+    messages.success(
+        bundle.format_pattern(
+            bundle.get_message("invitation-rejected").unwrap().value().unwrap(),
+            None,
+            &mut vec![],
+        ),
+    );
+
+    Ok(Redirect::to("/notifications").into_response())
+}
+
+/// Retract/cancel a pending invitation
+pub async fn retract_invitation(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((slug, invitation_id)): Path<(String, Uuid)>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let community = community.unwrap();
+
+    // Must be logged in
+    let user = match &auth_session.user {
+        Some(user) => user,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    // Check if user is owner or moderator
+    let user_role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
+    match user_role {
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        _ => return Ok(StatusCode::FORBIDDEN.into_response()),
+    }
+
+    // Delete the invitation
+    sqlx::query!(
+        "DELETE FROM community_invitations WHERE id = $1 AND community_id = $2 AND status = 'pending'",
+        invitation_id,
+        community.id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    // Return empty HTML for HTMX to remove the row
+    Ok(Html(String::new()).into_response())
+}
+
+/// Render members management page
+pub async fn members_page(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
+    messages: Messages,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let community = community.unwrap();
+
+    // For private/unlisted communities, only members can view member list
+    // For public communities, anyone can view
+    let user_role = if community.visibility != crate::models::community::CommunityVisibility::Public {
+        // Private or unlisted community - require membership
+        let user = match &auth_session.user {
+            Some(user) => user,
+            None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+        };
+
+        let is_member = is_user_member(&mut tx, user.id, community.id).await?;
+        if !is_member {
+            return Ok(StatusCode::FORBIDDEN.into_response());
+        }
+
+        // Get user's role to determine permissions
+        get_user_role_in_community(&mut tx, user.id, community.id).await?
+    } else {
+        // Public community - anyone can view, but only logged-in members have roles
+        match &auth_session.user {
+            Some(user) => get_user_role_in_community(&mut tx, user.id, community.id).await?,
+            None => None,
+        }
+    };
+
+    let members = get_community_members(&mut tx, community.id).await?;
+
+    // Fetch user details for each member
+    let members_with_details: Vec<serde_json::Value> = {
+        let mut result = Vec::new();
+        for member in members {
+            let user_info = sqlx::query!(
+                "SELECT login_name, display_name FROM users WHERE id = $1",
+                member.user_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            result.push(serde_json::json!({
+                "id": member.id,
+                "user_id": member.user_id,
+                "login_name": user_info.login_name,
+                "display_name": user_info.display_name,
+                "role": member.role,
+                "joined_at": member.joined_at,
+            }));
+        }
+        result
+    };
+
+    // Fetch pending invitations if user is owner/moderator
+    let pending_invitations = match user_role {
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {
+            let invitations = get_pending_invitations_for_community(&mut tx, community.id).await?;
+            let mut invitations_with_details = Vec::new();
+            for invitation in invitations {
+                let invitee_info = sqlx::query!(
+                    "SELECT login_name, display_name FROM users WHERE id = $1",
+                    invitation.invitee_id
+                )
+                .fetch_one(&mut *tx)
+                .await?;
+
+                invitations_with_details.push(serde_json::json!({
+                    "id": invitation.id,
+                    "invitee_login_name": invitee_info.login_name,
+                    "invitee_display_name": invitee_info.display_name,
+                    "created_at": invitation.created_at,
+                }));
+            }
+            invitations_with_details
+        },
+        _ => Vec::new(),
+    };
+
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+
+    tx.commit().await?;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community_members.jinja")?;
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        community,
+        members => members_with_details,
+        pending_invitations,
+        user_role,
+        can_invite => matches!(user_role, Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator)),
+        can_remove => matches!(user_role, Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator)),
+        messages => messages.into_iter().collect::<Vec<_>>(),
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
+        ftl_lang,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
