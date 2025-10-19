@@ -5,205 +5,15 @@
 {% block content %}
   <div class="center">
     <h2>{{ ftl_get_message("community") }}</h2>
-
     {# Search box #}
     <input type="text"
            id="community-search"
            class="community-move-search"
            placeholder="{{ ftl_get_message('post-move-search-placeholder') }}"
            autocomplete="off"
-           style="margin-bottom: 20px; width: 100%; max-width: 600px;" />
-
-    {# Official Communities #}
-    {% if official_communities %}
-      <div class="community-section">
-        <h3>{{ ftl_get_message("official-communities") }}</h3>
-        <div class="community-list">
-          {% for community in official_communities %}
-            <div class="community-move-card"
-                 data-community-name="{{ community.name|lower }}"
-                 data-community-slug="{{ community.slug|lower }}"
-                 data-community-description="{{ community.description|lower if community.description else '' }}">
-              <div class="community-move-card-content">
-                <div class="community-move-card-main">
-                  <div class="community-move-card-header">
-                    <div>
-                      <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
-                      <a href="/communities/@{{ community.slug }}" class="muted" style="margin-left: 8px; text-decoration: none;">@{{ community.slug }}</a>
-                      {% if community.visibility == "Unlisted" %}
-                        <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
-                      {% elif community.visibility == "Private" %}
-                        <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
-                      {% endif %}
-                    </div>
-                    <p class="community-owner-handle muted">by <a href="/@{{ community.owner_login_name }}">@{{ community.owner_login_name }}</a></p>
-                  </div>
-                  {% if community.description %}
-                    <p class="community-description">{{ community.description }}</p>
-                  {% endif %}
-                  <p class="community-stats-inline muted">
-                    {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
-                    {% if community.members_count %}
-                      {% if community.posts_count %} · {% endif %}
-                      {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
-                    {% endif %}
-                  </p>
-                </div>
-                <div class="community-move-card-thumbnails">
-                  {% if community.recent_posts %}
-                    <div class="community-thumbnails">
-                      {% for post in community.recent_posts %}
-                        <a href="/@{{ post.author_login_name }}/{{ post.id }}" class="community-thumbnail-link">
-                          <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                               alt=""
-                               class="community-thumbnail"
-                               width="{{ post.image_width }}"
-                               height="{{ post.image_height }}" />
-                        </a>
-                      {% endfor %}
-                    </div>
-                  {% else %}
-                    <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      </div>
-    {% else %}
-      <p>{{ ftl_get_message("official-communities-nil") }}</p>
-    {% endif %}
-
-    {# Participating Communities #}
-    {% if current_user %}
-      {% if participating_communities %}
-        <div class="community-section" style="margin-top: 40px;">
-          <h3>{{ ftl_get_message("participating-community") }}</h3>
-          <div class="community-list">
-            {% for community in participating_communities %}
-              <div class="community-move-card"
-                   data-community-name="{{ community.name|lower }}"
-                   data-community-slug="{{ community.slug|lower }}"
-                   data-community-description="{{ community.description|lower if community.description else '' }}">
-                <div class="community-move-card-content">
-                  <div class="community-move-card-main">
-                    <div class="community-move-card-header">
-                      <div>
-                        <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
-                        {% if community.visibility == "Unlisted" %}
-                          <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
-                        {% elif community.visibility == "Private" %}
-                          <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
-                        {% endif %}
-                      </div>
-                      <p class="community-owner-handle muted">@{{ community.owner_login_name }}</p>
-                    </div>
-                    {% if community.description %}
-                      <p class="community-description">{{ community.description }}</p>
-                    {% endif %}
-                    <p class="community-stats-inline muted">
-                      {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
-                      {% if community.members_count %}
-                        {% if community.posts_count %} · {% endif %}
-                        {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
-                      {% endif %}
-                    </p>
-                  </div>
-                  <div class="community-move-card-thumbnails">
-                    {% if community.recent_posts %}
-                      <div class="community-thumbnails">
-                        {% for post in community.recent_posts %}
-                          <a href="/@{{ post.author_login_name }}/{{ post.id }}" class="community-thumbnail-link">
-                            <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                                 alt=""
-                                 class="community-thumbnail"
-                                 width="{{ post.image_width }}"
-                                 height="{{ post.image_height }}" />
-                          </a>
-                        {% endfor %}
-                      </div>
-                    {% else %}
-                      <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
-                    {% endif %}
-                  </div>
-                </div>
-              </div>
-            {% endfor %}
-          </div>
-        </div>
-      {% else %}
-        <div style="margin-top: 40px;">
-          <h3>{{ ftl_get_message("participating-community") }}</h3>
-          <p>{{ ftl_get_message("active-communities-nil") }}</p>
-        </div>
-      {% endif %}
-    {% endif %}
-
-    {# Latest Active Public Communities #}
-    {% if public_communities %}
-      <div class="community-section" style="margin-top: 40px;">
-        <h3>{{ ftl_get_message("latest-active-public-community") }}</h3>
-        <div class="community-list">
-          {% for community in public_communities %}
-            <div class="community-move-card"
-                 data-community-name="{{ community.name|lower }}"
-                 data-community-slug="{{ community.slug|lower }}"
-                 data-community-description="{{ community.description|lower if community.description else '' }}">
-              <div class="community-move-card-content">
-                <div class="community-move-card-main">
-                  <div class="community-move-card-header">
-                    <div>
-                      <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
-                      <a href="/communities/@{{ community.slug }}" class="muted" style="margin-left: 8px; text-decoration: none;">@{{ community.slug }}</a>
-                      {% if community.visibility == "Unlisted" %}
-                        <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
-                      {% elif community.visibility == "Private" %}
-                        <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
-                      {% endif %}
-                    </div>
-                    <p class="community-owner-handle muted">by <a href="/@{{ community.owner_login_name }}">@{{ community.owner_login_name }}</a></p>
-                  </div>
-                  {% if community.description %}
-                    <p class="community-description">{{ community.description }}</p>
-                  {% endif %}
-                  <p class="community-stats-inline muted">
-                    {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
-                    {% if community.members_count %}
-                      {% if community.posts_count %} · {% endif %}
-                      {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
-                    {% endif %}
-                  </p>
-                </div>
-                <div class="community-move-card-thumbnails">
-                  {% if community.recent_posts %}
-                    <div class="community-thumbnails">
-                      {% for post in community.recent_posts %}
-                        <a href="/@{{ post.author_login_name }}/{{ post.id }}" class="community-thumbnail-link">
-                          <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                               alt=""
-                               class="community-thumbnail"
-                               width="{{ post.image_width }}"
-                               height="{{ post.image_height }}" />
-                        </a>
-                      {% endfor %}
-                    </div>
-                  {% else %}
-                    <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      </div>
-    {% else %}
-      <div style="margin-top: 40px;">
-        <h3>{{ ftl_get_message("latest-active-public-community") }}</h3>
-        <p>{{ ftl_get_message("active-communities-nil") }}</p>
-      </div>
-    {% endif %}
-
+           style="margin-bottom: 20px;
+                  width: 100%;
+                  max-width: 600px" />
     {# My Communities #}
     {% if current_user %}
       <div class="community-section" style="margin-top: 40px;">
@@ -228,13 +38,11 @@
                       </div>
                       <p class="community-owner-handle muted">@{{ community.owner_login_name }}</p>
                     </div>
-                    {% if community.description %}
-                      <p class="community-description">{{ community.description }}</p>
-                    {% endif %}
+                    {% if community.description %}<p class="community-description">{{ community.description }}</p>{% endif %}
                     <p class="community-stats-inline muted">
                       {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
                       {% if community.members_count %}
-                        {% if community.posts_count %} · {% endif %}
+                        {% if community.posts_count %}·{% endif %}
                         {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
                       {% endif %}
                     </p>
@@ -243,7 +51,8 @@
                     {% if community.recent_posts %}
                       <div class="community-thumbnails">
                         {% for post in community.recent_posts %}
-                          <a href="/@{{ post.author_login_name }}/{{ post.id }}" class="community-thumbnail-link">
+                          <a href="/@{{ post.author_login_name }}/{{ post.id }}"
+                             class="community-thumbnail-link">
                             <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
                                  alt=""
                                  class="community-thumbnail"
@@ -269,7 +78,200 @@
       </div>
     {% endif %}
   </div>
-
+  {# Participating Communities #}
+  {% if current_user %}
+    {% if participating_communities %}
+      <div class="community-section" style="margin-top: 40px;">
+        <h3>{{ ftl_get_message("participating-community") }}</h3>
+        <div class="community-list">
+          {% for community in participating_communities %}
+            <div class="community-move-card"
+                 data-community-name="{{ community.name|lower }}"
+                 data-community-slug="{{ community.slug|lower }}"
+                 data-community-description="{{ community.description|lower if community.description else '' }}">
+              <div class="community-move-card-content">
+                <div class="community-move-card-main">
+                  <div class="community-move-card-header">
+                    <div>
+                      <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
+                      {% if community.visibility == "Unlisted" %}
+                        <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
+                      {% elif community.visibility == "Private" %}
+                        <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
+                      {% endif %}
+                    </div>
+                    <p class="community-owner-handle muted">@{{ community.owner_login_name }}</p>
+                  </div>
+                  {% if community.description %}<p class="community-description">{{ community.description }}</p>{% endif %}
+                  <p class="community-stats-inline muted">
+                    {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
+                    {% if community.members_count %}
+                      {% if community.posts_count %}·{% endif %}
+                      {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
+                    {% endif %}
+                  </p>
+                </div>
+                <div class="community-move-card-thumbnails">
+                  {% if community.recent_posts %}
+                    <div class="community-thumbnails">
+                      {% for post in community.recent_posts %}
+                        <a href="/@{{ post.author_login_name }}/{{ post.id }}"
+                           class="community-thumbnail-link">
+                          <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+                               alt=""
+                               class="community-thumbnail"
+                               width="{{ post.image_width }}"
+                               height="{{ post.image_height }}" />
+                        </a>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div style="margin-top: 40px;">
+        <h3>{{ ftl_get_message("participating-community") }}</h3>
+        <p>{{ ftl_get_message("active-communities-nil") }}</p>
+      </div>
+    {% endif %}
+  {% endif %}
+  {# Official Communities #}
+  {% if official_communities %}
+    <div class="community-section">
+      <h3>{{ ftl_get_message("official-communities") }}</h3>
+      <div class="community-list">
+        {% for community in official_communities %}
+          <div class="community-move-card"
+               data-community-name="{{ community.name|lower }}"
+               data-community-slug="{{ community.slug|lower }}"
+               data-community-description="{{ community.description|lower if community.description else '' }}">
+            <div class="community-move-card-content">
+              <div class="community-move-card-main">
+                <div class="community-move-card-header">
+                  <div>
+                    <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
+                    <a href="/communities/@{{ community.slug }}"
+                       class="muted"
+                       style="margin-left: 8px;
+                              text-decoration: none">@{{ community.slug }}</a>
+                    {% if community.visibility == "Unlisted" %}
+                      <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
+                    {% elif community.visibility == "Private" %}
+                      <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
+                    {% endif %}
+                  </div>
+                  <p class="community-owner-handle muted">
+                    by <a href="/@{{ community.owner_login_name }}">@{{ community.owner_login_name }}</a>
+                  </p>
+                </div>
+                {% if community.description %}<p class="community-description">{{ community.description }}</p>{% endif %}
+                <p class="community-stats-inline muted">
+                  {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
+                  {% if community.members_count %}
+                    {% if community.posts_count %}·{% endif %}
+                    {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
+                  {% endif %}
+                </p>
+              </div>
+              <div class="community-move-card-thumbnails">
+                {% if community.recent_posts %}
+                  <div class="community-thumbnails">
+                    {% for post in community.recent_posts %}
+                      <a href="/@{{ post.author_login_name }}/{{ post.id }}"
+                         class="community-thumbnail-link">
+                        <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+                             alt=""
+                             class="community-thumbnail"
+                             width="{{ post.image_width }}"
+                             height="{{ post.image_height }}" />
+                      </a>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <p>{{ ftl_get_message("official-communities-nil") }}</p>
+  {% endif %}
+  {# Latest Active Public Communities #}
+  {% if public_communities %}
+    <div class="community-section" style="margin-top: 40px;">
+      <h3>{{ ftl_get_message("latest-active-public-community") }}</h3>
+      <div class="community-list">
+        {% for community in public_communities %}
+          <div class="community-move-card"
+               data-community-name="{{ community.name|lower }}"
+               data-community-slug="{{ community.slug|lower }}"
+               data-community-description="{{ community.description|lower if community.description else '' }}">
+            <div class="community-move-card-content">
+              <div class="community-move-card-main">
+                <div class="community-move-card-header">
+                  <div>
+                    <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
+                    <a href="/communities/@{{ community.slug }}"
+                       class="muted"
+                       style="margin-left: 8px;
+                              text-decoration: none">@{{ community.slug }}</a>
+                    {% if community.visibility == "Unlisted" %}
+                      <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
+                    {% elif community.visibility == "Private" %}
+                      <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
+                    {% endif %}
+                  </div>
+                  <p class="community-owner-handle muted">
+                    by <a href="/@{{ community.owner_login_name }}">@{{ community.owner_login_name }}</a>
+                  </p>
+                </div>
+                {% if community.description %}<p class="community-description">{{ community.description }}</p>{% endif %}
+                <p class="community-stats-inline muted">
+                  {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
+                  {% if community.members_count %}
+                    {% if community.posts_count %}·{% endif %}
+                    {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
+                  {% endif %}
+                </p>
+              </div>
+              <div class="community-move-card-thumbnails">
+                {% if community.recent_posts %}
+                  <div class="community-thumbnails">
+                    {% for post in community.recent_posts %}
+                      <a href="/@{{ post.author_login_name }}/{{ post.id }}"
+                         class="community-thumbnail-link">
+                        <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+                             alt=""
+                             class="community-thumbnail"
+                             width="{{ post.image_width }}"
+                             height="{{ post.image_height }}" />
+                      </a>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% else %}
+    <div style="margin-top: 40px;">
+      <h3>{{ ftl_get_message("latest-active-public-community") }}</h3>
+      <p>{{ ftl_get_message("active-communities-nil") }}</p>
+    </div>
+  {% endif %}
   {# Search functionality #}
   <script>
     // Client-side search filtering for instant feedback
