@@ -305,7 +305,7 @@ pub async fn get_known_communities(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
 ) -> Result<Vec<KnownCommunity>> {
-    // Select public communities and private communities that the user is owner of, and private communities that the user has posted in, ordered by latest published post
+    // Select communities where the user has posted or communities that the user owns, ordered by latest published post
     let q = query_as!(
         KnownCommunity,
         r#"
@@ -313,7 +313,7 @@ pub async fn get_known_communities(
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id
             LEFT JOIN users ON communities.owner_id = users.id
-            WHERE communities.visibility = 'public' OR communities.id IN (
+            WHERE communities.id IN (
                 SELECT DISTINCT community_id
                 FROM posts
                 WHERE author_id = $1
