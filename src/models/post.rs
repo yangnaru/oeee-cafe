@@ -1000,12 +1000,26 @@ pub async fn edit_post_community(
     id: Uuid,
     new_community_id: Uuid,
 ) -> Result<()> {
+    // Use a recursive CTE to update the post and all its descendants
     let q = query!(
-        "
+        r#"
+            WITH RECURSIVE post_tree AS (
+                -- Base case: the root post being moved
+                SELECT id
+                FROM posts
+                WHERE id = $2
+
+                UNION ALL
+
+                -- Recursive case: all child posts
+                SELECT p.id
+                FROM posts p
+                INNER JOIN post_tree pt ON p.parent_post_id = pt.id
+            )
             UPDATE posts
             SET community_id = $1
-            WHERE id = $2
-        ",
+            WHERE id IN (SELECT id FROM post_tree)
+        "#,
         new_community_id,
         id
     );
