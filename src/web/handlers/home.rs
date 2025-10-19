@@ -5,7 +5,6 @@ use crate::models::community::{
     get_active_public_communities_excluding_owner, get_communities_members_count, get_public_communities,
     get_user_communities_with_latest_9_posts,
 };
-use crate::models::hashtag::get_trending_hashtags;
 use crate::models::post::{
     find_following_posts_by_user_id, find_public_community_posts_excluding_from_community_owner,
     find_recent_posts_by_communities,
@@ -96,9 +95,6 @@ pub async fn home(
         })
         .collect();
 
-    // Get trending hashtags
-    let trending_hashtags = get_trending_hashtags(&mut tx, 10).await?;
-
     // Get recent comments from public communities
     let recent_comments = find_latest_comments_from_public_communities(&mut tx, 5).await?;
 
@@ -112,7 +108,6 @@ pub async fn home(
         active_public_communities,
         official_communities_with_latest_posts,
         non_official_public_community_posts,
-        trending_hashtags,
         recent_comments,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,

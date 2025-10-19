@@ -37,27 +37,6 @@
       </section>
     {% endif %}
 
-    {# Trending Hashtags Section #}
-    {% if trending_hashtags %}
-      <section class="trending-hashtags-section" role="region" aria-labelledby="trending-hashtags-heading">
-        <div class="trending-hashtags">
-          <h2 id="trending-hashtags-heading" class="home-section-title">
-            <a href="/hashtags">{{ ftl_get_message("trending-hashtags") }}</a>
-          </h2>
-          <ul class="hashtag-list">
-            {% for hashtag in trending_hashtags %}
-              <li class="hashtag-item">
-                <a href="/hashtags/{{ hashtag.name }}">
-                  #{{ hashtag.display_name }}
-                  <span class="hashtag-post-count">({{ hashtag.post_count }})</span>
-                </a>
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
-      </section>
-    {% endif %}
-
     {# Latest Active Communities Section #}
     {% if active_public_communities and active_public_communities|length > 0 %}
       <section role="region" aria-labelledby="active-communities-heading">
