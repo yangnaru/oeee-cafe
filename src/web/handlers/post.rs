@@ -1132,6 +1132,17 @@ pub async fn post_edit_community(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
+    // Don't allow moving reply posts (posts with a parent)
+    if post
+        .as_ref()
+        .unwrap()
+        .get("parent_post_id")
+        .and_then(|v| v.as_ref())
+        .is_some()
+    {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
     let current_community_id = Uuid::parse_str(
         post.clone()
             .unwrap()
@@ -1396,6 +1407,17 @@ pub async fn do_post_edit_community(
         .as_ref()
         .unwrap()
         != auth_session.user.clone().unwrap().id.to_string()
+    {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    // Don't allow moving reply posts (posts with a parent)
+    if post
+        .as_ref()
+        .unwrap()
+        .get("parent_post_id")
+        .and_then(|v| v.as_ref())
+        .is_some()
     {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
