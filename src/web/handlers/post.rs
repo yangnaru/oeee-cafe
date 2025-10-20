@@ -287,8 +287,8 @@ pub async fn post_relay_view(
 
     let community = find_community_by_id(&mut tx, community_id).await?;
     if let Some(ref comm) = community {
-        // If community is private or unlisted, check if user is a member
-        if comm.visibility != crate::models::community::CommunityVisibility::Public {
+        // If community is private, check if user is a member
+        if comm.visibility == crate::models::community::CommunityVisibility::Private {
             match &auth_session.user {
                 Some(user) => {
                     let user_role = get_user_role_in_community(&mut tx, user.id, comm.id).await?;
@@ -372,8 +372,8 @@ pub async fn post_view(
 
             let community = find_community_by_id(&mut tx, community_id).await?;
             if let Some(community) = community {
-                // If community is private or unlisted, check if user is a member
-                if community.visibility != crate::models::community::CommunityVisibility::Public {
+                // If community is private, check if user is a member
+                if community.visibility == crate::models::community::CommunityVisibility::Private {
                     match &auth_session.user {
                         Some(user) => {
                             let user_role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
@@ -627,8 +627,8 @@ pub async fn post_replay_view(
 
     let community = find_community_by_id(&mut tx, community_id).await?;
     if let Some(ref comm) = community {
-        // If community is private or unlisted, check if user is a member
-        if comm.visibility != crate::models::community::CommunityVisibility::Public {
+        // If community is private, check if user is a member
+        if comm.visibility == crate::models::community::CommunityVisibility::Private {
             match &auth_session.user {
                 Some(user) => {
                     let user_role = get_user_role_in_community(&mut tx, user.id, comm.id).await?;
@@ -838,14 +838,14 @@ pub async fn post_publish(
             if let (Some(actor), Some(parent_author_id)) = (&actor, parent_author_id) {
                 // Don't notify if replying to own post
                 if parent_author_id != user_id {
-                    // For private/unlisted communities, only notify if parent author is still a member
+                    // For private communities, only notify if parent author is still a member
                     let community = find_community_by_id(&mut tx, community_id).await?;
                     let should_notify = if let Some(community) = community {
-                        if community.visibility != crate::models::community::CommunityVisibility::Public {
+                        if community.visibility == crate::models::community::CommunityVisibility::Private {
                             // Check if parent author is still a member
                             is_user_member(&mut tx, parent_author_id, community.id).await.unwrap_or(false)
                         } else {
-                            // Public community - always notify
+                            // Public or unlisted community - always notify
                             true
                         }
                     } else {
@@ -1004,8 +1004,8 @@ pub async fn do_create_comment(
 
         let community = find_community_by_id(&mut tx, community_id).await?;
         if let Some(ref comm) = community {
-            // If community is private or unlisted, check if user is a member
-            if comm.visibility != crate::models::community::CommunityVisibility::Public {
+            // If community is private, check if user is a member
+            if comm.visibility == crate::models::community::CommunityVisibility::Private {
                 let user_role = get_user_role_in_community(&mut tx, user_id, comm.id).await?;
                 if user_role.is_none() {
                     // User is not a member of this private community
@@ -1061,13 +1061,13 @@ pub async fn do_create_comment(
         for (mentioned_user_id, _login_name) in mentioned_users {
             // Don't notify the commenter themselves
             if mentioned_user_id != user_id {
-                // For private/unlisted communities, only notify if mentioned user is a member
+                // For private communities, only notify if mentioned user is a member
                 let should_notify = if let Some(ref community) = post_community {
-                    if community.visibility != crate::models::community::CommunityVisibility::Public {
+                    if community.visibility == crate::models::community::CommunityVisibility::Private {
                         // Check if mentioned user is a member
                         is_user_member(&mut tx, mentioned_user_id, community.id).await.unwrap_or(false)
                     } else {
-                        // Public community - always notify
+                        // Public or unlisted community - always notify
                         true
                     }
                 } else {
@@ -1763,8 +1763,8 @@ pub async fn post_view_by_login_name(
 
             let community = find_community_by_id(&mut tx, community_id).await?;
             if let Some(community) = community {
-                // If community is private or unlisted, check if user is a member
-                if community.visibility != crate::models::community::CommunityVisibility::Public {
+                // If community is private, check if user is a member
+                if community.visibility == crate::models::community::CommunityVisibility::Private {
                     match &auth_session.user {
                         Some(user) => {
                             let user_role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
@@ -2121,8 +2121,8 @@ pub async fn post_relay_view_by_login_name(
 
             let community = find_community_by_id(&mut tx, community_id).await?;
             if let Some(ref comm) = community {
-                // If community is private or unlisted, check if user is a member
-                if comm.visibility != crate::models::community::CommunityVisibility::Public {
+                // If community is private, check if user is a member
+                if comm.visibility == crate::models::community::CommunityVisibility::Private {
                     match &auth_session.user {
                         Some(user) => {
                             let user_role = get_user_role_in_community(&mut tx, user.id, comm.id).await?;
@@ -2217,8 +2217,8 @@ pub async fn post_replay_view_by_login_name(
 
             let community = find_community_by_id(&mut tx, community_id).await?;
             if let Some(ref comm) = community {
-                // If community is private or unlisted, check if user is a member
-                if comm.visibility != crate::models::community::CommunityVisibility::Public {
+                // If community is private, check if user is a member
+                if comm.visibility == crate::models::community::CommunityVisibility::Private {
                     match &auth_session.user {
                         Some(user) => {
                             let user_role = get_user_role_in_community(&mut tx, user.id, comm.id).await?;
@@ -2322,8 +2322,8 @@ pub async fn add_reaction(
 
         let community = find_community_by_id(&mut tx, community_id).await?;
         if let Some(community) = community {
-            // If community is private or unlisted, check if user is a member
-            if community.visibility != crate::models::community::CommunityVisibility::Public {
+            // If community is private, check if user is a member
+            if community.visibility == crate::models::community::CommunityVisibility::Private {
                 let user_role = get_user_role_in_community(&mut tx, user_id, community.id).await?;
                 if user_role.is_none() {
                     // User is not a member of this private community
@@ -2482,8 +2482,8 @@ pub async fn remove_reaction(
 
         let community = find_community_by_id(&mut tx, community_id).await?;
         if let Some(community) = community {
-            // If community is private or unlisted, check if user is a member
-            if community.visibility != crate::models::community::CommunityVisibility::Public {
+            // If community is private, check if user is a member
+            if community.visibility == crate::models::community::CommunityVisibility::Private {
                 let user_role = get_user_role_in_community(&mut tx, user_id, community.id).await?;
                 if user_role.is_none() {
                     // User is not a member of this private community
