@@ -241,10 +241,15 @@ nav a:visited,
 .comment-content {
   font-size: 0.95em;
   line-height: 1.4;
+  margin-top: 4px;
 }
 
 .comment-content p {
   margin: 4px 0;
+}
+
+.comment-content p:first-child {
+  margin-top: 0;
 }
 
 #comments form {
