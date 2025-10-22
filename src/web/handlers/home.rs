@@ -3,13 +3,12 @@ use crate::app_error::AppError;
 use crate::models::comment::find_latest_comments_from_public_communities;
 use crate::models::community::{
     get_communities_members_count, get_public_communities,
-    get_user_communities_with_latest_9_posts,
 };
 use crate::models::post::{
     find_following_posts_by_user_id, find_public_community_posts,
     find_recent_posts_by_communities,
 };
-use crate::models::user::{find_user_by_login_name, AuthSession};
+use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
 use crate::web::state::AppState;
 use axum::extract::Query;
@@ -32,11 +31,6 @@ pub async fn home(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let user = find_user_by_login_name(&mut tx, &state.config.official_account_login_name).await?;
-    let official_communities_with_latest_posts = match user.clone() {
-        Some(user) => get_user_communities_with_latest_9_posts(&mut tx, user.id).await?,
-        None => Vec::new(),
-    };
     let non_official_public_community_posts = find_public_community_posts(&mut tx, 18, 0).await?;
     let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
@@ -98,7 +92,6 @@ pub async fn home(
         default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         active_public_communities,
-        official_communities_with_latest_posts,
         non_official_public_community_posts,
         recent_comments,
         draft_post_count => common_ctx.draft_post_count,

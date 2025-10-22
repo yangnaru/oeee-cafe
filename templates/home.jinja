@@ -59,30 +59,6 @@
       </section>
     {% endif %}
 
-    {# Official Communities with Latest Posts Section #}
-    {% if official_communities_with_latest_posts and official_communities_with_latest_posts|length > 0 %}
-      {% for community in official_communities_with_latest_posts %}
-        <section role="region" aria-labelledby="community-{{ community.slug }}-heading">
-          <h2 id="community-{{ community.slug }}-heading" class="home-section-title">
-            <a href="/communities/@{{ community.slug }}">{{ community.name }}</a>
-          </h2>
-          {% if community.posts and community.posts|length > 0 %}
-            <div class="posts-grid">
-              {% for post in community.posts %}
-                {{ post_grid_item(post, r2_public_endpoint_url) }}
-              {% endfor %}
-            </div>
-          {% else %}
-            <p class="empty-state">{{ ftl_get_message("no-posts-in-community") }}</p>
-          {% endif %}
-        </section>
-      {% endfor %}
-    {% else %}
-      <section role="region">
-        <p class="empty-state">{{ ftl_get_message("timeline-empty") | safe }}</p>
-      </section>
-    {% endif %}
-
     {# Posts from Public Communities Section - MOVED TO BOTTOM with Infinite Scroll #}
     {% if non_official_public_community_posts and non_official_public_community_posts|length > 0 %}
       <section role="region" aria-labelledby="public-posts-heading">
