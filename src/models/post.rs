@@ -1029,6 +1029,8 @@ pub async fn edit_post_community(
 
 pub async fn find_public_community_posts(
     tx: &mut Transaction<'_, Postgres>,
+    limit: i64,
+    offset: i64,
 ) -> Result<Vec<SerializablePostForHome>> {
     let q = query!(
         "
@@ -1056,7 +1058,11 @@ pub async fn find_public_community_posts(
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             ORDER BY posts.published_at DESC
-        "
+            LIMIT $1
+            OFFSET $2
+        ",
+        limit,
+        offset
     );
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result

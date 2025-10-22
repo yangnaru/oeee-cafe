@@ -2,11 +2,11 @@ use super::ExtractFtlLang;
 use crate::app_error::AppError;
 use crate::models::comment::find_latest_comments_from_public_communities;
 use crate::models::community::{
-    get_active_public_communities_excluding_owner, get_communities_members_count, get_public_communities,
+    get_communities_members_count, get_public_communities,
     get_user_communities_with_latest_9_posts,
 };
 use crate::models::post::{
-    find_following_posts_by_user_id, find_public_community_posts_excluding_from_community_owner,
+    find_following_posts_by_user_id, find_public_community_posts,
     find_recent_posts_by_communities,
 };
 use crate::models::user::{find_user_by_login_name, AuthSession};
@@ -37,16 +37,8 @@ pub async fn home(
         Some(user) => get_user_communities_with_latest_9_posts(&mut tx, user.id).await?,
         None => Vec::new(),
     };
-    let non_official_public_community_posts = match user.clone() {
-        Some(user) => {
-            find_public_community_posts_excluding_from_community_owner(&mut tx, user.id, 18, 0).await?
-        }
-        None => Vec::new(),
-    };
-    let active_public_communities_raw = match user {
-        Some(user) => get_active_public_communities_excluding_owner(&mut tx, user.id).await?,
-        None => get_public_communities(&mut tx).await?,
-    };
+    let non_official_public_community_posts = find_public_community_posts(&mut tx, 18, 0).await?;
+    let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
     // Fetch recent posts and stats for active communities
     let community_ids: Vec<uuid::Uuid> = active_public_communities_raw.iter().map(|c| c.id).collect();
@@ -159,13 +151,7 @@ pub async fn load_more_public_posts(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = find_user_by_login_name(&mut tx, &state.config.official_account_login_name).await?;
-    let posts = match user {
-        Some(user) => {
-            find_public_community_posts_excluding_from_community_owner(&mut tx, user.id, 18, query.offset).await?
-        }
-        None => Vec::new(),
-    };
+    let posts = find_public_community_posts(&mut tx, 18, query.offset).await?;
 
     tx.commit().await?;
 
