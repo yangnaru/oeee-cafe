@@ -216,7 +216,7 @@ pub async fn find_latest_comments_from_public_communities(
     let comments = sqlx::query_as!(
         NotificationComment,
         r#"
-        SELECT
+        SELECT DISTINCT ON (comments.post_id)
             comments.id,
             comments.post_id,
             comments.actor_id,
@@ -246,7 +246,7 @@ pub async fn find_latest_comments_from_public_communities(
         AND posts.published_at IS NOT NULL
         AND (actors.user_id IS NULL OR actors.user_id != posts.author_id)
         AND posts.deleted_at IS NULL
-        ORDER BY comments.created_at DESC
+        ORDER BY comments.post_id, comments.created_at DESC
         LIMIT $1
         "#,
         limit
