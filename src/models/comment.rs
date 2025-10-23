@@ -216,37 +216,61 @@ pub async fn find_latest_comments_from_public_communities(
     let comments = sqlx::query_as!(
         NotificationComment,
         r#"
-        SELECT DISTINCT ON (comments.post_id)
-            comments.id,
-            comments.post_id,
-            comments.actor_id,
-            comments.updated_at,
-            comments.created_at,
-            comments.content,
-            comments.content_html,
-            comments.iri,
-            actors.name AS actor_name,
-            actors.handle AS actor_handle,
-            actors.url AS actor_url,
-            comment_authors.login_name AS "actor_login_name?",
-            CASE WHEN comment_authors.id IS NOT NULL THEN true ELSE false END AS "is_local!",
-            posts.title AS post_title,
-            post_authors.login_name AS post_author_login_name,
-            images.image_filename AS post_image_filename,
-            images.width AS post_image_width,
-            images.height AS post_image_height
-        FROM comments
-        LEFT JOIN actors ON comments.actor_id = actors.id
-        LEFT JOIN users AS comment_authors ON actors.user_id = comment_authors.id
-        LEFT JOIN posts ON comments.post_id = posts.id
-        LEFT JOIN users AS post_authors ON posts.author_id = post_authors.id
-        LEFT JOIN images ON posts.image_id = images.id
-        LEFT JOIN communities ON posts.community_id = communities.id
-        WHERE communities.visibility = 'public'
-        AND posts.published_at IS NOT NULL
-        AND (actors.user_id IS NULL OR actors.user_id != posts.author_id)
-        AND posts.deleted_at IS NULL
-        ORDER BY comments.post_id, comments.created_at DESC
+        WITH ranked_comments AS (
+            SELECT
+                comments.id,
+                comments.post_id,
+                comments.actor_id,
+                comments.updated_at,
+                comments.created_at,
+                comments.content,
+                comments.content_html,
+                comments.iri,
+                actors.name AS actor_name,
+                actors.handle AS actor_handle,
+                actors.url AS actor_url,
+                comment_authors.login_name AS actor_login_name,
+                CASE WHEN comment_authors.id IS NOT NULL THEN true ELSE false END AS is_local,
+                posts.title AS post_title,
+                post_authors.login_name AS post_author_login_name,
+                images.image_filename AS post_image_filename,
+                images.width AS post_image_width,
+                images.height AS post_image_height,
+                ROW_NUMBER() OVER (PARTITION BY comments.post_id ORDER BY comments.created_at DESC) AS rn
+            FROM comments
+            LEFT JOIN actors ON comments.actor_id = actors.id
+            LEFT JOIN users AS comment_authors ON actors.user_id = comment_authors.id
+            LEFT JOIN posts ON comments.post_id = posts.id
+            LEFT JOIN users AS post_authors ON posts.author_id = post_authors.id
+            LEFT JOIN images ON posts.image_id = images.id
+            LEFT JOIN communities ON posts.community_id = communities.id
+            WHERE communities.visibility = 'public'
+            AND posts.published_at IS NOT NULL
+            AND (actors.user_id IS NULL OR actors.user_id != posts.author_id)
+            AND posts.deleted_at IS NULL
+        )
+        SELECT
+            id,
+            post_id,
+            actor_id,
+            updated_at,
+            created_at,
+            content,
+            content_html,
+            iri,
+            actor_name,
+            actor_handle,
+            actor_url,
+            actor_login_name AS "actor_login_name?",
+            is_local AS "is_local!",
+            post_title,
+            post_author_login_name,
+            post_image_filename,
+            post_image_width,
+            post_image_height
+        FROM ranked_comments
+        WHERE rn = 1
+        ORDER BY created_at DESC
         LIMIT $1
         "#,
         limit
