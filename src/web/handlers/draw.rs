@@ -219,7 +219,7 @@ pub async fn draw_finish(
         .expect("Time went backwards");
     let duration_ms = since_the_epoch.as_millis() - security_timer;
 
-    if tool == "neo" || tool == "cucumber" {
+    if tool == "neo" || tool == "cucumber" || tool == "neo-cucumber-offline" {
         upload_object(
             &client,
             &state.config.aws_s3_bucket,
@@ -251,7 +251,7 @@ pub async fn draw_finish(
         return Ok(StatusCode::BAD_REQUEST.into_response());
     }
 
-    let replay_filename = if tool == "neo" || tool == "cucumber" {
+    let replay_filename = if tool == "neo" || tool == "cucumber" || tool == "neo-cucumber-offline" {
         format!("{}.pch", replay_sha256)
     } else if tool == "tegaki" {
         format!("{}.tgkr", replay_sha256)
@@ -263,6 +263,7 @@ pub async fn draw_finish(
         "neo" => Tool::Neo,
         "tegaki" => Tool::Tegaki,
         "cucumber" => Tool::Cucumber,
+        "neo-cucumber-offline" => Tool::Cucumber,
         _ => return Ok(StatusCode::BAD_REQUEST.into_response()),
     };
     let post_draft = PostDraft {

@@ -1,6 +1,10 @@
 import { useCallback, useRef, useEffect, useMemo } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { type CollaborationMeta } from "../types/collaboration";
+import {
+  compositeLayersToCanvas,
+  downloadCanvasAsPNG as downloadCanvas,
+} from "../utils/canvasExport";
 
 interface CanvasElements {
   bgCanvas: HTMLCanvasElement;
@@ -298,19 +302,7 @@ export const useCanvas = ({
   const compositeCanvasesForExport = useCallback(() => {
     if (!canvasMeta?.width || !canvasMeta?.height) return null;
 
-    // Create a temporary canvas for compositing
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = canvasMeta.width;
-    tempCanvas.height = canvasMeta.height;
-    const tempCtx = tempCanvas.getContext("2d");
-
-    if (!tempCtx) return null;
-
-    // Fill background with white
-    tempCtx.fillStyle = "#FFFFFF";
-    tempCtx.fillRect(0, 0, canvasMeta.width, canvasMeta.height);
-
-    // Composite all user layer canvases onto the temp canvas in z-index order
+    // Composite all user layer canvases in z-index order
     const canvasElements = Array.from(userCanvasRefs.current.entries()).map(
       ([key, canvas]) => ({
         key,
@@ -323,14 +315,10 @@ export const useCanvas = ({
     // Sort by z-index (lower z-index drawn first, appears below)
     canvasElements.sort((a, b) => a.zIndex - b.zIndex);
 
-    // Draw all layers in z-index order
-    canvasElements.forEach(({ canvas }) => {
-      if (canvas.style.display !== "none") {
-        tempCtx.drawImage(canvas, 0, 0);
-      }
-    });
+    // Extract sorted canvases
+    const layers = canvasElements.map(({ canvas }) => canvas);
 
-    return tempCanvas;
+    return compositeLayersToCanvas(canvasMeta.width, canvasMeta.height, layers);
   }, [canvasMeta]);
 
   // Function to download current canvas as PNG
@@ -342,18 +330,7 @@ export const useCanvas = ({
       const tempCanvas = compositeCanvasesForExport();
       if (!tempCanvas) return;
 
-      // Create download link
-      const link = document.createElement("a");
-      link.download = `canvas-${new Date()
-        .toISOString()
-        .slice(0, 19)
-        .replace(/:/g, "-")}.png`;
-      link.href = tempCanvas.toDataURL("image/png");
-
-      // Trigger download
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      downloadCanvas(tempCanvas);
     } catch (error) {
       console.error("Error in downloadCanvasAsPNG:", error);
     }

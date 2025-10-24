@@ -20,6 +20,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.1.14
         version: 4.1.14(vite@7.1.7(@types/node@24.5.2)(jiti@2.6.1)(lightningcss@1.30.1))
+      lz-string:
+        specifier: ^1.5.0
+        version: 1.5.0
       react:
         specifier: ^19.1.1
         version: 19.1.1
@@ -1711,6 +1714,10 @@ packages:
 
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
+
+  lz-string@1.5.0:
+    resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}
+    hasBin: true
 
   magic-string@0.30.19:
     resolution: {integrity: sha512-2N21sPY9Ws53PZvsEpVtNuSW+ScYbQdp4b9qUaL+9QkHUrGFKo56Lg9Emg5s9V/qrtNBmiR01sYhUOwu3H+VOw==}
@@ -3666,6 +3673,8 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
+
+  lz-string@1.5.0: {}
 
   magic-string@0.30.19:
     dependencies:

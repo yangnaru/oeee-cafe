@@ -46,6 +46,7 @@ interface ToolboxPanelProps {
   onZoomOut: () => void;
   onZoomReset: () => void;
   onSaveCollaborativeDrawing: () => void;
+  initialPosition?: { x: number; y: number };
 }
 
 export const ToolboxPanel = ({
@@ -68,14 +69,17 @@ export const ToolboxPanel = ({
   onZoomOut,
   onZoomReset,
   onSaveCollaborativeDrawing,
+  initialPosition,
 }: ToolboxPanelProps) => {
   const { t } = useLingui();
 
   // Dragging state
-  const [position, setPosition] = useState({
-    x: 288 + 16, // Chat width (288px = w-72) + 16px padding to match chat's p-4
-    y: 70, // Same distance from header as chat (80px to match top positioning)
-  });
+  const [position, setPosition] = useState(
+    initialPosition || {
+      x: 288 + 16, // Chat width (288px = w-72) + 16px padding to match chat's p-4
+      y: 70, // Same distance from header as chat (80px to match top positioning)
+    }
+  );
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const panelRef = useRef<HTMLDivElement>(null);

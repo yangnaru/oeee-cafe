@@ -14,8 +14,8 @@ msgstr ""
 "Plural-Forms: \n"
 
 #: src/components/Chat.tsx:245
-msgid "(you)"
-msgstr "(you)"
+#~ msgid "(you)"
+#~ msgstr "(you)"
 
 #: src/components/SessionExpiredModal.tsx:110
 #~ msgid "💾 Download PNG"
@@ -42,11 +42,11 @@ msgstr "(you)"
 #~ msgid "🔄 Saving..."
 #~ msgstr "🔄 Saving..."
 
-#: src/App.tsx:1725
+#: src/components/modals/AuthErrorModal.tsx:16
 msgid "Authentication Failed"
 msgstr "Authentication Failed"
 
-#: src/components/SessionHeader.tsx:53
+#: src/components/SessionHeader.tsx:56
 msgid "by"
 msgstr "by"
 
@@ -54,47 +54,65 @@ msgstr "by"
 #~ msgid "Chat"
 #~ msgstr "Chat"
 
-#: src/components/SessionHeader.tsx:68
+#. placeholder {0}: drawingContext.communityId
+#: src/OfflineApp.tsx:325
+msgid "Community: {0}"
+msgstr "Community: {0}"
+
+#: src/components/SessionHeader.tsx:71
 msgid "Connected"
 msgstr "Connected"
 
-#: src/components/SessionHeader.tsx:74
+#: src/components/SessionHeader.tsx:77
 msgid "Connecting"
 msgstr "Connecting"
 
-#: src/App.tsx:1846
+#: src/components/modals/ConnectionStatusModal.tsx:58
 msgid "Connecting..."
 msgstr "Connecting..."
 
-#: src/App.tsx:1820
+#: src/components/modals/ConnectionStatusModal.tsx:36
 msgid "Connection lost. Your work is saved locally."
 msgstr "Connection lost. Your work is saved locally."
 
-#: src/components/ColorPalette.tsx:58
+#: src/components/ColorPalette.tsx:59
 msgid "Custom color picker"
 msgstr "Custom color picker"
 
-#: src/components/ColorPalette.tsx:54
+#: src/components/ColorPalette.tsx:55
 msgid "Custom color picker - edits selected palette color"
 msgstr "Custom color picker - edits selected palette color"
 
-#: src/components/SessionHeader.tsx:80
+#: src/components/SessionHeader.tsx:83
 msgid "Disconnected"
 msgstr "Disconnected"
 
-#: src/App.tsx:1835
-#: src/components/SessionExpiredModal.tsx:124
+#: src/components/modals/ConnectionStatusModal.tsx:49
+#: src/components/SessionExpiredModal.tsx:142
+#: src/OfflineApp.tsx:353
 msgid "Download PNG"
 msgstr "Download PNG"
 
+#: src/OfflineApp.tsx:360
+msgid "Download Replay"
+msgstr "Download Replay"
+
 #. placeholder {0}: selectedPaletteIndex + 1
-#: src/components/ColorPalette.tsx:57
+#: src/components/ColorPalette.tsx:58
 msgid "Edit palette color {0}"
 msgstr "Edit palette color {0}"
 
 #: src/App.tsx:1915
 #~ msgid "Eraser"
 #~ msgstr "Eraser"
+
+#: src/OfflineApp.tsx:224
+msgid "Failed to download replay file."
+msgstr "Failed to download replay file."
+
+#: src/OfflineApp.tsx:192
+msgid "Failed to save drawing. Please try again."
+msgstr "Failed to save drawing. Please try again."
 
 #: src/components/SessionExpiredModal.tsx:49
 msgid "Failed to save session. Please try downloading as PNG instead."
@@ -104,8 +122,8 @@ msgstr "Failed to save session. Please try downloading as PNG instead."
 #~ msgid "Fill"
 #~ msgstr "Fill"
 
-#: src/App.tsx:1737
-#: src/App.tsx:1761
+#: src/components/modals/AuthErrorModal.tsx:28
+#: src/components/modals/RoomFullModal.tsx:35
 msgid "Go to Lobby"
 msgstr "Go to Lobby"
 
@@ -113,33 +131,37 @@ msgstr "Go to Lobby"
 #~ msgid "Halftone"
 #~ msgstr "Halftone"
 
-#: src/App.tsx:1695
+#: src/components/modals/InitializationErrorModal.tsx:18
 msgid "Initialization Failed"
 msgstr "Initialization Failed"
 
-#: src/App.tsx:1715
+#: src/components/modals/LoadingModal.tsx:13
 msgid "Initializing collaboration session..."
 msgstr "Initializing collaboration session..."
 
-#: src/components/ToolboxPanel.tsx:352
+#: src/components/ToolboxPanel.tsx:335
 msgid "Left click to select layer, right click to toggle visibility"
 msgstr "Left click to select layer, right click to toggle visibility"
 
-#: src/components/SessionHeader.tsx:86
+#: src/components/SessionHeader.tsx:89
 msgid "Loading"
 msgstr "Loading"
 
-#: src/App.tsx:1712
+#: src/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
 msgstr "Loading..."
 
-#: src/App.tsx:1811
+#: src/components/modals/ConnectionStatusModal.tsx:25
 msgid "LOADING..."
 msgstr "LOADING..."
 
 #: src/App.tsx:917
-msgid "Oeee Cafe"
-msgstr "Oeee Cafe"
+#~ msgid "Oeee Cafe"
+#~ msgstr "Oeee Cafe"
+
+#: src/OfflineApp.tsx:319
+msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
+msgstr "Offline Drawing ({canvasWidth} × {canvasHeight})"
 
 #: src/components/ToolboxPanel.tsx:259
 #~ msgid "Opacity"
@@ -159,11 +181,16 @@ msgstr "Palette color {0} (selected - edit with color picker below)"
 #~ msgid "Pan"
 #~ msgstr "Pan"
 
-#: src/components/Chat.tsx:221
+#. placeholder {0}: drawingContext.parentPostId
+#: src/OfflineApp.tsx:333
+msgid "Parent Post: {0}"
+msgstr "Parent Post: {0}"
+
+#: src/components/Chat.tsx:181
 msgid "Participants"
 msgstr "Participants"
 
-#: src/App.tsx:1829
+#: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
 msgstr "Reconnect"
 
@@ -175,61 +202,66 @@ msgstr "Reconnect"
 #~ msgid "Reset"
 #~ msgstr "Reset"
 
-#: src/App.tsx:1702
-#: src/App.tsx:1767
+#: src/components/modals/InitializationErrorModal.tsx:25
+#: src/components/modals/RoomFullModal.tsx:41
 msgid "Retry"
 msgstr "Retry"
 
-#: src/components/SessionExpiredModal.tsx:145
+#: src/components/SessionExpiredModal.tsx:163
 msgid "Return to Lobby"
 msgstr "Return to Lobby"
 
-#: src/components/SessionExpiredModal.tsx:136
+#: src/components/SessionExpiredModal.tsx:154
 msgid "Save as PNG"
 msgstr "Save as PNG"
 
-#: src/components/ToolboxPanel.tsx:421
-#: src/components/ToolboxPanel.tsx:422
+#: src/OfflineApp.tsx:346
+msgid "Save Drawing"
+msgstr "Save Drawing"
+
+#: src/components/ToolboxPanel.tsx:406
+#: src/components/ToolboxPanel.tsx:407
 msgid "Save drawing to gallery"
 msgstr "Save drawing to gallery"
 
-#: src/components/SessionExpiredModal.tsx:108
-#: src/components/ToolboxPanel.tsx:434
+#: src/components/SessionExpiredModal.tsx:122
+#: src/components/ToolboxPanel.tsx:424
 msgid "Save to Gallery"
 msgstr "Save to Gallery"
 
-#: src/components/SessionExpiredModal.tsx:103
-#: src/components/ToolboxPanel.tsx:429
+#: src/components/SessionExpiredModal.tsx:113
+#: src/components/ToolboxPanel.tsx:419
+#: src/OfflineApp.tsx:346
 msgid "Saving..."
 msgstr "Saving..."
 
-#: src/components/Chat.tsx:322
+#: src/components/Chat.tsx:267
 msgid "Send"
 msgstr "Send"
 
-#: src/components/SessionExpiredModal.tsx:77
+#: src/components/SessionExpiredModal.tsx:82
 msgid "Session Expired"
 msgstr "Session Expired"
 
-#: src/App.tsx:1747
+#: src/components/modals/RoomFullModal.tsx:22
 msgid "Session Full"
 msgstr "Session Full"
 
-#: src/App.tsx:1915
+#: src/components/modals/SessionEndingModal.tsx:15
 msgid "Session is ending. The drawing is being saved to the gallery..."
 msgstr "Session is ending. The drawing is being saved to the gallery..."
 
-#: src/components/SessionHeader.tsx:63
+#: src/components/SessionHeader.tsx:66
 msgid "Share"
 msgstr "Share"
 
 #: src/components/ToolboxPanel.tsx:379
-msgid "Show/hide background layer"
-msgstr "Show/hide background layer"
+#~ msgid "Show/hide background layer"
+#~ msgstr "Show/hide background layer"
 
 #: src/components/ToolboxPanel.tsx:378
-msgid "Show/hide foreground layer"
-msgstr "Show/hide foreground layer"
+#~ msgid "Show/hide foreground layer"
+#~ msgstr "Show/hide foreground layer"
 
 #: src/components/ToolboxPanel.tsx:240
 #~ msgid "Size"
@@ -239,15 +271,15 @@ msgstr "Show/hide foreground layer"
 #~ msgid "Solid"
 #~ msgstr "Solid"
 
-#: src/components/SessionExpiredModal.tsx:83
+#: src/components/SessionExpiredModal.tsx:88
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
 msgstr "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
 
-#: src/components/SessionExpiredModal.tsx:82
+#: src/components/SessionExpiredModal.tsx:87
 msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
 msgstr "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
 
-#: src/components/SessionExpiredModal.tsx:84
+#: src/components/SessionExpiredModal.tsx:89
 msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 msgstr "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 
@@ -255,18 +287,19 @@ msgstr "This collaborative session has ended due to inactivity. You can save you
 msgid "This session has already been saved. You can only download it as a PNG."
 msgstr "This session has already been saved. You can only download it as a PNG."
 
-#. placeholder {0}: roomFullError.currentUserCount
-#. placeholder {1}: roomFullError.maxUsers
-#. placeholder {2}: roomFullError.maxUsers
 #: src/App.tsx:1750
-msgid "This session is full ({0}/{1} users). Only the first {2} users can join a session."
-msgstr "This session is full ({0}/{1} users). Only the first {2} users can join a session."
+#~ msgid "This session is full ({0}/{1} users). Only the first {2} users can join a session."
+#~ msgstr "This session is full ({0}/{1} users). Only the first {2} users can join a session."
 
-#: src/components/Chat.tsx:313
+#: src/components/modals/RoomFullModal.tsx:25
+msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
+msgstr "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
+
+#: src/components/Chat.tsx:258
 msgid "Type a message..."
 msgstr "Type a message..."
 
-#: src/App.tsx:1728
+#: src/components/modals/AuthErrorModal.tsx:19
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 
@@ -274,6 +307,6 @@ msgstr "Unable to authenticate your session. Either the session doesn't exist, o
 #~ msgid "Undo"
 #~ msgstr "Undo"
 
-#: src/App.tsx:1921
+#: src/components/modals/SessionEndingModal.tsx:20
 msgid "You'll be redirected to the post page shortly."
 msgstr "You'll be redirected to the post page shortly."

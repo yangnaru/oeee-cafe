@@ -1,4 +1,3 @@
-import { i18n } from "@lingui/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import { Chat } from "./components/Chat";
@@ -22,29 +21,7 @@ import { useZoomControls } from "./hooks/useZoomControls";
 import { useCanvas } from "./hooks/useCanvas";
 import { useWebSocket, type ConnectionState } from "./hooks/useWebSocket";
 import { useCursor } from "./hooks/useCursor";
-import { messages as enMessages } from "./locales/en/messages";
-import { messages as jaMessages } from "./locales/ja/messages";
-import { messages as koMessages } from "./locales/ko/messages";
-import { messages as zhMessages } from "./locales/zh/messages";
 import { encodeEndSession } from "./utils/binaryProtocol";
-
-// Initialize i18n with locale messages
-const localeMessages = {
-  en: enMessages,
-  ko: koMessages,
-  ja: jaMessages,
-  zh: zhMessages,
-};
-
-const setupI18n = (locale: string) => {
-  const messages =
-    localeMessages[locale as keyof typeof localeMessages] || localeMessages.en;
-  i18n.load(locale, messages);
-  i18n.activate(locale);
-};
-
-// Initialize i18n with default locale (English) to prevent destructuring errors
-setupI18n("en");
 
 // Function to get session ID from URL
 const getSessionId = (): string => {
@@ -506,10 +483,8 @@ function App() {
       userIdRef.current = authInfo.user_id;
       userLoginNameRef.current = authInfo.login_name;
 
-      // Set up internationalization with preferred locale
-      if (authInfo.preferred_locale) {
-        setupI18n(authInfo.preferred_locale);
-      }
+      // Note: i18n is set up in main.tsx using the user's preferred locale
+      // from /api/auth, so we don't need to set it up again here
 
       // Step 3: Fetch collaboration metadata
       console.log("Fetching collaboration metadata");
