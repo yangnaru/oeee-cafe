@@ -18,6 +18,7 @@ const DEFAULT_HEIGHT = 300;
 
 function OfflineApp() {
   const { t } = useLingui();
+  const isDevelopment = import.meta.env.DEV;
 
   // Extract and validate dimensions and context from URL parameters
   const { canvasWidth, canvasHeight, communityId, parentPostId, twoToneConfig } =
@@ -401,20 +402,24 @@ function OfflineApp() {
             >
               {isSaving ? <Trans>Saving...</Trans> : <Trans>Save Drawing</Trans>}
             </button>
-            <button
-              type="button"
-              onClick={downloadCanvasAsPNG}
-              className="px-4 py-2 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
-            >
-              <Trans>Download PNG</Trans>
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadReplay}
-              className="px-4 py-2 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
-            >
-              <Trans>Download Replay</Trans>
-            </button>
+            {isDevelopment && (
+              <>
+                <button
+                  type="button"
+                  onClick={downloadCanvasAsPNG}
+                  className="px-4 py-2 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
+                >
+                  <Trans>Download PNG</Trans>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadReplay}
+                  className="px-4 py-2 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
+                >
+                  <Trans>Download Replay</Trans>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
