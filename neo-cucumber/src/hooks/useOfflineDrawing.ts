@@ -246,6 +246,62 @@ export const useOfflineDrawing = (
     }
   }, [baseDrawing.drawingEngine]);
 
+  // Track if we've already initialized to prevent double-init
+  const hasInitializedTwoToneRef = useRef(false);
+
+  // Initialize two-tone canvas with background color fill
+  const initializeTwoToneCanvas = useCallback((backgroundColor: string) => {
+    console.log("initializeTwoToneCanvas called with backgroundColor:", backgroundColor);
+
+    // Guard against double initialization
+    if (hasInitializedTwoToneRef.current) {
+      console.log("Already initialized two-tone canvas, skipping");
+      return;
+    }
+
+    const engine = baseDrawing.drawingEngine;
+    const history = baseDrawing.history;
+    if (!engine || !history) {
+      console.log("Engine or history not ready yet");
+      return;
+    }
+
+    hasInitializedTwoToneRef.current = true;
+
+    const bgLayer = engine.layers.background;
+    const r = parseInt(backgroundColor.slice(1, 3), 16);
+    const g = parseInt(backgroundColor.slice(3, 5), 16);
+    const b = parseInt(backgroundColor.slice(5, 7), 16);
+    console.log("Parsed RGB values:", { r, g, b });
+
+    // Fill entire canvas with background color (floodFill at 0,0)
+    // Opacity must be in 0-255 range, not 0-1
+    engine.doFloodFill(bgLayer, 0, 0, r, g, b, 255);
+    console.log("After doFloodFill, checking bgLayer canvas:");
+    const bgCanvas = engine.getLayerCanvas("background");
+    if (bgCanvas) {
+      const ctx = bgCanvas.getContext("2d");
+      if (ctx) {
+        const pixelData = ctx.getImageData(10, 10, 1, 1).data;
+        console.log("Sample pixel at (10,10):", { r: pixelData[0], g: pixelData[1], b: pixelData[2], a: pixelData[3] });
+      }
+    }
+
+    engine.updateAllDOMCanvasesImmediate();
+    console.log("Canvas filled and updated");
+
+    // Save canvas state to history after fill
+    history.saveState(engine.layers.background, engine.layers.foreground, "both", true);
+    console.log("Saved canvas state to history after fill");
+
+    // Record in replay - ABGR format
+    const color = (255 << 24) | (b << 16) | (g << 8) | r;
+    actionRecorderRef.current.step();
+    actionRecorderRef.current.push("floodFill", 0, 0, 0, color);
+    strokeCountRef.current++;
+    console.log("Replay recorded, stroke count:", strokeCountRef.current);
+  }, [baseDrawing.drawingEngine, baseDrawing.history]);
+
   // Return enhanced interface with replay functionality
   return {
     ...baseDrawing,
@@ -256,5 +312,6 @@ export const useOfflineDrawing = (
     getStartTime: () => startTimeRef.current,
     getStrokeCount: () => strokeCountRef.current,
     addRestoreAction,
+    initializeTwoToneCanvas,
   };
 };

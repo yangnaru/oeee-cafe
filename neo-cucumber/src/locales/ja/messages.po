@@ -54,8 +54,12 @@ msgstr "作成者:"
 #~ msgid "Chat"
 #~ msgstr "チャット"
 
+#: src/components/SimplifiedToolbox.tsx:59
+msgid "Color"
+msgstr ""
+
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:325
+#: src/OfflineApp.tsx:360
 msgid "Community: {0}"
 msgstr "コミュニティ: {0}"
 
@@ -89,11 +93,11 @@ msgstr "切断済み"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:353
+#: src/OfflineApp.tsx:388
 msgid "Download PNG"
 msgstr "PNG をダウンロード"
 
-#: src/OfflineApp.tsx:360
+#: src/OfflineApp.tsx:395
 msgid "Download Replay"
 msgstr "リプレイをダウンロード"
 
@@ -106,11 +110,11 @@ msgstr "パレットカラー {0} を編集"
 #~ msgid "Eraser"
 #~ msgstr "消しゴム"
 
-#: src/OfflineApp.tsx:224
+#: src/OfflineApp.tsx:248
 msgid "Failed to download replay file."
 msgstr "リプレイファイルのダウンロードに失敗しました。"
 
-#: src/OfflineApp.tsx:192
+#: src/OfflineApp.tsx:211
 msgid "Failed to save drawing. Please try again."
 msgstr "描画の保存に失敗しました。もう一度お試しください。"
 
@@ -159,7 +163,7 @@ msgstr "読み込み中..."
 #~ msgid "Oeee Cafe"
 #~ msgstr "OEEEカフェ"
 
-#: src/OfflineApp.tsx:319
+#: src/OfflineApp.tsx:354
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "オフライン描画 ({canvasWidth} × {canvasHeight})"
 
@@ -182,7 +186,7 @@ msgstr "パレットカラー {0} (選択済み - 下のカラーピッカーで
 #~ msgstr "パン"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:333
+#: src/OfflineApp.tsx:368
 msgid "Parent Post: {0}"
 msgstr "親投稿: {0}"
 
@@ -215,7 +219,8 @@ msgstr "ロビーに戻る"
 msgid "Save as PNG"
 msgstr "PNG として保存"
 
-#: src/OfflineApp.tsx:346
+#: src/components/SimplifiedToolbox.tsx:117
+#: src/OfflineApp.tsx:381
 msgid "Save Drawing"
 msgstr "描画を保存"
 
@@ -230,8 +235,9 @@ msgid "Save to Gallery"
 msgstr "ギャラリーに保存"
 
 #: src/components/SessionExpiredModal.tsx:113
+#: src/components/SimplifiedToolbox.tsx:117
 #: src/components/ToolboxPanel.tsx:419
-#: src/OfflineApp.tsx:346
+#: src/OfflineApp.tsx:381
 msgid "Saving..."
 msgstr "保存中..."
 
@@ -303,9 +309,9 @@ msgstr "メッセージを入力..."
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "セッションを認証できません。セッションが存在しないか、期限切れです。ロビーに戻ってください。"
 
-#: src/App.tsx:1887
-#~ msgid "Undo"
-#~ msgstr "元に戻す"
+#: src/components/SimplifiedToolbox.tsx:107
+msgid "Undo"
+msgstr "元に戻す"
 
 #: src/components/modals/SessionEndingModal.tsx:20
 msgid "You'll be redirected to the post page shortly."

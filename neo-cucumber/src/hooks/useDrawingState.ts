@@ -63,6 +63,25 @@ export const useDrawingState = () => {
     [selectedPaletteIndex, paletteColors, updateColor]
   );
 
+  // Initialize for two-tone drawing mode
+  const initializeForTwoTone = useCallback(
+    (backgroundColor: string, foregroundColor: string) => {
+      console.log("initializeForTwoTone called with:", { backgroundColor, foregroundColor });
+      setPaletteColors([backgroundColor, foregroundColor]);
+      console.log("setPaletteColors called with:", [backgroundColor, foregroundColor]);
+      setSelectedPaletteIndex(1); // Start with foreground color selected
+      setDrawingState((prev) => ({
+        ...prev,
+        brushSize: 2, // Two-tone mode starts with brush size 2
+        color: foregroundColor,
+        brushType: "solid",
+        opacity: 255,
+        layerType: "background",
+      }));
+    },
+    []
+  );
+
   return {
     // State
     drawingState,
@@ -78,5 +97,6 @@ export const useDrawingState = () => {
     updateBrushType,
     updateColor,
     handleColorPickerChange,
+    initializeForTwoTone,
   };
 };

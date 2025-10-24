@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import "./App.css";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ToolboxPanel } from "./components/ToolboxPanel";
+import { SimplifiedToolbox } from "./components/SimplifiedToolbox";
 import { useOfflineDrawing } from "./hooks/useOfflineDrawing";
 import { useDrawingState } from "./hooks/useDrawingState";
 import { useZoomControls } from "./hooks/useZoomControls";
@@ -19,7 +20,7 @@ function OfflineApp() {
   const { t } = useLingui();
 
   // Extract and validate dimensions and context from URL parameters
-  const { canvasWidth, canvasHeight, communityId, parentPostId } =
+  const { canvasWidth, canvasHeight, communityId, parentPostId, twoToneConfig } =
     useMemo(() => {
       const params = new URLSearchParams(window.location.search);
       const widthParam = params.get("width");
@@ -41,11 +42,25 @@ function OfflineApp() {
       const communityId = params.get("community_id") || null;
       const parentPostId = params.get("parent_post_id") || null;
 
+      // Parse two-tone mode parameters
+      const twoTone = params.get("twoTone") === "true";
+      const twoToneConfig = twoTone ? {
+        enabled: true,
+        backgroundColor: params.get("backgroundColor") || "#ffffff",
+        foregroundColor: params.get("foregroundColor") || "#000000"
+      } : null;
+
+      // Debug logging
+      if (twoToneConfig) {
+        console.log("Two-tone config parsed:", twoToneConfig);
+      }
+
       return {
         canvasWidth: width,
         canvasHeight: height,
         communityId,
         parentPostId,
+        twoToneConfig,
       };
     }, []);
 
@@ -58,12 +73,33 @@ function OfflineApp() {
     updateBrushType,
     updateColor,
     handleColorPickerChange,
+    initializeForTwoTone,
   } = useDrawingState();
+
+  // Initialize two-tone palette immediately if in two-tone mode
+  // Use useLayoutEffect to ensure synchronous execution before first paint
+  useLayoutEffect(() => {
+    if (twoToneConfig) {
+      console.log("Calling initializeForTwoTone with:", {
+        bg: twoToneConfig.backgroundColor,
+        fg: twoToneConfig.foregroundColor
+      });
+      initializeForTwoTone(
+        twoToneConfig.backgroundColor,
+        twoToneConfig.foregroundColor
+      );
+    }
+  }, [twoToneConfig, initializeForTwoTone]);
 
   const [historyState, setHistoryState] = useState({
     canUndo: false,
     canRedo: false,
   });
+
+  // Debug: Log palette colors whenever they change
+  useEffect(() => {
+    console.log("Current paletteColors:", paletteColors);
+  }, [paletteColors]);
 
   // Store community and parent post context from URL parameters
   const [drawingContext] = useState({
@@ -103,6 +139,7 @@ function OfflineApp() {
     getStartTime,
     getStrokeCount,
     addRestoreAction,
+    initializeTwoToneCanvas,
   } = useOfflineDrawing(
     tempLocalUserCanvasRef,
     appRef,
@@ -168,9 +205,12 @@ function OfflineApp() {
       formData.append("animation", replayBlob);
       formData.append("width", canvasWidth.toString());
       formData.append("height", canvasHeight.toString());
-      formData.append("tool", "neo-cucumber-offline");
+      // Use "cucumber" tool name for two-tone mode, otherwise "neo-cucumber-offline"
+      formData.append("tool", twoToneConfig ? "cucumber" : "neo-cucumber-offline");
       formData.append("security_timer", getStartTime().toString());
-      formData.append("security_count", getStrokeCount().toString());
+      // For two-tone mode: subtract 2 (initial fill + final restore) from stroke count
+      const strokeCount = twoToneConfig ? getStrokeCount() - 2 : getStrokeCount();
+      formData.append("security_count", strokeCount.toString());
 
       if (drawingContext.communityId) {
         formData.append("community_id", drawingContext.communityId);
@@ -208,6 +248,7 @@ function OfflineApp() {
     addRestoreAction,
     drawingContext,
     isSaving,
+    twoToneConfig,
     t,
   ]);
 
@@ -294,6 +335,13 @@ function OfflineApp() {
     setDrawingState,
     canvasContainerRef,
   ]);
+
+  // Initialize two-tone canvas fill when drawing engine is ready
+  useEffect(() => {
+    if (drawingEngine && twoToneConfig) {
+      initializeTwoToneCanvas(twoToneConfig.backgroundColor);
+    }
+  }, [drawingEngine, twoToneConfig, initializeTwoToneCanvas]);
 
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
@@ -409,28 +457,47 @@ function OfflineApp() {
               />
               {/* Layer canvases will be dynamically created here */}
             </div>
-            <ToolboxPanel
-              drawingState={drawingState}
-              historyState={historyState}
-              paletteColors={paletteColors}
-              selectedPaletteIndex={selectedPaletteIndex}
-              currentZoom={currentZoom}
-              isOwner={false}
-              isSaving={false}
-              sessionEnded={false}
-              onUndo={undo}
-              onRedo={redo}
-              onUpdateBrushType={updateBrushType}
-              onUpdateDrawingState={setDrawingState}
-              onUpdateColor={updateColor}
-              onColorPickerChange={handleColorPickerChange}
-              onSetSelectedPaletteIndex={setSelectedPaletteIndex}
-              onZoomIn={() => handleZoomIn()}
-              onZoomOut={() => handleZoomOut()}
-              onZoomReset={handleZoomReset}
-              onSaveCollaborativeDrawing={() => {}}
-              initialPosition={{ x: 16, y: 70 }}
-            />
+            {twoToneConfig ? (
+              <SimplifiedToolbox
+                brushSize={drawingState.brushSize}
+                paletteColors={paletteColors}
+                selectedPaletteIndex={selectedPaletteIndex}
+                canUndo={historyState.canUndo}
+                canRedo={historyState.canRedo}
+                isSaving={isSaving}
+                onBrushSizeChange={(size) =>
+                  setDrawingState((prev) => ({ ...prev, brushSize: size }))
+                }
+                onColorSelect={updateColor}
+                onSetSelectedPaletteIndex={setSelectedPaletteIndex}
+                onUndo={undo}
+                onRedo={redo}
+                onSave={handleSaveDrawing}
+              />
+            ) : (
+              <ToolboxPanel
+                drawingState={drawingState}
+                historyState={historyState}
+                paletteColors={paletteColors}
+                selectedPaletteIndex={selectedPaletteIndex}
+                currentZoom={currentZoom}
+                isOwner={false}
+                isSaving={false}
+                sessionEnded={false}
+                onUndo={undo}
+                onRedo={redo}
+                onUpdateBrushType={updateBrushType}
+                onUpdateDrawingState={setDrawingState}
+                onUpdateColor={updateColor}
+                onColorPickerChange={handleColorPickerChange}
+                onSetSelectedPaletteIndex={setSelectedPaletteIndex}
+                onZoomIn={() => handleZoomIn()}
+                onZoomOut={() => handleZoomOut()}
+                onZoomReset={handleZoomReset}
+                onSaveCollaborativeDrawing={() => {}}
+                initialPosition={{ x: 16, y: 70 }}
+              />
+            )}
           </div>
         </div>
       </div>

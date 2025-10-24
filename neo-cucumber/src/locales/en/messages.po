@@ -54,8 +54,12 @@ msgstr "by"
 #~ msgid "Chat"
 #~ msgstr "Chat"
 
+#: src/components/SimplifiedToolbox.tsx:59
+msgid "Color"
+msgstr "Color"
+
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:325
+#: src/OfflineApp.tsx:360
 msgid "Community: {0}"
 msgstr "Community: {0}"
 
@@ -89,11 +93,11 @@ msgstr "Disconnected"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:353
+#: src/OfflineApp.tsx:388
 msgid "Download PNG"
 msgstr "Download PNG"
 
-#: src/OfflineApp.tsx:360
+#: src/OfflineApp.tsx:395
 msgid "Download Replay"
 msgstr "Download Replay"
 
@@ -106,11 +110,11 @@ msgstr "Edit palette color {0}"
 #~ msgid "Eraser"
 #~ msgstr "Eraser"
 
-#: src/OfflineApp.tsx:224
+#: src/OfflineApp.tsx:248
 msgid "Failed to download replay file."
 msgstr "Failed to download replay file."
 
-#: src/OfflineApp.tsx:192
+#: src/OfflineApp.tsx:211
 msgid "Failed to save drawing. Please try again."
 msgstr "Failed to save drawing. Please try again."
 
@@ -159,7 +163,7 @@ msgstr "LOADING..."
 #~ msgid "Oeee Cafe"
 #~ msgstr "Oeee Cafe"
 
-#: src/OfflineApp.tsx:319
+#: src/OfflineApp.tsx:354
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "Offline Drawing ({canvasWidth} × {canvasHeight})"
 
@@ -182,7 +186,7 @@ msgstr "Palette color {0} (selected - edit with color picker below)"
 #~ msgstr "Pan"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:333
+#: src/OfflineApp.tsx:368
 msgid "Parent Post: {0}"
 msgstr "Parent Post: {0}"
 
@@ -215,7 +219,8 @@ msgstr "Return to Lobby"
 msgid "Save as PNG"
 msgstr "Save as PNG"
 
-#: src/OfflineApp.tsx:346
+#: src/components/SimplifiedToolbox.tsx:117
+#: src/OfflineApp.tsx:381
 msgid "Save Drawing"
 msgstr "Save Drawing"
 
@@ -230,8 +235,9 @@ msgid "Save to Gallery"
 msgstr "Save to Gallery"
 
 #: src/components/SessionExpiredModal.tsx:113
+#: src/components/SimplifiedToolbox.tsx:117
 #: src/components/ToolboxPanel.tsx:419
-#: src/OfflineApp.tsx:346
+#: src/OfflineApp.tsx:381
 msgid "Saving..."
 msgstr "Saving..."
 
@@ -303,9 +309,9 @@ msgstr "Type a message..."
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 
-#: src/App.tsx:1887
-#~ msgid "Undo"
-#~ msgstr "Undo"
+#: src/components/SimplifiedToolbox.tsx:107
+msgid "Undo"
+msgstr "Undo"
 
 #: src/components/modals/SessionEndingModal.tsx:20
 msgid "You'll be redirected to the post page shortly."
