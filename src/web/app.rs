@@ -267,6 +267,7 @@ impl App {
                 "/collaborate",
                 get(collaborate_lobby).post(create_collaborative_session),
             )
+            .route("/collaborate/", get(serve_collaborative_app))
             .route(
                 "/collaborate/:uuid",
                 get(serve_collaborative_app).post(save_collaborative_session),
