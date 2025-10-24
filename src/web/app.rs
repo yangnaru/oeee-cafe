@@ -18,9 +18,9 @@ use crate::web::handlers::collaborate::{
 use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
     communities, community, community_comments, community_iframe, create_community_form,
-    do_accept_invitation, do_create_community, do_reject_invitation,
-    get_members, hx_do_edit_community, hx_edit_community, invite_user,
-    members_page, remove_member, retract_invitation,
+    do_accept_invitation, do_create_community, do_reject_invitation, get_members,
+    hx_do_edit_community, hx_edit_community, invite_user, members_page, remove_member,
+    retract_invitation,
 };
 use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
@@ -33,11 +33,11 @@ use crate::web::handlers::notifications::{
     mark_all_notifications_read, mark_notification_read,
 };
 use crate::web::handlers::post::{
-    add_reaction, do_create_comment, do_post_edit_community,
-    draft_posts, hx_delete_post, hx_do_edit_post, hx_edit_post,
-    post_edit_community, post_publish, post_publish_form, post_reactions_detail, post_relay_view,
-    post_relay_view_by_login_name, post_replay_view, post_replay_view_by_login_name,
-    post_view_by_login_name, redirect_post_to_login_name, remove_reaction,
+    add_reaction, do_create_comment, do_post_edit_community, draft_posts, hx_delete_post,
+    hx_do_edit_post, hx_edit_post, post_edit_community, post_publish, post_publish_form,
+    post_reactions_detail, post_relay_view, post_relay_view_by_login_name, post_replay_view,
+    post_replay_view_by_login_name, post_view_by_login_name, redirect_post_to_login_name,
+    remove_reaction,
 };
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
@@ -99,7 +99,6 @@ impl App {
         let auth_layer = AuthManagerLayerBuilder::new(authn_backend, session_layer).build();
 
         let static_router = Router::new()
-            .nest_service("/static/cucumber", ServeDir::new("cucumber"))
             .nest_service("/static/neo/dist", ServeDir::new("neo/dist"))
             .nest_service("/static/tegaki/css", ServeDir::new("tegaki/css"))
             .nest_service("/static/tegaki/js", ServeDir::new("tegaki/js"))
@@ -146,8 +145,14 @@ impl App {
             .route("/posts/:post_id/reactions/remove", post(remove_reaction))
             .route("/communities/new", get(create_community_form))
             .route("/communities/@:slug/members", get(members_page))
-            .route("/communities/@:slug/members/:user_id", delete(remove_member))
-            .route("/communities/@:slug/invitations/:invitation_id", delete(retract_invitation))
+            .route(
+                "/communities/@:slug/members/:user_id",
+                delete(remove_member),
+            )
+            .route(
+                "/communities/@:slug/invitations/:invitation_id",
+                delete(retract_invitation),
+            )
             .route("/communities/:id/members", get(get_members))
             .route("/communities/:id/invite", post(invite_user))
             .route("/communities/:id/members/:user_id", delete(remove_member))
@@ -166,10 +171,7 @@ impl App {
             .route("/posts/:id/relay", get(post_relay_view))
             .route("/posts/:id", put(hx_do_edit_post))
             .route("/posts/:id", delete(hx_delete_post))
-            .route(
-                "/@:login_name/:id/edit/community",
-                get(post_edit_community),
-            )
+            .route("/@:login_name/:id/edit/community", get(post_edit_community))
             .route(
                 "/@:login_name/:id/edit/community",
                 post(do_post_edit_community),

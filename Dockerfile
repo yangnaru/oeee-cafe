@@ -27,13 +27,6 @@ RUN --mount=type=cache,target=/sccache,sharing=locked \
     cargo build --release && \
     sccache --show-stats
 
-# Build cucumber
-FROM node:24-slim AS node-builder-cucumber
-WORKDIR /app/cucumber
-COPY cucumber/package.json cucumber/package-lock.json cucumber/tsconfig.json cucumber/ ./
-RUN npm ci
-RUN npx tsc
-
 # Build neo-cucumber
 FROM node:24-slim AS node-builder-neo-cucumber
 WORKDIR /app/neo-cucumber
@@ -55,6 +48,5 @@ COPY static/ ./static/
 COPY templates/ ./templates/
 COPY --from=rust-builder /app/target/release/oeee-cafe ./
 COPY --from=node-builder-neo-cucumber /app/neo-cucumber/dist/ ./neo-cucumber/dist/
-COPY --from=node-builder-cucumber /app/cucumber/cucumber.js ./cucumber/
 EXPOSE 3000
 CMD ["./oeee-cafe", "config.toml"]

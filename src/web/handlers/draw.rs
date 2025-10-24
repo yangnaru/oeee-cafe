@@ -53,7 +53,6 @@ pub async fn start_draw(
     let template_filename = match input.tool.as_str() {
         "neo" => "draw_post_neo.jinja",
         "tegaki" => "draw_post_tegaki.jinja",
-        "cucumber" => "draw_post_cucumber.jinja",
         _ => "draw_post_neo.jinja",
     };
 
