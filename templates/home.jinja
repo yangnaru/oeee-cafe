@@ -1,7 +1,6 @@
 {% extends "base.jinja" %}
 {% import "comment_card_macro.jinja" as comment_card_macro %}
 {% import "community_card_macro.jinja" as community_card_macro %}
-
 {# Macro for rendering post grid items - reusable across different sections #}
 {% macro post_grid_item(post, r2_public_endpoint_url) %}
   <div class="posts-grid-item">
@@ -18,31 +17,15 @@
     </a>
   </div>
 {% endmacro %}
-
 {% block title %}
   {{ ftl_get_message("brand") }}
 {% endblock title %}
-
 {% block content %}
   <div class="center">
-    {# Recent Comments from Public Communities Section #}
-    {% if recent_comments and recent_comments|length > 0 %}
-      <section class="recent-comments-section" role="region" aria-labelledby="recent-comments-heading">
-        <h2 id="recent-comments-heading" class="home-section-title">
-          {{ ftl_get_message("recent-comments-from-public-communities") }}
-        </h2>
-        {% for comment in recent_comments %}
-          {{ comment_card_macro.comment_card(comment, r2_public_endpoint_url, ftl_get_message) }}
-        {% endfor %}
-      </section>
-    {% endif %}
-
     {# Latest Active Communities Section #}
     {% if active_public_communities and active_public_communities|length > 0 %}
       <section role="region" aria-labelledby="active-communities-heading">
-        <h2 id="active-communities-heading" class="home-section-title">
-          {{ ftl_get_message("latest-active-communities") }}
-        </h2>
+        <h2 id="active-communities-heading" class="home-section-title">{{ ftl_get_message("latest-active-communities") }}</h2>
         <div class="community-list">
           {# Note: Limited to 10 communities for performance. Consider pagination for larger lists. #}
           {% for community in active_public_communities[:10] %}
@@ -52,23 +35,29 @@
       </section>
     {% else %}
       <section role="region" aria-labelledby="active-communities-heading">
-        <h2 id="active-communities-heading" class="home-section-title">
-          {{ ftl_get_message("latest-active-communities") }}
-        </h2>
+        <h2 id="active-communities-heading" class="home-section-title">{{ ftl_get_message("latest-active-communities") }}</h2>
         <p class="empty-state">{{ ftl_get_message("no-active-communities") }}</p>
       </section>
     {% endif %}
-
+    {# Recent Comments from Public Communities Section #}
+    {% if recent_comments and recent_comments|length > 0 %}
+      <section class="recent-comments-section"
+               role="region"
+               aria-labelledby="recent-comments-heading">
+        <h2 id="recent-comments-heading" class="home-section-title">
+          {{ ftl_get_message("recent-comments-from-public-communities") }}
+        </h2>
+        {% for comment in recent_comments %}
+          {{ comment_card_macro.comment_card(comment, r2_public_endpoint_url, ftl_get_message) }}
+        {% endfor %}
+      </section>
+    {% endif %}
     {# Posts from Public Communities Section - MOVED TO BOTTOM with Infinite Scroll #}
     {% if non_official_public_community_posts and non_official_public_community_posts|length > 0 %}
       <section role="region" aria-labelledby="public-posts-heading">
-        <h2 id="public-posts-heading" class="home-section-title">
-          {{ ftl_get_message("posts-from-public-communities") }}
-        </h2>
+        <h2 id="public-posts-heading" class="home-section-title">{{ ftl_get_message("posts-from-public-communities") }}</h2>
         <div class="posts-grid" id="public-posts-grid">
-          {% for post in non_official_public_community_posts %}
-            {{ post_grid_item(post, r2_public_endpoint_url) }}
-          {% endfor %}
+          {% for post in non_official_public_community_posts %}{{ post_grid_item(post, r2_public_endpoint_url) }}{% endfor %}
           {# Infinite scroll sentinel - triggers when scrolled into view #}
           {% if non_official_public_community_posts|length == 18 %}
             <div class="infinite-scroll-sentinel"
