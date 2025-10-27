@@ -54,12 +54,12 @@ msgstr "by"
 #~ msgid "Chat"
 #~ msgstr "Chat"
 
-#: src/components/SimplifiedToolbox.tsx:59
+#: src/components/SimplifiedToolbox.tsx:63
 msgid "Color"
 msgstr "Color"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:360
+#: src/OfflineApp.tsx:382
 msgid "Community: {0}"
 msgstr "Community: {0}"
 
@@ -93,11 +93,11 @@ msgstr "Disconnected"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:388
+#: src/OfflineApp.tsx:412
 msgid "Download PNG"
 msgstr "Download PNG"
 
-#: src/OfflineApp.tsx:395
+#: src/OfflineApp.tsx:419
 msgid "Download Replay"
 msgstr "Download Replay"
 
@@ -110,11 +110,11 @@ msgstr "Edit palette color {0}"
 #~ msgid "Eraser"
 #~ msgstr "Eraser"
 
-#: src/OfflineApp.tsx:248
+#: src/OfflineApp.tsx:274
 msgid "Failed to download replay file."
 msgstr "Failed to download replay file."
 
-#: src/OfflineApp.tsx:211
+#: src/OfflineApp.tsx:237
 msgid "Failed to save drawing. Please try again."
 msgstr "Failed to save drawing. Please try again."
 
@@ -125,6 +125,10 @@ msgstr "Failed to save session. Please try downloading as PNG instead."
 #: src/App.tsx:1917
 #~ msgid "Fill"
 #~ msgstr "Fill"
+
+#: src/components/ToolboxPanel.tsx:415
+msgid "Flip"
+msgstr "Flip"
 
 #: src/components/modals/AuthErrorModal.tsx:28
 #: src/components/modals/RoomFullModal.tsx:35
@@ -143,7 +147,7 @@ msgstr "Initialization Failed"
 msgid "Initializing collaboration session..."
 msgstr "Initializing collaboration session..."
 
-#: src/components/ToolboxPanel.tsx:335
+#: src/components/ToolboxPanel.tsx:336
 msgid "Left click to select layer, right click to toggle visibility"
 msgstr "Left click to select layer, right click to toggle visibility"
 
@@ -163,7 +167,7 @@ msgstr "LOADING..."
 #~ msgid "Oeee Cafe"
 #~ msgstr "Oeee Cafe"
 
-#: src/OfflineApp.tsx:354
+#: src/OfflineApp.tsx:376
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "Offline Drawing ({canvasWidth} × {canvasHeight})"
 
@@ -186,7 +190,7 @@ msgstr "Palette color {0} (selected - edit with color picker below)"
 #~ msgstr "Pan"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:368
+#: src/OfflineApp.tsx:390
 msgid "Parent Post: {0}"
 msgstr "Parent Post: {0}"
 
@@ -198,9 +202,9 @@ msgstr "Participants"
 msgid "Reconnect"
 msgstr "Reconnect"
 
-#: src/App.tsx:1895
-#~ msgid "Redo"
-#~ msgstr "Redo"
+#: src/components/SimplifiedToolbox.tsx:120
+msgid "Redo"
+msgstr "Redo"
 
 #: src/App.tsx:2119
 #~ msgid "Reset"
@@ -219,25 +223,25 @@ msgstr "Return to Lobby"
 msgid "Save as PNG"
 msgstr "Save as PNG"
 
-#: src/components/SimplifiedToolbox.tsx:117
-#: src/OfflineApp.tsx:381
+#: src/components/SimplifiedToolbox.tsx:131
+#: src/OfflineApp.tsx:403
 msgid "Save Drawing"
 msgstr "Save Drawing"
 
-#: src/components/ToolboxPanel.tsx:406
-#: src/components/ToolboxPanel.tsx:407
+#: src/components/ToolboxPanel.tsx:429
+#: src/components/ToolboxPanel.tsx:430
 msgid "Save drawing to gallery"
 msgstr "Save drawing to gallery"
 
 #: src/components/SessionExpiredModal.tsx:122
-#: src/components/ToolboxPanel.tsx:424
+#: src/components/ToolboxPanel.tsx:447
 msgid "Save to Gallery"
 msgstr "Save to Gallery"
 
 #: src/components/SessionExpiredModal.tsx:113
-#: src/components/SimplifiedToolbox.tsx:117
-#: src/components/ToolboxPanel.tsx:419
-#: src/OfflineApp.tsx:381
+#: src/components/SimplifiedToolbox.tsx:131
+#: src/components/ToolboxPanel.tsx:442
+#: src/OfflineApp.tsx:403
 msgid "Saving..."
 msgstr "Saving..."
 
@@ -301,6 +305,10 @@ msgstr "This session has already been saved. You can only download it as a PNG."
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 
+#: src/components/ToolboxPanel.tsx:411
+msgid "Toggle horizontal flip"
+msgstr "Toggle horizontal flip"
+
 #: src/components/Chat.tsx:258
 msgid "Type a message..."
 msgstr "Type a message..."
@@ -309,7 +317,7 @@ msgstr "Type a message..."
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 
-#: src/components/SimplifiedToolbox.tsx:107
+#: src/components/SimplifiedToolbox.tsx:112
 msgid "Undo"
 msgstr "Undo"
 

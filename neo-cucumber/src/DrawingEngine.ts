@@ -28,6 +28,7 @@ export class DrawingEngine {
   private prevLine: [[number, number], [number, number]] | null = null;
   private panOffsetX = 0;
   private panOffsetY = 0;
+  private isFlippedHorizontal = false;
 
   // Alpha calculation constants
   private static readonly ALPHATYPE_PEN = 0;
@@ -306,15 +307,22 @@ export class DrawingEngine {
     this.updateCanvasPan(container, zoomScale);
   }
 
+  public setFlippedHorizontal(isFlipped: boolean, container?: HTMLCanvasElement | HTMLDivElement, zoomScale?: number) {
+    this.isFlippedHorizontal = isFlipped;
+    this.updateCanvasPan(container, zoomScale);
+  }
+
   private updateCanvasPan(container?: HTMLCanvasElement | HTMLDivElement, zoomScale?: number) {
     if (!container) return;
 
-    // Combine scale and translate transforms
+    // Combine flip, scale, and translate transforms
+    const flipTransform = this.isFlippedHorizontal ? 'scaleX(-1)' : '';
     const scaleTransform = zoomScale ? `scale(${zoomScale})` : '';
     const translateTransform = `translate(${this.panOffsetX}px, ${this.panOffsetY}px)`;
-    const transform = scaleTransform 
-      ? `${scaleTransform} ${translateTransform}` 
-      : translateTransform;
+
+    // Build transform string with all active transforms
+    const transforms = [flipTransform, scaleTransform, translateTransform].filter(t => t);
+    const transform = transforms.join(' ');
     
     // Find the actual canvas container
     let actualContainer: HTMLElement | null = null;

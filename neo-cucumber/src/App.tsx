@@ -611,6 +611,17 @@ function App() {
     canvasContainerRef,
   ]);
 
+  // Sync horizontal flip state to drawing engine
+  useEffect(() => {
+    if (drawingEngine) {
+      drawingEngine.setFlippedHorizontal(
+        drawingState.isFlippedHorizontal,
+        canvasContainerRef.current || undefined,
+        currentZoom
+      );
+    }
+  }, [drawingState.isFlippedHorizontal, drawingEngine, currentZoom, canvasContainerRef]);
+
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

@@ -10,6 +10,7 @@ export interface DrawingState {
   zoomLevel: number;
   fgVisible: boolean;
   bgVisible: boolean;
+  isFlippedHorizontal: boolean;
   pendingPanDeltaX?: number;
   pendingPanDeltaY?: number;
 }

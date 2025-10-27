@@ -54,12 +54,12 @@ msgstr "作成者:"
 #~ msgid "Chat"
 #~ msgstr "チャット"
 
-#: src/components/SimplifiedToolbox.tsx:59
+#: src/components/SimplifiedToolbox.tsx:63
 msgid "Color"
 msgstr ""
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:360
+#: src/OfflineApp.tsx:382
 msgid "Community: {0}"
 msgstr "コミュニティ: {0}"
 
@@ -93,11 +93,11 @@ msgstr "切断済み"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:388
+#: src/OfflineApp.tsx:412
 msgid "Download PNG"
 msgstr "PNG をダウンロード"
 
-#: src/OfflineApp.tsx:395
+#: src/OfflineApp.tsx:419
 msgid "Download Replay"
 msgstr "リプレイをダウンロード"
 
@@ -110,11 +110,11 @@ msgstr "パレットカラー {0} を編集"
 #~ msgid "Eraser"
 #~ msgstr "消しゴム"
 
-#: src/OfflineApp.tsx:248
+#: src/OfflineApp.tsx:274
 msgid "Failed to download replay file."
 msgstr "リプレイファイルのダウンロードに失敗しました。"
 
-#: src/OfflineApp.tsx:211
+#: src/OfflineApp.tsx:237
 msgid "Failed to save drawing. Please try again."
 msgstr "描画の保存に失敗しました。もう一度お試しください。"
 
@@ -125,6 +125,10 @@ msgstr "セッションの保存に失敗しました。代わりに PNG とし�
 #: src/App.tsx:1917
 #~ msgid "Fill"
 #~ msgstr "塗りつぶし"
+
+#: src/components/ToolboxPanel.tsx:415
+msgid "Flip"
+msgstr "左右反転"
 
 #: src/components/modals/AuthErrorModal.tsx:28
 #: src/components/modals/RoomFullModal.tsx:35
@@ -143,7 +147,7 @@ msgstr "初期化に失敗しました"
 msgid "Initializing collaboration session..."
 msgstr "コラボレーションセッションを初期化中..."
 
-#: src/components/ToolboxPanel.tsx:335
+#: src/components/ToolboxPanel.tsx:336
 msgid "Left click to select layer, right click to toggle visibility"
 msgstr "左クリックでレイヤーを選択、右クリックで表示切り替え"
 
@@ -163,7 +167,7 @@ msgstr "読み込み中..."
 #~ msgid "Oeee Cafe"
 #~ msgstr "OEEEカフェ"
 
-#: src/OfflineApp.tsx:354
+#: src/OfflineApp.tsx:376
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "オフライン描画 ({canvasWidth} × {canvasHeight})"
 
@@ -186,7 +190,7 @@ msgstr "パレットカラー {0} (選択済み - 下のカラーピッカーで
 #~ msgstr "パン"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:368
+#: src/OfflineApp.tsx:390
 msgid "Parent Post: {0}"
 msgstr "親投稿: {0}"
 
@@ -198,9 +202,9 @@ msgstr "参加者"
 msgid "Reconnect"
 msgstr "再接続"
 
-#: src/App.tsx:1895
-#~ msgid "Redo"
-#~ msgstr "やり直し"
+#: src/components/SimplifiedToolbox.tsx:120
+msgid "Redo"
+msgstr "やり直し"
 
 #: src/App.tsx:2119
 #~ msgid "Reset"
@@ -219,25 +223,25 @@ msgstr "ロビーに戻る"
 msgid "Save as PNG"
 msgstr "PNG として保存"
 
-#: src/components/SimplifiedToolbox.tsx:117
-#: src/OfflineApp.tsx:381
+#: src/components/SimplifiedToolbox.tsx:131
+#: src/OfflineApp.tsx:403
 msgid "Save Drawing"
 msgstr "描画を保存"
 
-#: src/components/ToolboxPanel.tsx:406
-#: src/components/ToolboxPanel.tsx:407
+#: src/components/ToolboxPanel.tsx:429
+#: src/components/ToolboxPanel.tsx:430
 msgid "Save drawing to gallery"
 msgstr "描画をギャラリーに保存"
 
 #: src/components/SessionExpiredModal.tsx:122
-#: src/components/ToolboxPanel.tsx:424
+#: src/components/ToolboxPanel.tsx:447
 msgid "Save to Gallery"
 msgstr "ギャラリーに保存"
 
 #: src/components/SessionExpiredModal.tsx:113
-#: src/components/SimplifiedToolbox.tsx:117
-#: src/components/ToolboxPanel.tsx:419
-#: src/OfflineApp.tsx:381
+#: src/components/SimplifiedToolbox.tsx:131
+#: src/components/ToolboxPanel.tsx:442
+#: src/OfflineApp.tsx:403
 msgid "Saving..."
 msgstr "保存中..."
 
@@ -301,6 +305,10 @@ msgstr "このセッションはすでに保存されています。PNG とし�
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "このセッションは満員です（{currentUserCount}/{maxUsers}ユーザー）。最初の{maxUsers}ユーザーのみがセッションに参加できます。"
 
+#: src/components/ToolboxPanel.tsx:411
+msgid "Toggle horizontal flip"
+msgstr "左右反転を切り替え"
+
 #: src/components/Chat.tsx:258
 msgid "Type a message..."
 msgstr "メッセージを入力..."
@@ -309,7 +317,7 @@ msgstr "メッセージを入力..."
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "セッションを認証できません。セッションが存在しないか、期限切れです。ロビーに戻ってください。"
 
-#: src/components/SimplifiedToolbox.tsx:107
+#: src/components/SimplifiedToolbox.tsx:112
 msgid "Undo"
 msgstr "元に戻す"
 

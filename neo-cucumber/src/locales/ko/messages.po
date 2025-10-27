@@ -54,12 +54,12 @@ msgstr "작성자:"
 #~ msgid "Chat"
 #~ msgstr "채팅"
 
-#: src/components/SimplifiedToolbox.tsx:59
+#: src/components/SimplifiedToolbox.tsx:63
 msgid "Color"
 msgstr ""
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:360
+#: src/OfflineApp.tsx:382
 msgid "Community: {0}"
 msgstr "커뮤니티: {0}"
 
@@ -93,11 +93,11 @@ msgstr "연결 끊어짐"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:388
+#: src/OfflineApp.tsx:412
 msgid "Download PNG"
 msgstr "PNG 다운로드"
 
-#: src/OfflineApp.tsx:395
+#: src/OfflineApp.tsx:419
 msgid "Download Replay"
 msgstr "리플레이 다운로드"
 
@@ -110,11 +110,11 @@ msgstr "팔레트 색상 {0} 편집"
 #~ msgid "Eraser"
 #~ msgstr "지우개"
 
-#: src/OfflineApp.tsx:248
+#: src/OfflineApp.tsx:274
 msgid "Failed to download replay file."
 msgstr "리플레이 파일 다운로드에 실패했습니다."
 
-#: src/OfflineApp.tsx:211
+#: src/OfflineApp.tsx:237
 msgid "Failed to save drawing. Please try again."
 msgstr "그림 저장에 실패했습니다. 다시 시도해 주세요."
 
@@ -125,6 +125,10 @@ msgstr "세션 저장에 실패했습니다. 대신 PNG로 다운로드해 보�
 #: src/App.tsx:1917
 #~ msgid "Fill"
 #~ msgstr "채우기"
+
+#: src/components/ToolboxPanel.tsx:415
+msgid "Flip"
+msgstr "좌우 반전"
 
 #: src/components/modals/AuthErrorModal.tsx:28
 #: src/components/modals/RoomFullModal.tsx:35
@@ -143,7 +147,7 @@ msgstr "초기화 실패"
 msgid "Initializing collaboration session..."
 msgstr "협업 세션 초기화 중..."
 
-#: src/components/ToolboxPanel.tsx:335
+#: src/components/ToolboxPanel.tsx:336
 msgid "Left click to select layer, right click to toggle visibility"
 msgstr "왼쪽 클릭으로 레이어 선택, 오른쪽 클릭으로 표시 전환"
 
@@ -163,7 +167,7 @@ msgstr "로딩 중..."
 #~ msgid "Oeee Cafe"
 #~ msgstr "오이카페"
 
-#: src/OfflineApp.tsx:354
+#: src/OfflineApp.tsx:376
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "오프라인 그리기 ({canvasWidth} × {canvasHeight})"
 
@@ -186,7 +190,7 @@ msgstr "팔레트 색상 {0} (선택됨 - 아래 색상 선택기로 편집)"
 #~ msgstr "이동"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:368
+#: src/OfflineApp.tsx:390
 msgid "Parent Post: {0}"
 msgstr "부모 게시물: {0}"
 
@@ -198,9 +202,9 @@ msgstr "참여자"
 msgid "Reconnect"
 msgstr "재연결"
 
-#: src/App.tsx:1895
-#~ msgid "Redo"
-#~ msgstr "다시 실행"
+#: src/components/SimplifiedToolbox.tsx:120
+msgid "Redo"
+msgstr "다시 실행"
 
 #: src/App.tsx:2119
 #~ msgid "Reset"
@@ -219,25 +223,25 @@ msgstr "로비로 돌아가기"
 msgid "Save as PNG"
 msgstr "PNG로 저장"
 
-#: src/components/SimplifiedToolbox.tsx:117
-#: src/OfflineApp.tsx:381
+#: src/components/SimplifiedToolbox.tsx:131
+#: src/OfflineApp.tsx:403
 msgid "Save Drawing"
 msgstr "그림 저장"
 
-#: src/components/ToolboxPanel.tsx:406
-#: src/components/ToolboxPanel.tsx:407
+#: src/components/ToolboxPanel.tsx:429
+#: src/components/ToolboxPanel.tsx:430
 msgid "Save drawing to gallery"
 msgstr "그림을 갤러리에 저장"
 
 #: src/components/SessionExpiredModal.tsx:122
-#: src/components/ToolboxPanel.tsx:424
+#: src/components/ToolboxPanel.tsx:447
 msgid "Save to Gallery"
 msgstr "갤러리에 저장"
 
 #: src/components/SessionExpiredModal.tsx:113
-#: src/components/SimplifiedToolbox.tsx:117
-#: src/components/ToolboxPanel.tsx:419
-#: src/OfflineApp.tsx:381
+#: src/components/SimplifiedToolbox.tsx:131
+#: src/components/ToolboxPanel.tsx:442
+#: src/OfflineApp.tsx:403
 msgid "Saving..."
 msgstr "저장 중..."
 
@@ -301,6 +305,10 @@ msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 �
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "이 세션이 가득 찼습니다 ({currentUserCount}/{maxUsers}명). 처음 {maxUsers}명의 사용자만 세션에 참여할 수 있습니다."
 
+#: src/components/ToolboxPanel.tsx:411
+msgid "Toggle horizontal flip"
+msgstr "좌우 반전 전환"
+
 #: src/components/Chat.tsx:258
 msgid "Type a message..."
 msgstr "메시지 입력..."
@@ -309,7 +317,7 @@ msgstr "메시지 입력..."
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "세션을 인증할 수 없습니다. 세션이 존재하지 않거나 만료되었습니다. 로비로 돌아가 주세요."
 
-#: src/components/SimplifiedToolbox.tsx:107
+#: src/components/SimplifiedToolbox.tsx:112
 msgid "Undo"
 msgstr "실행 취소"
 

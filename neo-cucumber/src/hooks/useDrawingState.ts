@@ -15,6 +15,7 @@ export const useDrawingState = () => {
     zoomLevel: 100,
     fgVisible: true,
     bgVisible: true,
+    isFlippedHorizontal: false,
   });
 
   const updateBrushType = useCallback((type: BrushType) => {

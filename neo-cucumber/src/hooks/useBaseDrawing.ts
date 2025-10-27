@@ -10,6 +10,7 @@ export interface DrawingState {
   layerType: "foreground" | "background";
   fgVisible: boolean;
   bgVisible: boolean;
+  isFlippedHorizontal: boolean;
 }
 
 interface DrawingEventCallbacks {
@@ -155,8 +156,13 @@ export const useBaseDrawing = (
     const screenX = clientX - rect.left;
     const screenY = clientY - rect.top;
 
-    const x = (screenX / rect.width) * baseCanvasWidth;
+    let x = (screenX / rect.width) * baseCanvasWidth;
     const y = (screenY / rect.height) * baseCanvasHeight;
+
+    // Flip x-coordinate if horizontal flip is enabled
+    if (currentDrawingStateRef.current.isFlippedHorizontal) {
+      x = baseCanvasWidth - x - 1;
+    }
 
     return { x: Math.round(x), y: Math.round(y) };
   }, [canvasRef]);

@@ -17,6 +17,7 @@ interface DrawingState {
   zoomLevel: number;
   fgVisible: boolean;
   bgVisible: boolean;
+  isFlippedHorizontal: boolean;
   pendingPanDeltaX?: number;
   pendingPanDeltaY?: number;
 }
@@ -391,6 +392,28 @@ export const ToolboxPanel = ({
             className="flex items-center justify-center px-2 py-2 border-r border-t border-b border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white flex-1"
           >
             <Icon icon="material-symbols:zoom-in" width={16} height={16} />
+          </button>
+        </div>
+
+        {/* Flip horizontal control */}
+        <div className="flex flex-row">
+          <button
+            type="button"
+            onClick={() =>
+              onUpdateDrawingState((prev) => ({
+                ...prev,
+                isFlippedHorizontal: !prev.isFlippedHorizontal,
+              }))
+            }
+            className={`flex items-center justify-center gap-2 px-3 py-2 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white flex-1 ${
+              drawingState.isFlippedHorizontal ? 'bg-highlight text-white' : ''
+            }`}
+            title={t`Toggle horizontal flip`}
+          >
+            <Icon icon="material-symbols:flip" width={16} height={16} />
+            <span className="text-sm">
+              <Trans>Flip</Trans>
+            </span>
           </button>
         </div>
 
