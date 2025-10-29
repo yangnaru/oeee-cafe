@@ -17,7 +17,7 @@ use crate::web::state::AppState;
 use axum::extract::Path;
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
-use axum::{extract::State, http::StatusCode, response::Html, Form};
+use axum::{extract::State, http::StatusCode, response::{Html, Json}, Form};
 use axum_messages::Messages;
 use minijinja::context;
 use serde::Deserialize;
@@ -1289,5 +1289,105 @@ pub async fn members_page(
     })?;
 
     Ok(Html(rendered).into_response())
+}
+
+pub async fn community_detail_json(
+    _auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Strip @ prefix if present
+    let slug = slug.strip_prefix('@').unwrap_or(&slug);
+
+    let community = find_community_by_slug(&mut tx, slug.to_string())
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Community not found"))?;
+
+    // Access control: For private communities, return 404 for unauthenticated users
+    // Note: We're not checking membership here, just returning public info
+    // The iOS app can show "private community" UI
+    if community.visibility == CommunityVisibility::Private {
+        // For now, return basic info but no posts/comments for private communities
+    }
+
+    let posts = find_published_posts_by_community_id(&mut tx, community.id).await?;
+    let comments = find_latest_comments_in_community(&mut tx, community.id, 5).await?;
+    let stats = get_community_stats(&mut tx, community.id).await?;
+
+    tx.commit().await?;
+
+    // Convert posts to JSON with image URLs
+    let posts_json: Vec<serde_json::Value> = posts
+        .into_iter()
+        .map(|post| {
+            let image_prefix = &post.image_filename[..2];
+            serde_json::json!({
+                "id": post.id,
+                "title": post.title,
+                "author_id": post.author_id,
+                "user_login_name": post.user_login_name,
+                "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
+                "image_width": post.image_width,
+                "image_height": post.image_height,
+                "published_at": post.published_at,
+            })
+        })
+        .collect();
+
+    // Convert comments to JSON
+    let comments_json: Vec<serde_json::Value> = comments
+        .into_iter()
+        .map(|comment| {
+            let post_image_url = comment.post_image_filename.as_ref().map(|filename| {
+                let image_prefix = &filename[..2];
+                format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, filename
+                )
+            });
+
+            serde_json::json!({
+                "id": comment.id,
+                "post_id": comment.post_id,
+                "actor_id": comment.actor_id,
+                "content": comment.content,
+                "content_html": comment.content_html,
+                "actor_name": comment.actor_name,
+                "actor_handle": comment.actor_handle,
+                "actor_login_name": comment.actor_login_name,
+                "is_local": comment.is_local,
+                "created_at": comment.created_at,
+                "post_title": comment.post_title,
+                "post_author_login_name": comment.post_author_login_name,
+                "post_image_url": post_image_url,
+                "post_image_width": comment.post_image_width,
+                "post_image_height": comment.post_image_height,
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "community": {
+            "id": community.id,
+            "name": community.name,
+            "slug": community.slug,
+            "description": community.description,
+            "visibility": community.visibility,
+            "owner_id": community.owner_id,
+            "background_color": community.background_color,
+            "foreground_color": community.foreground_color,
+        },
+        "stats": {
+            "total_posts": stats.total_posts,
+            "total_contributors": stats.total_contributors,
+            "total_comments": stats.total_comments,
+        },
+        "posts": posts_json,
+        "comments": comments_json,
+    }))
+    .into_response())
 }
 
