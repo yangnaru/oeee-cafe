@@ -10,6 +10,7 @@ use crate::models::post::{
     find_child_posts_by_parent_id, find_following_posts_by_user_id, find_post_by_id,
     find_public_community_posts, find_recent_posts_by_communities,
 };
+use crate::models::reaction::get_reaction_counts;
 use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
 use crate::web::state::AppState;
@@ -335,7 +336,7 @@ pub async fn get_latest_comments_json(
 }
 
 pub async fn get_post_details_json(
-    _auth_session: AuthSession,
+    auth_session: AuthSession,
     State(state): State<AppState>,
     Path(post_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -352,6 +353,10 @@ pub async fn get_post_details_json(
 
     // Get child posts (replies)
     let child_posts = find_child_posts_by_parent_id(&mut tx, post_id).await?;
+
+    // Get reaction counts
+    let user_actor_id = auth_session.user.as_ref().and_then(|u| u.actor_id);
+    let reactions = get_reaction_counts(&mut tx, post_id, user_actor_id).await?;
 
     tx.commit().await?;
 
@@ -401,5 +406,6 @@ pub async fn get_post_details_json(
         "post": post,
         "comments": comments_json,
         "child_posts": child_posts_json,
+        "reactions": reactions,
     })).into_response())
 }
