@@ -11,7 +11,7 @@ use crate::models::post::{
     find_child_posts_by_parent_id, find_following_posts_by_user_id, find_post_by_id,
     find_public_community_posts, find_recent_posts_by_communities,
 };
-use crate::models::reaction::get_reaction_counts;
+use crate::models::reaction::{find_reactions_by_post_id_and_emoji, get_reaction_counts};
 use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
 use crate::web::state::AppState;
@@ -415,6 +415,24 @@ pub async fn get_post_details_json(
         "post": post,
         "comments": comments_json,
         "child_posts": child_posts_json,
+        "reactions": reactions,
+    })).into_response())
+}
+
+pub async fn get_post_reactions_by_emoji_json(
+    _auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((post_id, emoji)): Path<(Uuid, String)>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Get reactions for this post and emoji
+    let reactions = find_reactions_by_post_id_and_emoji(&mut tx, post_id, &emoji).await?;
+
+    tx.commit().await?;
+
+    Ok(Json(serde_json::json!({
         "reactions": reactions,
     })).into_response())
 }

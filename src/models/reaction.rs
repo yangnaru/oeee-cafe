@@ -135,6 +135,46 @@ pub async fn find_reactions_by_post_id(
         .collect())
 }
 
+pub async fn find_reactions_by_post_id_and_emoji(
+    tx: &mut Transaction<'_, Postgres>,
+    post_id: Uuid,
+    emoji: &str,
+) -> Result<Vec<SerializableReaction>> {
+    let reactions = sqlx::query!(
+        r#"
+        SELECT
+            reactions.iri,
+            reactions.post_id,
+            reactions.actor_id,
+            reactions.emoji,
+            reactions.created_at,
+            actors.name AS actor_name,
+            actors.handle AS actor_handle
+        FROM reactions
+        LEFT JOIN actors ON reactions.actor_id = actors.id
+        WHERE post_id = $1 AND emoji = $2
+        ORDER BY created_at DESC
+        "#,
+        post_id,
+        emoji
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(reactions
+        .into_iter()
+        .map(|reaction| SerializableReaction {
+            iri: reaction.iri,
+            post_id: reaction.post_id,
+            actor_id: reaction.actor_id,
+            emoji: reaction.emoji,
+            created_at: reaction.created_at,
+            actor_name: reaction.actor_name,
+            actor_handle: reaction.actor_handle,
+        })
+        .collect())
+}
+
 pub async fn get_reaction_counts(
     tx: &mut Transaction<'_, Postgres>,
     post_id: Uuid,
