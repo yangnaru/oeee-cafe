@@ -30,6 +30,7 @@ use crate::web::handlers::hashtag::{hashtag_autocomplete, hashtag_discovery, has
 use crate::web::handlers::home::{
     get_post_details_json, home, load_more_public_posts, load_more_public_posts_json, my_timeline,
 };
+use crate::web::handlers::search::search_json;
 use crate::web::handlers::notifications::{
     delete_notification_handler, get_unread_notification_count, list_notifications,
     mark_all_notifications_read, mark_notification_read,
@@ -231,6 +232,7 @@ impl App {
             .route("/api/home/posts", get(load_more_public_posts))
             .route("/api/v1/posts/public", get(load_more_public_posts_json))
             .route("/api/v1/posts/:post_id", get(get_post_details_json))
+            .route("/api/v1/search", get(search_json))
             .route("/communities", get(communities))
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))

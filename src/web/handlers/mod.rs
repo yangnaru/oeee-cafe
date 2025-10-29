@@ -42,6 +42,7 @@ pub mod home;
 pub mod notifications;
 pub mod post;
 pub mod profile;
+pub mod search;
 
 pub async fn handler_404(
     auth_session: AuthSession,
