@@ -95,7 +95,7 @@ pub async fn search_json(
         })
         .collect();
 
-    // Convert posts to JSON with image URLs
+    // Convert posts to JSON with minimal fields for thumbnails
     let posts_json: Vec<serde_json::Value> = posts
         .into_iter()
         .map(|post| {
@@ -111,14 +111,9 @@ pub async fn search_json(
 
             serde_json::json!({
                 "id": post.id,
-                "title": post.title,
-                "content": post.content,
-                "author_id": post.author_id,
-                "user_login_name": post.user_login_name,
                 "image_url": image_url,
                 "image_width": post.image_width,
                 "image_height": post.image_height,
-                "published_at": post.published_at,
                 "is_sensitive": post.is_sensitive,
             })
         })

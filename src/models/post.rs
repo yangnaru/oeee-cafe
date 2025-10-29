@@ -93,6 +93,24 @@ pub struct SerializableDraftPost {
     pub updated_at: DateTime<Utc>,
 }
 
+// Minimal structs for post thumbnails (grid/list views)
+#[derive(Serialize)]
+pub struct PostThumbnail {
+    pub id: Uuid,
+    pub image_filename: String,
+    pub image_width: i32,
+    pub image_height: i32,
+}
+
+#[derive(Serialize)]
+pub struct PostThumbnailWithSensitivity {
+    pub id: Uuid,
+    pub image_filename: String,
+    pub image_width: i32,
+    pub image_height: i32,
+    pub is_sensitive: bool,
+}
+
 #[derive(Serialize)]
 pub struct SerializableThreadedPost {
     pub id: Uuid,

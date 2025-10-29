@@ -731,22 +731,16 @@ pub async fn profile_json(
 
     tx.commit().await?;
 
-    // Convert posts to JSON with image URLs
+    // Convert posts to JSON with minimal fields for thumbnails
     let posts_json: Vec<serde_json::Value> = public_posts
         .into_iter()
         .map(|post| {
             let image_prefix = &post.image_filename[..2];
             serde_json::json!({
                 "id": post.id,
-                "title": post.title,
-                "author_id": post.author_id,
-                "paint_duration": post.paint_duration,
-                "stroke_count": post.stroke_count,
-                "viewer_count": post.viewer_count,
                 "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
                 "image_width": post.image_width,
                 "image_height": post.image_height,
-                "published_at": post.published_at,
             })
         })
         .collect();

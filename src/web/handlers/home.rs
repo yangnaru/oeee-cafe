@@ -181,24 +181,17 @@ pub async fn load_more_public_posts_json(
 
     tx.commit().await?;
 
-    // Convert to JSON response with full image URLs
+    // Convert to JSON response with minimal fields for thumbnails
     let posts_with_urls: Vec<serde_json::Value> = posts
         .into_iter()
         .map(|post| {
             let image_prefix = &post.image_filename[..2];
             serde_json::json!({
                 "id": post.id,
-                "title": post.title,
-                "author_id": post.author_id,
-                "user_login_name": post.user_login_name,
-                "paint_duration": post.paint_duration,
-                "stroke_count": post.stroke_count,
-                "viewer_count": post.viewer_count,
                 "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
                 "image_width": post.image_width,
                 "image_height": post.image_height,
                 "is_sensitive": post.is_sensitive,
-                "published_at": post.published_at,
             })
         })
         .collect();
@@ -237,7 +230,7 @@ pub async fn get_active_communities_json(
 
     tx.commit().await?;
 
-    // Group posts by community_id
+    // Group posts by community_id with minimal fields for thumbnails
     use std::collections::HashMap;
     let mut posts_by_community: HashMap<uuid::Uuid, Vec<serde_json::Value>> = HashMap::new();
     for post in recent_posts {
@@ -247,16 +240,9 @@ pub async fn get_active_communities_json(
         let image_prefix = &post.image_filename[..2];
         posts.push(serde_json::json!({
             "id": post.id.to_string(),
-            "image_filename": post.image_filename,
             "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
             "image_width": post.image_width,
             "image_height": post.image_height,
-            "author_login_name": post.author_login_name,
-            "title": post.title,
-            "paint_duration": post.paint_duration,
-            "stroke_count": post.stroke_count,
-            "viewer_count": post.viewer_count,
-            "published_at": post.published_at,
         }));
     }
 
