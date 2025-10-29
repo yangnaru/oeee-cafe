@@ -13,7 +13,7 @@ use crate::web::context::CommonContext;
 use crate::web::state::AppState;
 use axum::extract::Query;
 use axum::response::IntoResponse;
-use axum::{extract::State, response::Html};
+use axum::{extract::State, response::Html, response::Json};
 use axum_messages::Messages;
 use serde::Deserialize;
 
@@ -157,4 +157,45 @@ pub async fn load_more_public_posts(
     })?;
 
     Ok(Html(rendered).into_response())
+}
+
+pub async fn load_more_public_posts_json(
+    _auth_session: AuthSession,
+    State(state): State<AppState>,
+    Query(query): Query<LoadMoreQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let posts = find_public_community_posts(&mut tx, 18, query.offset).await?;
+
+    tx.commit().await?;
+
+    // Convert to JSON response with full image URLs
+    let posts_with_urls: Vec<serde_json::Value> = posts
+        .into_iter()
+        .map(|post| {
+            let image_prefix = &post.image_filename[..2];
+            serde_json::json!({
+                "id": post.id,
+                "title": post.title,
+                "author_id": post.author_id,
+                "user_login_name": post.user_login_name,
+                "paint_duration": post.paint_duration,
+                "stroke_count": post.stroke_count,
+                "viewer_count": post.viewer_count,
+                "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
+                "image_width": post.image_width,
+                "image_height": post.image_height,
+                "is_sensitive": post.is_sensitive,
+                "published_at": post.published_at,
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "posts": posts_with_urls,
+        "offset": query.offset + 18,
+        "has_more": posts_with_urls.len() == 18,
+    })).into_response())
 }
