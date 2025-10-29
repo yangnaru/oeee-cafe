@@ -464,8 +464,8 @@ pub async fn find_recent_posts_by_communities(
                 i.height as image_height,
                 u.login_name as author_login_name,
                 p.title,
-                p.paint_duration::TEXT as paint_duration,
-                p.stroke_count,
+                EXTRACT(EPOCH FROM i.paint_duration)::BIGINT::TEXT as paint_duration,
+                i.stroke_count,
                 p.viewer_count,
                 p.published_at,
                 ROW_NUMBER() OVER (PARTITION BY p.community_id ORDER BY p.published_at DESC) as rn
@@ -496,8 +496,8 @@ pub async fn find_recent_posts_by_communities(
             author_login_name: row.author_login_name,
             title: row.title,
             paint_duration: row.paint_duration,
-            stroke_count: row.stroke_count,
-            viewer_count: row.viewer_count,
+            stroke_count: Some(row.stroke_count),
+            viewer_count: Some(row.viewer_count),
             published_at: row.published_at,
         })
         .collect())
