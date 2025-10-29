@@ -37,6 +37,12 @@ pub async fn home(
     let non_official_public_community_posts = find_public_community_posts(&mut tx, 18, 0).await?;
     let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
+    // Filter to communities with at least 10 posts
+    let active_public_communities_raw: Vec<_> = active_public_communities_raw
+        .into_iter()
+        .filter(|c| c.posts_count.unwrap_or(0) >= 10)
+        .collect();
+
     // Fetch recent posts and stats for active communities
     let community_ids: Vec<uuid::Uuid> = active_public_communities_raw.iter().map(|c| c.id).collect();
 
@@ -213,9 +219,10 @@ pub async fn get_active_communities_json(
 
     let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
-    // Limit to 5 communities
+    // Filter to communities with at least 10 posts, then limit to 5 communities
     let active_public_communities_raw: Vec<_> = active_public_communities_raw
         .into_iter()
+        .filter(|c| c.posts_count.unwrap_or(0) >= 10)
         .take(5)
         .collect();
 
