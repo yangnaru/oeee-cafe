@@ -229,9 +229,15 @@ pub async fn api_list_notifications(
     tx.commit().await?;
 
     // Convert notifications to JSON
+    let r2_base_url = &state.config.r2_public_endpoint_url;
     let notifications_json: Vec<serde_json::Value> = notifications
         .into_iter()
         .map(|n| {
+            // Build full image URL if filename exists
+            let post_image_url = n.post_image_filename.as_ref().map(|filename| {
+                format!("{}/image/{}/{}", r2_base_url, &filename[0..2], filename)
+            });
+
             json!({
                 "id": n.id,
                 "recipient_id": n.recipient_id,
@@ -249,6 +255,7 @@ pub async fn api_list_notifications(
                 "post_title": n.post_title,
                 "post_author_login_name": n.post_author_login_name,
                 "post_image_filename": n.post_image_filename,
+                "post_image_url": post_image_url,
                 "post_image_width": n.post_image_width,
                 "post_image_height": n.post_image_height,
                 "comment_content": n.comment_content,
@@ -295,6 +302,12 @@ pub async fn api_mark_notification_read(
     tx.commit().await?;
 
     if let Some(n) = notification {
+        // Build full image URL if filename exists
+        let r2_base_url = &state.config.r2_public_endpoint_url;
+        let post_image_url = n.post_image_filename.as_ref().map(|filename| {
+            format!("{}/image/{}/{}", r2_base_url, &filename[0..2], filename)
+        });
+
         let notification_json = json!({
             "id": n.id,
             "recipient_id": n.recipient_id,
@@ -312,6 +325,7 @@ pub async fn api_mark_notification_read(
             "post_title": n.post_title,
             "post_author_login_name": n.post_author_login_name,
             "post_image_filename": n.post_image_filename,
+            "post_image_url": post_image_url,
             "post_image_width": n.post_image_width,
             "post_image_height": n.post_image_height,
             "comment_content": n.comment_content,
