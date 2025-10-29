@@ -1,21 +1,24 @@
 use super::ExtractFtlLang;
 use crate::app_error::AppError;
-use crate::models::comment::find_latest_comments_from_public_communities;
+use crate::models::comment::{
+    find_comments_by_post_id, find_latest_comments_from_public_communities,
+};
 use crate::models::community::{
     get_communities_members_count, get_public_communities,
 };
 use crate::models::post::{
-    find_following_posts_by_user_id, find_public_community_posts,
-    find_recent_posts_by_communities,
+    find_child_posts_by_parent_id, find_following_posts_by_user_id, find_post_by_id,
+    find_public_community_posts, find_recent_posts_by_communities,
 };
 use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
 use crate::web::state::AppState;
-use axum::extract::Query;
+use axum::extract::{Path, Query};
 use axum::response::IntoResponse;
 use axum::{extract::State, response::Html, response::Json};
 use axum_messages::Messages;
 use serde::Deserialize;
+use uuid::Uuid;
 
 use minijinja::context;
 
@@ -197,5 +200,75 @@ pub async fn load_more_public_posts_json(
         "posts": posts_with_urls,
         "offset": query.offset + 18,
         "has_more": posts_with_urls.len() == 18,
+    })).into_response())
+}
+
+pub async fn get_post_details_json(
+    _auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(post_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Get post details
+    let post = find_post_by_id(&mut tx, post_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Post not found"))?;
+
+    // Get comments for this post
+    let comments = find_comments_by_post_id(&mut tx, post_id).await?;
+
+    // Get child posts (replies)
+    let child_posts = find_child_posts_by_parent_id(&mut tx, post_id).await?;
+
+    tx.commit().await?;
+
+    // Convert comments to JSON
+    let comments_json: Vec<serde_json::Value> = comments
+        .into_iter()
+        .map(|comment| {
+            serde_json::json!({
+                "id": comment.id,
+                "post_id": comment.post_id,
+                "actor_id": comment.actor_id,
+                "content": comment.content,
+                "content_html": comment.content_html,
+                "actor_name": comment.actor_name,
+                "actor_handle": comment.actor_handle,
+                "actor_login_name": comment.actor_login_name,
+                "is_local": comment.is_local,
+                "created_at": comment.created_at,
+                "updated_at": comment.updated_at,
+            })
+        })
+        .collect();
+
+    // Convert child posts to JSON with image URLs
+    let child_posts_json: Vec<serde_json::Value> = child_posts
+        .into_iter()
+        .map(|child| {
+            let image_prefix = &child.image_filename[..2];
+            serde_json::json!({
+                "id": child.id,
+                "title": child.title,
+                "content": child.content,
+                "author_id": child.author_id,
+                "user_login_name": child.user_login_name,
+                "user_display_name": child.user_display_name,
+                "user_actor_handle": child.user_actor_handle,
+                "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, child.image_filename),
+                "image_width": child.image_width,
+                "image_height": child.image_height,
+                "published_at": child.published_at,
+                "comments_count": child.comments_count,
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "post": post,
+        "comments": comments_json,
+        "child_posts": child_posts_json,
     })).into_response())
 }
