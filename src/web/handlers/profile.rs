@@ -18,7 +18,7 @@ use crate::web::context::CommonContext;
 use crate::web::state::AppState;
 use axum::extract::Path;
 use axum::response::IntoResponse;
-use axum::{extract::State, http::StatusCode, response::Html, Form};
+use axum::{extract::State, http::StatusCode, response::Html, response::Json, Form};
 
 use minijinja::context;
 use serde::Deserialize;
@@ -687,4 +687,110 @@ pub async fn guestbook(
     })?;
 
     Ok(Html(rendered).into_response())
+}
+
+pub async fn profile_json(
+    _auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("User not found"))?;
+
+    // Get only public posts
+    let public_posts = find_published_public_posts_by_author_id(&mut tx, user.id).await?;
+
+    // Get banner
+    let banner = match user.banner_id {
+        Some(banner_id) => {
+            let banner = find_banner_by_id(&mut tx, banner_id).await?;
+            Some(serde_json::json!({
+                "id": banner.id,
+                "image_filename": banner.image_filename,
+                "image_url": format!("{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url,
+                    &banner.image_filename[..2],
+                    banner.image_filename
+                ),
+            }))
+        }
+        None => None,
+    };
+
+    // Get followings
+    let followings = find_followings_by_user_id(&mut tx, user.id).await?;
+
+    // Get links
+    let links = find_links_by_user_id(&mut tx, user.id).await?;
+
+    tx.commit().await?;
+
+    // Convert posts to JSON with image URLs
+    let posts_json: Vec<serde_json::Value> = public_posts
+        .into_iter()
+        .map(|post| {
+            let image_prefix = &post.image_filename[..2];
+            serde_json::json!({
+                "id": post.id,
+                "title": post.title,
+                "author_id": post.author_id,
+                "paint_duration": post.paint_duration,
+                "stroke_count": post.stroke_count,
+                "viewer_count": post.viewer_count,
+                "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
+                "image_width": post.image_width,
+                "image_height": post.image_height,
+                "published_at": post.published_at,
+            })
+        })
+        .collect();
+
+    // Convert followings to JSON
+    let followings_json: Vec<serde_json::Value> = followings
+        .into_iter()
+        .map(|following| {
+            let banner_image_url = following.banner_image_filename.as_ref().map(|filename| {
+                let image_prefix = &filename[..2];
+                format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, filename)
+            });
+
+            serde_json::json!({
+                "id": following.user_id,
+                "login_name": following.login_name,
+                "display_name": following.display_name,
+                "banner_image_url": banner_image_url,
+                "banner_image_width": following.banner_image_width,
+                "banner_image_height": following.banner_image_height,
+            })
+        })
+        .collect();
+
+    // Convert links to JSON
+    let links_json: Vec<serde_json::Value> = links
+        .into_iter()
+        .map(|link| {
+            serde_json::json!({
+                "id": link.id,
+                "url": link.url,
+                "description": link.description,
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "user": {
+            "id": user.id,
+            "login_name": user.login_name,
+            "display_name": user.display_name,
+        },
+        "banner": banner,
+        "posts": posts_json,
+        "followings": followings_json,
+        "links": links_json,
+    }))
+    .into_response())
 }

@@ -45,7 +45,7 @@ use crate::web::handlers::post::{
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
     do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile, do_write_guestbook_entry,
-    guestbook, profile, profile_banners_iframe, profile_iframe, profile_settings,
+    guestbook, profile, profile_banners_iframe, profile_iframe, profile_json, profile_settings,
 };
 use activitypub_federation::config::{FederationConfig, FederationMiddleware};
 use anyhow::Result;
@@ -233,6 +233,7 @@ impl App {
             .route("/api/v1/posts/public", get(load_more_public_posts_json))
             .route("/api/v1/posts/:post_id", get(get_post_details_json))
             .route("/api/v1/search", get(search_json))
+            .route("/api/v1/profile/:login_name", get(profile_json))
             .route("/communities", get(communities))
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))
