@@ -1,5 +1,6 @@
 use super::ExtractFtlLang;
 use crate::app_error::AppError;
+use crate::models::actor::Actor;
 use crate::models::comment::{
     find_comments_by_post_id, find_latest_comments_from_public_communities,
 };
@@ -355,7 +356,15 @@ pub async fn get_post_details_json(
     let child_posts = find_child_posts_by_parent_id(&mut tx, post_id).await?;
 
     // Get reaction counts
-    let user_actor_id = auth_session.user.as_ref().and_then(|u| u.actor_id);
+    let user_actor_id = if let Some(ref user) = auth_session.user {
+        Actor::find_by_user_id(&mut tx, user.id)
+            .await
+            .ok()
+            .flatten()
+            .map(|actor| actor.id)
+    } else {
+        None
+    };
     let reactions = get_reaction_counts(&mut tx, post_id, user_actor_id).await?;
 
     tx.commit().await?;
