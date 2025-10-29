@@ -218,7 +218,7 @@ pub async fn get_active_communities_json(
         .map(|c| c.id)
         .collect();
 
-    let recent_posts = find_recent_posts_by_communities(&mut tx, &community_ids, 3).await?;
+    let recent_posts = find_recent_posts_by_communities(&mut tx, &community_ids, 10).await?;
     let community_stats = get_communities_members_count(&mut tx, &community_ids).await?;
 
     tx.commit().await?;
