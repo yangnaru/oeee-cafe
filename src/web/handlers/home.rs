@@ -212,6 +212,12 @@ pub async fn get_active_communities_json(
 
     let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
+    // Limit to 5 communities
+    let active_public_communities_raw: Vec<_> = active_public_communities_raw
+        .into_iter()
+        .take(5)
+        .collect();
+
     // Fetch recent posts and stats for active communities
     let community_ids: Vec<uuid::Uuid> = active_public_communities_raw
         .iter()
