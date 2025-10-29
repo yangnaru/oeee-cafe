@@ -15,8 +15,9 @@ use crate::models::post::{
 };
 use crate::models::user::{find_user_by_id, find_user_by_login_name, AuthSession};
 use crate::web::context::CommonContext;
+use crate::web::handlers::home::LoadMoreQuery;
 use crate::web::state::AppState;
-use axum::extract::Path;
+use axum::extract::{Path, Query};
 use axum::response::IntoResponse;
 use axum::{extract::State, http::StatusCode, response::Html, response::Json, Form};
 
@@ -203,7 +204,7 @@ pub async fn profile_iframe(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let posts = find_published_public_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
+    let posts = find_published_public_posts_by_author_id(&mut tx, user.clone().unwrap().id, 1000, 0).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_iframe.jinja")?;
     let rendered = template.render(context! {
@@ -693,6 +694,7 @@ pub async fn profile_json(
     _auth_session: AuthSession,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
+    Query(query): Query<LoadMoreQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
@@ -702,7 +704,7 @@ pub async fn profile_json(
         .ok_or_else(|| anyhow::anyhow!("User not found"))?;
 
     // Get only public posts
-    let public_posts = find_published_public_posts_by_author_id(&mut tx, user.id).await?;
+    let public_posts = find_published_public_posts_by_author_id(&mut tx, user.id, query.limit, query.offset).await?;
 
     // Get banner
     let banner = match user.banner_id {
@@ -789,6 +791,8 @@ pub async fn profile_json(
         },
         "banner": banner,
         "posts": posts_json,
+        "posts_offset": query.offset + query.limit,
+        "posts_has_more": posts_json.len() as i64 == query.limit,
         "followings": followings_json,
         "links": links_json,
     }))

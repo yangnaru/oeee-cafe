@@ -212,6 +212,8 @@ pub async fn get_draft_post_count(
 pub async fn find_published_public_posts_by_author_id(
     tx: &mut Transaction<'_, Postgres>,
     author_id: Uuid,
+    limit: i64,
+    offset: i64,
 ) -> Result<Vec<SerializableProfilePost>> {
     let q = query!(
         r#"
@@ -238,8 +240,11 @@ pub async fn find_published_public_posts_by_author_id(
             AND published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             ORDER BY published_at DESC
+            LIMIT $2 OFFSET $3
         "#,
-        author_id
+        author_id,
+        limit,
+        offset
     );
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result
@@ -364,6 +369,8 @@ pub async fn find_draft_posts_by_author_id(
 pub async fn find_published_posts_by_community_id(
     tx: &mut Transaction<'_, Postgres>,
     community_id: Uuid,
+    limit: i64,
+    offset: i64,
 ) -> Result<Vec<SerializablePost>> {
     let q = query!(
         "
@@ -390,8 +397,11 @@ pub async fn find_published_posts_by_community_id(
             AND published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             ORDER BY published_at DESC
+            LIMIT $2 OFFSET $3
         ",
-        community_id
+        community_id,
+        limit,
+        offset
     );
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result

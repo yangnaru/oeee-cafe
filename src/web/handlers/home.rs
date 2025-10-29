@@ -136,7 +136,8 @@ pub async fn my_timeline(
 
 #[derive(Deserialize)]
 pub struct LoadMoreQuery {
-    offset: i64,
+    pub offset: i64,
+    pub limit: i64,
 }
 
 pub async fn load_more_public_posts(
@@ -147,7 +148,7 @@ pub async fn load_more_public_posts(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let posts = find_public_community_posts(&mut tx, 18, query.offset).await?;
+    let posts = find_public_community_posts(&mut tx, query.limit, query.offset).await?;
 
     tx.commit().await?;
 
@@ -155,8 +156,8 @@ pub async fn load_more_public_posts(
     let rendered = template.render(context! {
         posts,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        offset => query.offset + 18,
-        has_more => posts.len() == 18,
+        offset => query.offset + query.limit,
+        has_more => posts.len() as i64 == query.limit,
     })?;
 
     Ok(Html(rendered).into_response())
@@ -170,7 +171,7 @@ pub async fn load_more_public_posts_json(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let posts = find_public_community_posts(&mut tx, 18, query.offset).await?;
+    let posts = find_public_community_posts(&mut tx, query.limit, query.offset).await?;
 
     tx.commit().await?;
 
@@ -198,8 +199,8 @@ pub async fn load_more_public_posts_json(
 
     Ok(Json(serde_json::json!({
         "posts": posts_with_urls,
-        "offset": query.offset + 18,
-        "has_more": posts_with_urls.len() == 18,
+        "offset": query.offset + query.limit,
+        "has_more": posts_with_urls.len() as i64 == query.limit,
     })).into_response())
 }
 

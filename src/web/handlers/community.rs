@@ -12,9 +12,10 @@ use crate::models::community::{
 };
 use crate::models::post::{find_published_posts_by_community_id, find_recent_posts_by_communities};
 use crate::models::user::{AuthSession, find_user_by_login_name};
+use crate::web::handlers::home::LoadMoreQuery;
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
 use crate::web::state::AppState;
-use axum::extract::Path;
+use axum::extract::{Path, Query};
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::{Html, Json}, Form};
@@ -84,7 +85,7 @@ pub async fn community(
         }
     }
 
-    let posts = find_published_posts_by_community_id(&mut tx, community_uuid).await?;
+    let posts = find_published_posts_by_community_id(&mut tx, community_uuid, 1000, 0).await?;
     let comments = find_latest_comments_in_community(&mut tx, community_uuid, 5).await?;
     let stats = get_community_stats(&mut tx, community_uuid).await?;
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
@@ -187,7 +188,7 @@ pub async fn community_iframe(
         }
     }
 
-    let posts = find_published_posts_by_community_id(&mut tx, community_uuid).await?;
+    let posts = find_published_posts_by_community_id(&mut tx, community_uuid, 1000, 0).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("community_iframe.jinja")?;
     let rendered = template.render(context! {
@@ -1295,6 +1296,7 @@ pub async fn community_detail_json(
     _auth_session: AuthSession,
     State(state): State<AppState>,
     Path(slug): Path<String>,
+    Query(query): Query<LoadMoreQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
@@ -1313,7 +1315,7 @@ pub async fn community_detail_json(
         // For now, return basic info but no posts/comments for private communities
     }
 
-    let posts = find_published_posts_by_community_id(&mut tx, community.id).await?;
+    let posts = find_published_posts_by_community_id(&mut tx, community.id, query.limit, query.offset).await?;
     let comments = find_latest_comments_in_community(&mut tx, community.id, 5).await?;
     let stats = get_community_stats(&mut tx, community.id).await?;
 
@@ -1386,6 +1388,8 @@ pub async fn community_detail_json(
             "total_comments": stats.total_comments,
         },
         "posts": posts_json,
+        "posts_offset": query.offset + query.limit,
+        "posts_has_more": posts_json.len() as i64 == query.limit,
         "comments": comments_json,
     }))
     .into_response())
