@@ -1,14 +1,14 @@
 use crate::app_error::AppError;
-use crate::models::user::{create_user, AuthSession, Credentials, UserDraft};
+use crate::models::user::{create_user, AuthSession, Credentials, Language, UserDraft};
 use crate::web::handlers::{get_bundle, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::extract::Query;
 use axum::response::{IntoResponse, Redirect};
-use axum::{extract::State, http::StatusCode, response::Html, Form};
+use axum::{extract::State, http::StatusCode, response::Html, response::Json, Form};
 use axum_messages::Messages;
 use fluent::{FluentArgs, FluentValue};
 use minijinja::context;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::ExtractAcceptLanguage;
 
@@ -182,5 +182,146 @@ pub async fn do_logout(mut auth_session: AuthSession) -> impl IntoResponse {
     match auth_session.logout().await {
         Ok(_) => Redirect::to("/").into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+// JSON API types
+#[derive(Debug, Deserialize)]
+pub struct LoginRequest {
+    pub login_name: String,
+    pub password: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LoginResponse {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<UserInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserInfo {
+    pub id: String,
+    pub login_name: String,
+    pub display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub banner_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferred_language: Option<Language>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LogoutResponse {
+    pub success: bool,
+}
+
+// JSON API endpoint for login
+pub async fn api_login(
+    mut auth_session: AuthSession,
+    State(_state): State<AppState>,
+    Json(req): Json<LoginRequest>,
+) -> impl IntoResponse {
+    // Create credentials from JSON request
+    let creds = Credentials {
+        login_name: req.login_name,
+        password: req.password,
+        next: None,
+    };
+
+    // Authenticate user
+    let user = match auth_session.authenticate(creds).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(LoginResponse {
+                    success: false,
+                    user: None,
+                    error: Some("Invalid credentials".to_string()),
+                }),
+            )
+                .into_response();
+        }
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(LoginResponse {
+                    success: false,
+                    user: None,
+                    error: Some("Authentication error".to_string()),
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    // Login user (sets session cookie)
+    if auth_session.login(&user).await.is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(LoginResponse {
+                success: false,
+                user: None,
+                error: Some("Login error".to_string()),
+            }),
+        )
+            .into_response();
+    }
+
+    // Return success with user info
+    (
+        StatusCode::OK,
+        Json(LoginResponse {
+            success: true,
+            user: Some(UserInfo {
+                id: user.id.to_string(),
+                login_name: user.login_name,
+                display_name: user.display_name,
+                email: user.email,
+                banner_id: user.banner_id.map(|id| id.to_string()),
+                preferred_language: user.preferred_language,
+            }),
+            error: None,
+        }),
+    )
+        .into_response()
+}
+
+// JSON API endpoint for logout
+pub async fn api_logout(mut auth_session: AuthSession) -> impl IntoResponse {
+    match auth_session.logout().await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(LogoutResponse { success: true }),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(LogoutResponse { success: false }),
+        )
+            .into_response(),
+    }
+}
+
+// JSON API endpoint to get current user info
+pub async fn api_me(auth_session: AuthSession) -> impl IntoResponse {
+    match auth_session.user {
+        Some(user) => (
+            StatusCode::OK,
+            Json(UserInfo {
+                id: user.id.to_string(),
+                login_name: user.login_name,
+                display_name: user.display_name,
+                email: user.email,
+                banner_id: user.banner_id.map(|id| id.to_string()),
+                preferred_language: user.preferred_language,
+            }),
+        )
+            .into_response(),
+        None => (StatusCode::UNAUTHORIZED).into_response(),
     }
 }

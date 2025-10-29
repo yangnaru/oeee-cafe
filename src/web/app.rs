@@ -10,7 +10,7 @@ use crate::web::handlers::activitypub::{
     activitypub_post_community_inbox, activitypub_post_shared_inbox,
     activitypub_post_user_followers, activitypub_post_user_inbox, activitypub_webfinger,
 };
-use crate::web::handlers::auth::{do_login, do_logout, do_signup, login, signup};
+use crate::web::handlers::auth::{api_login, api_logout, api_me, do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::collaborate::{
     collaborate_lobby, create_collaborative_session, get_auth_info, get_collaboration_meta,
     save_collaborative_session, serve_collaborative_app, websocket_collaborate_handler,
@@ -238,6 +238,9 @@ impl App {
             .route("/api/v1/communities/active", get(get_active_communities_json))
             .route("/api/v1/communities/:slug", get(community_detail_json))
             .route("/api/v1/comments/latest", get(get_latest_comments_json))
+            .route("/api/v1/auth/login", post(api_login))
+            .route("/api/v1/auth/logout", post(api_logout))
+            .route("/api/v1/auth/me", get(api_me))
             .route("/communities", get(communities))
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))
