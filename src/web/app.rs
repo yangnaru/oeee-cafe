@@ -33,6 +33,7 @@ use crate::web::handlers::home::{
 };
 use crate::web::handlers::search::search_json;
 use crate::web::handlers::notifications::{
+    api_delete_notification, api_list_notifications, api_mark_notification_read,
     delete_notification_handler, get_unread_notification_count, list_notifications,
     mark_all_notifications_read, mark_notification_read,
 };
@@ -241,6 +242,11 @@ impl App {
             .route("/api/v1/auth/login", post(api_login))
             .route("/api/v1/auth/logout", post(api_logout))
             .route("/api/v1/auth/me", get(api_me))
+            .route("/api/v1/notifications", get(api_list_notifications))
+            .route("/api/v1/notifications/unread-count", get(get_unread_notification_count))
+            .route("/api/v1/notifications/mark-all-read", post(mark_all_notifications_read))
+            .route("/api/v1/notifications/:notification_id/mark-read", post(api_mark_notification_read))
+            .route("/api/v1/notifications/:notification_id", delete(api_delete_notification))
             .route("/communities", get(communities))
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))
