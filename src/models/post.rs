@@ -424,6 +424,11 @@ pub struct CommunityRecentPost {
     pub image_width: i32,
     pub image_height: i32,
     pub author_login_name: String,
+    pub title: Option<String>,
+    pub paint_duration: Option<String>,
+    pub stroke_count: Option<i32>,
+    pub viewer_count: Option<i32>,
+    pub published_at: Option<DateTime<Utc>>,
 }
 
 /// Fetch recent posts (up to `limit` per community) for multiple communities
@@ -444,7 +449,12 @@ pub async fn find_recent_posts_by_communities(
             ranked.image_filename,
             ranked.image_width,
             ranked.image_height,
-            ranked.author_login_name
+            ranked.author_login_name,
+            ranked.title,
+            ranked.paint_duration,
+            ranked.stroke_count,
+            ranked.viewer_count,
+            ranked.published_at
         FROM (
             SELECT
                 p.id,
@@ -453,6 +463,11 @@ pub async fn find_recent_posts_by_communities(
                 i.width as image_width,
                 i.height as image_height,
                 u.login_name as author_login_name,
+                p.title,
+                p.paint_duration::TEXT as paint_duration,
+                p.stroke_count,
+                p.viewer_count,
+                p.published_at,
                 ROW_NUMBER() OVER (PARTITION BY p.community_id ORDER BY p.published_at DESC) as rn
             FROM posts p
             INNER JOIN images i ON p.image_id = i.id
@@ -479,6 +494,11 @@ pub async fn find_recent_posts_by_communities(
             image_width: row.image_width,
             image_height: row.image_height,
             author_login_name: row.author_login_name,
+            title: row.title,
+            paint_duration: row.paint_duration,
+            stroke_count: row.stroke_count,
+            viewer_count: row.viewer_count,
+            published_at: row.published_at,
         })
         .collect())
 }

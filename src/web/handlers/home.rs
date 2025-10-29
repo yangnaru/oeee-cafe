@@ -238,6 +238,11 @@ pub async fn get_active_communities_json(
             "image_width": post.image_width,
             "image_height": post.image_height,
             "author_login_name": post.author_login_name,
+            "title": post.title,
+            "paint_duration": post.paint_duration,
+            "stroke_count": post.stroke_count,
+            "viewer_count": post.viewer_count,
+            "published_at": post.published_at,
         }));
     }
 
