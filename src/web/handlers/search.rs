@@ -50,7 +50,7 @@ pub async fn search_json(
     .fetch_all(&mut *tx)
     .await?;
 
-    // Search for posts by title or content
+    // Search for posts by title or content (only from public communities)
     let posts = sqlx::query!(
         r#"
         SELECT
@@ -67,9 +67,11 @@ pub async fn search_json(
         FROM posts
         LEFT JOIN users ON posts.author_id = users.id
         LEFT JOIN images ON posts.image_id = images.id
+        INNER JOIN communities ON posts.community_id = communities.id
         WHERE (posts.title ILIKE $1 OR posts.content ILIKE $1)
           AND posts.published_at IS NOT NULL
           AND posts.deleted_at IS NULL
+          AND communities.visibility = 'public'
         ORDER BY posts.published_at DESC
         LIMIT $2
         "#,
