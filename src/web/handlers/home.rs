@@ -203,6 +203,132 @@ pub async fn load_more_public_posts_json(
     })).into_response())
 }
 
+pub async fn get_active_communities_json(
+    _auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let active_public_communities_raw = get_public_communities(&mut tx).await?;
+
+    // Fetch recent posts and stats for active communities
+    let community_ids: Vec<uuid::Uuid> = active_public_communities_raw
+        .iter()
+        .map(|c| c.id)
+        .collect();
+
+    let recent_posts = find_recent_posts_by_communities(&mut tx, &community_ids, 3).await?;
+    let community_stats = get_communities_members_count(&mut tx, &community_ids).await?;
+
+    tx.commit().await?;
+
+    // Group posts by community_id
+    use std::collections::HashMap;
+    let mut posts_by_community: HashMap<uuid::Uuid, Vec<serde_json::Value>> = HashMap::new();
+    for post in recent_posts {
+        let posts = posts_by_community
+            .entry(post.community_id)
+            .or_insert_with(Vec::new);
+        let image_prefix = &post.image_filename[..2];
+        posts.push(serde_json::json!({
+            "id": post.id.to_string(),
+            "image_filename": post.image_filename,
+            "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
+            "image_width": post.image_width,
+            "image_height": post.image_height,
+            "author_login_name": post.author_login_name,
+        }));
+    }
+
+    // Create stats lookup map
+    let mut stats_by_community: HashMap<uuid::Uuid, Option<i64>> = HashMap::new();
+    for stat in community_stats {
+        stats_by_community.insert(stat.community_id, stat.members_count);
+    }
+
+    // Build active communities with all metadata
+    let active_public_communities: Vec<serde_json::Value> = active_public_communities_raw
+        .into_iter()
+        .map(|community| {
+            let recent_posts = posts_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or_default();
+            let members_count = stats_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or(None);
+
+            serde_json::json!({
+                "id": community.id.to_string(),
+                "name": community.name,
+                "slug": community.slug,
+                "description": community.description,
+                "visibility": community.visibility,
+                "owner_login_name": community.owner_login_name,
+                "posts_count": community.posts_count,
+                "members_count": members_count,
+                "recent_posts": recent_posts,
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "communities": active_public_communities,
+    }))
+    .into_response())
+}
+
+pub async fn get_latest_comments_json(
+    _auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let recent_comments = find_latest_comments_from_public_communities(&mut tx, 10).await?;
+
+    tx.commit().await?;
+
+    // Convert comments to JSON with full image URLs
+    let comments_json: Vec<serde_json::Value> = recent_comments
+        .into_iter()
+        .map(|comment| {
+            let post_image_url = comment.post_image_filename.as_ref().map(|filename| {
+                let image_prefix = &filename[..2];
+                format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, filename
+                )
+            });
+
+            serde_json::json!({
+                "id": comment.id,
+                "post_id": comment.post_id,
+                "actor_id": comment.actor_id,
+                "content": comment.content,
+                "content_html": comment.content_html,
+                "actor_name": comment.actor_name,
+                "actor_handle": comment.actor_handle,
+                "actor_login_name": comment.actor_login_name,
+                "is_local": comment.is_local,
+                "created_at": comment.created_at,
+                "post_title": comment.post_title,
+                "post_author_login_name": comment.post_author_login_name,
+                "post_image_url": post_image_url,
+                "post_image_width": comment.post_image_width,
+                "post_image_height": comment.post_image_height,
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "comments": comments_json,
+    }))
+    .into_response())
+}
+
 pub async fn get_post_details_json(
     _auth_session: AuthSession,
     State(state): State<AppState>,

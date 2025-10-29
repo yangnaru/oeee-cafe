@@ -28,7 +28,8 @@ use crate::web::handlers::draw::{
 use crate::web::handlers::handler_404;
 use crate::web::handlers::hashtag::{hashtag_autocomplete, hashtag_discovery, hashtag_view};
 use crate::web::handlers::home::{
-    get_post_details_json, home, load_more_public_posts, load_more_public_posts_json, my_timeline,
+    get_active_communities_json, get_latest_comments_json, get_post_details_json, home,
+    load_more_public_posts, load_more_public_posts_json, my_timeline,
 };
 use crate::web::handlers::search::search_json;
 use crate::web::handlers::notifications::{
@@ -234,6 +235,8 @@ impl App {
             .route("/api/v1/posts/:post_id", get(get_post_details_json))
             .route("/api/v1/search", get(search_json))
             .route("/api/v1/profile/:login_name", get(profile_json))
+            .route("/api/v1/communities/active", get(get_active_communities_json))
+            .route("/api/v1/comments/latest", get(get_latest_comments_json))
             .route("/communities", get(communities))
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))
