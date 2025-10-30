@@ -93,6 +93,24 @@ pub struct SerializableDraftPost {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Structured post detail response for JSON API
+#[derive(Serialize)]
+pub struct PostDetailForJson {
+    pub id: Uuid,
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub author_id: Uuid,
+    pub login_name: String,
+    pub display_name: String,
+    pub paint_duration: String,
+    pub viewer_count: i32,
+    pub image_filename: String,
+    pub image_width: i32,
+    pub image_height: i32,
+    pub is_sensitive: bool,
+    pub published_at_utc: Option<String>,
+}
+
 // Minimal structs for post thumbnails (grid/list views)
 #[derive(Serialize)]
 pub struct PostThumbnail {
@@ -743,6 +761,62 @@ pub async fn find_post_by_id(
             row.parent_post_id.map(|id| id.to_string()),
         );
         map
+    }))
+}
+
+/// Fetch post details with structured types for JSON API
+pub async fn find_post_detail_for_json(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+) -> Result<Option<PostDetailForJson>> {
+    let q = query!(
+        "
+            SELECT
+                posts.id,
+                posts.title,
+                posts.content,
+                posts.is_sensitive,
+                posts.author_id,
+                images.paint_duration,
+                images.width,
+                images.height,
+                images.image_filename,
+                posts.viewer_count,
+                posts.published_at,
+                users.display_name AS display_name,
+                users.login_name AS login_name
+            FROM posts
+            LEFT JOIN images ON posts.image_id = images.id
+            LEFT JOIN users ON posts.author_id = users.id
+            WHERE posts.id = $1
+            AND posts.deleted_at IS NULL
+        ",
+        id
+    );
+    let result = q.fetch_optional(&mut **tx).await?;
+
+    Ok(result.map(|row| {
+        let paint_duration = Duration::try_seconds(row.paint_duration.microseconds / 1000000)
+            .unwrap()
+            .to_std()
+            .unwrap();
+        let paint_duration_human_readable = format_duration(paint_duration);
+
+        PostDetailForJson {
+            id: row.id,
+            title: row.title,
+            content: row.content,
+            author_id: row.author_id,
+            login_name: row.login_name,
+            display_name: row.display_name,
+            paint_duration: paint_duration_human_readable.to_string(),
+            viewer_count: row.viewer_count,
+            image_filename: row.image_filename,
+            image_width: row.width,
+            image_height: row.height,
+            is_sensitive: row.is_sensitive.unwrap_or(false),
+            published_at_utc: row.published_at.map(|dt| dt.to_rfc3339()),
+        }
     }))
 }
 

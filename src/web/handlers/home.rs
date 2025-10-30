@@ -8,7 +8,7 @@ use crate::models::community::{
     get_communities_members_count, get_public_communities,
 };
 use crate::models::post::{
-    find_child_posts_by_parent_id, find_following_posts_by_user_id, find_post_by_id,
+    find_child_posts_by_parent_id, find_following_posts_by_user_id, find_post_detail_for_json,
     find_public_community_posts, find_recent_posts_by_communities,
 };
 use crate::models::reaction::{find_reactions_by_post_id_and_emoji, get_reaction_counts};
@@ -344,8 +344,8 @@ pub async fn get_post_details_json(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    // Get post details
-    let post = find_post_by_id(&mut tx, post_id)
+    // Get post details with proper types
+    let post = find_post_detail_for_json(&mut tx, post_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Post not found"))?;
 
