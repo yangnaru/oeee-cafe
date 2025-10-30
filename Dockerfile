@@ -13,7 +13,6 @@ RUN case "$(uname -m)" in \
 
 # Copy source files
 COPY Cargo.toml Cargo.lock ./
-COPY .sqlx/ ./.sqlx/
 COPY locales/ ./locales/
 COPY migrations/ ./migrations/
 COPY src/ ./src/
@@ -22,6 +21,8 @@ COPY src/ ./src/
 ENV RUSTC_WRAPPER=sccache
 ENV SCCACHE_DIR=/sccache
 ENV SCCACHE_CACHE_SIZE="10G"
+ENV DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5433/oeee_cafe
+
 RUN --mount=type=cache,target=/sccache,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release && \
