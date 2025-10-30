@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     models::{
-        community::get_pending_invitations_for_user,
+        community::get_pending_invitations_with_details_for_user,
         notification::{
             delete_notification, get_notification_by_id, get_unread_count,
             list_notifications as fetch_notifications, mark_all_notifications_as_read,
@@ -37,38 +37,22 @@ pub async fn list_notifications(
     // Fetch notifications using the new notification system
     let notifications = fetch_notifications(&mut tx, user.id, 50, 0).await?;
 
-    // Fetch pending invitations
-    let invitations = get_pending_invitations_for_user(&mut tx, user.id).await?;
+    // Fetch pending invitations with all details in a single query (no N+1)
+    let invitations = get_pending_invitations_with_details_for_user(&mut tx, user.id).await?;
 
-    // Fetch community details for each invitation
-    let invitations_with_details: Vec<serde_json::Value> = {
-        let mut result = Vec::new();
-        for invitation in invitations {
-            let community = sqlx::query!(
-                "SELECT name, slug FROM communities WHERE id = $1",
-                invitation.community_id
-            )
-            .fetch_one(&mut *tx)
-            .await?;
-
-            let inviter = sqlx::query!(
-                "SELECT login_name, display_name FROM users WHERE id = $1",
-                invitation.inviter_id
-            )
-            .fetch_one(&mut *tx)
-            .await?;
-
-            result.push(serde_json::json!({
+    let invitations_with_details: Vec<serde_json::Value> = invitations
+        .into_iter()
+        .map(|invitation| {
+            serde_json::json!({
                 "id": invitation.id,
-                "community_name": community.name,
-                "community_slug": community.slug,
-                "inviter_login_name": inviter.login_name,
-                "inviter_display_name": inviter.display_name,
+                "community_name": invitation.community_name,
+                "community_slug": invitation.community_slug,
+                "inviter_login_name": invitation.inviter_login_name,
+                "inviter_display_name": invitation.inviter_display_name,
                 "created_at": invitation.created_at,
-            }));
-        }
-        result
-    };
+            })
+        })
+        .collect();
 
     // Get common context (includes unread_notification_count and draft_post_count)
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;

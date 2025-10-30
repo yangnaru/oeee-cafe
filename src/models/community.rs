@@ -215,15 +215,18 @@ pub async fn get_user_communities_with_latest_9_posts(
     .fetch_all(&mut **tx)
     .await?;
 
-    let mut result = Vec::new();
+    // Collect all community IDs for bulk query
+    let community_ids: Vec<Uuid> = communities.iter().map(|c| c.id).collect();
 
-    for community in communities {
-        let q = query!(
-            "
+    // Fetch all posts for these communities in a single query
+    let all_posts = query!(
+        r#"
+            WITH ranked_posts AS (
                 SELECT
                     posts.id,
                     posts.title,
                     posts.author_id,
+                    posts.community_id,
                     users.login_name,
                     images.paint_duration AS paint_duration,
                     images.stroke_count AS stroke_count,
@@ -235,53 +238,75 @@ pub async fn get_user_communities_with_latest_9_posts(
                     posts.is_sensitive,
                     posts.published_at,
                     posts.created_at,
-                    posts.updated_at
+                    posts.updated_at,
+                    ROW_NUMBER() OVER (PARTITION BY posts.community_id ORDER BY posts.published_at DESC) as rn
                 FROM posts
                 LEFT JOIN images ON posts.image_id = images.id
                 LEFT JOIN users ON posts.author_id = users.id
-                WHERE community_id = $1
+                WHERE posts.community_id = ANY($1)
                 AND posts.deleted_at IS NULL
                 AND posts.published_at IS NOT NULL
-                ORDER BY posts.published_at DESC
-                LIMIT 9
-            ",
-            community.id
-        );
-        let r = q.fetch_all(&mut **tx).await?;
-        let posts = r
-            .into_iter()
-            .map(|row| SerializablePost {
-                id: row.id,
-                title: row.title,
-                author_id: row.author_id,
-                user_login_name: Some(row.login_name),
-                paint_duration: row.paint_duration.microseconds.to_string(),
-                stroke_count: row.stroke_count,
-                image_filename: row.image_filename,
-                image_width: row.width,
-                image_height: row.height,
-                replay_filename: row.replay_filename,
-                is_sensitive: row.is_sensitive,
-                viewer_count: row.viewer_count,
-                published_at: row.published_at,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-            })
-            .collect();
+            )
+            SELECT * FROM ranked_posts WHERE rn <= 9
+            ORDER BY community_id, published_at DESC
+        "#,
+        &community_ids
+    )
+    .fetch_all(&mut **tx)
+    .await?;
 
-        result.push(PublicCommunityWithPosts {
-            id: community.id,
-            owner_id: community.owner_id,
-            owner_login_name: community.owner_login_name,
-            name: community.name,
-            slug: community.slug,
-            description: community.description,
-            visibility: community.visibility,
-            updated_at: community.updated_at,
-            created_at: community.created_at,
-            posts,
-        });
+    // Group posts by community_id
+    use std::collections::HashMap;
+    let mut posts_by_community: HashMap<Uuid, Vec<SerializablePost>> = HashMap::new();
+
+    for row in all_posts {
+        let post = SerializablePost {
+            id: row.id,
+            title: row.title,
+            author_id: row.author_id,
+            user_login_name: Some(row.login_name),
+            paint_duration: row.paint_duration.microseconds.to_string(),
+            stroke_count: row.stroke_count,
+            image_filename: row.image_filename,
+            image_width: row.width,
+            image_height: row.height,
+            replay_filename: row.replay_filename,
+            is_sensitive: row.is_sensitive,
+            viewer_count: row.viewer_count,
+            published_at: row.published_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        };
+
+        posts_by_community
+            .entry(row.community_id)
+            .or_insert_with(Vec::new)
+            .push(post);
     }
+
+    // Build result with posts attached to each community
+    let result = communities
+        .into_iter()
+        .map(|community| {
+            let posts = posts_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or_default();
+
+            PublicCommunityWithPosts {
+                id: community.id,
+                owner_id: community.owner_id,
+                owner_login_name: community.owner_login_name,
+                name: community.name,
+                slug: community.slug,
+                description: community.description,
+                visibility: community.visibility,
+                updated_at: community.updated_at,
+                created_at: community.created_at,
+                posts,
+            }
+        })
+        .collect();
 
     Ok(result)
 }
@@ -664,6 +689,60 @@ pub async fn get_community_members(
     Ok(members)
 }
 
+/// Struct for community members with user details (no N+1 query)
+#[derive(Debug)]
+pub struct CommunityMemberWithDetails {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub login_name: String,
+    pub display_name: String,
+    pub role: CommunityMemberRole,
+    pub joined_at: DateTime<Utc>,
+}
+
+/// Get community members with user details in a single query
+pub async fn get_community_members_with_details(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+) -> Result<Vec<CommunityMemberWithDetails>> {
+    let members = query!(
+        r#"
+        SELECT
+            cm.id,
+            cm.user_id,
+            u.login_name,
+            u.display_name,
+            cm.role as "role: CommunityMemberRole",
+            cm.joined_at
+        FROM community_members cm
+        JOIN users u ON cm.user_id = u.id
+        WHERE cm.community_id = $1
+        ORDER BY
+            CASE cm.role
+                WHEN 'owner' THEN 1
+                WHEN 'moderator' THEN 2
+                WHEN 'member' THEN 3
+            END,
+            cm.joined_at ASC
+        "#,
+        community_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(members
+        .into_iter()
+        .map(|row| CommunityMemberWithDetails {
+            id: row.id,
+            user_id: row.user_id,
+            login_name: row.login_name,
+            display_name: row.display_name,
+            role: row.role,
+            joined_at: row.joined_at,
+        })
+        .collect())
+}
+
 /// Add a member to a community
 pub async fn add_community_member(
     tx: &mut Transaction<'_, Postgres>,
@@ -783,6 +862,61 @@ pub async fn get_pending_invitations_for_user(
     Ok(invitations)
 }
 
+/// Struct for invitations with all required details (no N+1 query)
+#[derive(Debug)]
+pub struct InvitationWithDetails {
+    pub id: Uuid,
+    pub community_id: Uuid,
+    pub community_name: String,
+    pub community_slug: String,
+    pub inviter_id: Uuid,
+    pub inviter_login_name: String,
+    pub inviter_display_name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Get pending invitations for a user with all details in a single query
+pub async fn get_pending_invitations_with_details_for_user(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<Vec<InvitationWithDetails>> {
+    let invitations = query!(
+        r#"
+        SELECT
+            ci.id,
+            ci.community_id,
+            c.name as community_name,
+            c.slug as community_slug,
+            ci.inviter_id,
+            u.login_name as inviter_login_name,
+            u.display_name as inviter_display_name,
+            ci.created_at
+        FROM community_invitations ci
+        JOIN communities c ON ci.community_id = c.id
+        JOIN users u ON ci.inviter_id = u.id
+        WHERE ci.invitee_id = $1 AND ci.status = 'pending'
+        ORDER BY ci.created_at DESC
+        "#,
+        user_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(invitations
+        .into_iter()
+        .map(|row| InvitationWithDetails {
+            id: row.id,
+            community_id: row.community_id,
+            community_name: row.community_name,
+            community_slug: row.community_slug,
+            inviter_id: row.inviter_id,
+            inviter_login_name: row.inviter_login_name,
+            inviter_display_name: row.inviter_display_name,
+            created_at: row.created_at,
+        })
+        .collect())
+}
+
 /// Get pending invitations for a community
 pub async fn get_pending_invitations_for_community(
     tx: &mut Transaction<'_, Postgres>,
@@ -802,6 +936,51 @@ pub async fn get_pending_invitations_for_community(
     .await?;
 
     Ok(invitations)
+}
+
+/// Struct for community invitations with invitee details (no N+1 query)
+#[derive(Debug)]
+pub struct CommunityInvitationWithInviteeDetails {
+    pub id: Uuid,
+    pub invitee_id: Uuid,
+    pub invitee_login_name: String,
+    pub invitee_display_name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Get pending invitations for a community with invitee details in a single query
+pub async fn get_pending_invitations_with_invitee_details_for_community(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+) -> Result<Vec<CommunityInvitationWithInviteeDetails>> {
+    let invitations = query!(
+        r#"
+        SELECT
+            ci.id,
+            ci.invitee_id,
+            u.login_name as invitee_login_name,
+            u.display_name as invitee_display_name,
+            ci.created_at
+        FROM community_invitations ci
+        JOIN users u ON ci.invitee_id = u.id
+        WHERE ci.community_id = $1 AND ci.status = 'pending'
+        ORDER BY ci.created_at DESC
+        "#,
+        community_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(invitations
+        .into_iter()
+        .map(|row| CommunityInvitationWithInviteeDetails {
+            id: row.id,
+            invitee_id: row.invitee_id,
+            invitee_login_name: row.invitee_login_name,
+            invitee_display_name: row.invitee_display_name,
+            created_at: row.created_at,
+        })
+        .collect())
 }
 
 /// Get invitation by ID

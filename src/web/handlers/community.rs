@@ -4,8 +4,8 @@ use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
     accept_invitation, add_community_member, create_community, create_invitation,
     find_community_by_id, find_community_by_slug, get_communities_members_count,
-    get_community_members, get_community_stats, get_invitation_by_id, get_own_communities,
-    get_participating_communities, get_pending_invitations_for_community,
+    get_community_members_with_details, get_community_stats, get_invitation_by_id, get_own_communities,
+    get_participating_communities, get_pending_invitations_with_invitee_details_for_community,
     get_public_communities, get_user_role_in_community,
     is_user_member, reject_invitation, remove_community_member, update_community_with_activity,
     CommunityDraft, CommunityMemberRole, CommunityVisibility,
@@ -840,30 +840,22 @@ pub async fn get_members(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let members = get_community_members(&mut tx, community.id).await?;
+    // Fetch members with user details in a single query (no N+1)
+    let members = get_community_members_with_details(&mut tx, community.id).await?;
 
-    // Fetch user details for each member
-    let members_with_details: Vec<serde_json::Value> = {
-        let mut result = Vec::new();
-        for member in members {
-            let user = sqlx::query!(
-                "SELECT login_name, display_name FROM users WHERE id = $1",
-                member.user_id
-            )
-            .fetch_one(&mut *tx)
-            .await?;
-
-            result.push(serde_json::json!({
+    let members_with_details: Vec<serde_json::Value> = members
+        .into_iter()
+        .map(|member| {
+            serde_json::json!({
                 "id": member.id,
                 "user_id": member.user_id,
-                "login_name": user.login_name,
-                "display_name": user.display_name,
+                "login_name": member.login_name,
+                "display_name": member.display_name,
                 "role": member.role,
                 "joined_at": member.joined_at,
-            }));
-        }
-        result
-    };
+            })
+        })
+        .collect();
 
     tx.commit().await?;
 
@@ -1220,52 +1212,38 @@ pub async fn members_page(
         }
     };
 
-    let members = get_community_members(&mut tx, community.id).await?;
+    // Fetch members with user details in a single query (no N+1)
+    let members = get_community_members_with_details(&mut tx, community.id).await?;
 
-    // Fetch user details for each member
-    let members_with_details: Vec<serde_json::Value> = {
-        let mut result = Vec::new();
-        for member in members {
-            let user_info = sqlx::query!(
-                "SELECT login_name, display_name FROM users WHERE id = $1",
-                member.user_id
-            )
-            .fetch_one(&mut *tx)
-            .await?;
-
-            result.push(serde_json::json!({
+    let members_with_details: Vec<serde_json::Value> = members
+        .into_iter()
+        .map(|member| {
+            serde_json::json!({
                 "id": member.id,
                 "user_id": member.user_id,
-                "login_name": user_info.login_name,
-                "display_name": user_info.display_name,
+                "login_name": member.login_name,
+                "display_name": member.display_name,
                 "role": member.role,
                 "joined_at": member.joined_at,
-            }));
-        }
-        result
-    };
+            })
+        })
+        .collect();
 
-    // Fetch pending invitations if user is owner/moderator
+    // Fetch pending invitations with invitee details in a single query (no N+1)
     let pending_invitations = match user_role {
         Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {
-            let invitations = get_pending_invitations_for_community(&mut tx, community.id).await?;
-            let mut invitations_with_details = Vec::new();
-            for invitation in invitations {
-                let invitee_info = sqlx::query!(
-                    "SELECT login_name, display_name FROM users WHERE id = $1",
-                    invitation.invitee_id
-                )
-                .fetch_one(&mut *tx)
-                .await?;
-
-                invitations_with_details.push(serde_json::json!({
-                    "id": invitation.id,
-                    "invitee_login_name": invitee_info.login_name,
-                    "invitee_display_name": invitee_info.display_name,
-                    "created_at": invitation.created_at,
-                }));
-            }
-            invitations_with_details
+            let invitations = get_pending_invitations_with_invitee_details_for_community(&mut tx, community.id).await?;
+            invitations
+                .into_iter()
+                .map(|invitation| {
+                    serde_json::json!({
+                        "id": invitation.id,
+                        "invitee_login_name": invitation.invitee_login_name,
+                        "invitee_display_name": invitation.invitee_display_name,
+                        "created_at": invitation.created_at,
+                    })
+                })
+                .collect()
         },
         _ => Vec::new(),
     };
