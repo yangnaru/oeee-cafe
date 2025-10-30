@@ -14,6 +14,12 @@ use crate::models::post::{
 use crate::models::reaction::{find_reactions_by_post_id_and_emoji, get_reaction_counts};
 use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
+use crate::web::responses::{
+    ChildPostResponse, CommentListResponse, CommentResponse, CommentWithPost,
+    CommunityListResponse, CommunityPostThumbnail, CommunityWithPosts, PaginationMeta,
+    PostDetail, PostDetailResponse, PostListResponse, PostThumbnail, ReactionCount,
+    ReactionsDetailResponse, Reactor,
+};
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
 use axum::response::IntoResponse;
@@ -175,7 +181,7 @@ pub async fn load_more_public_posts_json(
     _auth_session: AuthSession,
     State(state): State<AppState>,
     Query(query): Query<LoadMoreQuery>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<PostListResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -183,32 +189,40 @@ pub async fn load_more_public_posts_json(
 
     tx.commit().await?;
 
-    // Convert to JSON response with minimal fields for thumbnails
-    let posts_with_urls: Vec<serde_json::Value> = posts
+    let thumbnails: Vec<PostThumbnail> = posts
         .into_iter()
         .map(|post| {
             let image_prefix = &post.image_filename[..2];
-            serde_json::json!({
-                "id": post.id,
-                "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
-                "image_width": post.image_width,
-                "image_height": post.image_height,
-                "is_sensitive": post.is_sensitive,
-            })
+            PostThumbnail {
+                id: post.id,
+                image_url: format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+                ),
+                image_width: post.image_width,
+                image_height: post.image_height,
+                is_sensitive: post.is_sensitive,
+            }
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "posts": posts_with_urls,
-        "offset": query.offset + query.limit,
-        "has_more": posts_with_urls.len() as i64 == query.limit,
-    })).into_response())
+    let has_more = thumbnails.len() as i64 == query.limit;
+
+    Ok(Json(PostListResponse {
+        posts: thumbnails,
+        pagination: PaginationMeta {
+            offset: query.offset,
+            limit: query.limit,
+            total: None,
+            has_more,
+        },
+    }))
 }
 
 pub async fn get_active_communities_json(
     _auth_session: AuthSession,
     State(state): State<AppState>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<CommunityListResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -232,20 +246,23 @@ pub async fn get_active_communities_json(
 
     tx.commit().await?;
 
-    // Group posts by community_id with minimal fields for thumbnails
+    // Group posts by community_id
     use std::collections::HashMap;
-    let mut posts_by_community: HashMap<uuid::Uuid, Vec<serde_json::Value>> = HashMap::new();
+    let mut posts_by_community: HashMap<uuid::Uuid, Vec<CommunityPostThumbnail>> = HashMap::new();
     for post in recent_posts {
         let posts = posts_by_community
             .entry(post.community_id)
             .or_insert_with(Vec::new);
         let image_prefix = &post.image_filename[..2];
-        posts.push(serde_json::json!({
-            "id": post.id.to_string(),
-            "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
-            "image_width": post.image_width,
-            "image_height": post.image_height,
-        }));
+        posts.push(CommunityPostThumbnail {
+            id: post.id,
+            image_url: format!(
+                "{}/image/{}/{}",
+                state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+            ),
+            image_width: post.image_width,
+            image_height: post.image_height,
+        });
     }
 
     // Create stats lookup map
@@ -255,7 +272,7 @@ pub async fn get_active_communities_json(
     }
 
     // Build active communities with all metadata
-    let active_public_communities: Vec<serde_json::Value> = active_public_communities_raw
+    let communities: Vec<CommunityWithPosts> = active_public_communities_raw
         .into_iter()
         .map(|community| {
             let recent_posts = posts_by_community
@@ -265,32 +282,29 @@ pub async fn get_active_communities_json(
             let members_count = stats_by_community
                 .get(&community.id)
                 .cloned()
-                .unwrap_or(None);
+                .flatten();
 
-            serde_json::json!({
-                "id": community.id.to_string(),
-                "name": community.name,
-                "slug": community.slug,
-                "description": community.description,
-                "visibility": community.visibility,
-                "owner_login_name": community.owner_login_name,
-                "posts_count": community.posts_count,
-                "members_count": members_count,
-                "recent_posts": recent_posts,
-            })
+            CommunityWithPosts {
+                id: community.id,
+                name: community.name,
+                slug: community.slug,
+                description: community.description,
+                visibility: format!("{:?}", community.visibility).to_lowercase(),
+                owner_login_name: community.owner_login_name,
+                posts_count: community.posts_count,
+                members_count,
+                recent_posts,
+            }
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "communities": active_public_communities,
-    }))
-    .into_response())
+    Ok(Json(CommunityListResponse { communities }))
 }
 
 pub async fn get_latest_comments_json(
     _auth_session: AuthSession,
     State(state): State<AppState>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<CommentListResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -298,8 +312,7 @@ pub async fn get_latest_comments_json(
 
     tx.commit().await?;
 
-    // Convert comments to JSON with full image URLs
-    let comments_json: Vec<serde_json::Value> = recent_comments
+    let comments: Vec<CommentWithPost> = recent_comments
         .into_iter()
         .map(|comment| {
             let post_image_url = comment.post_image_filename.as_ref().map(|filename| {
@@ -310,42 +323,39 @@ pub async fn get_latest_comments_json(
                 )
             });
 
-            serde_json::json!({
-                "id": comment.id,
-                "post_id": comment.post_id,
-                "actor_id": comment.actor_id,
-                "content": comment.content,
-                "content_html": comment.content_html,
-                "actor_name": comment.actor_name,
-                "actor_handle": comment.actor_handle,
-                "actor_login_name": comment.actor_login_name,
-                "is_local": comment.is_local,
-                "created_at": comment.created_at,
-                "post_title": comment.post_title,
-                "post_author_login_name": comment.post_author_login_name,
-                "post_image_url": post_image_url,
-                "post_image_width": comment.post_image_width,
-                "post_image_height": comment.post_image_height,
-            })
+            CommentWithPost {
+                id: comment.id,
+                post_id: comment.post_id,
+                actor_id: comment.actor_id,
+                content: comment.content,
+                content_html: comment.content_html,
+                actor_name: comment.actor_name,
+                actor_handle: comment.actor_handle,
+                actor_login_name: comment.actor_login_name,
+                is_local: comment.is_local,
+                created_at: comment.created_at,
+                post_title: comment.post_title,
+                post_author_login_name: comment.post_author_login_name,
+                post_image_url,
+                post_image_width: comment.post_image_width,
+                post_image_height: comment.post_image_height,
+            }
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "comments": comments_json,
-    }))
-    .into_response())
+    Ok(Json(CommentListResponse { comments }))
 }
 
 pub async fn get_post_details_json(
     auth_session: AuthSession,
     State(state): State<AppState>,
     Path(post_id): Path<Uuid>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<PostDetailResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     // Get post details with proper types
-    let post = find_post_detail_for_json(&mut tx, post_id)
+    let post_data = find_post_detail_for_json(&mut tx, post_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("Post not found"))?;
 
@@ -369,70 +379,105 @@ pub async fn get_post_details_json(
 
     tx.commit().await?;
 
-    // Convert comments to JSON
-    let comments_json: Vec<serde_json::Value> = comments
+    let post = PostDetail {
+        id: post_data.id,
+        title: post_data.title,
+        content: post_data.content,
+        author_id: post_data.author_id,
+        login_name: post_data.login_name,
+        display_name: post_data.display_name,
+        paint_duration: post_data.paint_duration,
+        viewer_count: post_data.viewer_count,
+        image_filename: post_data.image_filename,
+        image_width: post_data.image_width,
+        image_height: post_data.image_height,
+        is_sensitive: post_data.is_sensitive,
+        published_at_utc: post_data.published_at_utc,
+    };
+
+    let comments_response: Vec<CommentResponse> = comments
         .into_iter()
-        .map(|comment| {
-            serde_json::json!({
-                "id": comment.id,
-                "post_id": comment.post_id,
-                "actor_id": comment.actor_id,
-                "content": comment.content,
-                "content_html": comment.content_html,
-                "actor_name": comment.actor_name,
-                "actor_handle": comment.actor_handle,
-                "actor_login_name": comment.actor_login_name,
-                "is_local": comment.is_local,
-                "created_at": comment.created_at,
-                "updated_at": comment.updated_at,
-            })
+        .map(|comment| CommentResponse {
+            id: comment.id,
+            post_id: comment.post_id,
+            actor_id: comment.actor_id,
+            content: comment.content,
+            content_html: comment.content_html,
+            actor_name: comment.actor_name,
+            actor_handle: comment.actor_handle,
+            actor_login_name: comment.actor_login_name,
+            is_local: comment.is_local,
+            created_at: comment.created_at,
+            updated_at: comment.updated_at,
         })
         .collect();
 
-    // Convert child posts to JSON with image URLs
-    let child_posts_json: Vec<serde_json::Value> = child_posts
+    let child_posts_response: Vec<ChildPostResponse> = child_posts
         .into_iter()
         .map(|child| {
             let image_prefix = &child.image_filename[..2];
-            serde_json::json!({
-                "id": child.id,
-                "title": child.title,
-                "content": child.content,
-                "author_id": child.author_id,
-                "user_login_name": child.user_login_name,
-                "user_display_name": child.user_display_name,
-                "user_actor_handle": child.user_actor_handle,
-                "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, child.image_filename),
-                "image_width": child.image_width,
-                "image_height": child.image_height,
-                "published_at": child.published_at,
-                "comments_count": child.comments_count,
-            })
+            ChildPostResponse {
+                id: child.id,
+                title: child.title,
+                content: child.content,
+                author_id: child.author_id,
+                user_login_name: child.user_login_name,
+                user_display_name: child.user_display_name,
+                user_actor_handle: child.user_actor_handle,
+                image_url: format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, child.image_filename
+                ),
+                image_width: child.image_width,
+                image_height: child.image_height,
+                published_at: child.published_at,
+                comments_count: child.comments_count,
+            }
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "post": post,
-        "comments": comments_json,
-        "child_posts": child_posts_json,
-        "reactions": reactions,
-    })).into_response())
+    let reactions_response: Vec<ReactionCount> = reactions
+        .into_iter()
+        .map(|r| ReactionCount {
+            emoji: r.emoji,
+            count: r.count,
+            reacted_by_user: r.reacted_by_user,
+        })
+        .collect();
+
+    Ok(Json(PostDetailResponse {
+        post,
+        comments: comments_response,
+        child_posts: child_posts_response,
+        reactions: reactions_response,
+    }))
 }
 
 pub async fn get_post_reactions_by_emoji_json(
     _auth_session: AuthSession,
     State(state): State<AppState>,
     Path((post_id, emoji)): Path<(Uuid, String)>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<ReactionsDetailResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     // Get reactions for this post and emoji
-    let reactions = find_reactions_by_post_id_and_emoji(&mut tx, post_id, &emoji).await?;
+    let reactions_data = find_reactions_by_post_id_and_emoji(&mut tx, post_id, &emoji).await?;
 
     tx.commit().await?;
 
-    Ok(Json(serde_json::json!({
-        "reactions": reactions,
-    })).into_response())
+    let reactions: Vec<Reactor> = reactions_data
+        .into_iter()
+        .map(|r| Reactor {
+            iri: r.iri,
+            post_id: r.post_id,
+            actor_id: r.actor_id,
+            emoji: r.emoji,
+            created_at: r.created_at,
+            actor_name: r.actor_name,
+            actor_handle: r.actor_handle,
+        })
+        .collect();
+
+    Ok(Json(ReactionsDetailResponse { reactions }))
 }

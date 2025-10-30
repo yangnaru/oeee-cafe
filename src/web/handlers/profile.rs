@@ -16,6 +16,9 @@ use crate::models::post::{
 use crate::models::user::{find_user_by_id, find_user_by_login_name, AuthSession};
 use crate::web::context::CommonContext;
 use crate::web::handlers::home::LoadMoreQuery;
+use crate::web::responses::{
+    ProfileBanner, ProfileFollowing, ProfileLink, ProfilePost, ProfileResponse, ProfileUser,
+};
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
 use axum::response::IntoResponse;
@@ -695,7 +698,7 @@ pub async fn profile_json(
     State(state): State<AppState>,
     Path(login_name): Path<String>,
     Query(query): Query<LoadMoreQuery>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<ProfileResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -710,15 +713,16 @@ pub async fn profile_json(
     let banner = match user.banner_id {
         Some(banner_id) => {
             let banner = find_banner_by_id(&mut tx, banner_id).await?;
-            Some(serde_json::json!({
-                "id": banner.id,
-                "image_filename": banner.image_filename,
-                "image_url": format!("{}/image/{}/{}",
+            Some(ProfileBanner {
+                id: banner.id,
+                image_filename: banner.image_filename.clone(),
+                image_url: format!(
+                    "{}/image/{}/{}",
                     state.config.r2_public_endpoint_url,
                     &banner.image_filename[..2],
                     banner.image_filename
                 ),
-            }))
+            })
         }
         None => None,
     };
@@ -731,64 +735,69 @@ pub async fn profile_json(
 
     tx.commit().await?;
 
-    // Convert posts to JSON with minimal fields for thumbnails
-    let posts_json: Vec<serde_json::Value> = public_posts
+    // Convert posts to typed structs with minimal fields for thumbnails
+    let posts_typed: Vec<ProfilePost> = public_posts
         .into_iter()
         .map(|post| {
             let image_prefix = &post.image_filename[..2];
-            serde_json::json!({
-                "id": post.id,
-                "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
-                "image_width": post.image_width,
-                "image_height": post.image_height,
-            })
+            ProfilePost {
+                id: post.id,
+                image_url: format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+                ),
+                image_width: post.image_width,
+                image_height: post.image_height,
+            }
         })
         .collect();
 
-    // Convert followings to JSON
-    let followings_json: Vec<serde_json::Value> = followings
+    // Convert followings to typed structs
+    let followings_typed: Vec<ProfileFollowing> = followings
         .into_iter()
         .map(|following| {
             let banner_image_url = following.banner_image_filename.as_ref().map(|filename| {
                 let image_prefix = &filename[..2];
-                format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, filename)
+                format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, filename
+                )
             });
 
-            serde_json::json!({
-                "id": following.user_id,
-                "login_name": following.login_name,
-                "display_name": following.display_name,
-                "banner_image_url": banner_image_url,
-                "banner_image_width": following.banner_image_width,
-                "banner_image_height": following.banner_image_height,
-            })
+            ProfileFollowing {
+                id: following.user_id,
+                login_name: following.login_name,
+                display_name: following.display_name,
+                banner_image_url,
+                banner_image_width: following.banner_image_width,
+                banner_image_height: following.banner_image_height,
+            }
         })
         .collect();
 
-    // Convert links to JSON
-    let links_json: Vec<serde_json::Value> = links
+    // Convert links to typed structs
+    let links_typed: Vec<ProfileLink> = links
         .into_iter()
-        .map(|link| {
-            serde_json::json!({
-                "id": link.id,
-                "url": link.url,
-                "description": link.description,
-            })
+        .map(|link| ProfileLink {
+            id: link.id,
+            url: link.url,
+            description: link.description,
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "user": {
-            "id": user.id,
-            "login_name": user.login_name,
-            "display_name": user.display_name,
+    let posts_has_more = posts_typed.len() as i64 == query.limit;
+
+    Ok(Json(ProfileResponse {
+        user: ProfileUser {
+            id: user.id,
+            login_name: user.login_name,
+            display_name: user.display_name,
         },
-        "banner": banner,
-        "posts": posts_json,
-        "posts_offset": query.offset + query.limit,
-        "posts_has_more": posts_json.len() as i64 == query.limit,
-        "followings": followings_json,
-        "links": links_json,
+        banner,
+        posts: posts_typed,
+        posts_offset: query.offset + query.limit,
+        posts_has_more,
+        followings: followings_typed,
+        links: links_typed,
     }))
-    .into_response())
 }

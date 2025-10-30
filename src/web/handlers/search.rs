@@ -1,8 +1,8 @@
 use crate::app_error::AppError;
 use crate::models::user::AuthSession;
+use crate::web::responses::{SearchPostResult, SearchResponse, SearchUserResult};
 use crate::web::state::AppState;
 use axum::extract::Query;
-use axum::response::IntoResponse;
 use axum::{extract::State, response::Json};
 use serde::Deserialize;
 
@@ -17,7 +17,7 @@ pub async fn search_json(
     _auth_session: AuthSession,
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<SearchResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -83,20 +83,18 @@ pub async fn search_json(
 
     tx.commit().await?;
 
-    // Convert users to JSON
-    let users_json: Vec<serde_json::Value> = users
+    // Convert users to typed structs
+    let users_typed: Vec<SearchUserResult> = users
         .into_iter()
-        .map(|user| {
-            serde_json::json!({
-                "id": user.id,
-                "login_name": user.login_name,
-                "display_name": user.display_name,
-            })
+        .map(|user| SearchUserResult {
+            id: user.id,
+            login_name: user.login_name,
+            display_name: user.display_name,
         })
         .collect();
 
-    // Convert posts to JSON with minimal fields for thumbnails
-    let posts_json: Vec<serde_json::Value> = posts
+    // Convert posts to typed structs with minimal fields for thumbnails
+    let posts_typed: Vec<SearchPostResult> = posts
         .into_iter()
         .map(|post| {
             let image_url = if let Some(ref filename) = post.image_filename {
@@ -109,19 +107,18 @@ pub async fn search_json(
                 String::new()
             };
 
-            serde_json::json!({
-                "id": post.id,
-                "image_url": image_url,
-                "image_width": post.image_width,
-                "image_height": post.image_height,
-                "is_sensitive": post.is_sensitive,
-            })
+            SearchPostResult {
+                id: post.id,
+                image_url,
+                image_width: post.image_width,
+                image_height: post.image_height,
+                is_sensitive: post.is_sensitive.unwrap_or(false),
+            }
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "users": users_json,
-        "posts": posts_json,
+    Ok(Json(SearchResponse {
+        users: users_typed,
+        posts: posts_typed,
     }))
-    .into_response())
 }

@@ -14,6 +14,10 @@ use crate::models::post::{find_published_posts_by_community_id, find_recent_post
 use crate::models::user::{AuthSession, find_user_by_login_name};
 use crate::web::handlers::home::LoadMoreQuery;
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
+use crate::web::responses::{
+    CommunityComment, CommunityDetailResponse, CommunityInfo, CommunityPostThumbnail,
+    CommunityStats,
+};
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
 use axum::http::{HeaderMap, HeaderValue};
@@ -1275,7 +1279,7 @@ pub async fn community_detail_json(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     Query(query): Query<LoadMoreQuery>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<CommunityDetailResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -1299,22 +1303,25 @@ pub async fn community_detail_json(
 
     tx.commit().await?;
 
-    // Convert posts to JSON with minimal fields for thumbnails
-    let posts_json: Vec<serde_json::Value> = posts
+    // Convert posts to typed structs with minimal fields for thumbnails
+    let posts_typed: Vec<CommunityPostThumbnail> = posts
         .into_iter()
         .map(|post| {
             let image_prefix = &post.image_filename[..2];
-            serde_json::json!({
-                "id": post.id,
-                "image_url": format!("{}/image/{}/{}", state.config.r2_public_endpoint_url, image_prefix, post.image_filename),
-                "image_width": post.image_width,
-                "image_height": post.image_height,
-            })
+            CommunityPostThumbnail {
+                id: post.id,
+                image_url: format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+                ),
+                image_width: post.image_width,
+                image_height: post.image_height,
+            }
         })
         .collect();
 
-    // Convert comments to JSON
-    let comments_json: Vec<serde_json::Value> = comments
+    // Convert comments to typed structs
+    let comments_typed: Vec<CommunityComment> = comments
         .into_iter()
         .map(|comment| {
             let post_image_url = comment.post_image_filename.as_ref().map(|filename| {
@@ -1325,47 +1332,48 @@ pub async fn community_detail_json(
                 )
             });
 
-            serde_json::json!({
-                "id": comment.id,
-                "post_id": comment.post_id,
-                "actor_id": comment.actor_id,
-                "content": comment.content,
-                "content_html": comment.content_html,
-                "actor_name": comment.actor_name,
-                "actor_handle": comment.actor_handle,
-                "actor_login_name": comment.actor_login_name,
-                "is_local": comment.is_local,
-                "created_at": comment.created_at,
-                "post_title": comment.post_title,
-                "post_author_login_name": comment.post_author_login_name,
-                "post_image_url": post_image_url,
-                "post_image_width": comment.post_image_width,
-                "post_image_height": comment.post_image_height,
-            })
+            CommunityComment {
+                id: comment.id,
+                post_id: comment.post_id,
+                actor_id: comment.actor_id,
+                content: comment.content,
+                content_html: comment.content_html,
+                actor_name: comment.actor_name,
+                actor_handle: comment.actor_handle,
+                actor_login_name: comment.actor_login_name,
+                is_local: comment.is_local,
+                created_at: comment.created_at,
+                post_title: comment.post_title,
+                post_author_login_name: comment.post_author_login_name,
+                post_image_url,
+                post_image_width: comment.post_image_width,
+                post_image_height: comment.post_image_height,
+            }
         })
         .collect();
 
-    Ok(Json(serde_json::json!({
-        "community": {
-            "id": community.id,
-            "name": community.name,
-            "slug": community.slug,
-            "description": community.description,
-            "visibility": community.visibility,
-            "owner_id": community.owner_id,
-            "background_color": community.background_color,
-            "foreground_color": community.foreground_color,
+    let posts_has_more = posts_typed.len() as i64 == query.limit;
+
+    Ok(Json(CommunityDetailResponse {
+        community: CommunityInfo {
+            id: community.id,
+            name: community.name,
+            slug: community.slug,
+            description: community.description,
+            visibility: community.visibility,
+            owner_id: community.owner_id,
+            background_color: community.background_color,
+            foreground_color: community.foreground_color,
         },
-        "stats": {
-            "total_posts": stats.total_posts,
-            "total_contributors": stats.total_contributors,
-            "total_comments": stats.total_comments,
+        stats: CommunityStats {
+            total_posts: stats.total_posts,
+            total_contributors: stats.total_contributors,
+            total_comments: stats.total_comments,
         },
-        "posts": posts_json,
-        "posts_offset": query.offset + query.limit,
-        "posts_has_more": posts_json.len() as i64 == query.limit,
-        "comments": comments_json,
+        posts: posts_typed,
+        posts_offset: query.offset + query.limit,
+        posts_has_more,
+        comments: comments_typed,
     }))
-    .into_response())
 }
 

@@ -6,8 +6,7 @@ use axum::{
 };
 use axum_messages::Messages;
 use minijinja::context;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
@@ -20,7 +19,15 @@ use crate::{
         },
         user::AuthSession,
     },
-    web::{context::CommonContext, handlers::ExtractFtlLang, state::AppState},
+    web::{
+        context::CommonContext,
+        handlers::ExtractFtlLang,
+        responses::{
+            DeleteNotificationResponse, MarkAllReadResponse, MarkNotificationReadResponse,
+            NotificationItem, NotificationsListResponse, UnreadCountResponse,
+        },
+        state::AppState,
+    },
 };
 
 pub async fn list_notifications(
@@ -116,7 +123,7 @@ pub async fn mark_notification_read(
 pub async fn mark_all_notifications_read(
     auth_session: AuthSession,
     State(state): State<AppState>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<MarkAllReadResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -126,14 +133,17 @@ pub async fn mark_all_notifications_read(
 
     tx.commit().await?;
 
-    Ok(Json(json!({ "success": true, "count": count })).into_response())
+    Ok(Json(MarkAllReadResponse {
+        success: true,
+        count: count as i64,
+    }))
 }
 
 /// Get the unread notification count for the current user
 pub async fn get_unread_notification_count(
     auth_session: AuthSession,
     State(state): State<AppState>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<UnreadCountResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -143,7 +153,7 @@ pub async fn get_unread_notification_count(
 
     tx.commit().await?;
 
-    Ok(Json(json!({ "count": count })).into_response())
+    Ok(Json(UnreadCountResponse { count }))
 }
 
 /// Delete a specific notification
@@ -185,19 +195,12 @@ fn default_limit() -> i64 {
     50
 }
 
-#[derive(Debug, Serialize)]
-pub struct NotificationsListResponse {
-    pub notifications: Vec<serde_json::Value>,
-    pub total: usize,
-    pub has_more: bool,
-}
-
 /// API: List notifications with pagination (JSON response)
 pub async fn api_list_notifications(
     auth_session: AuthSession,
     State(state): State<AppState>,
     Query(params): Query<NotificationQueryParams>,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<Json<NotificationsListResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -212,9 +215,9 @@ pub async fn api_list_notifications(
 
     tx.commit().await?;
 
-    // Convert notifications to JSON
+    // Convert notifications to typed structs
     let r2_base_url = &state.config.r2_public_endpoint_url;
-    let notifications_json: Vec<serde_json::Value> = notifications
+    let notifications_typed: Vec<NotificationItem> = notifications
         .into_iter()
         .map(|n| {
             // Build full image URL if filename exists
@@ -222,40 +225,38 @@ pub async fn api_list_notifications(
                 format!("{}/image/{}/{}", r2_base_url, &filename[0..2], filename)
             });
 
-            json!({
-                "id": n.id,
-                "recipient_id": n.recipient_id,
-                "actor_id": n.actor_id,
-                "actor_name": n.actor_name,
-                "actor_handle": n.actor_handle,
-                "notification_type": n.notification_type,
-                "post_id": n.post_id,
-                "comment_id": n.comment_id,
-                "reaction_iri": n.reaction_iri,
-                "reaction_emoji": n.reaction_emoji,
-                "guestbook_entry_id": n.guestbook_entry_id,
-                "read_at": n.read_at,
-                "created_at": n.created_at,
-                "post_title": n.post_title,
-                "post_author_login_name": n.post_author_login_name,
-                "post_image_filename": n.post_image_filename,
-                "post_image_url": post_image_url,
-                "post_image_width": n.post_image_width,
-                "post_image_height": n.post_image_height,
-                "comment_content": n.comment_content,
-                "comment_content_html": n.comment_content_html,
-                "guestbook_content": n.guestbook_content,
-            })
+            NotificationItem {
+                id: n.id,
+                recipient_id: n.recipient_id,
+                actor_id: n.actor_id,
+                actor_name: n.actor_name,
+                actor_handle: n.actor_handle,
+                notification_type: n.notification_type,
+                post_id: n.post_id,
+                comment_id: n.comment_id,
+                reaction_iri: n.reaction_iri,
+                reaction_emoji: n.reaction_emoji,
+                guestbook_entry_id: n.guestbook_entry_id,
+                read_at: n.read_at,
+                created_at: n.created_at,
+                post_title: n.post_title,
+                post_author_login_name: n.post_author_login_name,
+                post_image_filename: n.post_image_filename,
+                post_image_url,
+                post_image_width: n.post_image_width,
+                post_image_height: n.post_image_height,
+                comment_content: n.comment_content,
+                comment_content_html: n.comment_content_html,
+                guestbook_content: n.guestbook_content,
+            }
         })
         .collect();
 
-    let response = NotificationsListResponse {
-        notifications: notifications_json,
+    Ok(Json(NotificationsListResponse {
+        notifications: notifications_typed,
         total: total_count as usize,
         has_more,
-    };
-
-    Ok(Json(response).into_response())
+    }))
 }
 
 /// API: Mark a specific notification as read (JSON response)
@@ -275,7 +276,11 @@ pub async fn api_mark_notification_read(
         tx.rollback().await?;
         return Ok((
             StatusCode::NOT_FOUND,
-            Json(json!({ "success": false, "error": "Notification not found" })),
+            Json(MarkNotificationReadResponse {
+                success: false,
+                notification: None,
+                error: Some("Notification not found".to_string()),
+            }),
         )
             .into_response());
     }
@@ -292,36 +297,45 @@ pub async fn api_mark_notification_read(
             format!("{}/image/{}/{}", r2_base_url, &filename[0..2], filename)
         });
 
-        let notification_json = json!({
-            "id": n.id,
-            "recipient_id": n.recipient_id,
-            "actor_id": n.actor_id,
-            "actor_name": n.actor_name,
-            "actor_handle": n.actor_handle,
-            "notification_type": n.notification_type,
-            "post_id": n.post_id,
-            "comment_id": n.comment_id,
-            "reaction_iri": n.reaction_iri,
-            "reaction_emoji": n.reaction_emoji,
-            "guestbook_entry_id": n.guestbook_entry_id,
-            "read_at": n.read_at,
-            "created_at": n.created_at,
-            "post_title": n.post_title,
-            "post_author_login_name": n.post_author_login_name,
-            "post_image_filename": n.post_image_filename,
-            "post_image_url": post_image_url,
-            "post_image_width": n.post_image_width,
-            "post_image_height": n.post_image_height,
-            "comment_content": n.comment_content,
-            "comment_content_html": n.comment_content_html,
-            "guestbook_content": n.guestbook_content,
-        });
+        let notification_item = NotificationItem {
+            id: n.id,
+            recipient_id: n.recipient_id,
+            actor_id: n.actor_id,
+            actor_name: n.actor_name,
+            actor_handle: n.actor_handle,
+            notification_type: n.notification_type,
+            post_id: n.post_id,
+            comment_id: n.comment_id,
+            reaction_iri: n.reaction_iri,
+            reaction_emoji: n.reaction_emoji,
+            guestbook_entry_id: n.guestbook_entry_id,
+            read_at: n.read_at,
+            created_at: n.created_at,
+            post_title: n.post_title,
+            post_author_login_name: n.post_author_login_name,
+            post_image_filename: n.post_image_filename,
+            post_image_url,
+            post_image_width: n.post_image_width,
+            post_image_height: n.post_image_height,
+            comment_content: n.comment_content,
+            comment_content_html: n.comment_content_html,
+            guestbook_content: n.guestbook_content,
+        };
 
-        Ok(Json(json!({ "success": true, "notification": notification_json })).into_response())
+        Ok(Json(MarkNotificationReadResponse {
+            success: true,
+            notification: Some(notification_item),
+            error: None,
+        })
+        .into_response())
     } else {
         Ok((
             StatusCode::NOT_FOUND,
-            Json(json!({ "success": false, "error": "Notification not found" })),
+            Json(MarkNotificationReadResponse {
+                success: false,
+                notification: None,
+                error: Some("Notification not found".to_string()),
+            }),
         )
             .into_response())
     }
@@ -343,11 +357,18 @@ pub async fn api_delete_notification(
     tx.commit().await?;
 
     if success {
-        Ok(Json(json!({ "success": true })).into_response())
+        Ok(Json(DeleteNotificationResponse {
+            success: true,
+            error: None,
+        })
+        .into_response())
     } else {
         Ok((
             StatusCode::NOT_FOUND,
-            Json(json!({ "success": false, "error": "Notification not found" })),
+            Json(DeleteNotificationResponse {
+                success: false,
+                error: Some("Notification not found".to_string()),
+            }),
         )
             .into_response())
     }
