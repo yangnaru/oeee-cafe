@@ -91,6 +91,8 @@ pub async fn link_post_to_hashtags(
     .map(|r| r.is_public)
     .unwrap_or(false);
 
+    let mut hashtag_ids = Vec::new();
+
     for (name, display_name) in hashtag_names {
         // Find or create hashtag
         let hashtag = find_or_create_hashtag(tx, name, display_name).await?;
@@ -108,19 +110,21 @@ pub async fn link_post_to_hashtags(
         .execute(&mut **tx)
         .await;
 
-        // Increment post_count only if the post is in a public community
-        if is_public {
-            sqlx::query!(
-                r#"
-                UPDATE hashtags
-                SET post_count = post_count + 1, updated_at = NOW()
-                WHERE id = $1
-                "#,
-                hashtag.id
-            )
-            .execute(&mut **tx)
-            .await?;
-        }
+        hashtag_ids.push(hashtag.id);
+    }
+
+    // Increment post_count for all hashtags in a single query (only if post is in a public community)
+    if is_public && !hashtag_ids.is_empty() {
+        sqlx::query!(
+            r#"
+            UPDATE hashtags
+            SET post_count = post_count + 1, updated_at = NOW()
+            WHERE id = ANY($1)
+            "#,
+            &hashtag_ids
+        )
+        .execute(&mut **tx)
+        .await?;
     }
     Ok(())
 }
@@ -165,20 +169,18 @@ pub async fn unlink_post_hashtags(tx: &mut Transaction<'_, Postgres>, post_id: U
     .execute(&mut **tx)
     .await?;
 
-    // Decrement post_count for each hashtag (only if post is in a public community)
-    if is_public {
-        for hashtag_id in hashtag_ids {
-            sqlx::query!(
-                r#"
-                UPDATE hashtags
-                SET post_count = GREATEST(post_count - 1, 0), updated_at = NOW()
-                WHERE id = $1
-                "#,
-                hashtag_id
-            )
-            .execute(&mut **tx)
-            .await?;
-        }
+    // Decrement post_count for all hashtags in a single query (only if post is in a public community)
+    if is_public && !hashtag_ids.is_empty() {
+        sqlx::query!(
+            r#"
+            UPDATE hashtags
+            SET post_count = GREATEST(post_count - 1, 0), updated_at = NOW()
+            WHERE id = ANY($1)
+            "#,
+            &hashtag_ids
+        )
+        .execute(&mut **tx)
+        .await?;
     }
 
     Ok(())
