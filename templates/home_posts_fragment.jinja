@@ -18,7 +18,7 @@
 {# Sentinel element for infinite scroll - triggers when scrolled into view #}
 {% if has_more %}
   <div class="infinite-scroll-sentinel"
-       hx-get="/api/home/posts?offset={{ offset }}"
+       hx-get="/api/home/posts?offset={{ offset }}&limit=18"
        hx-trigger="revealed"
        hx-swap="outerHTML">
     <span class="loading-indicator">{{ ftl_get_message("loading-more-posts") }}</span>
