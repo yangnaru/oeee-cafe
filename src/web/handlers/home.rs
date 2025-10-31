@@ -11,8 +11,9 @@ use crate::models::community::{
 use crate::models::post::{
     delete_post_with_activity, find_child_posts_by_parent_id, find_following_posts_by_user_id,
     find_post_by_id, find_post_detail_for_json, find_public_community_posts,
-    find_recent_posts_by_communities, unlink_post_hashtags,
+    find_recent_posts_by_communities,
 };
+use crate::models::hashtag::unlink_post_hashtags;
 use crate::models::reaction::{find_reactions_by_post_id_and_emoji, get_reaction_counts};
 use crate::models::notification::{
     create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
@@ -802,7 +803,10 @@ pub async fn delete_post_api(
     Path(post_id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     // Require authentication
-    let user = auth_session.user.ok_or(AppError::Unauthorized)?;
+    let user = match auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
 
     let post_uuid = Uuid::parse_str(&post_id)?;
 
@@ -818,10 +822,10 @@ pub async fn delete_post_api(
     let post = post.unwrap();
 
     // Check if the user is the author
-    let author_id = post
-        .get("author_id")
-        .and_then(|v| v.as_ref())
-        .ok_or(AppError::InternalServerError)?;
+    let author_id = match post.get("author_id").and_then(|v| v.as_ref()) {
+        Some(id) => id,
+        None => return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+    };
 
     if author_id != &user.id.to_string() {
         return Ok(StatusCode::FORBIDDEN.into_response());
