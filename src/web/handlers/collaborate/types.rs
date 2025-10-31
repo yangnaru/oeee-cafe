@@ -8,6 +8,7 @@ pub struct CreateSessionRequest {
     pub height: i32,
     pub is_public: bool,
     pub max_participants: i32,
+    pub community_id: Option<String>,
 }
 
 #[derive(Serialize)]

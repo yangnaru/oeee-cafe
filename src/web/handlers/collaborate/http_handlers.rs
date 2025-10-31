@@ -164,10 +164,16 @@ pub async fn create_collaborative_session(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
+    // Use provided community_id or fall back to default
+    let community_id = match request.community_id {
+        Some(id) => id.parse::<Uuid>()?,
+        None => state.config.default_community_id.parse::<Uuid>()?,
+    };
+
     let session_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO collaborative_sessions 
+        INSERT INTO collaborative_sessions
         (id, owner_id, title, width, height, is_public, community_id, max_participants)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         "#,
@@ -177,7 +183,7 @@ pub async fn create_collaborative_session(
         request.width,
         request.height,
         request.is_public,
-        state.config.default_community_id.parse::<Uuid>()?,
+        community_id,
         request.max_participants
     )
     .execute(&mut *tx)
@@ -247,4 +253,45 @@ pub async fn serve_collaborative_app() -> Result<Response, AppError> {
     let html = std::fs::read_to_string("neo-cucumber/dist/index.html")
         .map_err(|_| anyhow::anyhow!("Failed to load collaborative app"))?;
     Ok(Html(html).into_response())
+}
+
+pub async fn get_active_sessions_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<SessionWithCounts>>, AppError> {
+    let _user = match auth_session.user {
+        Some(user) => user,
+        None => return Err(anyhow::anyhow!("Authentication required").into()),
+    };
+
+    let db = &state.db_pool;
+
+    let active_sessions = sqlx::query_as!(
+        SessionWithCounts,
+        r#"
+        SELECT
+            cs.id,
+            u.login_name as owner_login_name,
+            cs.title,
+            cs.width,
+            cs.height,
+            cs.created_at,
+            COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) as participant_count
+        FROM collaborative_sessions cs
+        JOIN users u ON cs.owner_id = u.id
+        JOIN communities c ON cs.community_id = c.id
+        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
+        WHERE cs.is_public = true
+          AND cs.ended_at IS NULL
+          AND c.visibility = 'public'
+        GROUP BY cs.id, u.login_name, cs.max_participants
+        HAVING COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) < cs.max_participants
+        ORDER BY cs.last_activity DESC
+        LIMIT 20
+        "#
+    )
+    .fetch_all(db)
+    .await?;
+
+    Ok(Json(active_sessions))
 }
