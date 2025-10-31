@@ -548,7 +548,7 @@ pub async fn find_recent_posts_by_communities(
             stroke_count: Some(row.stroke_count),
             viewer_count: Some(row.viewer_count),
             published_at: row.published_at,
-            is_sensitive: row.is_sensitive,
+            is_sensitive: row.is_sensitive.unwrap_or(false),
         })
         .collect())
 }
