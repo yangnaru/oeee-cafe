@@ -59,3 +59,10 @@ pub struct ProfileLink {
     pub url: String,
     pub description: String,
 }
+
+/// Response for profile followings list endpoint
+#[derive(Serialize, Debug)]
+pub struct ProfileFollowingsListResponse {
+    pub followings: Vec<ProfileFollowing>,
+    pub pagination: PaginationMeta,
+}

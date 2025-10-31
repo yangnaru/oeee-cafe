@@ -17,8 +17,8 @@ use crate::models::user::{find_user_by_id, find_user_by_login_name, AuthSession}
 use crate::web::context::CommonContext;
 use crate::web::handlers::home::LoadMoreQuery;
 use crate::web::responses::{
-    PaginationMeta, ProfileBanner, ProfileFollowing, ProfileLink, ProfilePost, ProfileResponse,
-    ProfileUser,
+    PaginationMeta, ProfileBanner, ProfileFollowing, ProfileFollowingsListResponse, ProfileLink,
+    ProfilePost, ProfileResponse, ProfileUser,
 };
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
@@ -154,7 +154,7 @@ pub async fn profile(
             is_following(&mut tx, current_user.id, user.clone().unwrap().id).await?;
     }
 
-    let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id).await?;
+    let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id, 9999, 0, false).await?;
 
     let banner = match user.clone().unwrap().banner_id {
         Some(banner_id) => Some(find_banner_by_id(&mut tx, banner_id).await?),
@@ -235,7 +235,7 @@ pub async fn profile_banners_iframe(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id).await?;
+    let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id, 9999, 0, false).await?;
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("profile_banners_iframe.jinja")?;
@@ -728,8 +728,8 @@ pub async fn profile_json(
         None => None,
     };
 
-    // Get followings
-    let followings = find_followings_by_user_id(&mut tx, user.id).await?;
+    // Get followings (only with banners for preview)
+    let followings = find_followings_by_user_id(&mut tx, user.id, 9999, 0, true).await?;
 
     // Get links
     let links = find_links_by_user_id(&mut tx, user.id).await?;
@@ -805,4 +805,60 @@ pub async fn profile_json(
         followings: followings_typed,
         links: links_typed,
     }))
+}
+
+/// API endpoint to get paginated followings list for a profile
+pub async fn profile_followings_json(
+    _auth_session: AuthSession,
+    Path(login_name): Path<String>,
+    Query(query): Query<LoadMoreQuery>,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find user by login name
+    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+
+    if user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let user = user.unwrap();
+
+    // Get followings with pagination
+    let followings = find_followings_by_user_id(&mut tx, user.id, query.limit, query.offset, false).await?;
+
+    tx.commit().await?;
+
+    // Convert to typed structs
+    let followings_typed: Vec<ProfileFollowing> = followings
+        .into_iter()
+        .map(|f| ProfileFollowing {
+            id: f.user_id,
+            login_name: f.login_name,
+            display_name: f.display_name,
+            banner_image_url: f.banner_image_filename.map(|filename| {
+                format!(
+                    "{}/images/{}",
+                    state.config.base_url.trim_end_matches('/'),
+                    filename
+                )
+            }),
+            banner_image_width: f.banner_image_width,
+            banner_image_height: f.banner_image_height,
+        })
+        .collect();
+
+    let has_more = followings_typed.len() as i64 == query.limit;
+
+    Ok(Json(ProfileFollowingsListResponse {
+        followings: followings_typed,
+        pagination: PaginationMeta {
+            offset: query.offset + query.limit,
+            limit: query.limit,
+            total: None,
+            has_more,
+        },
+    }).into_response())
 }

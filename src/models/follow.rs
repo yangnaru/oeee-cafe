@@ -97,6 +97,9 @@ pub struct FollowingInfo {
 pub async fn find_followings_by_user_id(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
+    limit: i64,
+    offset: i64,
+    with_banners_only: bool,
 ) -> Result<Vec<FollowingInfo>> {
     let follower_actor_id = get_actor_id_by_user_id(tx, user_id).await?;
 
@@ -113,13 +116,17 @@ pub async fn find_followings_by_user_id(
         LEFT JOIN users ON actors.user_id = users.id
         LEFT JOIN banners ON users.banner_id = banners.id
         LEFT JOIN images ON banners.image_id = images.id
-        WHERE follower_actor_id = $1"#,
-        follower_actor_id
+        WHERE follower_actor_id = $1
+        ORDER BY users.display_name ASC
+        LIMIT $2 OFFSET $3"#,
+        follower_actor_id,
+        limit,
+        offset
     )
     .fetch_all(&mut **tx)
     .await?;
 
-    let following_infos = rows
+    let following_infos: Vec<FollowingInfo> = rows
         .into_iter()
         .filter_map(|row| {
             row.user_id.map(|user_id| FollowingInfo {
@@ -130,6 +137,14 @@ pub async fn find_followings_by_user_id(
                 banner_image_width: row.width,
                 banner_image_height: row.height,
             })
+        })
+        .filter(|f| {
+            // Filter by banners in Rust if needed
+            if with_banners_only {
+                f.banner_image_filename.is_some()
+            } else {
+                true
+            }
         })
         .collect();
 

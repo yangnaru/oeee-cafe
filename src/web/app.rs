@@ -48,7 +48,8 @@ use crate::web::handlers::post::{
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
     do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile, do_write_guestbook_entry,
-    guestbook, profile, profile_banners_iframe, profile_iframe, profile_json, profile_settings,
+    guestbook, profile, profile_banners_iframe, profile_followings_json, profile_iframe,
+    profile_json, profile_settings,
 };
 use activitypub_federation::config::{FederationConfig, FederationMiddleware};
 use anyhow::Result;
@@ -238,6 +239,7 @@ impl App {
             .route("/api/v1/posts/:post_id/reactions/:emoji", get(get_post_reactions_by_emoji_json))
             .route("/api/v1/search", get(search_json))
             .route("/api/v1/profiles/:login_name", get(profile_json))
+            .route("/api/v1/profiles/:login_name/followings", get(profile_followings_json))
             .route("/api/v1/communities/active", get(get_active_communities_json))
             .route("/api/v1/communities/:slug", get(community_detail_json))
             .route("/api/v1/comments/latest", get(get_latest_comments_json))
