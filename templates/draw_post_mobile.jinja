@@ -103,7 +103,8 @@
               window.NativeBridge.postMessage({
                 type: 'drawing_complete',
                 postId: data.post_id,
-                communityId: data.community_id
+                communityId: data.community_id,
+                imageUrl: data.image_url
               });
             }
           })

@@ -180,6 +180,7 @@ pub async fn upload_object(
 pub struct DrawFinishResponse {
     pub community_id: String,
     pub post_id: String,
+    pub image_url: String,
 }
 
 pub async fn draw_finish(
@@ -345,9 +346,19 @@ pub async fn draw_finish(
     let post = create_post(&mut tx, post_draft).await?;
     let _ = tx.commit().await;
 
+    // Construct image URL
+    let image_prefix = &image_sha256[0..2];
+    let image_url = format!(
+        "{}/image/{}/{}.png",
+        state.config.r2_public_endpoint_url,
+        image_prefix,
+        image_sha256
+    );
+
     Ok(Json(DrawFinishResponse {
         community_id: community_id.to_string(),
         post_id: post.id.to_string(),
+        image_url,
     })
     .into_response())
 }
