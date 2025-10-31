@@ -51,10 +51,18 @@ done
 
 echo "==> Running migrations..."
 export DATABASE_URL=postgresql://postgres:postgres@localhost:5433/oeee_cafe
-if ! sqlx migrate run; then
-    echo "ERROR: migrations failed"
-    exit 1
-fi
+MIGRATION_ATTEMPTS=0
+MAX_MIGRATION_ATTEMPTS=5
+until sqlx migrate run; do
+    MIGRATION_ATTEMPTS=$((MIGRATION_ATTEMPTS + 1))
+    if [ $MIGRATION_ATTEMPTS -ge $MAX_MIGRATION_ATTEMPTS ]; then
+        echo "ERROR: migrations failed after $MAX_MIGRATION_ATTEMPTS attempts"
+        exit 1
+    fi
+    echo "Migration attempt $MIGRATION_ATTEMPTS failed, retrying in 2 seconds..."
+    sleep 2
+done
+echo "Migrations completed successfully!"
 
 echo "==> Building and deploying with Docker Compose..."
 if ! docker compose up -d --build --remove-orphans; then
