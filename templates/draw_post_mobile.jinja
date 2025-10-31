@@ -19,8 +19,6 @@
   </style>
 </head>
 <body>
-  <div id="appstage"></div>
-
   <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}" charset="utf-8"></script>
   <script>
     // Unified native bridge for iOS and Android
@@ -47,13 +45,15 @@
       }
     };
 
-    // Create Neo painter applet
+    // Create Neo painter applet using document.write
     document.write(`
-      <applet-dummy name="paintbbs" width="{{ width + 150 }}" height="{{ height + 172 }}">
-        <param name="image_width" value="{{ width }}">
-        <param name="image_height" value="{{ height }}">
-        <param name="thumbnail_type" value="animation">
-      </applet-dummy>
+      <div id="appstage">
+        <applet-dummy name="paintbbs" width="{{ width + 150 }}" height="{{ height + 172 }}">
+          <param name="image_width" value="{{ width }}">
+          <param name="image_height" value="{{ height }}">
+          <param name="thumbnail_type" value="animation">
+        </applet-dummy>
+      </div>
     `);
 
     // Enable fullscreen mode for mobile

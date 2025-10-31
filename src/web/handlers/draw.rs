@@ -151,6 +151,7 @@ pub async fn start_draw_mobile(
         community_slug => community.slug,
         parent_post => parent_post,
         parent_post_id => input.parent_post_id,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ftl_lang
     })?;
 
