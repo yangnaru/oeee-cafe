@@ -2,7 +2,8 @@ use super::ExtractFtlLang;
 use crate::app_error::AppError;
 use crate::models::actor::Actor;
 use crate::models::comment::{
-    build_comment_thread_tree_paginated, find_latest_comments_from_public_communities,
+    build_comment_thread_tree_paginated, create_comment, find_latest_comments_from_public_communities,
+    CommentDraft,
 };
 use crate::models::community::{
     get_communities_members_count, get_public_communities, is_user_member, Community,
@@ -12,6 +13,10 @@ use crate::models::post::{
     find_public_community_posts, find_recent_posts_by_communities,
 };
 use crate::models::reaction::{find_reactions_by_post_id_and_emoji, get_reaction_counts};
+use crate::models::notification::{
+    create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
+    CreateNotificationParams, NotificationType,
+};
 use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
 use crate::web::responses::{
@@ -164,6 +169,12 @@ pub struct CommentsQuery {
 
 fn default_comments_limit() -> i64 {
     100
+}
+
+#[derive(Deserialize)]
+pub struct CreateCommentRequest {
+    pub content: String,
+    pub parent_comment_id: Option<String>,
 }
 
 pub async fn load_more_public_posts(
@@ -575,5 +586,205 @@ pub async fn get_post_comments_api(
             total: None,
             has_more,
         },
+    }))
+}
+
+pub async fn create_comment_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(post_id): Path<Uuid>,
+    Json(request): Json<CreateCommentRequest>,
+) -> Result<Json<ThreadedCommentResponse>, AppError> {
+    // Require authentication
+    let user = auth_session
+        .user
+        .ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Get the actor for this user
+    let actor = Actor::find_by_user_id(&mut tx, user.id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("No actor found for user"))?;
+
+    // Parse parent_comment_id if provided
+    let parent_comment_id = request
+        .parent_comment_id
+        .as_ref()
+        .and_then(|id| Uuid::parse_str(id).ok());
+
+    // Get the post to check access and get author
+    let post = sqlx::query!(
+        r#"
+        SELECT author_id, community_id
+        FROM posts
+        WHERE id = $1
+        "#,
+        post_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("Post not found"))?;
+
+    // Check if post is in a private community and if user has access
+    let community = sqlx::query_as!(
+        Community,
+        r#"
+        SELECT id, slug, name, description, owner_id, visibility AS "visibility: _", created_at, updated_at, background_color, foreground_color
+        FROM communities
+        WHERE id = $1
+        "#,
+        post.community_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if let Some(ref comm) = community {
+        if comm.visibility == crate::models::community::CommunityVisibility::Private {
+            let is_member = is_user_member(&mut tx, user.id, comm.id).await?;
+            if !is_member {
+                return Err(anyhow::anyhow!("You must be a member to comment in this private community").into());
+            }
+        }
+    }
+
+    // Create the comment
+    let comment = create_comment(
+        &mut tx,
+        CommentDraft {
+            actor_id: actor.id,
+            post_id,
+            parent_comment_id,
+            content: request.content,
+            content_html: None,
+        },
+    )
+    .await?;
+
+    // Collect notification info for push notifications after commit
+    let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
+    // If this is a reply to another comment, notify the parent comment author
+    if let Some(parent_id) = parent_comment_id {
+        let parent_comment = sqlx::query!(
+            r#"
+            SELECT actor_id
+            FROM comments
+            WHERE id = $1
+            "#,
+            parent_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        if let Some(parent) = parent_comment {
+            let parent_actor = sqlx::query!(
+                r#"
+                SELECT user_id
+                FROM actors
+                WHERE id = $1
+                "#,
+                parent.actor_id
+            )
+            .fetch_optional(&mut *tx)
+            .await?;
+
+            if let Some(parent_actor_data) = parent_actor {
+                if let Some(parent_user_id) = parent_actor_data.user_id {
+                    if parent_user_id != user.id {
+                        if let Ok(notification) = create_notification(
+                            &mut tx,
+                            CreateNotificationParams {
+                                recipient_id: parent_user_id,
+                                actor_id: actor.id,
+                                notification_type: NotificationType::CommentReply,
+                                post_id: Some(post_id),
+                                comment_id: Some(comment.id),
+                                reaction_iri: None,
+                                guestbook_entry_id: None,
+                            },
+                        )
+                        .await
+                        {
+                            notification_info.push((notification.id, parent_user_id));
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Notify the post author for top-level comments
+        if post.author_id != user.id {
+            if let Ok(notification) = create_notification(
+                &mut tx,
+                CreateNotificationParams {
+                    recipient_id: post.author_id,
+                    actor_id: actor.id,
+                    notification_type: NotificationType::Comment,
+                    post_id: Some(post_id),
+                    comment_id: Some(comment.id),
+                    reaction_iri: None,
+                    guestbook_entry_id: None,
+                },
+            )
+            .await
+            {
+                notification_info.push((notification.id, post.author_id));
+            }
+        }
+    }
+
+    tx.commit().await?;
+
+    // Send push notifications after successful commit
+    if !notification_info.is_empty() {
+        let push_service = state.push_service.clone();
+        let db_pool = state.db_pool.clone();
+        tokio::spawn(async move {
+            for (notification_id, recipient_id) in notification_info {
+                let mut tx = match db_pool.begin().await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to begin transaction for push notification: {:?}",
+                            e
+                        );
+                        continue;
+                    }
+                };
+
+                // Get the full notification with actor details
+                if let Ok(Some(notification)) =
+                    get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                {
+                    // Get unread count for badge
+                    let badge_count = get_unread_count(&mut tx, recipient_id)
+                        .await
+                        .ok()
+                        .and_then(|count| u32::try_from(count).ok());
+
+                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                }
+                let _ = tx.commit().await;
+            }
+        });
+    }
+
+    // Return the created comment
+    Ok(Json(ThreadedCommentResponse {
+        id: comment.id,
+        post_id: comment.post_id,
+        parent_comment_id: comment.parent_comment_id,
+        actor_id: comment.actor_id,
+        content: comment.content,
+        content_html: comment.content_html,
+        actor_name: String::new(), // Will be populated by client from their cached data
+        actor_handle: String::new(),
+        actor_login_name: None,
+        is_local: true,
+        created_at: comment.created_at,
+        updated_at: comment.updated_at,
+        children: Vec::new(),
     }))
 }
