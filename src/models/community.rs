@@ -12,6 +12,7 @@ use super::post::SerializablePost;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Type, PartialEq, Eq)]
 #[sqlx(type_name = "community_visibility", rename_all = "snake_case")]
+#[serde(rename_all = "lowercase")]
 pub enum CommunityVisibility {
     Public,
     Unlisted,

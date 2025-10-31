@@ -289,7 +289,7 @@ pub async fn get_active_communities_json(
                 name: community.name,
                 slug: community.slug,
                 description: community.description,
-                visibility: format!("{:?}", community.visibility).to_lowercase(),
+                visibility: community.visibility,
                 owner_login_name: community.owner_login_name,
                 posts_count: community.posts_count,
                 members_count,
