@@ -9,6 +9,7 @@ pub struct Comment {
     pub id: Uuid,
     pub post_id: Uuid,
     pub actor_id: Uuid,
+    pub parent_comment_id: Option<Uuid>,
     pub content: String,
     pub content_html: Option<String>,
     pub iri: Option<String>,
@@ -19,6 +20,7 @@ pub struct Comment {
 pub struct CommentDraft {
     pub post_id: Uuid,
     pub actor_id: Uuid,
+    pub parent_comment_id: Option<Uuid>,
     pub content: String,
     pub content_html: Option<String>,
 }
@@ -38,6 +40,25 @@ pub struct SerializableComment {
     pub is_local: bool,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct SerializableThreadedComment {
+    pub id: Uuid,
+    pub post_id: Uuid,
+    pub actor_id: Uuid,
+    pub parent_comment_id: Option<Uuid>,
+    pub content: String,
+    pub content_html: Option<String>,
+    pub iri: Option<String>,
+    pub actor_name: String,
+    pub actor_handle: String,
+    pub actor_url: String,
+    pub actor_login_name: Option<String>,
+    pub is_local: bool,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub children: Vec<SerializableThreadedComment>,
 }
 
 #[derive(Serialize)]
@@ -113,6 +134,165 @@ pub async fn find_comments_by_post_id(
             }
         })
         .collect())
+}
+
+pub async fn build_comment_thread_tree(
+    tx: &mut Transaction<'_, Postgres>,
+    post_id: Uuid,
+) -> Result<Vec<SerializableThreadedComment>> {
+    use std::collections::HashMap;
+
+    // Use recursive CTE to fetch all comments with their parent relationships
+    let rows = sqlx::query!(
+        r#"
+        WITH RECURSIVE comment_tree AS (
+            -- Base case: all comments for this post
+            SELECT
+                comments.id,
+                comments.post_id,
+                comments.actor_id,
+                comments.parent_comment_id,
+                comments.content,
+                comments.content_html,
+                comments.iri,
+                comments.updated_at,
+                comments.created_at,
+                actors.name AS actor_name,
+                actors.handle AS actor_handle,
+                actors.url AS actor_url,
+                users.login_name AS user_login_name
+            FROM comments
+            LEFT JOIN actors ON comments.actor_id = actors.id
+            LEFT JOIN users ON actors.user_id = users.id
+            WHERE comments.post_id = $1
+        )
+        SELECT
+            id,
+            post_id,
+            actor_id,
+            parent_comment_id,
+            content,
+            content_html,
+            iri,
+            updated_at,
+            created_at,
+            actor_name,
+            actor_handle,
+            actor_url,
+            user_login_name
+        FROM comment_tree
+        ORDER BY created_at ASC
+        "#,
+        post_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    // Build maps for efficient tree construction
+    let mut comment_data: HashMap<Uuid, (
+        Uuid, // post_id
+        Uuid, // actor_id
+        Option<Uuid>, // parent_comment_id
+        String, // content
+        Option<String>, // content_html
+        Option<String>, // iri
+        String, // actor_name
+        String, // actor_handle
+        String, // actor_url
+        Option<String>, // actor_login_name
+        bool, // is_local
+        DateTime<Utc>, // updated_at
+        DateTime<Utc>, // created_at
+    )> = HashMap::new();
+
+    let mut children_map: HashMap<Option<Uuid>, Vec<Uuid>> = HashMap::new();
+
+    for row in rows {
+        let comment_id = row.id;
+        // user_login_name can be NULL from LEFT JOIN, but SQLx might infer it as String
+        // We need to handle it as Option<String>
+        let user_login_name = row.user_login_name;
+        let is_local = !user_login_name.is_empty();
+
+        comment_data.insert(
+            comment_id,
+            (
+                row.post_id,
+                row.actor_id,
+                row.parent_comment_id,
+                row.content,
+                row.content_html,
+                row.iri,
+                row.actor_name,
+                row.actor_handle,
+                row.actor_url,
+                if user_login_name.is_empty() { None } else { Some(user_login_name) },
+                is_local,
+                row.updated_at,
+                row.created_at,
+            ),
+        );
+
+        children_map
+            .entry(row.parent_comment_id)
+            .or_insert_with(Vec::new)
+            .push(comment_id);
+    }
+
+    // Recursive function to build subtree
+    fn build_subtree(
+        comment_id: Uuid,
+        comment_data: &HashMap<Uuid, (
+            Uuid, Uuid, Option<Uuid>, String, Option<String>, Option<String>,
+            String, String, String, Option<String>, bool, DateTime<Utc>, DateTime<Utc>
+        )>,
+        children_map: &HashMap<Option<Uuid>, Vec<Uuid>>,
+    ) -> Option<SerializableThreadedComment> {
+        let (post_id, actor_id, parent_comment_id, content, content_html, iri,
+             actor_name, actor_handle, actor_url, actor_login_name, is_local,
+             updated_at, created_at) = comment_data.get(&comment_id)?;
+
+        let children = children_map
+            .get(&Some(comment_id))
+            .map(|child_ids| {
+                child_ids
+                    .iter()
+                    .filter_map(|child_id| build_subtree(*child_id, comment_data, children_map))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Some(SerializableThreadedComment {
+            id: comment_id,
+            post_id: *post_id,
+            actor_id: *actor_id,
+            parent_comment_id: *parent_comment_id,
+            content: content.clone(),
+            content_html: content_html.clone(),
+            iri: iri.clone(),
+            actor_name: actor_name.clone(),
+            actor_handle: actor_handle.clone(),
+            actor_url: actor_url.clone(),
+            actor_login_name: actor_login_name.clone(),
+            is_local: *is_local,
+            updated_at: *updated_at,
+            created_at: *created_at,
+            children,
+        })
+    }
+
+    // Build trees for all root comments (comments with no parent)
+    let result: Vec<SerializableThreadedComment> = children_map
+        .get(&None)
+        .map(|root_ids| {
+            root_ids
+                .iter()
+                .filter_map(|comment_id| build_subtree(*comment_id, &comment_data, &children_map))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(result)
 }
 
 pub async fn find_comments_to_posts_by_author(
@@ -288,12 +468,13 @@ pub async fn create_comment(
     let comment = sqlx::query_as!(
         Comment,
         r#"
-        INSERT INTO comments (post_id, actor_id, content, content_html)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO comments (post_id, actor_id, parent_comment_id, content, content_html)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *
         "#,
         draft.post_id,
         draft.actor_id,
+        draft.parent_comment_id,
         draft.content,
         draft.content_html
     )
@@ -349,8 +530,8 @@ pub async fn create_comment_from_activitypub(
     let comment = sqlx::query_as!(
         Comment,
         r#"
-        INSERT INTO comments (post_id, actor_id, content, content_html, iri)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO comments (post_id, actor_id, parent_comment_id, content, content_html, iri)
+        VALUES ($1, $2, NULL, $3, $4, $5)
         RETURNING *
         "#,
         post_id,

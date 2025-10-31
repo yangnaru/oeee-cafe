@@ -1,6 +1,6 @@
-{% macro comments(comments) %}
-  {% for comment in comments %}
-    <div class="comment">
+{% macro comment_item(comment) %}
+  <div class="comment-wrapper">
+    <div class="comment" id="comment-{{ comment.id }}">
       <div class="comment-body">
         <div class="comment-header">
           {% if comment.is_local %}
@@ -18,7 +18,30 @@
             {{ comment.content|markdown|safe }}
           {% endif %}
         </div>
+        <div class="comment-actions">
+          <button class="comment-reply-btn"
+                  hx-on:click="document.getElementById('parent_comment_id').value = '{{ comment.id }}';
+                               document.getElementById('reply-to-text').textContent = 'Replying to {{ comment.actor_name }}';
+                               document.getElementById('reply-info').style.display = 'block';
+                               document.getElementById('comment-content').focus();
+                               document.getElementById('comment-form').scrollIntoView({ behavior: 'smooth', block: 'center' });">
+            Reply
+          </button>
+        </div>
       </div>
     </div>
+    {% if comment.children and comment.children|length > 0 %}
+      <div class="comment-replies">
+        {% for child in comment.children %}
+          {{ comment_item(child) }}
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% macro comments(comments) %}
+  {% for comment in comments %}
+    {{ comment_item(comment) }}
   {% endfor %}
 {% endmacro %}

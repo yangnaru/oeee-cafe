@@ -259,9 +259,16 @@
             </p>
           {% endif %}
           {% if current_user %}
-            <form hx-post="/comments" hx-swap="outerHTML" hx-target="#comments">
+            <form id="comment-form" hx-post="/comments" hx-swap="outerHTML" hx-target="#comments">
               <input type="hidden" name="post_id" value="{{ post_id }}">
-              <textarea name="content"></textarea>
+              <input type="hidden" id="parent_comment_id" name="parent_comment_id" value="">
+              <div id="reply-info" style="display: none; margin-bottom: 10px; padding: 8px; background: var(--secondary-bg-color); border-left: 3px solid var(--main-border-color);">
+                <span id="reply-to-text"></span>
+                <button type="button"
+                        hx-on:click="document.getElementById('parent_comment_id').value = ''; document.getElementById('reply-info').style.display = 'none';"
+                        style="margin-left: 10px;">Cancel</button>
+              </div>
+              <textarea id="comment-content" name="content"></textarea>
               <button type="submit">{{ ftl_get_message("post-comment") }}</button>
             </form>
           {% endif %}

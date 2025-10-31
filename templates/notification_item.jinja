@@ -35,6 +35,8 @@
         {{ ftl_get_message("notification-mention") }}
       {% elif notification.notification_type == "PostReply" %}
         {{ ftl_get_message("notification-post-reply") }}
+      {% elif notification.notification_type == "CommentReply" %}
+        {{ ftl_get_message("notification-comment-reply") }}
       {% endif %}
     </strong>
     <span class="notification-time muted">{{ notification.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}</span>
@@ -42,7 +44,7 @@
 
   <div class="notification-body">
     {# Post thumbnail for post-related notifications #}
-    {% if notification.post_image_filename and (notification.notification_type == "Comment" or notification.notification_type == "Reaction" or notification.notification_type == "Mention" or notification.notification_type == "PostReply") %}
+    {% if notification.post_image_filename and (notification.notification_type == "Comment" or notification.notification_type == "Reaction" or notification.notification_type == "Mention" or notification.notification_type == "PostReply" or notification.notification_type == "CommentReply") %}
       <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}" class="notification-thumbnail">
         <img class="post-image notification-post-image"
              width="{{ notification.post_image_width }}"
@@ -123,6 +125,20 @@
             <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
           {% endif %}
         </p>
+
+      {% elif notification.notification_type == "CommentReply" %}
+        {% if notification.post_title %}
+          <p class="notification-action">
+            {{ ftl_get_message("notification-replied-to-comment") }}
+            {{ ftl_get_message("notification-on-post") }}
+            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+          </p>
+        {% endif %}
+        {% if notification.comment_content_html %}
+          <div class="notification-preview">{{ notification.comment_content_html|safe }}</div>
+        {% elif notification.comment_content %}
+          <pre class="notification-preview">{{ notification.comment_content }}</pre>
+        {% endif %}
       {% endif %}
     </div>
   </div>

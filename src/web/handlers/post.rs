@@ -1,10 +1,12 @@
 use crate::app_error::AppError;
 use crate::models::actor::Actor;
 use crate::models::comment::{
-    create_comment, extract_mentions, find_comments_by_post_id, find_users_by_login_names,
+    build_comment_thread_tree, create_comment, extract_mentions, find_users_by_login_names,
     CommentDraft,
 };
-use crate::models::community::{find_community_by_id, get_known_communities, get_user_role_in_community, is_user_member};
+use crate::models::community::{
+    find_community_by_id, get_known_communities, get_user_role_in_community, is_user_member,
+};
 use crate::models::follow;
 use crate::models::hashtag::{
     get_hashtags_for_post, link_post_to_hashtags, parse_hashtag_input, unlink_post_hashtags,
@@ -15,9 +17,9 @@ use crate::models::notification::{
     CreateNotificationParams, NotificationType,
 };
 use crate::models::post::{
-    build_thread_tree, delete_post_with_activity,
-    edit_post, edit_post_community, find_draft_posts_by_author_id, find_post_by_id,
-    increment_post_viewer_count, publish_post, SerializableThreadedPost,
+    build_thread_tree, delete_post_with_activity, edit_post, edit_post_community,
+    find_draft_posts_by_author_id, find_post_by_id, increment_post_viewer_count, publish_post,
+    SerializableThreadedPost,
 };
 use crate::models::reaction::{
     create_reaction, delete_reaction, find_reactions_by_post_id, get_reaction_counts, ReactionDraft,
@@ -377,7 +379,8 @@ pub async fn post_view(
                 if community.visibility == crate::models::community::CommunityVisibility::Private {
                     match &auth_session.user {
                         Some(user) => {
-                            let user_role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
+                            let user_role =
+                                get_user_role_in_community(&mut tx, user.id, community.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
                                 return Ok(StatusCode::FORBIDDEN.into_response());
@@ -405,7 +408,7 @@ pub async fn post_view(
         }
     }
 
-    let comments = find_comments_by_post_id(&mut tx, uuid).await.unwrap();
+    let comments = build_comment_thread_tree(&mut tx, uuid).await.unwrap();
 
     // Get parent post data if it exists
     let (parent_post_author_login_name, parent_post_data) = if let Some(parent_post_id_str) = post
@@ -475,7 +478,7 @@ pub async fn post_view(
 
                     (login_name, Some(parent_post))
                 }
-                _ => (String::new(), None)
+                _ => (String::new(), None),
             }
         } else {
             (String::new(), None)
@@ -540,9 +543,7 @@ pub async fn post_view(
         .unwrap_or_default();
 
     // Get child posts (threaded replies)
-    let child_posts = build_thread_tree(&mut tx, uuid)
-        .await
-        .unwrap_or_default();
+    let child_posts = build_thread_tree(&mut tx, uuid).await.unwrap_or_default();
 
     tx.commit().await?;
 
@@ -845,9 +846,13 @@ pub async fn post_publish(
                     // For private communities, only notify if parent author is still a member
                     let community = find_community_by_id(&mut tx, community_id).await?;
                     let should_notify = if let Some(community) = community {
-                        if community.visibility == crate::models::community::CommunityVisibility::Private {
+                        if community.visibility
+                            == crate::models::community::CommunityVisibility::Private
+                        {
                             // Check if parent author is still a member
-                            is_user_member(&mut tx, parent_author_id, community.id).await.unwrap_or(false)
+                            is_user_member(&mut tx, parent_author_id, community.id)
+                                .await
+                                .unwrap_or(false)
                         } else {
                             // Public or unlisted community - always notify
                             true
@@ -898,7 +903,10 @@ pub async fn post_publish(
                 let mut tx = match db_pool.begin().await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        tracing::warn!(
+                            "Failed to begin transaction for push notification: {:?}",
+                            e
+                        );
                         continue;
                     }
                 };
@@ -978,11 +986,8 @@ pub async fn draft_posts(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let posts = find_draft_posts_by_author_id(
-        &mut tx,
-        auth_session.user.clone().unwrap().id,
-    )
-    .await?;
+    let posts =
+        find_draft_posts_by_author_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
 
     tx.commit().await?;
 
@@ -1054,6 +1059,7 @@ pub async fn draft_posts_api(
 #[derive(Deserialize)]
 pub struct CreateCommentForm {
     pub post_id: String,
+    pub parent_comment_id: Option<String>,
     pub content: String,
 }
 
@@ -1113,11 +1119,18 @@ pub async fn do_create_comment(
         .and_then(|id| id.as_ref())
         .and_then(|id| Uuid::parse_str(id).ok());
 
+    // Parse parent_comment_id if provided
+    let parent_comment_id = form
+        .parent_comment_id
+        .as_ref()
+        .and_then(|id| Uuid::parse_str(id).ok());
+
     let comment = create_comment(
         &mut tx,
         CommentDraft {
             actor_id: actor.id,
             post_id,
+            parent_comment_id,
             content: form.content,
             content_html: None,
         },
@@ -1127,24 +1140,78 @@ pub async fn do_create_comment(
     // Collect notification info (id, recipient_id) to send push notifications after commit
     let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
 
-    // Create notification for the post author (don't notify if commenting on own post)
-    if let Some(post_author_id) = post_author_id {
-        if post_author_id != user_id {
-            if let Ok(notification) = create_notification(
-                &mut tx,
-                CreateNotificationParams {
-                    recipient_id: post_author_id,
-                    actor_id: actor.id,
-                    notification_type: NotificationType::Comment,
-                    post_id: Some(post_id),
-                    comment_id: Some(comment.id),
-                    reaction_iri: None,
-                    guestbook_entry_id: None,
-                },
+    // If this is a reply to another comment, notify the parent comment author
+    if let Some(parent_id) = parent_comment_id {
+        // Fetch the parent comment to get its author
+        let parent_comment = sqlx::query!(
+            r#"
+            SELECT actor_id
+            FROM comments
+            WHERE id = $1
+            "#,
+            parent_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+
+        if let Some(parent) = parent_comment {
+            // Get the user_id from the parent comment's actor
+            let parent_actor = sqlx::query!(
+                r#"
+                SELECT user_id
+                FROM actors
+                WHERE id = $1
+                "#,
+                parent.actor_id
             )
-            .await
-            {
-                notification_info.push((notification.id, post_author_id));
+            .fetch_optional(&mut *tx)
+            .await?;
+
+            // Only notify if the parent comment author is a local user and not the same as current user
+            if let Some(parent_actor_data) = parent_actor {
+                if let Some(parent_user_id) = parent_actor_data.user_id {
+                    if parent_user_id != user_id {
+                        if let Ok(notification) = create_notification(
+                            &mut tx,
+                            CreateNotificationParams {
+                                recipient_id: parent_user_id,
+                                actor_id: actor.id,
+                                notification_type: NotificationType::CommentReply,
+                                post_id: Some(post_id),
+                                comment_id: Some(comment.id),
+                                reaction_iri: None,
+                                guestbook_entry_id: None,
+                            },
+                        )
+                        .await
+                        {
+                            notification_info.push((notification.id, parent_user_id));
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Create notification for the post author (don't notify if commenting on own post)
+        // Only send this if it's a top-level comment (no parent)
+        if let Some(post_author_id) = post_author_id {
+            if post_author_id != user_id {
+                if let Ok(notification) = create_notification(
+                    &mut tx,
+                    CreateNotificationParams {
+                        recipient_id: post_author_id,
+                        actor_id: actor.id,
+                        notification_type: NotificationType::Comment,
+                        post_id: Some(post_id),
+                        comment_id: Some(comment.id),
+                        reaction_iri: None,
+                        guestbook_entry_id: None,
+                    },
+                )
+                .await
+                {
+                    notification_info.push((notification.id, post_author_id));
+                }
             }
         }
     }
@@ -1158,9 +1225,13 @@ pub async fn do_create_comment(
             if mentioned_user_id != user_id {
                 // For private communities, only notify if mentioned user is a member
                 let should_notify = if let Some(ref community) = post_community {
-                    if community.visibility == crate::models::community::CommunityVisibility::Private {
+                    if community.visibility
+                        == crate::models::community::CommunityVisibility::Private
+                    {
                         // Check if mentioned user is a member
-                        is_user_member(&mut tx, mentioned_user_id, community.id).await.unwrap_or(false)
+                        is_user_member(&mut tx, mentioned_user_id, community.id)
+                            .await
+                            .unwrap_or(false)
                     } else {
                         // Public or unlisted community - always notify
                         true
@@ -1192,7 +1263,7 @@ pub async fn do_create_comment(
         }
     }
 
-    let comments = find_comments_by_post_id(&mut tx, post_id).await?;
+    let comments = build_comment_thread_tree(&mut tx, post_id).await?;
     let _ = tx.commit().await;
 
     // Send push notifications for created notifications
@@ -1204,7 +1275,10 @@ pub async fn do_create_comment(
                 let mut tx = match db_pool.begin().await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        tracing::warn!(
+                            "Failed to begin transaction for push notification: {:?}",
+                            e
+                        );
                         continue;
                     }
                 };
@@ -1416,7 +1490,9 @@ pub async fn post_edit_community(
     use std::collections::HashMap;
     let mut posts_by_community: HashMap<Uuid, Vec<serde_json::Value>> = HashMap::new();
     for post in recent_posts {
-        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
+        let posts = posts_by_community
+            .entry(post.community_id)
+            .or_insert_with(Vec::new);
         posts.push(serde_json::json!({
             "id": post.id.to_string(),
             "image_filename": post.image_filename,
@@ -1895,7 +1971,8 @@ pub async fn post_view_by_login_name(
                 if community.visibility == crate::models::community::CommunityVisibility::Private {
                     match &auth_session.user {
                         Some(user) => {
-                            let user_role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
+                            let user_role =
+                                get_user_role_in_community(&mut tx, user.id, community.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
                                 return Ok(StatusCode::FORBIDDEN.into_response());
@@ -1923,7 +2000,7 @@ pub async fn post_view_by_login_name(
         }
     }
 
-    let comments = find_comments_by_post_id(&mut tx, uuid).await.unwrap();
+    let comments = build_comment_thread_tree(&mut tx, uuid).await.unwrap();
     let post = find_post_by_id(&mut tx, uuid).await.unwrap();
 
     // Get parent post data if it exists
@@ -1997,7 +2074,7 @@ pub async fn post_view_by_login_name(
 
                     (login_name, Some(parent_post))
                 }
-                _ => (String::new(), None)
+                _ => (String::new(), None),
             }
         } else {
             (String::new(), None)
@@ -2062,9 +2139,7 @@ pub async fn post_view_by_login_name(
         .unwrap_or_default();
 
     // Get child posts (threaded replies)
-    let child_posts = build_thread_tree(&mut tx, uuid)
-        .await
-        .unwrap_or_default();
+    let child_posts = build_thread_tree(&mut tx, uuid).await.unwrap_or_default();
 
     tx.commit().await?;
 
@@ -2253,7 +2328,8 @@ pub async fn post_relay_view_by_login_name(
                 if comm.visibility == crate::models::community::CommunityVisibility::Private {
                     match &auth_session.user {
                         Some(user) => {
-                            let user_role = get_user_role_in_community(&mut tx, user.id, comm.id).await?;
+                            let user_role =
+                                get_user_role_in_community(&mut tx, user.id, comm.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
                                 return Ok(StatusCode::FORBIDDEN.into_response());
@@ -2349,7 +2425,8 @@ pub async fn post_replay_view_by_login_name(
                 if comm.visibility == crate::models::community::CommunityVisibility::Private {
                     match &auth_session.user {
                         Some(user) => {
-                            let user_role = get_user_role_in_community(&mut tx, user.id, comm.id).await?;
+                            let user_role =
+                                get_user_role_in_community(&mut tx, user.id, comm.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
                                 return Ok(StatusCode::FORBIDDEN.into_response());
@@ -2525,7 +2602,10 @@ pub async fn add_reaction(
                 let mut tx = match db_pool.begin().await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        tracing::warn!(
+                            "Failed to begin transaction for push notification: {:?}",
+                            e
+                        );
                         continue;
                     }
                 };

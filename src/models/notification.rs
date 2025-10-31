@@ -17,6 +17,8 @@ pub enum NotificationType {
     Mention,
     #[sqlx(rename = "post_reply")]
     PostReply,
+    #[sqlx(rename = "comment_reply")]
+    CommentReply,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -485,6 +487,15 @@ fn format_notification_message(notification: &NotificationWithActor) -> (String,
         NotificationType::PostReply => {
             let title = format!("{} replied to your post", actor_name);
             let body = notification.post_title.clone().unwrap_or_default();
+            (title, body)
+        }
+        NotificationType::CommentReply => {
+            let title = format!("{} replied to your comment", actor_name);
+            let body = if let Some(content) = &notification.comment_content {
+                content.clone()
+            } else {
+                format!("{} replied to your comment", actor_name)
+            };
             (title, body)
         }
     }

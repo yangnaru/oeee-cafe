@@ -2,7 +2,7 @@ use super::ExtractFtlLang;
 use crate::app_error::AppError;
 use crate::models::actor::Actor;
 use crate::models::comment::{
-    find_comments_by_post_id, find_latest_comments_from_public_communities,
+    build_comment_thread_tree, find_latest_comments_from_public_communities,
 };
 use crate::models::community::{
     get_communities_members_count, get_public_communities,
@@ -361,7 +361,7 @@ pub async fn get_post_details_json(
         .ok_or_else(|| anyhow::anyhow!("Post not found"))?;
 
     // Get comments for this post
-    let comments = find_comments_by_post_id(&mut tx, post_id).await?;
+    let comments = build_comment_thread_tree(&mut tx, post_id).await?;
 
     // Get child posts (replies)
     let child_posts = find_child_posts_by_parent_id(&mut tx, post_id).await?;
