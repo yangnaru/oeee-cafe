@@ -985,7 +985,7 @@ pub async fn draft_posts_api(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.ok_or(AppError::Unauthorized)?;
+    let user = auth_session.user.clone().unwrap();
 
     let posts = find_draft_posts_by_author_id(&mut tx, user.id).await?;
 
