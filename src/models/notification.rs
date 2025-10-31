@@ -394,3 +394,98 @@ pub async fn notification_exists(
 
     Ok(result.exists)
 }
+
+/// Send push notification for a newly created notification
+/// This should be called after create_notification() succeeds and the transaction is committed
+pub async fn send_push_for_notification(
+    push_service: &crate::push::PushService,
+    notification: &NotificationWithActor,
+    badge_count: Option<u32>,
+) {
+    // Format notification message based on type
+    let (title, body) = format_notification_message(notification);
+
+    let badge = badge_count;
+
+    // Add custom data for deep linking
+    let mut data = serde_json::Map::new();
+    data.insert("notification_id".to_string(), serde_json::json!(notification.id.to_string()));
+    data.insert("notification_type".to_string(), serde_json::json!(format!("{:?}", notification.notification_type)));
+
+    if let Some(post_id) = notification.post_id {
+        data.insert("post_id".to_string(), serde_json::json!(post_id.to_string()));
+    }
+    if let Some(comment_id) = notification.comment_id {
+        data.insert("comment_id".to_string(), serde_json::json!(comment_id.to_string()));
+    }
+
+    // Send push notification (don't fail if this errors)
+    if let Err(e) = push_service
+        .send_notification_to_user(
+            notification.recipient_id,
+            &title,
+            &body,
+            badge,
+            Some(serde_json::Value::Object(data)),
+        )
+        .await
+    {
+        tracing::warn!(
+            "Failed to send push notification to user {}: {:?}",
+            notification.recipient_id,
+            e
+        );
+    }
+}
+
+/// Format a notification into a user-friendly push notification message
+fn format_notification_message(notification: &NotificationWithActor) -> (String, String) {
+    let actor_name = &notification.actor_name;
+
+    match notification.notification_type {
+        NotificationType::Comment => {
+            let title = format!("New comment from {}", actor_name);
+            let body = if let Some(content) = &notification.comment_content {
+                content.clone()
+            } else {
+                format!("{} commented on your post", actor_name)
+            };
+            (title, body)
+        }
+        NotificationType::Reaction => {
+            let emoji = notification.reaction_emoji.as_deref().unwrap_or("❤️");
+            let title = format!("{} reacted to your post", actor_name);
+            let body = format!("{} {}", emoji, notification.post_title.as_deref().unwrap_or("your post"));
+            (title, body)
+        }
+        NotificationType::Follow => {
+            let title = "New follower".to_string();
+            let body = format!("{} started following you", actor_name);
+            (title, body)
+        }
+        NotificationType::GuestbookEntry => {
+            let title = format!("{} signed your guestbook", actor_name);
+            let body = notification.guestbook_content.clone().unwrap_or_default();
+            (title, body)
+        }
+        NotificationType::GuestbookReply => {
+            let title = format!("{} replied to your guestbook entry", actor_name);
+            let body = notification.guestbook_content.clone().unwrap_or_default();
+            (title, body)
+        }
+        NotificationType::Mention => {
+            let title = format!("{} mentioned you", actor_name);
+            let body = if let Some(content) = &notification.comment_content {
+                content.clone()
+            } else {
+                format!("{} mentioned you in a comment", actor_name)
+            };
+            (title, body)
+        }
+        NotificationType::PostReply => {
+            let title = format!("{} replied to your post", actor_name);
+            let body = notification.post_title.clone().unwrap_or_default();
+            (title, body)
+        }
+    }
+}

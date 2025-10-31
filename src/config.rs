@@ -37,6 +37,15 @@ pub struct AppConfig {
     pub smtp_port: u16,
     pub smtp_user: String,
     pub smtp_password: String,
+
+    // APNs configuration
+    pub apns_key_id: String,
+    pub apns_team_id: String,
+    pub apns_key_path: String,
+    pub apns_environment: String, // "production" or "sandbox"
+
+    // FCM configuration
+    pub fcm_server_key: String,
 }
 
 impl AppConfig {

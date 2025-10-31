@@ -67,6 +67,8 @@ uuid = { version = "1.18.1", features = ["serde"] }
 redis = { version = "0.32.5", features = ["aio", "tokio-comp"] }
 bb8-redis = "0.24.0"
 ammonia = "4.1"
+a2 = "0.10.0"
+fcm = "0.9.2"
 
 [dependencies.sqlx]
 version = "0.7.4"

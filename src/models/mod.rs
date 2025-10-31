@@ -12,5 +12,6 @@ pub mod link;
 pub mod nodeinfo;
 pub mod notification;
 pub mod post;
+pub mod push_token;
 pub mod reaction;
 pub mod user;

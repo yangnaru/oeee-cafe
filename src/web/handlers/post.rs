@@ -11,7 +11,8 @@ use crate::models::hashtag::{
 };
 use crate::models::image::find_image_by_id;
 use crate::models::notification::{
-    create_notification, CreateNotificationParams, NotificationType,
+    create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
+    CreateNotificationParams, NotificationType,
 };
 use crate::models::post::{
     build_thread_tree, delete_post_with_activity,
@@ -821,6 +822,9 @@ pub async fn post_publish(
     // Find the actor for this user to send ActivityPub activities
     let actor = Actor::find_by_user_id(&mut tx, user_id).await?;
 
+    // Collect notification info (id, recipient_id) to send push notifications after commit
+    let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
     // Check if this is a reply post and notify the parent post author
     if let Some(parent_post_id_str) = post
         .clone()
@@ -854,7 +858,7 @@ pub async fn post_publish(
                     };
 
                     if should_notify {
-                        let _ = create_notification(
+                        if let Ok(notification) = create_notification(
                             &mut tx,
                             CreateNotificationParams {
                                 recipient_id: parent_author_id,
@@ -866,7 +870,10 @@ pub async fn post_publish(
                                 guestbook_entry_id: None,
                             },
                         )
-                        .await;
+                        .await
+                        {
+                            notification_info.push((notification.id, parent_author_id));
+                        }
                     }
                 }
             }
@@ -881,6 +888,37 @@ pub async fn post_publish(
         .unwrap_or(false);
 
     let _ = tx.commit().await;
+
+    // Send push notifications for created notifications
+    if !notification_info.is_empty() {
+        let push_service = state.push_service.clone();
+        let db_pool = state.db_pool.clone();
+        tokio::spawn(async move {
+            for (notification_id, recipient_id) in notification_info {
+                let mut tx = match db_pool.begin().await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        continue;
+                    }
+                };
+
+                // Get the full notification with actor details
+                if let Ok(Some(notification)) =
+                    get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                {
+                    // Get unread count for badge
+                    let badge_count = get_unread_count(&mut tx, recipient_id)
+                        .await
+                        .ok()
+                        .and_then(|count| u32::try_from(count).ok());
+
+                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                }
+                let _ = tx.commit().await;
+            }
+        });
+    }
 
     // Send ActivityPub Create activity to followers if actor exists
     // For public and unlisted communities (not private)
@@ -1086,10 +1124,13 @@ pub async fn do_create_comment(
     )
     .await?;
 
+    // Collect notification info (id, recipient_id) to send push notifications after commit
+    let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
     // Create notification for the post author (don't notify if commenting on own post)
     if let Some(post_author_id) = post_author_id {
         if post_author_id != user_id {
-            let _ = create_notification(
+            if let Ok(notification) = create_notification(
                 &mut tx,
                 CreateNotificationParams {
                     recipient_id: post_author_id,
@@ -1101,7 +1142,10 @@ pub async fn do_create_comment(
                     guestbook_entry_id: None,
                 },
             )
-            .await;
+            .await
+            {
+                notification_info.push((notification.id, post_author_id));
+            }
         }
     }
 
@@ -1127,7 +1171,7 @@ pub async fn do_create_comment(
                 };
 
                 if should_notify {
-                    let _ = create_notification(
+                    if let Ok(notification) = create_notification(
                         &mut tx,
                         CreateNotificationParams {
                             recipient_id: mentioned_user_id,
@@ -1139,7 +1183,10 @@ pub async fn do_create_comment(
                             guestbook_entry_id: None,
                         },
                     )
-                    .await;
+                    .await
+                    {
+                        notification_info.push((notification.id, mentioned_user_id));
+                    }
                 }
             }
         }
@@ -1147,6 +1194,36 @@ pub async fn do_create_comment(
 
     let comments = find_comments_by_post_id(&mut tx, post_id).await?;
     let _ = tx.commit().await;
+
+    // Send push notifications for created notifications
+    if !notification_info.is_empty() {
+        let push_service = state.push_service.clone();
+        let db_pool = state.db_pool.clone();
+        tokio::spawn(async move {
+            for (notification_id, recipient_id) in notification_info {
+                let mut tx = match db_pool.begin().await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        continue;
+                    }
+                };
+
+                if let Ok(Some(notification)) =
+                    get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                {
+                    // Get unread count for badge
+                    let badge_count = get_unread_count(&mut tx, recipient_id)
+                        .await
+                        .ok()
+                        .and_then(|count| u32::try_from(count).ok());
+
+                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                }
+                let _ = tx.commit().await;
+            }
+        });
+    }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_comments.jinja")?;
     let rendered = template.render(context! {
@@ -2410,10 +2487,13 @@ pub async fn add_reaction(
         .and_then(|id| id.as_ref())
         .and_then(|id| Uuid::parse_str(id).ok());
 
+    // Collect notification info (id, recipient_id) to send push notifications after commit
+    let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
     // Create notification for the post author (don't notify if reacting to own post)
     if let Some(post_author_id) = post_author_id {
         if post_author_id != user_id {
-            let _ = create_notification(
+            if let Ok(notification) = create_notification(
                 &mut tx,
                 CreateNotificationParams {
                     recipient_id: post_author_id,
@@ -2425,13 +2505,46 @@ pub async fn add_reaction(
                     guestbook_entry_id: None,
                 },
             )
-            .await;
+            .await
+            {
+                notification_info.push((notification.id, post_author_id));
+            }
         }
     }
 
     let user_actor_id = Some(actor.id);
     let reaction_counts = get_reaction_counts(&mut tx, post_id, user_actor_id).await?;
     tx.commit().await?;
+
+    // Send push notifications for created notifications
+    if !notification_info.is_empty() {
+        let push_service = state.push_service.clone();
+        let db_pool = state.db_pool.clone();
+        tokio::spawn(async move {
+            for (notification_id, recipient_id) in notification_info {
+                let mut tx = match db_pool.begin().await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        continue;
+                    }
+                };
+
+                if let Ok(Some(notification)) =
+                    get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                {
+                    // Get unread count for badge
+                    let badge_count = get_unread_count(&mut tx, recipient_id)
+                        .await
+                        .ok()
+                        .and_then(|count| u32::try_from(count).ok());
+
+                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                }
+                let _ = tx.commit().await;
+            }
+        });
+    }
 
     // Send EmojiReact activity to post author if they're remote or local with followers
     if let Some(author_id) = post_author_id {

@@ -2,6 +2,7 @@ use fluent::bundle::FluentBundle;
 use fluent::{FluentArgs, FluentValue};
 use minijinja::{path_loader, Environment, State};
 use oeee_cafe::locale::LOCALES;
+use oeee_cafe::push::PushService;
 use oeee_cafe::web::app::App;
 use oeee_cafe::web::handlers::collaborate::redis_state::RedisStateManager;
 use oeee_cafe::web::state::AppState;
@@ -11,6 +12,7 @@ use std::collections::HashMap;
 use std::env::args;
 use std::path::PathBuf;
 use std::process::exit;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::Level;
 
@@ -175,12 +177,20 @@ fn main() {
 
             let redis_state = RedisStateManager::new(redis_pool.clone());
 
+            let push_service = PushService::new(&cfg, db_pool.clone()).unwrap_or_else(|e| {
+                tracing::warn!("Failed to initialize push service: {:?}", e);
+                tracing::warn!("Push notifications will not be available");
+                // Return a push service anyway (it will just log warnings when trying to send)
+                PushService::new(&cfg, db_pool.clone()).unwrap()
+            });
+
             let state = AppState {
                 config: cfg.clone(),
                 env,
                 db_pool,
                 redis_pool,
                 redis_state,
+                push_service: Arc::new(push_service),
             };
 
             App::new(state).await.unwrap().serve().await.unwrap()

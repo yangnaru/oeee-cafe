@@ -9,7 +9,10 @@ use crate::models::guestbook_entry::{
 use crate::models::link::{
     create_link, delete_link, find_links_by_user_id, update_link_order, LinkDraft,
 };
-use crate::models::notification::{create_notification, CreateNotificationParams, NotificationType};
+use crate::models::notification::{
+    create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
+    CreateNotificationParams, NotificationType,
+};
 use crate::models::post::{
     find_published_posts_by_author_id, find_published_public_posts_by_author_id,
 };
@@ -52,13 +55,17 @@ pub async fn do_follow_profile(
     )
     .await?;
 
+    // Collect notification info (id, recipient_id) to send push notifications after commit
+    let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
     // Create notification for the user being followed
     let follower_actor = Actor::find_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
     if let Some(follower_actor) = follower_actor {
+        let recipient_id = user.clone().unwrap().id;
         match create_notification(
             &mut tx,
             CreateNotificationParams {
-                recipient_id: user.clone().unwrap().id,
+                recipient_id,
                 actor_id: follower_actor.id,
                 notification_type: NotificationType::Follow,
                 post_id: None,
@@ -69,12 +76,45 @@ pub async fn do_follow_profile(
         )
         .await
         {
-            Ok(_) => tracing::info!("Created follow notification"),
+            Ok(notification) => {
+                tracing::info!("Created follow notification");
+                notification_info.push((notification.id, recipient_id));
+            }
             Err(e) => tracing::warn!("Failed to create follow notification: {:?}", e),
         }
     }
 
     let _ = tx.commit().await;
+
+    // Send push notifications for created notifications
+    if !notification_info.is_empty() {
+        let push_service = state.push_service.clone();
+        let db_pool = state.db_pool.clone();
+        tokio::spawn(async move {
+            for (notification_id, recipient_id) in notification_info {
+                let mut tx = match db_pool.begin().await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        continue;
+                    }
+                };
+
+                if let Ok(Some(notification)) =
+                    get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                {
+                    // Get unread count for badge
+                    let badge_count = get_unread_count(&mut tx, recipient_id)
+                        .await
+                        .ok()
+                        .and_then(|count| u32::try_from(count).ok());
+
+                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                }
+                let _ = tx.commit().await;
+            }
+        });
+    }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("unfollow_button.jinja")?;
     let rendered = template.render(context! {
@@ -506,13 +546,17 @@ pub async fn do_reply_guestbook_entry(
     guestbook_entry.reply = Some(form.content);
     guestbook_entry.replied_at = Some(replied_at);
 
+    // Collect notification info (id, recipient_id) to send push notifications after commit
+    let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
     // Create notification for the guestbook entry author (person who originally wrote the entry)
     let replier_actor = Actor::find_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
     if let Some(replier_actor) = replier_actor {
+        let recipient_id = guestbook_entry.author_id;
         match create_notification(
             &mut tx,
             CreateNotificationParams {
-                recipient_id: guestbook_entry.author_id,
+                recipient_id,
                 actor_id: replier_actor.id,
                 notification_type: NotificationType::GuestbookReply,
                 post_id: None,
@@ -523,12 +567,45 @@ pub async fn do_reply_guestbook_entry(
         )
         .await
         {
-            Ok(_) => tracing::info!("Created guestbook reply notification"),
+            Ok(notification) => {
+                tracing::info!("Created guestbook reply notification");
+                notification_info.push((notification.id, recipient_id));
+            }
             Err(e) => tracing::warn!("Failed to create guestbook reply notification: {:?}", e),
         }
     }
 
     let _ = tx.commit().await;
+
+    // Send push notifications for created notifications
+    if !notification_info.is_empty() {
+        let push_service = state.push_service.clone();
+        let db_pool = state.db_pool.clone();
+        tokio::spawn(async move {
+            for (notification_id, recipient_id) in notification_info {
+                let mut tx = match db_pool.begin().await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        continue;
+                    }
+                };
+
+                if let Ok(Some(notification)) =
+                    get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                {
+                    // Get unread count for badge
+                    let badge_count = get_unread_count(&mut tx, recipient_id)
+                        .await
+                        .ok()
+                        .and_then(|count| u32::try_from(count).ok());
+
+                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                }
+                let _ = tx.commit().await;
+            }
+        });
+    }
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("guestbook_entry_reply.jinja")?;
@@ -609,6 +686,9 @@ pub async fn do_write_guestbook_entry(
     )
     .await;
 
+    // Collect notification info (id, recipient_id) to send push notifications after commit
+    let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
     // Create notification for the guestbook owner
     if let Ok(ref entry) = guestbook_entry {
         let author_actor = Actor::find_by_user_id(&mut tx, current_user_id).await?;
@@ -627,13 +707,46 @@ pub async fn do_write_guestbook_entry(
             )
             .await
             {
-                Ok(_) => tracing::info!("Created guestbook entry notification"),
+                Ok(notification) => {
+                    tracing::info!("Created guestbook entry notification");
+                    notification_info.push((notification.id, recipient_id));
+                }
                 Err(e) => tracing::warn!("Failed to create guestbook entry notification: {:?}", e),
             }
         }
     }
 
     let _ = tx.commit().await;
+
+    // Send push notifications for created notifications
+    if !notification_info.is_empty() {
+        let push_service = state.push_service.clone();
+        let db_pool = state.db_pool.clone();
+        tokio::spawn(async move {
+            for (notification_id, recipient_id) in notification_info {
+                let mut tx = match db_pool.begin().await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        continue;
+                    }
+                };
+
+                if let Ok(Some(notification)) =
+                    get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                {
+                    // Get unread count for badge
+                    let badge_count = get_unread_count(&mut tx, recipient_id)
+                        .await
+                        .ok()
+                        .and_then(|count| u32::try_from(count).ok());
+
+                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                }
+                let _ = tx.commit().await;
+            }
+        });
+    }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook_entry.jinja")?;
     let rendered = template.render(context! {

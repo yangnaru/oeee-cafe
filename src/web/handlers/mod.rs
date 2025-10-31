@@ -42,6 +42,7 @@ pub mod home;
 pub mod notifications;
 pub mod post;
 pub mod profile;
+pub mod push_tokens;
 pub mod search;
 
 pub async fn handler_404(

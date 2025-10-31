@@ -52,6 +52,9 @@ use crate::web::handlers::profile::{
     guestbook, profile, profile_banners_iframe, profile_followings_json, profile_iframe,
     profile_json, profile_settings,
 };
+use crate::web::handlers::push_tokens::{
+    delete_push_token_handler, list_push_tokens_handler, register_push_token_handler,
+};
 use activitypub_federation::config::{FederationConfig, FederationMiddleware};
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
@@ -199,6 +202,12 @@ impl App {
             .route(
                 "/@:login_name/guestbook/:entry_id/reply",
                 post(do_reply_guestbook_entry),
+            )
+            .route("/api/push-tokens", post(register_push_token_handler))
+            .route("/api/push-tokens", get(list_push_tokens_handler))
+            .route(
+                "/api/push-tokens/:device_token",
+                delete(delete_push_token_handler),
             )
             .route_layer(login_required!(Backend, login_url = "/login"));
 

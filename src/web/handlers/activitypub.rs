@@ -94,7 +94,10 @@ use crate::models::comment::{
 use crate::models::community::{find_community_by_id, find_community_by_slug, CommunityVisibility};
 use crate::models::follow;
 use crate::models::image::find_image_by_id;
-use crate::models::notification::{create_notification, CreateNotificationParams, NotificationType};
+use crate::models::notification::{
+    create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
+    CreateNotificationParams, NotificationType,
+};
 use crate::models::post::find_post_by_id;
 use crate::models::user::{find_user_by_id, find_user_by_login_name};
 use crate::web::state::AppState;
@@ -1359,6 +1362,9 @@ impl ActivityHandler for Create {
                                     post_id
                                 );
 
+                                // Collect notification info to send push after commit
+                                let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
                                 // Create notification for post author
                                 if let Some(post_author_id) = post_author_user_id {
                                     match create_notification(
@@ -1375,12 +1381,45 @@ impl ActivityHandler for Create {
                                     )
                                     .await
                                     {
-                                        Ok(_) => tracing::info!("Created notification for comment from federated actor"),
+                                        Ok(notification) => {
+                                            tracing::info!("Created notification for comment from federated actor");
+                                            notification_info.push((notification.id, post_author_id));
+                                        }
                                         Err(e) => tracing::warn!("Failed to create notification for comment: {:?}", e),
                                     }
                                 }
 
                                 tx.commit().await?;
+
+                                // Send push notifications
+                                if !notification_info.is_empty() {
+                                    let push_service = data.push_service.clone();
+                                    let db_pool = data.db_pool.clone();
+                                    tokio::spawn(async move {
+                                        for (notification_id, recipient_id) in notification_info {
+                                            let mut tx = match db_pool.begin().await {
+                                                Ok(tx) => tx,
+                                                Err(e) => {
+                                                    tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                                                    continue;
+                                                }
+                                            };
+
+                                            if let Ok(Some(notification)) =
+                                                get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                                            {
+                                                // Get unread count for badge
+                                                let badge_count = get_unread_count(&mut tx, recipient_id)
+                                                    .await
+                                                    .ok()
+                                                    .and_then(|count| u32::try_from(count).ok());
+
+                                                send_push_for_notification(&push_service, &notification, badge_count).await;
+                                            }
+                                            let _ = tx.commit().await;
+                                        }
+                                    });
+                                }
                             }
                             Err(e) => {
                                 tracing::error!(
@@ -2132,6 +2171,9 @@ impl ActivityHandler for Like {
                                 post_id
                             );
 
+                            // Collect notification info to send push after commit
+                            let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
                             // Create notification for post author
                             if let Some(post_author_id) = post_author_user_id {
                                 match create_notification(
@@ -2142,18 +2184,51 @@ impl ActivityHandler for Like {
                                         notification_type: NotificationType::Reaction,
                                         post_id: Some(post_id),
                                         comment_id: None,
-                                        reaction_iri: Some(reaction.iri),
+                                        reaction_iri: Some(reaction.iri.clone()),
                                         guestbook_entry_id: None,
                                     },
                                 )
                                 .await
                                 {
-                                    Ok(_) => tracing::info!("Created notification for ❤️ reaction from federated actor"),
+                                    Ok(notification) => {
+                                        tracing::info!("Created notification for ❤️ reaction from federated actor");
+                                        notification_info.push((notification.id, post_author_id));
+                                    }
                                     Err(e) => tracing::warn!("Failed to create notification for ❤️ reaction: {:?}", e),
                                 }
                             }
 
                             tx.commit().await?;
+
+                            // Send push notifications
+                            if !notification_info.is_empty() {
+                                let push_service = data.push_service.clone();
+                                let db_pool = data.db_pool.clone();
+                                tokio::spawn(async move {
+                                    for (notification_id, recipient_id) in notification_info {
+                                        let mut tx = match db_pool.begin().await {
+                                            Ok(tx) => tx,
+                                            Err(e) => {
+                                                tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                                                continue;
+                                            }
+                                        };
+
+                                        if let Ok(Some(notification)) =
+                                            get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                                        {
+                                            // Get unread count for badge
+                                            let badge_count = get_unread_count(&mut tx, recipient_id)
+                                                .await
+                                                .ok()
+                                                .and_then(|count| u32::try_from(count).ok());
+
+                                            send_push_for_notification(&push_service, &notification, badge_count).await;
+                                        }
+                                        let _ = tx.commit().await;
+                                    }
+                                });
+                            }
                         }
                         Err(e) => {
                             tracing::error!("Failed to create reaction from Like: {:?}", e);
@@ -2312,6 +2387,9 @@ impl ActivityHandler for EmojiReact {
                                 post_id
                             );
 
+                            // Collect notification info to send push after commit
+                            let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
                             // Create notification for post author
                             if let Some(post_author_id) = post_author_user_id {
                                 match create_notification(
@@ -2322,18 +2400,51 @@ impl ActivityHandler for EmojiReact {
                                         notification_type: NotificationType::Reaction,
                                         post_id: Some(post_id),
                                         comment_id: None,
-                                        reaction_iri: Some(reaction.iri),
+                                        reaction_iri: Some(reaction.iri.clone()),
                                         guestbook_entry_id: None,
                                     },
                                 )
                                 .await
                                 {
-                                    Ok(_) => tracing::info!("Created notification for {} reaction from federated actor", self.content),
+                                    Ok(notification) => {
+                                        tracing::info!("Created notification for {} reaction from federated actor", self.content);
+                                        notification_info.push((notification.id, post_author_id));
+                                    }
                                     Err(e) => tracing::warn!("Failed to create notification for {} reaction: {:?}", self.content, e),
                                 }
                             }
 
                             tx.commit().await?;
+
+                            // Send push notifications
+                            if !notification_info.is_empty() {
+                                let push_service = data.push_service.clone();
+                                let db_pool = data.db_pool.clone();
+                                tokio::spawn(async move {
+                                    for (notification_id, recipient_id) in notification_info {
+                                        let mut tx = match db_pool.begin().await {
+                                            Ok(tx) => tx,
+                                            Err(e) => {
+                                                tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                                                continue;
+                                            }
+                                        };
+
+                                        if let Ok(Some(notification)) =
+                                            get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                                        {
+                                            // Get unread count for badge
+                                            let badge_count = get_unread_count(&mut tx, recipient_id)
+                                                .await
+                                                .ok()
+                                                .and_then(|count| u32::try_from(count).ok());
+
+                                            send_push_for_notification(&push_service, &notification, badge_count).await;
+                                        }
+                                        let _ = tx.commit().await;
+                                    }
+                                });
+                            }
                         }
                         Err(e) => {
                             tracing::error!("Failed to create reaction from EmojiReact: {:?}", e);
