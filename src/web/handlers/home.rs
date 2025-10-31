@@ -9,8 +9,9 @@ use crate::models::community::{
     get_communities_members_count, get_public_communities, is_user_member, Community,
 };
 use crate::models::post::{
-    find_child_posts_by_parent_id, find_following_posts_by_user_id, find_post_detail_for_json,
-    find_public_community_posts, find_recent_posts_by_communities,
+    delete_post_with_activity, find_child_posts_by_parent_id, find_following_posts_by_user_id,
+    find_post_by_id, find_post_detail_for_json, find_public_community_posts,
+    find_recent_posts_by_communities, unlink_post_hashtags,
 };
 use crate::models::reaction::{find_reactions_by_post_id_and_emoji, get_reaction_counts};
 use crate::models::notification::{
@@ -27,10 +28,11 @@ use crate::web::responses::{
 };
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{extract::State, response::Html, response::Json};
 use axum_messages::Messages;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use minijinja::context;
@@ -787,4 +789,51 @@ pub async fn create_comment_api(
         updated_at: comment.updated_at,
         children: Vec::new(),
     }))
+}
+
+#[derive(Serialize)]
+pub struct DeletePostResponse {
+    pub success: bool,
+}
+
+pub async fn delete_post_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(post_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = auth_session.user.ok_or(AppError::Unauthorized)?;
+
+    let post_uuid = Uuid::parse_str(&post_id)?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find the post
+    let post = find_post_by_id(&mut tx, post_uuid).await?;
+    if post.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let post = post.unwrap();
+
+    // Check if the user is the author
+    let author_id = post
+        .get("author_id")
+        .and_then(|v| v.as_ref())
+        .ok_or(AppError::InternalServerError)?;
+
+    if author_id != &user.id.to_string() {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    // Unlink hashtags before deleting post to properly decrement post_count
+    let _ = unlink_post_hashtags(&mut tx, post_uuid).await;
+
+    // Delete the post
+    delete_post_with_activity(&mut tx, post_uuid, Some(&state)).await?;
+
+    tx.commit().await?;
+
+    Ok(Json(DeletePostResponse { success: true }).into_response())
 }

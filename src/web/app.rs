@@ -29,7 +29,7 @@ use crate::web::handlers::draw::{
 use crate::web::handlers::handler_404;
 use crate::web::handlers::hashtag::{hashtag_autocomplete, hashtag_discovery, hashtag_view};
 use crate::web::handlers::home::{
-    create_comment_api, get_active_communities_json, get_latest_comments_json,
+    create_comment_api, delete_post_api, get_active_communities_json, get_latest_comments_json,
     get_post_comments_api, get_post_details_json, get_post_reactions_by_emoji_json, home,
     load_more_public_posts, load_more_public_posts_json, my_timeline,
 };
@@ -248,6 +248,7 @@ impl App {
             .route("/api/v1/posts/public", get(load_more_public_posts_json))
             .route("/api/v1/posts/drafts", get(draft_posts_api))
             .route("/api/v1/posts/:post_id", get(get_post_details_json))
+            .route("/api/v1/posts/:post_id", delete(delete_post_api))
             .route("/api/v1/posts/:post_id/comments", get(get_post_comments_api))
             .route("/api/v1/posts/:post_id/comments", post(create_comment_api))
             .route("/api/v1/posts/:post_id/reactions/:emoji", get(get_post_reactions_by_emoji_json))
