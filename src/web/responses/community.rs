@@ -30,6 +30,7 @@ pub struct CommunityPostThumbnail {
     pub image_url: String,
     pub image_width: i32,
     pub image_height: i32,
+    pub is_sensitive: bool,
 }
 
 /// Response for community detail endpoint

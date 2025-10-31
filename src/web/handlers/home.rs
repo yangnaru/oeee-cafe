@@ -262,6 +262,7 @@ pub async fn get_active_communities_json(
             ),
             image_width: post.image_width,
             image_height: post.image_height,
+            is_sensitive: post.is_sensitive,
         });
     }
 

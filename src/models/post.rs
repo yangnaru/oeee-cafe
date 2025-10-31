@@ -475,6 +475,7 @@ pub struct CommunityRecentPost {
     pub stroke_count: Option<i32>,
     pub viewer_count: Option<i32>,
     pub published_at: Option<DateTime<Utc>>,
+    pub is_sensitive: bool,
 }
 
 /// Fetch recent posts (up to `limit` per community) for multiple communities
@@ -500,7 +501,8 @@ pub async fn find_recent_posts_by_communities(
             ranked.paint_duration,
             ranked.stroke_count,
             ranked.viewer_count,
-            ranked.published_at
+            ranked.published_at,
+            ranked.is_sensitive
         FROM (
             SELECT
                 p.id,
@@ -514,6 +516,7 @@ pub async fn find_recent_posts_by_communities(
                 i.stroke_count,
                 p.viewer_count,
                 p.published_at,
+                p.is_sensitive,
                 ROW_NUMBER() OVER (PARTITION BY p.community_id ORDER BY p.published_at DESC) as rn
             FROM posts p
             INNER JOIN images i ON p.image_id = i.id
@@ -545,6 +548,7 @@ pub async fn find_recent_posts_by_communities(
             stroke_count: Some(row.stroke_count),
             viewer_count: Some(row.viewer_count),
             published_at: row.published_at,
+            is_sensitive: row.is_sensitive,
         })
         .collect())
 }
