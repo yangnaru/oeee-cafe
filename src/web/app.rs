@@ -237,7 +237,7 @@ impl App {
             .route("/api/v1/posts/:post_id", get(get_post_details_json))
             .route("/api/v1/posts/:post_id/reactions/:emoji", get(get_post_reactions_by_emoji_json))
             .route("/api/v1/search", get(search_json))
-            .route("/api/v1/profile/:login_name", get(profile_json))
+            .route("/api/v1/profiles/:login_name", get(profile_json))
             .route("/api/v1/communities/active", get(get_active_communities_json))
             .route("/api/v1/communities/:slug", get(community_detail_json))
             .route("/api/v1/comments/latest", get(get_latest_comments_json))
