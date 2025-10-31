@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use uuid::Uuid;
 
+use super::PaginationMeta;
 use crate::models::community::CommunityVisibility;
 
 /// Response for active communities list
@@ -16,7 +17,7 @@ pub struct CommunityWithPosts {
     pub name: String,
     pub slug: String,
     pub description: String,
-    pub visibility: String,
+    pub visibility: CommunityVisibility,
     pub owner_login_name: String,
     pub posts_count: Option<i64>,
     pub members_count: Option<i64>,
@@ -37,8 +38,7 @@ pub struct CommunityDetailResponse {
     pub community: CommunityInfo,
     pub stats: CommunityStats,
     pub posts: Vec<CommunityPostThumbnail>,
-    pub posts_offset: i64,
-    pub posts_has_more: bool,
+    pub pagination: PaginationMeta,
     pub comments: Vec<CommunityComment>,
 }
 

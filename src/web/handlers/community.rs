@@ -16,7 +16,7 @@ use crate::web::handlers::home::LoadMoreQuery;
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
 use crate::web::responses::{
     CommunityComment, CommunityDetailResponse, CommunityInfo, CommunityPostThumbnail,
-    CommunityStats,
+    CommunityStats, PaginationMeta,
 };
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
@@ -1352,7 +1352,7 @@ pub async fn community_detail_json(
         })
         .collect();
 
-    let posts_has_more = posts_typed.len() as i64 == query.limit;
+    let has_more = posts_typed.len() as i64 == query.limit;
 
     Ok(Json(CommunityDetailResponse {
         community: CommunityInfo {
@@ -1371,8 +1371,12 @@ pub async fn community_detail_json(
             total_comments: stats.total_comments,
         },
         posts: posts_typed,
-        posts_offset: query.offset + query.limit,
-        posts_has_more,
+        pagination: PaginationMeta {
+            offset: query.offset + query.limit,
+            limit: query.limit,
+            total: None,
+            has_more,
+        },
         comments: comments_typed,
     }))
 }

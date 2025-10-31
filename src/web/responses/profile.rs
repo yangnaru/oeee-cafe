@@ -1,6 +1,8 @@
 use serde::Serialize;
 use uuid::Uuid;
 
+use super::PaginationMeta;
+
 /// Response for profile endpoint
 #[derive(Serialize, Debug)]
 pub struct ProfileResponse {
@@ -8,8 +10,7 @@ pub struct ProfileResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub banner: Option<ProfileBanner>,
     pub posts: Vec<ProfilePost>,
-    pub posts_offset: i64,
-    pub posts_has_more: bool,
+    pub pagination: PaginationMeta,
     pub followings: Vec<ProfileFollowing>,
     pub links: Vec<ProfileLink>,
 }
