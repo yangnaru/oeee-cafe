@@ -56,9 +56,14 @@
       </div>
     `);
 
-    // Enable fullscreen mode for mobile
-    Neo.fullScreen = true;
-    Neo.updateWindow();
+    // Wait for Neo to initialize, then enable fullscreen mode
+    window.addEventListener('load', function() {
+      if (typeof Neo !== 'undefined') {
+        Neo.fullScreen = true;
+        Neo.updateWindow();
+        console.log('Neo fullscreen mode enabled');
+      }
+    });
 
     // Neo painter callback for form submission
     document.paintBBSCallback = function (str) {
