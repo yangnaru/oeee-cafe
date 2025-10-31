@@ -45,6 +45,7 @@ pub struct Input {
 pub struct InputMobile {
     width: String,
     height: String,
+    tool: String,
     community_id: Option<String>,
     parent_post_id: Option<String>,
 }
@@ -137,12 +138,19 @@ pub async fn start_draw_mobile(
         None
     };
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("draw_post_mobile.jinja")?;
+    let tool = &input.tool;
+    let template_filename = match tool.as_str() {
+        "tegaki" => "draw_post_tegaki_mobile.jinja",
+        "neo" => "draw_post_neo_mobile.jinja",
+        _ => "draw_post_neo_mobile.jinja", // fallback to neo
+    };
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         default_community_id => state.config.default_community_id.clone(),
         community_name => community.name,
-        tool => "neo", // Always use Neo for mobile
+        tool => tool,
         width => input.width.parse::<u32>()?,
         height => input.height.parse::<u32>()?,
         background_color => community.background_color,
