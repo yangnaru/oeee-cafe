@@ -838,19 +838,23 @@ pub async fn profile_followings_json(
     // Convert to typed structs
     let followings_typed: Vec<ProfileFollowing> = followings
         .into_iter()
-        .map(|f| ProfileFollowing {
-            id: f.user_id,
-            login_name: f.login_name,
-            display_name: f.display_name,
-            banner_image_url: f.banner_image_filename.map(|filename| {
+        .map(|f| {
+            let banner_image_url = f.banner_image_filename.as_ref().map(|filename| {
+                let image_prefix = &filename[..2];
                 format!(
-                    "{}/images/{}",
-                    state.config.base_url.trim_end_matches('/'),
-                    filename
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, filename
                 )
-            }),
-            banner_image_width: f.banner_image_width,
-            banner_image_height: f.banner_image_height,
+            });
+
+            ProfileFollowing {
+                id: f.user_id,
+                login_name: f.login_name,
+                display_name: f.display_name,
+                banner_image_url,
+                banner_image_width: f.banner_image_width,
+                banner_image_height: f.banner_image_height,
+            }
         })
         .collect();
 
