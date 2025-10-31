@@ -44,6 +44,9 @@ pub struct PostDetail {
     pub image_height: i32,
     pub is_sensitive: bool,
     pub published_at_utc: Option<String>,
+    pub community_id: Uuid,
+    pub community_name: String,
+    pub community_slug: String,
 }
 
 #[derive(Serialize, Debug)]

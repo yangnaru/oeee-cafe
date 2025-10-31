@@ -109,6 +109,9 @@ pub struct PostDetailForJson {
     pub image_height: i32,
     pub is_sensitive: bool,
     pub published_at_utc: Option<String>,
+    pub community_id: Uuid,
+    pub community_name: String,
+    pub community_slug: String,
 }
 
 // Minimal structs for post thumbnails (grid/list views)
@@ -781,6 +784,7 @@ pub async fn find_post_detail_for_json(
                 posts.content,
                 posts.is_sensitive,
                 posts.author_id,
+                posts.community_id,
                 images.paint_duration,
                 images.width,
                 images.height,
@@ -788,10 +792,13 @@ pub async fn find_post_detail_for_json(
                 posts.viewer_count,
                 posts.published_at,
                 users.display_name AS display_name,
-                users.login_name AS login_name
+                users.login_name AS login_name,
+                communities.name AS community_name,
+                communities.slug AS community_slug
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN users ON posts.author_id = users.id
+            LEFT JOIN communities ON posts.community_id = communities.id
             WHERE posts.id = $1
             AND posts.deleted_at IS NULL
         ",
@@ -820,6 +827,9 @@ pub async fn find_post_detail_for_json(
             image_height: row.height,
             is_sensitive: row.is_sensitive.unwrap_or(false),
             published_at_utc: row.published_at.map(|dt| dt.to_rfc3339()),
+            community_id: row.community_id,
+            community_name: row.community_name,
+            community_slug: row.community_slug,
         }
     }))
 }

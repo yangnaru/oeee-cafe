@@ -417,6 +417,9 @@ pub async fn get_post_details_json(
         image_height: post_data.image_height,
         is_sensitive: post_data.is_sensitive,
         published_at_utc: post_data.published_at_utc,
+        community_id: post_data.community_id,
+        community_name: post_data.community_name,
+        community_slug: post_data.community_slug,
     };
 
     let child_posts_response: Vec<ChildPostResponse> = child_posts
