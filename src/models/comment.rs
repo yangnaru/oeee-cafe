@@ -295,6 +295,219 @@ pub async fn build_comment_thread_tree(
     Ok(result)
 }
 
+pub async fn build_comment_thread_tree_paginated(
+    tx: &mut Transaction<'_, Postgres>,
+    post_id: Uuid,
+    limit: i64,
+    offset: i64,
+) -> Result<(Vec<SerializableThreadedComment>, i64)> {
+    // First, get the total count of top-level comments
+    let total_count = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*)
+        FROM comments
+        WHERE post_id = $1 AND parent_comment_id IS NULL
+        "#,
+        post_id
+    )
+    .fetch_one(&mut **tx)
+    .await?
+    .unwrap_or(0);
+
+    // Fetch all comments for this post using recursive CTE
+    // First get the paginated top-level comment IDs
+    let top_level_ids = sqlx::query_scalar!(
+        r#"
+        SELECT id
+        FROM comments
+        WHERE post_id = $1
+          AND parent_comment_id IS NULL
+        ORDER BY created_at ASC
+        LIMIT $2 OFFSET $3
+        "#,
+        post_id,
+        limit,
+        offset
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    // If no top-level comments, return early
+    if top_level_ids.is_empty() {
+        return Ok((Vec::new(), total_count));
+    }
+
+    // Now fetch those comments and all their children using recursive CTE
+    let rows = sqlx::query!(
+        r#"
+        WITH RECURSIVE comment_tree AS (
+            -- Base case: get the specific top-level comments
+            SELECT
+                c.id,
+                c.post_id,
+                c.actor_id,
+                c.parent_comment_id,
+                c.content,
+                c.content_html,
+                c.iri,
+                c.created_at,
+                c.updated_at,
+                a.name AS actor_name,
+                a.handle AS actor_handle,
+                a.url AS actor_url,
+                u.login_name AS user_login_name,
+                0 AS depth
+            FROM comments c
+            LEFT JOIN actors a ON c.actor_id = a.id
+            LEFT JOIN users u ON a.user_id = u.id
+            WHERE c.id = ANY($1)
+
+            UNION ALL
+
+            -- Recursive case: get all children of selected comments
+            SELECT
+                c.id,
+                c.post_id,
+                c.actor_id,
+                c.parent_comment_id,
+                c.content,
+                c.content_html,
+                c.iri,
+                c.created_at,
+                c.updated_at,
+                a.name AS actor_name,
+                a.handle AS actor_handle,
+                a.url AS actor_url,
+                u.login_name AS user_login_name,
+                ct.depth + 1
+            FROM comments c
+            LEFT JOIN actors a ON c.actor_id = a.id
+            LEFT JOIN users u ON a.user_id = u.id
+            INNER JOIN comment_tree ct ON c.parent_comment_id = ct.id
+        )
+        SELECT
+            id,
+            post_id,
+            actor_id,
+            parent_comment_id,
+            content,
+            content_html,
+            iri,
+            created_at,
+            updated_at,
+            actor_name,
+            actor_handle,
+            actor_url,
+            user_login_name
+        FROM comment_tree
+        ORDER BY created_at ASC
+        "#,
+        &top_level_ids
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    // Build comment data map
+    use std::collections::HashMap;
+    let mut comment_data: HashMap<Uuid, SerializableThreadedComment> = HashMap::new();
+    let mut children_map: HashMap<Option<Uuid>, Vec<Uuid>> = HashMap::new();
+
+    for row in rows {
+        // Handle optional fields from LEFT JOIN
+        let Some(id) = row.id else { continue };
+        let Some(post_id) = row.post_id else { continue };
+        let Some(actor_id) = row.actor_id else { continue };
+        let Some(content) = row.content else { continue };
+        let Some(created_at) = row.created_at else { continue };
+        let Some(updated_at) = row.updated_at else { continue };
+        let Some(actor_name) = row.actor_name else { continue };
+        let Some(actor_handle) = row.actor_handle else { continue };
+        let Some(actor_url) = row.actor_url else { continue };
+
+        let user_login_name = row.user_login_name.unwrap_or_default();
+        let is_local = !user_login_name.is_empty();
+        let actor_login_name = if user_login_name.is_empty() {
+            None
+        } else {
+            Some(user_login_name)
+        };
+
+        comment_data.insert(
+            id,
+            SerializableThreadedComment {
+                id,
+                post_id,
+                actor_id,
+                parent_comment_id: row.parent_comment_id,
+                content,
+                content_html: row.content_html,
+                iri: row.iri,
+                actor_name,
+                actor_handle,
+                actor_url,
+                actor_login_name,
+                is_local,
+                created_at,
+                updated_at,
+                children: Vec::new(),
+            },
+        );
+
+        children_map
+            .entry(row.parent_comment_id)
+            .or_insert_with(Vec::new)
+            .push(id);
+    }
+
+    // Recursive function to build comment tree
+    fn build_subtree(
+        comment_id: Uuid,
+        comment_data: &HashMap<Uuid, SerializableThreadedComment>,
+        children_map: &HashMap<Option<Uuid>, Vec<Uuid>>,
+    ) -> Option<SerializableThreadedComment> {
+        comment_data.get(&comment_id).map(|comment| {
+            let children = children_map
+                .get(&Some(comment_id))
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|child_id| build_subtree(child_id, comment_data, children_map))
+                .collect();
+
+            SerializableThreadedComment {
+                id: comment.id,
+                post_id: comment.post_id,
+                actor_id: comment.actor_id,
+                parent_comment_id: comment.parent_comment_id,
+                content: comment.content.clone(),
+                content_html: comment.content_html.clone(),
+                iri: comment.iri.clone(),
+                actor_name: comment.actor_name.clone(),
+                actor_handle: comment.actor_handle.clone(),
+                actor_url: comment.actor_url.clone(),
+                actor_login_name: comment.actor_login_name.clone(),
+                is_local: comment.is_local,
+                created_at: comment.created_at,
+                updated_at: comment.updated_at,
+                children,
+            }
+        })
+    }
+
+    // Build top-level comments with their children
+    let result = children_map
+        .get(&None)
+        .map(|top_level_ids| {
+            top_level_ids
+                .iter()
+                .filter_map(|comment_id| build_subtree(*comment_id, &comment_data, &children_map))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok((result, total_count))
+}
+
 pub async fn find_comments_to_posts_by_author(
     tx: &mut Transaction<'_, Postgres>,
     author_id: Uuid,

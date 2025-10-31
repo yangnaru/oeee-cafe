@@ -2,10 +2,10 @@ use super::ExtractFtlLang;
 use crate::app_error::AppError;
 use crate::models::actor::Actor;
 use crate::models::comment::{
-    build_comment_thread_tree, find_latest_comments_from_public_communities,
+    build_comment_thread_tree_paginated, find_latest_comments_from_public_communities,
 };
 use crate::models::community::{
-    get_communities_members_count, get_public_communities,
+    get_communities_members_count, get_public_communities, is_user_member, Community,
 };
 use crate::models::post::{
     find_child_posts_by_parent_id, find_following_posts_by_user_id, find_post_detail_for_json,
@@ -15,10 +15,10 @@ use crate::models::reaction::{find_reactions_by_post_id_and_emoji, get_reaction_
 use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
 use crate::web::responses::{
-    ChildPostResponse, CommentListResponse, CommentResponse, CommentWithPost,
+    ChildPostResponse, CommentListResponse, CommentsListResponse, CommentWithPost,
     CommunityListResponse, CommunityPostThumbnail, CommunityWithPosts, PaginationMeta,
     PostDetail, PostDetailResponse, PostListResponse, PostThumbnail, ReactionCount,
-    ReactionsDetailResponse, Reactor,
+    ReactionsDetailResponse, Reactor, ThreadedCommentResponse,
 };
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
@@ -152,6 +152,18 @@ pub async fn my_timeline(
 pub struct LoadMoreQuery {
     pub offset: i64,
     pub limit: i64,
+}
+
+#[derive(Deserialize)]
+pub struct CommentsQuery {
+    #[serde(default)]
+    pub offset: i64,
+    #[serde(default = "default_comments_limit")]
+    pub limit: i64,
+}
+
+fn default_comments_limit() -> i64 {
+    100
 }
 
 pub async fn load_more_public_posts(
@@ -360,9 +372,6 @@ pub async fn get_post_details_json(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Post not found"))?;
 
-    // Get comments for this post
-    let comments = build_comment_thread_tree(&mut tx, post_id).await?;
-
     // Get child posts (replies)
     let child_posts = find_child_posts_by_parent_id(&mut tx, post_id).await?;
 
@@ -395,23 +404,6 @@ pub async fn get_post_details_json(
         is_sensitive: post_data.is_sensitive,
         published_at_utc: post_data.published_at_utc,
     };
-
-    let comments_response: Vec<CommentResponse> = comments
-        .into_iter()
-        .map(|comment| CommentResponse {
-            id: comment.id,
-            post_id: comment.post_id,
-            actor_id: comment.actor_id,
-            content: comment.content,
-            content_html: comment.content_html,
-            actor_name: comment.actor_name,
-            actor_handle: comment.actor_handle,
-            actor_login_name: comment.actor_login_name,
-            is_local: comment.is_local,
-            created_at: comment.created_at,
-            updated_at: comment.updated_at,
-        })
-        .collect();
 
     let child_posts_response: Vec<ChildPostResponse> = child_posts
         .into_iter()
@@ -448,7 +440,6 @@ pub async fn get_post_details_json(
 
     Ok(Json(PostDetailResponse {
         post,
-        comments: comments_response,
         child_posts: child_posts_response,
         reactions: reactions_response,
     }))
@@ -481,4 +472,108 @@ pub async fn get_post_reactions_by_emoji_json(
         .collect();
 
     Ok(Json(ReactionsDetailResponse { reactions }))
+}
+
+pub async fn get_post_comments_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(post_id): Path<Uuid>,
+    Query(query): Query<CommentsQuery>,
+) -> Result<Json<CommentsListResponse>, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Validate and cap the limit
+    let limit = query.limit.min(200).max(1);
+    let offset = query.offset.max(0);
+
+    // Get post's community_id to check visibility
+    let post_community_id = sqlx::query_scalar!(
+        r#"
+        SELECT community_id
+        FROM posts
+        WHERE id = $1 AND deleted_at IS NULL
+        "#,
+        post_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("Post not found"))?;
+
+    // Get the community to check visibility
+    let community = sqlx::query_as!(
+        Community,
+        r#"
+        SELECT id, slug, name, description, owner_id, visibility AS "visibility: _", created_at, updated_at, background_color, foreground_color
+        FROM communities
+        WHERE id = $1
+        "#,
+        post_community_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    // Check authorization for private communities
+    if let Some(ref community) = community {
+        if community.visibility == crate::models::community::CommunityVisibility::Private {
+            // For private communities, user must be logged in and be a member
+            if let Some(ref user) = auth_session.user {
+                let is_member = is_user_member(&mut tx, user.id, community.id).await?;
+                if !is_member {
+                    return Err(anyhow::anyhow!(
+                        "You must be a member to view comments in this private community"
+                    )
+                    .into());
+                }
+            } else {
+                return Err(
+                    anyhow::anyhow!("Authentication required to view comments in private community")
+                        .into(),
+                );
+            }
+        }
+    }
+
+    // Get paginated comments
+    let (comments_data, _total_count) =
+        build_comment_thread_tree_paginated(&mut tx, post_id, limit, offset).await?;
+
+    tx.commit().await?;
+
+    // Convert to response format
+    fn convert_to_response(comment: crate::models::comment::SerializableThreadedComment) -> ThreadedCommentResponse {
+        ThreadedCommentResponse {
+            id: comment.id,
+            post_id: comment.post_id,
+            parent_comment_id: comment.parent_comment_id,
+            actor_id: comment.actor_id,
+            content: comment.content,
+            content_html: comment.content_html,
+            actor_name: comment.actor_name,
+            actor_handle: comment.actor_handle,
+            actor_login_name: comment.actor_login_name,
+            is_local: comment.is_local,
+            created_at: comment.created_at,
+            updated_at: comment.updated_at,
+            children: comment.children.into_iter().map(convert_to_response).collect(),
+        }
+    }
+
+    let comments: Vec<ThreadedCommentResponse> = comments_data
+        .into_iter()
+        .map(convert_to_response)
+        .collect();
+
+    // Determine if there are more comments
+    let has_more = comments.len() as i64 == limit;
+
+    Ok(Json(CommentsListResponse {
+        comments,
+        pagination: PaginationMeta {
+            offset,
+            limit,
+            total: None,
+            has_more,
+        },
+    }))
 }

@@ -25,7 +25,6 @@ pub struct PostListResponse {
 #[derive(Serialize, Debug)]
 pub struct PostDetailResponse {
     pub post: PostDetail,
-    pub comments: Vec<CommentResponse>,
     pub child_posts: Vec<ChildPostResponse>,
     pub reactions: Vec<ReactionCount>,
 }
@@ -100,4 +99,29 @@ pub struct Reactor {
     pub created_at: DateTime<Utc>,
     pub actor_name: String,
     pub actor_handle: String,
+}
+
+/// Threaded comment with recursive children
+#[derive(Serialize, Debug)]
+pub struct ThreadedCommentResponse {
+    pub id: Uuid,
+    pub post_id: Uuid,
+    pub parent_comment_id: Option<Uuid>,
+    pub actor_id: Uuid,
+    pub content: String,
+    pub content_html: Option<String>,
+    pub actor_name: String,
+    pub actor_handle: String,
+    pub actor_login_name: Option<String>,
+    pub is_local: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub children: Vec<ThreadedCommentResponse>,
+}
+
+/// Response for paginated comments list endpoint
+#[derive(Serialize, Debug)]
+pub struct CommentsListResponse {
+    pub comments: Vec<ThreadedCommentResponse>,
+    pub pagination: PaginationMeta,
 }
