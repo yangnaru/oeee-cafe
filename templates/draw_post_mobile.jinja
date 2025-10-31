@@ -1,11 +1,19 @@
 <!DOCTYPE html>
 <html lang="{{ ftl_lang }}">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% if parent_post %}Re: {{ parent_post.title }} @ {{ community_name }}{% else %}{{ ftl_get_message("community-drawing-new") }} @ {{ community_name }}{% endif %}</title>
-  <link rel="stylesheet" href="{{ '/static/neo/dist/neo.css' | cachebuster | safe }}" type="text/css" />
-  <style>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+      {% if parent_post %}
+        Re: {{ parent_post.title }} @ {{ community_name }}
+      {% else %}
+        {{ ftl_get_message("community-drawing-new") }} @ {{ community_name }}
+      {% endif %}
+    </title>
+    <link rel="stylesheet"
+          href="{{ '/static/neo/dist/neo.css' | cachebuster | safe }}"
+          type="text/css" />
+    <style>
     body {
       margin: 0;
       padding: 0;
@@ -16,11 +24,12 @@
       width: 100%;
       height: 100vh;
     }
-  </style>
-</head>
-<body>
-  <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}" charset="utf-8"></script>
-  <script>
+    </style>
+  </head>
+  <body>
+    <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}"
+            charset="utf-8"></script>
+    <script>
     // Unified native bridge for iOS and Android
     window.NativeBridge = {
       postMessage: function(message) {
@@ -116,23 +125,6 @@
         return false;
       }
     };
-
-    {% if parent_post %}
-    // Load parent post image for editing/replying
-    const parentPostImageUrl = "{{ r2_public_endpoint_url|safe }}/image/{{ parent_post.image_filename[:2] }}/{{ parent_post.image_filename | cachebuster }}";
-    fetch(parentPostImageUrl)
-      .then(response => response.blob())
-      .then(blob => {
-        const img = new Image();
-        img.src = URL.createObjectURL(blob);
-        img.onload = () => {
-          Neo.painter.startFromImage(img);
-        };
-      })
-      .catch(error => {
-        console.error("Error loading parent post image:", error);
-      });
-    {% endif %}
-  </script>
-</body>
+    </script>
+  </body>
 </html>
