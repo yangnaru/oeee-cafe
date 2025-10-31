@@ -36,7 +36,7 @@ pub struct Input {
     width: String,
     height: String,
     tool: String,
-    community_id: String,
+    community_id: Option<String>,
     parent_post_id: Option<String>,
 }
 
@@ -62,7 +62,9 @@ pub async fn start_draw(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let community_id = Uuid::parse_str(&input.community_id).unwrap();
+    let community_id = Uuid::parse_str(
+        input.community_id.as_deref().unwrap_or(&state.config.default_community_id)
+    ).unwrap();
     let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
 
     // Query parent post if parent_post_id is provided
@@ -93,6 +95,52 @@ pub async fn start_draw(
         parent_post_id => input.parent_post_id,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
+        ftl_lang
+    })?;
+
+    Ok(Html(rendered))
+}
+
+pub async fn start_draw_mobile(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
+    Form(input): Form<Input>,
+) -> Result<Html<String>, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let community_id = Uuid::parse_str(
+        input.community_id.as_deref().unwrap_or(&state.config.default_community_id)
+    ).unwrap();
+    let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
+
+    // Query parent post if parent_post_id is provided
+    let parent_post = if let Some(ref parent_post_id) = input.parent_post_id {
+        let parent_uuid = Uuid::parse_str(parent_post_id).ok();
+        if let Some(uuid) = parent_uuid {
+            find_post_by_id(&mut tx, uuid).await?
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("draw_post_mobile.jinja")?;
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        default_community_id => state.config.default_community_id.clone(),
+        community_name => community.name,
+        tool => "neo", // Always use Neo for mobile
+        width => input.width.parse::<u32>()?,
+        height => input.height.parse::<u32>()?,
+        background_color => community.background_color,
+        foreground_color => community.foreground_color,
+        community_id => community_id.to_string(),
+        community_slug => community.slug,
+        parent_post => parent_post,
+        parent_post_id => input.parent_post_id,
         ftl_lang
     })?;
 

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="{{ ftl_lang }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if parent_post %}Re: {{ parent_post.title }} @ {{ community_name }}{% else %}{{ ftl_get_message("community-drawing-new") }} @ {{ community_name }}{% endif %}</title>
+  <link rel="stylesheet" href="{{ '/static/neo/dist/neo.css' | cachebuster | safe }}" type="text/css" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #appstage {
+      width: 100%;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="appstage"></div>
+
+  <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}" charset="utf-8"></script>
+  <script>
+    // Unified native bridge for iOS and Android
+    window.NativeBridge = {
+      postMessage: function(message) {
+        try {
+          // iOS WKWebView
+          if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.oeee) {
+            window.webkit.messageHandlers.oeee.postMessage(message);
+            return;
+          }
+
+          // Android WebView
+          if (window.OeeeCafe && window.OeeeCafe.postMessage) {
+            window.OeeeCafe.postMessage(JSON.stringify(message));
+            return;
+          }
+
+          // Fallback for web debugging
+          console.log('NativeBridge message:', message);
+        } catch (error) {
+          console.error('NativeBridge error:', error);
+        }
+      }
+    };
+
+    // Create Neo painter applet
+    document.write(`
+      <applet-dummy name="paintbbs" width="{{ width + 150 }}" height="{{ height + 172 }}">
+        <param name="image_width" value="{{ width }}">
+        <param name="image_height" value="{{ height }}">
+        <param name="thumbnail_type" value="animation">
+      </applet-dummy>
+    `);
+
+    // Enable fullscreen mode for mobile
+    Neo.fullScreen = true;
+    Neo.updateWindow();
+
+    // Neo painter callback for form submission
+    document.paintBBSCallback = function (str) {
+      if (str === "check") {
+        const image = Neo.painter.getImage();
+        const animation = Neo.painter.getThumbnail("animation");
+
+        const form = new FormData();
+        form.append("image", image.toDataURL("image/png"));
+        form.append("animation", animation);
+        form.append("community_id", "{{ community_id }}");
+        form.append("security_timer", Neo.painter.securityTimer);
+        form.append("security_count", Neo.painter.securityCount);
+        form.append("width", image.width);
+        form.append("height", image.height);
+        form.append("tool", "neo");
+
+        {% if parent_post %}
+        form.append("parent_post_id", "{{ parent_post.id }}");
+        {% elif parent_post_id %}
+        form.append("parent_post_id", "{{ parent_post_id }}");
+        {% endif %}
+
+        // Post form to server
+        fetch("/draw/finish", {
+          method: "POST",
+          body: form,
+        })
+          .then((response) => response.json())
+          .then(async (data) => {
+            if (data?.error) {
+              alert(data.error);
+            } else {
+              Neo.uploaded = true;
+
+              // Notify native app of completion
+              window.NativeBridge.postMessage({
+                type: 'drawing_complete',
+                postId: data.post_id,
+                communityId: data.community_id
+              });
+            }
+          })
+          .catch((error) => {
+            alert("{{ ftl_get_message("community-drawing-post-error") }}");
+            console.error('Upload error:', error);
+          });
+
+        return false;
+      }
+    };
+
+    {% if parent_post %}
+    // Load parent post image for editing/replying
+    const parentPostImageUrl = "{{ r2_public_endpoint_url|safe }}/image/{{ parent_post.image_filename[:2] }}/{{ parent_post.image_filename | cachebuster }}";
+    fetch(parentPostImageUrl)
+      .then(response => response.blob())
+      .then(blob => {
+        const img = new Image();
+        img.src = URL.createObjectURL(blob);
+        img.onload = () => {
+          Neo.painter.startFromImage(img);
+        };
+      })
+      .catch(error => {
+        console.error("Error loading parent post image:", error);
+      });
+    {% endif %}
+  </script>
+</body>
+</html>

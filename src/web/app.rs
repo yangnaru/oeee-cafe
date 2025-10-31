@@ -24,6 +24,7 @@ use crate::web::handlers::community::{
 };
 use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
+    start_draw_mobile,
 };
 use crate::web::handlers::handler_404;
 use crate::web::handlers::hashtag::{hashtag_autocomplete, hashtag_discovery, hashtag_view};
@@ -168,6 +169,7 @@ impl App {
             .route("/logout", post(do_logout))
             .route("/draw", get(start_draw_get))
             .route("/draw", post(start_draw))
+            .route("/draw/mobile", post(start_draw_mobile))
             .route(
                 "/draw/finish",
                 post(draw_finish).layer(DefaultBodyLimit::max(10 * 1024 * 1024)),
