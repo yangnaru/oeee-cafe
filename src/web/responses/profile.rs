@@ -12,6 +12,7 @@ pub struct ProfileResponse {
     pub posts: Vec<ProfilePost>,
     pub pagination: PaginationMeta,
     pub followings: Vec<ProfileFollowing>,
+    pub total_followings: i64,
     pub links: Vec<ProfileLink>,
 }
 

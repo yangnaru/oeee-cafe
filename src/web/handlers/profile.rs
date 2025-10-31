@@ -1,7 +1,7 @@
 use crate::app_error::AppError;
 use crate::models::actor::Actor;
 use crate::models::banner::find_banner_by_id;
-use crate::models::follow::{find_followings_by_user_id, follow_user, is_following, unfollow_user};
+use crate::models::follow::{count_followings_by_user_id, find_followings_by_user_id, follow_user, is_following, unfollow_user};
 use crate::models::guestbook_entry::{
     add_guestbook_entry_reply, create_guestbook_entry, delete_guestbook_entry,
     find_guestbook_entries_by_recipient_id, find_guestbook_entry_by_id, GuestbookEntryDraft,
@@ -731,6 +731,9 @@ pub async fn profile_json(
     // Get followings (only with banners for preview)
     let followings = find_followings_by_user_id(&mut tx, user.id, 9999, 0, true).await?;
 
+    // Get total followings count
+    let total_followings = count_followings_by_user_id(&mut tx, user.id).await?;
+
     // Get links
     let links = find_links_by_user_id(&mut tx, user.id).await?;
 
@@ -803,6 +806,7 @@ pub async fn profile_json(
             has_more,
         },
         followings: followings_typed,
+        total_followings,
         links: links_typed,
     }))
 }
