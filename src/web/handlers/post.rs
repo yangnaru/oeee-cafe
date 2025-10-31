@@ -37,7 +37,7 @@ use aws_sdk_s3::types::{Delete, ObjectIdentifier};
 use aws_sdk_s3::Client;
 use axum::extract::Path;
 use axum::http::{HeaderMap, HeaderValue};
-use axum::response::{IntoResponse, Redirect};
+use axum::response::{IntoResponse, Json, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
 use minijinja::context;
 use serde::{Deserialize, Serialize};
@@ -960,6 +960,57 @@ pub async fn draft_posts(
     })?;
 
     Ok(Html(rendered))
+}
+
+#[derive(Serialize)]
+pub struct DraftPostJson {
+    pub id: Uuid,
+    pub title: Option<String>,
+    pub image_url: String,
+    pub created_at: String,
+    pub community_id: Uuid,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Serialize)]
+pub struct DraftPostsResponse {
+    pub drafts: Vec<DraftPostJson>,
+}
+
+pub async fn draft_posts_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<Json<DraftPostsResponse>, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let user = auth_session.user.ok_or(AppError::Unauthorized)?;
+
+    let posts = find_draft_posts_by_author_id(&mut tx, user.id).await?;
+
+    tx.commit().await?;
+
+    let drafts: Vec<DraftPostJson> = posts
+        .into_iter()
+        .map(|post| {
+            let image_prefix = &post.image_filename[..2];
+            DraftPostJson {
+                id: post.id,
+                title: post.title,
+                image_url: format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+                ),
+                created_at: post.updated_at.to_rfc3339(),
+                community_id: post.community_id,
+                width: post.image_width,
+                height: post.image_height,
+            }
+        })
+        .collect();
+
+    Ok(Json(DraftPostsResponse { drafts }))
 }
 
 #[derive(Deserialize)]
