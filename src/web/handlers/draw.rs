@@ -35,7 +35,16 @@ use uuid::Uuid;
 pub struct Input {
     width: String,
     height: String,
-    tool: String,
+    tool: Option<String>,
+    community_id: Option<String>,
+    parent_post_id: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(dead_code)]
+pub struct InputMobile {
+    width: String,
+    height: String,
     community_id: Option<String>,
     parent_post_id: Option<String>,
 }
@@ -50,7 +59,8 @@ pub async fn start_draw(
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Form(input): Form<Input>,
 ) -> Result<Html<String>, AppError> {
-    let template_filename = match input.tool.as_str() {
+    let tool = input.tool.as_deref().unwrap_or("neo");
+    let template_filename = match tool {
         "neo" => "draw_post_neo.jinja",
         "tegaki" => "draw_post_tegaki.jinja",
         _ => "draw_post_neo.jinja",
@@ -105,7 +115,7 @@ pub async fn start_draw_mobile(
     auth_session: AuthSession,
     State(state): State<AppState>,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
-    Form(input): Form<Input>,
+    Form(input): Form<InputMobile>,
 ) -> Result<Html<String>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
