@@ -1,4 +1,5 @@
 use crate::app_error::AppError;
+use crate::models::push_token::delete_push_token;
 use crate::models::user::{create_user, AuthSession, Credentials, Language, UserDraft};
 use crate::web::handlers::{get_bundle, ExtractFtlLang};
 use crate::web::state::AppState;
@@ -214,6 +215,12 @@ pub struct UserInfo {
     pub preferred_language: Option<Language>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct LogoutRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_token: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct LogoutResponse {
     pub success: bool,
@@ -292,7 +299,20 @@ pub async fn api_login(
 }
 
 // JSON API endpoint for logout
-pub async fn api_logout(mut auth_session: AuthSession) -> impl IntoResponse {
+pub async fn api_logout(
+    mut auth_session: AuthSession,
+    State(state): State<AppState>,
+    Json(request): Json<LogoutRequest>,
+) -> impl IntoResponse {
+    // Delete the push token for this device if provided
+    if let (Some(user), Some(device_token)) = (&auth_session.user, request.device_token) {
+        let db_pool = &state.db_pool;
+        if let Ok(mut tx) = db_pool.begin().await {
+            let _ = delete_push_token(&mut tx, user.id, device_token).await;
+            let _ = tx.commit().await;
+        }
+    }
+
     match auth_session.logout().await {
         Ok(_) => (
             StatusCode::OK,
