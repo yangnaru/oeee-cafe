@@ -26,7 +26,7 @@ use axum::{extract::State, http::StatusCode, response::{Html, Json}, Form};
 use axum_messages::Messages;
 use minijinja::context;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::web::context::CommonContext;
@@ -1399,9 +1399,13 @@ pub async fn get_communities_list_json(
         (vec![], vec![])
     };
 
-    // Combine own and participating communities
+    // Combine own and participating communities and deduplicate by ID
     let mut my_communities_raw = own_communities_raw;
     my_communities_raw.extend(participating_communities_raw);
+
+    // Deduplicate by community ID (in case user owns and participates in the same community)
+    let mut seen_ids = std::collections::HashSet::new();
+    my_communities_raw.retain(|c| seen_ids.insert(c.id));
 
     // Fetch public communities
     let public_communities_raw = get_public_communities(&mut tx).await?;
