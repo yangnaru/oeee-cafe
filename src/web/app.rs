@@ -204,10 +204,10 @@ impl App {
                 "/@:login_name/guestbook/:entry_id/reply",
                 post(do_reply_guestbook_entry),
             )
-            .route("/api/push-tokens", post(register_push_token_handler))
-            .route("/api/push-tokens", get(list_push_tokens_handler))
+            .route("/api/v1/push-tokens", post(register_push_token_handler))
+            .route("/api/v1/push-tokens", get(list_push_tokens_handler))
             .route(
-                "/api/push-tokens/:device_token",
+                "/api/v1/push-tokens/:device_token",
                 delete(delete_push_token_handler),
             )
             .route_layer(login_required!(Backend, login_url = "/login"));
