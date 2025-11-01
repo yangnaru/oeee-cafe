@@ -44,6 +44,7 @@ pub mod post;
 pub mod profile;
 pub mod push_tokens;
 pub mod search;
+pub mod well_known;
 
 pub async fn handler_404(
     auth_session: AuthSession,
