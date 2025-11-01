@@ -10,7 +10,7 @@ use crate::web::handlers::activitypub::{
     activitypub_post_community_inbox, activitypub_post_shared_inbox,
     activitypub_post_user_followers, activitypub_post_user_inbox, activitypub_webfinger,
 };
-use crate::web::handlers::auth::{api_login, api_logout, api_me, do_login, do_logout, do_signup, login, signup};
+use crate::web::handlers::auth::{api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::collaborate::{
     collaborate_lobby, create_collaborative_session, get_active_sessions_json, get_auth_info,
     get_collaboration_meta, save_collaborative_session, serve_collaborative_app,
@@ -224,7 +224,6 @@ impl App {
 
         let activitypub_router = Router::new()
             .route("/.well-known/webfinger", get(activitypub_webfinger))
-            .route("/.well-known/apple-app-site-association", get(apple_app_site_association))
             .route("/ap/users/:login_name", get(activitypub_get_user))
             .route("/ap/posts/:post_id", get(activitypub_get_post))
             .route(
@@ -248,6 +247,7 @@ impl App {
 
         let app = Router::new()
             .route("/", get(home))
+            .route("/.well-known/apple-app-site-association", get(apple_app_site_association))
             .route("/api/home/posts", get(load_more_public_posts))
             .route("/api/v1/posts/public", get(load_more_public_posts_json))
             .route("/api/v1/posts/drafts", get(draft_posts_api))
@@ -269,6 +269,7 @@ impl App {
             .route("/api/v1/collaborate/sessions", post(create_collaborative_session))
             .route("/api/v1/auth/login", post(api_login))
             .route("/api/v1/auth/logout", post(api_logout))
+            .route("/api/v1/auth/signup", post(api_signup))
             .route("/api/v1/auth/me", get(api_me))
             .route("/api/v1/account", delete(delete_account))
             .route("/api/v1/notifications", get(api_list_notifications))

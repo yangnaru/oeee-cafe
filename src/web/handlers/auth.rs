@@ -226,6 +226,22 @@ pub struct LogoutResponse {
     pub success: bool,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SignupRequest {
+    pub login_name: String,
+    pub password: String,
+    pub display_name: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SignupResponse {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<UserInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
 // JSON API endpoint for login
 pub async fn api_login(
     mut auth_session: AuthSession,
@@ -344,4 +360,102 @@ pub async fn api_me(auth_session: AuthSession) -> impl IntoResponse {
             .into_response(),
         None => (StatusCode::UNAUTHORIZED).into_response(),
     }
+}
+
+// JSON API endpoint for signup
+pub async fn api_signup(
+    mut auth_session: AuthSession,
+    State(state): State<AppState>,
+    Json(req): Json<SignupRequest>,
+) -> impl IntoResponse {
+    // Create user draft
+    let user_draft = match UserDraft::new(req.login_name, req.password, req.display_name) {
+        Ok(draft) => draft,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(SignupResponse {
+                    success: false,
+                    user: None,
+                    error: Some(e.to_string()),
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    // Create user in database
+    let db = &state.db_pool;
+    let mut tx = match db.begin().await {
+        Ok(tx) => tx,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(SignupResponse {
+                    success: false,
+                    user: None,
+                    error: Some("Database error".to_string()),
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    let user = match create_user(&mut tx, user_draft, &state.config).await {
+        Ok(user) => user,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(SignupResponse {
+                    success: false,
+                    user: None,
+                    error: Some(e.to_string()),
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    if tx.commit().await.is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(SignupResponse {
+                success: false,
+                user: None,
+                error: Some("Database error".to_string()),
+            }),
+        )
+            .into_response();
+    }
+
+    // Auto-login user (sets session cookie)
+    if auth_session.login(&user).await.is_err() {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(SignupResponse {
+                success: false,
+                user: None,
+                error: Some("Login error".to_string()),
+            }),
+        )
+            .into_response();
+    }
+
+    // Return success with user info
+    (
+        StatusCode::CREATED,
+        Json(SignupResponse {
+            success: true,
+            user: Some(UserInfo {
+                id: user.id.to_string(),
+                login_name: user.login_name,
+                display_name: user.display_name,
+                email: user.email,
+                banner_id: user.banner_id.map(|id| id.to_string()),
+                preferred_language: user.preferred_language,
+            }),
+            error: None,
+        }),
+    )
+        .into_response()
 }
