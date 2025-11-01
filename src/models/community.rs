@@ -205,6 +205,77 @@ pub async fn count_public_communities(
     Ok(result.len() as i64)
 }
 
+pub async fn search_public_communities(
+    tx: &mut Transaction<'_, Postgres>,
+    query: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<PublicCommunity>> {
+    // Prepare search pattern
+    let pattern = format!("%{}%", query);
+    let exact_pattern = query.to_string();
+
+    // Search communities by name, slug, or description with ranking
+    let q = query_as!(
+        PublicCommunity,
+        r#"
+            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name,
+                   communities.name, communities.slug, communities.description,
+                   communities.visibility as "visibility: _", communities.updated_at, communities.created_at,
+                   communities.background_color, communities.foreground_color,
+                   COALESCE(COUNT(posts.id), 0) AS posts_count
+            FROM communities
+            LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
+            LEFT JOIN users ON communities.owner_id = users.id
+            WHERE communities.visibility = 'public'
+              AND (communities.name ILIKE $1
+                   OR communities.slug ILIKE $1
+                   OR communities.description ILIKE $1)
+            GROUP BY communities.id, users.login_name
+            ORDER BY
+                CASE
+                    WHEN communities.name ILIKE $2 THEN 0  -- Exact match
+                    WHEN communities.slug ILIKE $2 THEN 1  -- Slug match
+                    WHEN communities.name ILIKE $3 THEN 2  -- Starts with match (name)
+                    WHEN communities.slug ILIKE $3 THEN 3  -- Starts with match (slug)
+                    ELSE 4
+                END,
+                communities.name
+            LIMIT $4 OFFSET $5
+        "#,
+        pattern,
+        exact_pattern,
+        format!("{}%", query),
+        limit,
+        offset
+    );
+
+    Ok(q.fetch_all(&mut **tx).await?)
+}
+
+pub async fn count_search_public_communities(
+    tx: &mut Transaction<'_, Postgres>,
+    query: &str,
+) -> Result<i64> {
+    let pattern = format!("%{}%", query);
+
+    let result = query!(
+        r#"
+            SELECT COUNT(*) AS "count!"
+            FROM communities
+            WHERE communities.visibility = 'public'
+              AND (communities.name ILIKE $1
+                   OR communities.slug ILIKE $1
+                   OR communities.description ILIKE $1)
+        "#,
+        pattern
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    Ok(result.count)
+}
+
 pub async fn get_active_public_communities_excluding_owner(
     tx: &mut Transaction<'_, Postgres>,
     community_owner_id: Uuid,

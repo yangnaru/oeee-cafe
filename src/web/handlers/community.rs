@@ -2,13 +2,14 @@ use crate::app_error::AppError;
 use crate::models::actor::create_actor_for_community;
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
-    accept_invitation, add_community_member, count_public_communities, create_community, create_invitation,
-    find_community_by_id, find_community_by_slug, get_communities_members_count,
-    get_community_members_with_details, get_community_stats, get_invitation_by_id, get_own_communities,
-    get_participating_communities, get_pending_invitations_with_invitee_details_for_community,
-    get_public_communities, get_public_communities_paginated, get_user_role_in_community,
-    is_user_member, reject_invitation, remove_community_member, update_community_with_activity,
-    CommunityDraft, CommunityMemberRole, CommunityVisibility,
+    accept_invitation, add_community_member, count_public_communities, count_search_public_communities,
+    create_community, create_invitation, find_community_by_id, find_community_by_slug,
+    get_communities_members_count, get_community_members_with_details, get_community_stats,
+    get_invitation_by_id, get_own_communities, get_participating_communities,
+    get_pending_invitations_with_invitee_details_for_community, get_public_communities,
+    get_public_communities_paginated, get_user_role_in_community, is_user_member,
+    reject_invitation, remove_community_member, search_public_communities,
+    update_community_with_activity, CommunityDraft, CommunityMemberRole, CommunityVisibility,
 };
 use crate::models::post::{find_published_posts_by_community_id, find_recent_posts_by_communities};
 use crate::models::user::{AuthSession, find_user_by_login_name};
@@ -1555,6 +1556,128 @@ pub async fn get_public_communities_json(
     }
 
     // Build public_communities with all metadata
+    let communities: Vec<CommunityWithPosts> = public_communities_raw
+        .into_iter()
+        .map(|community| {
+            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
+            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
+
+            CommunityWithPosts {
+                id: community.id,
+                name: community.name,
+                slug: community.slug,
+                description: community.description,
+                visibility: community.visibility,
+                owner_login_name: community.owner_login_name,
+                posts_count: community.posts_count,
+                members_count,
+                recent_posts,
+            }
+        })
+        .collect();
+
+    let has_more = (offset + limit) < total_count;
+
+    Ok(Json(PublicCommunitiesResponse {
+        communities,
+        pagination: PaginationMeta {
+            offset,
+            limit,
+            total: Some(total_count),
+            has_more,
+        },
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    pub q: String,
+    #[serde(default)]
+    pub offset: i64,
+    #[serde(default = "default_search_limit")]
+    pub limit: i64,
+}
+
+fn default_search_limit() -> i64 {
+    20
+}
+
+pub async fn search_public_communities_json(
+    State(state): State<AppState>,
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<PublicCommunitiesResponse>, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Validate search query
+    let search_query = query.q.trim();
+    if search_query.is_empty() {
+        // Return empty results for empty queries
+        return Ok(Json(PublicCommunitiesResponse {
+            communities: vec![],
+            pagination: PaginationMeta {
+                offset: query.offset,
+                limit: query.limit,
+                total: Some(0),
+                has_more: false,
+            },
+        }));
+    }
+
+    // Validate and constrain pagination parameters
+    let limit = query.limit.clamp(1, 100);
+    let offset = query.offset.max(0);
+
+    // Search public communities
+    let public_communities_raw = search_public_communities(&mut tx, search_query, limit, offset).await?;
+
+    // Get total count for search results
+    let total_count = count_search_public_communities(&mut tx, search_query).await?;
+
+    // Collect all community IDs for batch queries
+    let community_ids: Vec<Uuid> = public_communities_raw.iter().map(|c| c.id).collect();
+
+    // Fetch recent posts (10 per community) for all communities
+    let recent_posts = if !community_ids.is_empty() {
+        find_recent_posts_by_communities(&mut tx, &community_ids, 10).await?
+    } else {
+        Vec::new()
+    };
+
+    // Fetch members count for all communities
+    let members_stats = if !community_ids.is_empty() {
+        get_communities_members_count(&mut tx, &community_ids).await?
+    } else {
+        Vec::new()
+    };
+
+    tx.commit().await?;
+
+    // Group posts by community_id
+    use std::collections::HashMap as StdHashMap;
+    let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
+    for post in recent_posts {
+        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
+        let image_prefix = &post.image_filename[..2];
+        posts.push(CommunityPostThumbnail {
+            id: post.id,
+            image_url: format!(
+                "{}/image/{}/{}",
+                state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+            ),
+            image_width: post.image_width,
+            image_height: post.image_height,
+            is_sensitive: post.is_sensitive,
+        });
+    }
+
+    // Create stats lookup map
+    let mut members_by_community: StdHashMap<Uuid, Option<i64>> = StdHashMap::new();
+    for stat in members_stats {
+        members_by_community.insert(stat.community_id, stat.members_count);
+    }
+
+    // Build communities with all metadata
     let communities: Vec<CommunityWithPosts> = public_communities_raw
         .into_iter()
         .map(|community| {
