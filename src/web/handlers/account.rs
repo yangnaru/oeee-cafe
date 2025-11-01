@@ -490,3 +490,59 @@ pub async fn delete_account(
         }
     }
 }
+
+#[derive(Deserialize)]
+pub struct DeleteAccountForm {
+    password: String,
+}
+
+pub async fn delete_account_htmx(
+    mut auth_session: AuthSession,
+    State(state): State<AppState>,
+    Form(form): Form<DeleteAccountForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = match auth_session.user.as_ref() {
+        Some(user) => user.clone(),
+        None => {
+            return Ok(Redirect::to("/login").into_response());
+        }
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Attempt to delete the user
+    match delete_user_with_activity(
+        &mut tx,
+        user.id,
+        &form.password,
+        &state.config,
+        Some(&state),
+    )
+    .await
+    {
+        Ok(_) => {
+            tx.commit().await?;
+
+            // Log the user out
+            auth_session.logout().await?;
+
+            // Redirect to homepage with HX-Redirect header
+            Ok((
+                StatusCode::OK,
+                [("HX-Redirect", "/")],
+            )
+                .into_response())
+        }
+        Err(e) => {
+            tx.rollback().await?;
+
+            // Return error message as HTML for HTMX to display
+            let error_html = format!(
+                r#"<div class="error-message">{}</div>"#,
+                e.to_string()
+            );
+            Ok((StatusCode::BAD_REQUEST, Html(error_html)).into_response())
+        }
+    }
+}

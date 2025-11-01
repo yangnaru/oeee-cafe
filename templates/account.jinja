@@ -83,6 +83,25 @@
       </fieldset>
       <input type="submit" value="{{ ftl_get_message("account-language-settings-save") }}" />
     </form>
+    <form id="delete-account-form"
+          hx-delete="/account/delete"
+          hx-confirm="{{ ftl_get_message("account-delete-confirm") }}"
+          hx-target="#delete-error"
+          hx-swap="innerHTML">
+      <fieldset class="dangerous">
+        <legend>{{ ftl_get_message("account-delete") }}</legend>
+        <p class="dangerous">{{ ftl_get_message("account-delete-warning") }}</p>
+        <div id="delete-error"></div>
+        <p>
+          <label for="delete_password">{{ ftl_get_message("account-change-password-current") }}:</label>
+          <input name="password"
+                 id="delete_password"
+                 type="password"
+                 required />
+        </p>
+      </fieldset>
+      <button type="submit" class="dangerous">{{ ftl_get_message("account-delete-button") }}</button>
+    </form>
     <form action="/logout" method="post">
       <button type="submit">{{ ftl_get_message("sign-out") }}</button>
     </form>

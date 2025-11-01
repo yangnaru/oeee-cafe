@@ -2,8 +2,8 @@ use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::about::about;
 use crate::web::handlers::account::{
-    account, delete_account, edit_account, edit_password, request_email_verification_code,
-    save_language, verify_email_verification_code,
+    account, delete_account, delete_account_htmx, edit_account, edit_password,
+    request_email_verification_code, save_language, verify_email_verification_code,
 };
 use crate::web::handlers::activitypub::{
     activitypub_get_community, activitypub_get_post, activitypub_get_user,
@@ -152,6 +152,7 @@ impl App {
                 "/account/verify-email",
                 post(verify_email_verification_code),
             )
+            .route("/account/delete", delete(delete_account_htmx))
             .route("/comments", post(do_create_comment))
             .route("/posts/:post_id/reactions/add", post(add_reaction))
             .route("/posts/:post_id/reactions/remove", post(remove_reaction))
