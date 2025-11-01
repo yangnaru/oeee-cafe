@@ -13,7 +13,7 @@ use crate::models::post::{
     find_post_by_id, find_post_detail_for_json, find_public_community_posts,
     find_recent_posts_by_communities, SerializableThreadedPost,
 };
-use crate::models::hashtag::unlink_post_hashtags;
+use crate::models::hashtag::{get_hashtags_for_post, unlink_post_hashtags};
 use crate::models::reaction::{find_reactions_by_post_id_and_emoji, get_reaction_counts};
 use crate::models::notification::{
     create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
@@ -459,6 +459,13 @@ pub async fn get_post_details_json(
     };
     let reactions = get_reaction_counts(&mut tx, post_id, user_actor_id).await?;
 
+    // Get hashtags for this post
+    let hashtags_data = get_hashtags_for_post(&mut tx, post_id).await?;
+    let hashtags: Vec<String> = hashtags_data
+        .into_iter()
+        .map(|h| h.display_name)
+        .collect();
+
     tx.commit().await?;
 
     let post = PostDetail {
@@ -478,6 +485,7 @@ pub async fn get_post_details_json(
         community_id: post_data.community_id,
         community_name: post_data.community_name,
         community_slug: post_data.community_slug,
+        hashtags,
     };
 
     let child_posts_response: Vec<ChildPostResponse> = child_posts

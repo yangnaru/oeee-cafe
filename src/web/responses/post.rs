@@ -48,6 +48,7 @@ pub struct PostDetail {
     pub community_id: Uuid,
     pub community_name: String,
     pub community_slug: String,
+    pub hashtags: Vec<String>,
 }
 
 #[derive(Serialize, Debug)]
