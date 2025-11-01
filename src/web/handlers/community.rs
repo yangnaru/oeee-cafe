@@ -1403,13 +1403,8 @@ pub async fn get_communities_list_json(
     let mut my_communities_raw = own_communities_raw;
     my_communities_raw.extend(participating_communities_raw);
 
-    // Fetch public communities (with at least 10 posts)
+    // Fetch public communities
     let public_communities_raw = get_public_communities(&mut tx).await?;
-    let public_communities_raw: Vec<_> = public_communities_raw
-        .into_iter()
-        .filter(|c| c.posts_count.unwrap_or(0) >= 10)
-        .take(20) // Return more communities for the dedicated communities tab
-        .collect();
 
     // Collect all community IDs for batch queries
     let mut all_community_ids: Vec<Uuid> = Vec::new();
