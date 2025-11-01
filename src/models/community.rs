@@ -159,6 +159,52 @@ pub async fn get_public_communities(
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
+pub async fn get_public_communities_paginated(
+    tx: &mut Transaction<'_, Postgres>,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<PublicCommunity>> {
+    // Select communities ordered by latest published post with pagination
+    let q = query_as!(
+        PublicCommunity,
+        r#"
+            SELECT communities.id, communities.owner_id, users.login_name AS owner_login_name, communities.name, communities.slug, communities.description, communities.visibility as "visibility: _", communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color, COALESCE(COUNT(posts.id), 0) AS posts_count
+            FROM communities
+            LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
+            LEFT JOIN users ON communities.owner_id = users.id
+            WHERE communities.visibility = 'public'
+            GROUP BY communities.id, users.login_name
+            HAVING MAX(posts.published_at) IS NOT NULL
+            ORDER BY MAX(posts.published_at) DESC
+            LIMIT $1 OFFSET $2
+        "#,
+        limit,
+        offset
+    );
+
+    Ok(q.fetch_all(&mut **tx).await?)
+}
+
+pub async fn count_public_communities(
+    tx: &mut Transaction<'_, Postgres>,
+) -> Result<i64> {
+    // Count public communities with at least one post
+    let result = query!(
+        r#"
+            SELECT COUNT(DISTINCT communities.id) AS "count!"
+            FROM communities
+            LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
+            WHERE communities.visibility = 'public'
+            GROUP BY communities.id
+            HAVING MAX(posts.published_at) IS NOT NULL
+        "#
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(result.len() as i64)
+}
+
 pub async fn get_active_public_communities_excluding_owner(
     tx: &mut Transaction<'_, Postgres>,
     community_owner_id: Uuid,

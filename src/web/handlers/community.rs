@@ -2,11 +2,11 @@ use crate::app_error::AppError;
 use crate::models::actor::create_actor_for_community;
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
-    accept_invitation, add_community_member, create_community, create_invitation,
+    accept_invitation, add_community_member, count_public_communities, create_community, create_invitation,
     find_community_by_id, find_community_by_slug, get_communities_members_count,
     get_community_members_with_details, get_community_stats, get_invitation_by_id, get_own_communities,
     get_participating_communities, get_pending_invitations_with_invitee_details_for_community,
-    get_public_communities, get_user_role_in_community,
+    get_public_communities, get_public_communities_paginated, get_user_role_in_community,
     is_user_member, reject_invitation, remove_community_member, update_community_with_activity,
     CommunityDraft, CommunityMemberRole, CommunityVisibility,
 };
@@ -15,8 +15,9 @@ use crate::models::user::{AuthSession, find_user_by_login_name};
 use crate::web::handlers::home::LoadMoreQuery;
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
 use crate::web::responses::{
-    CommunityComment, CommunityDetailResponse, CommunitiesListResponse, CommunityInfo,
-    CommunityPostThumbnail, CommunityStats, CommunityWithPosts, PaginationMeta,
+    CommunityComment, CommunityDetailResponse, CommunityInfo,
+    CommunityPostThumbnail, CommunityStats, CommunityWithPosts, MyCommunitiesResponse, PaginationMeta,
+    PublicCommunitiesResponse,
 };
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
@@ -1382,11 +1383,11 @@ pub async fn community_detail_json(
     }))
 }
 
-/// Get communities list for mobile apps (my communities + public communities)
+/// Get my communities list for mobile apps
 pub async fn get_communities_list_json(
     auth_session: AuthSession,
     State(state): State<AppState>,
-) -> Result<Json<CommunitiesListResponse>, AppError> {
+) -> Result<Json<MyCommunitiesResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -1407,18 +1408,8 @@ pub async fn get_communities_list_json(
     let mut my_community_ids = HashSet::new();
     my_communities_raw.retain(|c| my_community_ids.insert(c.id));
 
-    // Fetch public communities and exclude ones that are already in my_communities
-    let public_communities_raw: Vec<_> = get_public_communities(&mut tx).await?
-        .into_iter()
-        .filter(|c| !my_community_ids.contains(&c.id))
-        .collect();
-
-    // Collect all community IDs for batch queries
-    let mut all_community_ids: Vec<Uuid> = Vec::new();
-    all_community_ids.extend(my_communities_raw.iter().map(|c| c.id));
-    all_community_ids.extend(public_communities_raw.iter().map(|c| c.id));
-    all_community_ids.sort();
-    all_community_ids.dedup();
+    // Collect community IDs for batch queries
+    let all_community_ids: Vec<Uuid> = my_communities_raw.iter().map(|c| c.id).collect();
 
     // Fetch recent posts (10 per community) for all communities
     let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 10).await?;
@@ -1476,7 +1467,7 @@ pub async fn get_communities_list_json(
     }
 
     // Build my_communities with all metadata
-    let my_communities: Vec<CommunityWithPosts> = my_communities_raw
+    let communities: Vec<CommunityWithPosts> = my_communities_raw
         .into_iter()
         .map(|community| {
             let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
@@ -1498,8 +1489,73 @@ pub async fn get_communities_list_json(
         })
         .collect();
 
+    Ok(Json(MyCommunitiesResponse {
+        communities,
+    }))
+}
+
+pub async fn get_public_communities_json(
+    State(state): State<AppState>,
+    Query(query): Query<LoadMoreQuery>,
+) -> Result<Json<PublicCommunitiesResponse>, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Validate and constrain pagination parameters
+    let limit = query.limit.clamp(1, 100);
+    let offset = query.offset.max(0);
+
+    // Fetch paginated public communities
+    let public_communities_raw = get_public_communities_paginated(&mut tx, limit, offset).await?;
+
+    // Get total count
+    let total_count = count_public_communities(&mut tx).await?;
+
+    // Collect all community IDs for batch queries
+    let community_ids: Vec<Uuid> = public_communities_raw.iter().map(|c| c.id).collect();
+
+    // Fetch recent posts (10 per community) for all communities
+    let recent_posts = if !community_ids.is_empty() {
+        find_recent_posts_by_communities(&mut tx, &community_ids, 10).await?
+    } else {
+        Vec::new()
+    };
+
+    // Fetch members count for all communities
+    let members_stats = if !community_ids.is_empty() {
+        get_communities_members_count(&mut tx, &community_ids).await?
+    } else {
+        Vec::new()
+    };
+
+    tx.commit().await?;
+
+    // Group posts by community_id
+    use std::collections::HashMap as StdHashMap;
+    let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
+    for post in recent_posts {
+        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
+        let image_prefix = &post.image_filename[..2];
+        posts.push(CommunityPostThumbnail {
+            id: post.id,
+            image_url: format!(
+                "{}/image/{}/{}",
+                state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+            ),
+            image_width: post.image_width,
+            image_height: post.image_height,
+            is_sensitive: post.is_sensitive,
+        });
+    }
+
+    // Create stats lookup map
+    let mut members_by_community: StdHashMap<Uuid, Option<i64>> = StdHashMap::new();
+    for stat in members_stats {
+        members_by_community.insert(stat.community_id, stat.members_count);
+    }
+
     // Build public_communities with all metadata
-    let public_communities: Vec<CommunityWithPosts> = public_communities_raw
+    let communities: Vec<CommunityWithPosts> = public_communities_raw
         .into_iter()
         .map(|community| {
             let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
@@ -1519,9 +1575,16 @@ pub async fn get_communities_list_json(
         })
         .collect();
 
-    Ok(Json(CommunitiesListResponse {
-        my_communities,
-        public_communities,
+    let has_more = (offset + limit) < total_count;
+
+    Ok(Json(PublicCommunitiesResponse {
+        communities,
+        pagination: PaginationMeta {
+            offset,
+            limit,
+            total: Some(total_count),
+            has_more,
+        },
     }))
 }
 

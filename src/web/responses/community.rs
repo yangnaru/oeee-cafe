@@ -11,11 +11,17 @@ pub struct CommunityListResponse {
     pub communities: Vec<CommunityWithPosts>,
 }
 
-/// Response for communities list (mobile - my + public)
+/// Response for my communities only
 #[derive(Serialize, Debug)]
-pub struct CommunitiesListResponse {
-    pub my_communities: Vec<CommunityWithPosts>,
-    pub public_communities: Vec<CommunityWithPosts>,
+pub struct MyCommunitiesResponse {
+    pub communities: Vec<CommunityWithPosts>,
+}
+
+/// Response for paginated public communities
+#[derive(Serialize, Debug)]
+pub struct PublicCommunitiesResponse {
+    pub communities: Vec<CommunityWithPosts>,
+    pub pagination: PaginationMeta,
 }
 
 #[derive(Serialize, Debug)]
