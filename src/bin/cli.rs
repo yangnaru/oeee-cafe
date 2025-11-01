@@ -4,8 +4,10 @@ use oeee_cafe::{
     models::{
         actor::{backfill_actors_for_existing_communities, backfill_actors_for_existing_users},
         community::get_communities,
+        push_token::get_user_tokens,
         user::{find_user_by_id, find_user_by_login_name, update_password},
     },
+    push::PushService,
     AppConfig,
 };
 use std::process::exit;
@@ -34,6 +36,8 @@ enum Commands {
     BackfillActors,
     /// Create actors for existing communities that don't have them
     BackfillCommunityActors,
+    /// Send a test push notification to a user
+    SendTestPush { login_name: String },
 }
 
 #[tokio::main]
@@ -117,6 +121,58 @@ async fn main() -> Result<()> {
                 "✅ Created {} actors for existing communities",
                 created_count
             );
+        }
+        Commands::SendTestPush { login_name } => {
+            println!("Looking up user '{}'...", login_name);
+            let user = find_user_by_login_name(&mut tx, login_name).await?;
+
+            match user {
+                Some(user) => {
+                    println!("Found user: {} ({})", user.display_name, user.id);
+
+                    // Get push tokens for this user
+                    let tokens = get_user_tokens(&mut tx, user.id).await?;
+                    println!("User has {} push token(s) registered:", tokens.len());
+                    for token in &tokens {
+                        println!("  - {:?}: {}...", token.platform, &token.device_token[..token.device_token.len().min(20)]);
+                    }
+
+                    if tokens.is_empty() {
+                        println!("❌ No push tokens registered for this user");
+                        exit(1);
+                    }
+
+                    // Initialize push service
+                    println!("\nInitializing push service...");
+                    let db_pool = cfg.connect_database().await?;
+                    let push_service = PushService::new(&cfg, db_pool).await?;
+
+                    // Send test notification
+                    println!("Sending test push notification...");
+                    match push_service
+                        .send_notification_to_user(
+                            user.id,
+                            "Test Push Notification",
+                            "This is a test notification from the CLI",
+                            Some(1),
+                            None,
+                        )
+                        .await
+                    {
+                        Ok(_) => {
+                            println!("✅ Test notification sent successfully!");
+                        }
+                        Err(e) => {
+                            println!("❌ Failed to send test notification: {:?}", e);
+                            exit(1);
+                        }
+                    }
+                }
+                None => {
+                    println!("❌ User not found");
+                    exit(1);
+                }
+            }
         }
     }
 
