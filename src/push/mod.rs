@@ -35,6 +35,7 @@ impl PushService {
                 &config.apns_key_id,
                 &config.apns_team_id,
                 &config.apns_environment,
+                &config.apns_topic,
             ) {
                 Ok(client) => {
                     tracing::info!("APNs client initialized successfully");

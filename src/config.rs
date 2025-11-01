@@ -43,6 +43,7 @@ pub struct AppConfig {
     pub apns_team_id: String,
     pub apns_key_path: String,
     pub apns_environment: String, // "production" or "sandbox"
+    pub apns_topic: String,       // App bundle ID
 
     // FCM configuration (V1 API)
     pub fcm_service_account_path: String,

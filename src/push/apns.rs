@@ -10,10 +10,11 @@ use super::PushError;
 #[derive(Clone)]
 pub struct ApnsClient {
     client: Arc<Client>,
+    topic: String,
 }
 
 impl ApnsClient {
-    pub fn new(key_path: &str, key_id: &str, team_id: &str, environment: &str) -> Result<Self, anyhow::Error> {
+    pub fn new(key_path: &str, key_id: &str, team_id: &str, environment: &str, topic: &str) -> Result<Self, anyhow::Error> {
         let mut key_file = File::open(key_path)?;
 
         let endpoint = match environment {
@@ -26,6 +27,7 @@ impl ApnsClient {
 
         Ok(Self {
             client: Arc::new(client),
+            topic: topic.to_string(),
         })
     }
 
@@ -46,8 +48,12 @@ impl ApnsClient {
             builder = builder.set_badge(badge_count);
         }
 
-        // Build the notification payload
-        let mut payload = builder.build(device_token, NotificationOptions::default());
+        // Build the notification payload with topic (bundle ID)
+        let options = NotificationOptions {
+            apns_topic: Some(&self.topic),
+            ..Default::default()
+        };
+        let mut payload = builder.build(device_token, options);
 
         // Add custom data if provided
         if let Some(ref custom_data) = data {
