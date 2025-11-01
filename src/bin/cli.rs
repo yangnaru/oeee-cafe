@@ -43,6 +43,9 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize rustls crypto provider
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     // Initialize tracing/logging
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(Level::WARN)

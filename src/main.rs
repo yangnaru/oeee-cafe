@@ -17,6 +17,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::Level;
 
 fn main() {
+    // Initialize rustls crypto provider for push notifications
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let _guard = sentry::init(("https://d8284c2171832794baf0bdaace92c55f@o4504757655764992.ingest.us.sentry.io/4510046127194112", sentry::ClientOptions {
         release: sentry::release_name!(),
         // Capture user IPs and potentially sensitive headers when using HTTP server integrations

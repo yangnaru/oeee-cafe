@@ -3339,6 +3339,7 @@ dependencies = [
  "redis",
  "reqwest",
  "rpassword",
+ "rustls 0.23.32",
  "sentry",
  "serde",
  "serde_json",
