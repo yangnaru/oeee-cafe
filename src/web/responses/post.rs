@@ -25,6 +25,7 @@ pub struct PostListResponse {
 #[derive(Serialize, Debug)]
 pub struct PostDetailResponse {
     pub post: PostDetail,
+    pub parent_post: Option<ChildPostResponse>,
     pub child_posts: Vec<ChildPostResponse>,
     pub reactions: Vec<ReactionCount>,
 }
@@ -78,6 +79,7 @@ pub struct ChildPostResponse {
     pub image_height: i32,
     pub published_at: Option<DateTime<Utc>>,
     pub comments_count: i64,
+    pub children: Vec<ChildPostResponse>,
 }
 
 #[derive(Serialize, Debug)]

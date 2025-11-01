@@ -9,9 +9,9 @@ use crate::models::community::{
     get_communities_members_count, get_public_communities, is_user_member, Community,
 };
 use crate::models::post::{
-    delete_post_with_activity, find_child_posts_by_parent_id, find_following_posts_by_user_id,
+    build_thread_tree, delete_post_with_activity, find_following_posts_by_user_id,
     find_post_by_id, find_post_detail_for_json, find_public_community_posts,
-    find_recent_posts_by_communities,
+    find_recent_posts_by_communities, SerializableThreadedPost,
 };
 use crate::models::hashtag::unlink_post_hashtags;
 use crate::models::reaction::{find_reactions_by_post_id_and_emoji, get_reaction_counts};
@@ -373,6 +373,36 @@ pub async fn get_latest_comments_json(
     Ok(Json(CommentListResponse { comments }))
 }
 
+/// Helper function to convert SerializableThreadedPost to ChildPostResponse
+fn threaded_post_to_response(
+    post: SerializableThreadedPost,
+    r2_endpoint: &str,
+) -> ChildPostResponse {
+    let image_prefix = &post.image_filename[..2];
+    ChildPostResponse {
+        id: post.id,
+        title: post.title,
+        content: post.content,
+        author_id: post.author_id,
+        user_login_name: post.user_login_name,
+        user_display_name: post.user_display_name,
+        user_actor_handle: post.user_actor_handle,
+        image_url: format!(
+            "{}/image/{}/{}",
+            r2_endpoint, image_prefix, post.image_filename
+        ),
+        image_width: post.image_width,
+        image_height: post.image_height,
+        published_at: post.published_at,
+        comments_count: post.comments_count,
+        children: post
+            .children
+            .into_iter()
+            .map(|child| threaded_post_to_response(child, r2_endpoint))
+            .collect(),
+    }
+}
+
 pub async fn get_post_details_json(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -386,8 +416,36 @@ pub async fn get_post_details_json(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Post not found"))?;
 
-    // Get child posts (replies)
-    let child_posts = find_child_posts_by_parent_id(&mut tx, post_id).await?;
+    // Get parent post if it exists
+    let parent_post = if let Some(parent_id) = post_data.parent_post_id {
+        let parent_data = find_post_detail_for_json(&mut tx, parent_id).await?;
+        parent_data.map(|p| {
+            let image_prefix = &p.image_filename[..2];
+            ChildPostResponse {
+                id: p.id,
+                title: p.title,
+                content: p.content,
+                author_id: p.author_id,
+                user_login_name: p.login_name.clone(),
+                user_display_name: p.display_name,
+                user_actor_handle: format!("{}@{}", p.login_name, state.config.domain),
+                image_url: format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, p.image_filename
+                ),
+                image_width: p.image_width,
+                image_height: p.image_height,
+                published_at: p.published_at_utc.and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok().map(|dt| dt.with_timezone(&chrono::Utc))),
+                comments_count: 0, // Not needed for parent display
+                children: Vec::new(), // Parent post doesn't show its own children in this context
+            }
+        })
+    } else {
+        None
+    };
+
+    // Get child posts (replies) using threaded structure
+    let child_posts = build_thread_tree(&mut tx, post_id).await?;
 
     // Get reaction counts
     let user_actor_id = if let Some(ref user) = auth_session.user {
@@ -424,26 +482,7 @@ pub async fn get_post_details_json(
 
     let child_posts_response: Vec<ChildPostResponse> = child_posts
         .into_iter()
-        .map(|child| {
-            let image_prefix = &child.image_filename[..2];
-            ChildPostResponse {
-                id: child.id,
-                title: child.title,
-                content: child.content,
-                author_id: child.author_id,
-                user_login_name: child.user_login_name,
-                user_display_name: child.user_display_name,
-                user_actor_handle: child.user_actor_handle,
-                image_url: format!(
-                    "{}/image/{}/{}",
-                    state.config.r2_public_endpoint_url, image_prefix, child.image_filename
-                ),
-                image_width: child.image_width,
-                image_height: child.image_height,
-                published_at: child.published_at,
-                comments_count: child.comments_count,
-            }
-        })
+        .map(|child| threaded_post_to_response(child, &state.config.r2_public_endpoint_url))
         .collect();
 
     let reactions_response: Vec<ReactionCount> = reactions
@@ -457,6 +496,7 @@ pub async fn get_post_details_json(
 
     Ok(Json(PostDetailResponse {
         post,
+        parent_post,
         child_posts: child_posts_response,
         reactions: reactions_response,
     }))

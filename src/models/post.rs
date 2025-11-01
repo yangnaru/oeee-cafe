@@ -112,6 +112,7 @@ pub struct PostDetailForJson {
     pub community_id: Uuid,
     pub community_name: String,
     pub community_slug: String,
+    pub parent_post_id: Option<Uuid>,
 }
 
 // Minimal structs for post thumbnails (grid/list views)
@@ -785,6 +786,7 @@ pub async fn find_post_detail_for_json(
                 posts.is_sensitive,
                 posts.author_id,
                 posts.community_id,
+                posts.parent_post_id,
                 images.paint_duration,
                 images.width,
                 images.height,
@@ -830,6 +832,7 @@ pub async fn find_post_detail_for_json(
             community_id: row.community_id,
             community_name: row.community_name,
             community_slug: row.community_slug,
+            parent_post_id: row.parent_post_id,
         }
     }))
 }
