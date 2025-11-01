@@ -12,7 +12,7 @@ services:
     ports:
       - "30000:3000"
     volumes:
-      - ./config/prod.toml:/app/config.toml:ro
+      - ./config:/app/config:ro
     networks:
       - oeee-cafe-network
     restart: always
