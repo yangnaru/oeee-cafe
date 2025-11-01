@@ -42,6 +42,7 @@ impl UserDraft {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Type)]
 #[sqlx(type_name = "preferred_language", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum Language {
     Ko,
     Ja,
