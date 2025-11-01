@@ -23,10 +23,12 @@ ENV SCCACHE_DIR=/sccache
 ENV SCCACHE_CACHE_SIZE="10G"
 ENV DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5433/oeee_cafe
 
-RUN --mount=type=cache,target=/sccache,sharing=locked \
+RUN --mount=type=cache,target=/sccache \
     --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
     cargo build --release && \
-    sccache --show-stats
+    sccache --show-stats && \
+    cp /app/target/release/oeee-cafe /app/oeee-cafe
 
 # Build neo-cucumber
 FROM node:24-slim AS node-builder-neo-cucumber
@@ -47,7 +49,7 @@ COPY neo/dist/neo.css neo/dist/neo.js ./neo/dist/
 COPY locales/ ./locales/
 COPY static/ ./static/
 COPY templates/ ./templates/
-COPY --from=rust-builder /app/target/release/oeee-cafe ./
+COPY --from=rust-builder /app/oeee-cafe ./
 COPY --from=node-builder-neo-cucumber /app/neo-cucumber/dist/ ./neo-cucumber/dist/
 EXPOSE 3000
 CMD ["./oeee-cafe", "config/config.toml"]
