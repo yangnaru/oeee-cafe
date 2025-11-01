@@ -50,4 +50,4 @@ COPY templates/ ./templates/
 COPY --from=rust-builder /app/target/release/oeee-cafe ./
 COPY --from=node-builder-neo-cucumber /app/neo-cucumber/dist/ ./neo-cucumber/dist/
 EXPOSE 3000
-CMD ["./oeee-cafe", "config.toml"]
+CMD ["./oeee-cafe", "config/config.toml"]
