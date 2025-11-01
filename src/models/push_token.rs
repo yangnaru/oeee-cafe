@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
 #[sqlx(type_name = "platform_type", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum PlatformType {
     Ios,
     Android,
