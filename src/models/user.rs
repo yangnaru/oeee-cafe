@@ -63,6 +63,7 @@ pub struct User {
     pub created_at: DateTime<Utc>,
     pub banner_id: Option<Uuid>,
     pub preferred_language: Option<Language>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 impl User {
@@ -95,7 +96,8 @@ pub async fn update_user_preferred_language(
                 created_at,
                 updated_at,
                 banner_id,
-                preferred_language AS "preferred_language: _"
+                preferred_language AS "preferred_language: _",
+                deleted_at
         "#,
         preferred_language as _,
         id,
@@ -113,6 +115,7 @@ pub async fn update_user_preferred_language(
         updated_at: result.updated_at,
         banner_id: result.banner_id,
         preferred_language: result.preferred_language,
+        deleted_at: result.deleted_at,
     })
 }
 
@@ -138,7 +141,8 @@ pub async fn update_user_email_verified_at(
                 created_at,
                 updated_at,
                 banner_id,
-                preferred_language AS "preferred_language: _"
+                preferred_language AS "preferred_language: _",
+                deleted_at
         "#,
         email,
         email_verified_at,
@@ -157,6 +161,7 @@ pub async fn update_user_email_verified_at(
         updated_at: result.updated_at,
         banner_id: result.banner_id,
         preferred_language: result.preferred_language,
+        deleted_at: result.deleted_at,
     })
 }
 
@@ -188,7 +193,8 @@ pub async fn update_password(
                 created_at,
                 updated_at,
                 banner_id,
-                preferred_language AS "preferred_language: _"
+                preferred_language AS "preferred_language: _",
+                deleted_at
         "#,
         password_hash,
         id,
@@ -206,6 +212,7 @@ pub async fn update_password(
         updated_at: result.updated_at,
         banner_id: result.banner_id,
         preferred_language: result.preferred_language,
+        deleted_at: result.deleted_at,
     })
 }
 
@@ -231,7 +238,8 @@ pub async fn update_user(
                 created_at,
                 updated_at,
                 banner_id,
-                preferred_language AS "preferred_language: _"
+                preferred_language AS "preferred_language: _",
+                deleted_at
         "#,
         login_name,
         display_name,
@@ -250,6 +258,7 @@ pub async fn update_user(
         updated_at: result.updated_at,
         banner_id: result.banner_id,
         preferred_language: result.preferred_language,
+        deleted_at: result.deleted_at,
     })
 }
 
@@ -315,6 +324,7 @@ pub async fn create_user(
         updated_at: result.updated_at,
         banner_id: None,
         preferred_language: None,
+        deleted_at: None,
     };
 
     // Create actor for the user
@@ -337,7 +347,8 @@ pub async fn find_user_by_id(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Re
             created_at,
             updated_at,
             banner_id,
-            preferred_language AS "preferred_language: _"
+            preferred_language AS "preferred_language: _",
+            deleted_at
         FROM users
         WHERE id = $1"#,
         id
@@ -362,7 +373,8 @@ pub async fn find_user_by_login_name(
             created_at,
             updated_at,
             banner_id,
-            preferred_language AS "preferred_language: _"
+            preferred_language AS "preferred_language: _",
+            deleted_at
         FROM users
         WHERE login_name = $1"#,
         login_name
@@ -399,6 +411,137 @@ pub async fn find_users_with_public_posts_and_banner(
         "#,
     );
     Ok(q.fetch_all(&mut **tx).await?)
+}
+
+pub async fn delete_user(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    password: &str,
+) -> Result<()> {
+    // First, find the user
+    let user = find_user_by_id(tx, id).await?;
+    let user = user.ok_or_else(|| anyhow::anyhow!("User not found"))?;
+
+    // Check if user is already deleted
+    if user.deleted_at.is_some() {
+        return Err(anyhow::anyhow!("User is already deleted"));
+    }
+
+    // Verify password
+    user.verify_password(password)
+        .map_err(|_| anyhow::anyhow!("Invalid password"))?;
+
+    // Check if user owns any communities
+    let community_count = query!(
+        r#"
+        SELECT COUNT(*) as "count!"
+        FROM communities
+        WHERE owner_id = $1
+        "#,
+        id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    if community_count.count > 0 {
+        return Err(anyhow::anyhow!(
+            "Cannot delete account while owning communities. Please transfer or delete your communities first."
+        ));
+    }
+
+    // Delete sessions for this user
+    query!(
+        r#"
+        DELETE FROM sessions
+        WHERE (data::json->>'user_id')::text = $1
+        "#,
+        id.to_string()
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Delete push tokens (will cascade automatically)
+    query!(
+        r#"
+        DELETE FROM push_tokens
+        WHERE user_id = $1
+        "#,
+        id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Delete notifications (will cascade automatically)
+    query!(
+        r#"
+        DELETE FROM notifications
+        WHERE recipient_id = $1
+        "#,
+        id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Delete follow relationships
+    if let Some(actor) = super::actor::Actor::find_by_user_id(tx, id).await? {
+        query!(
+            r#"
+            DELETE FROM follows
+            WHERE follower_id = $1 OR following_id = $1
+            "#,
+            actor.id
+        )
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    // Soft delete and anonymize user
+    query!(
+        r#"
+        UPDATE users
+        SET
+            deleted_at = NOW(),
+            email = NULL,
+            display_name = '[deleted]',
+            password_hash = '',
+            updated_at = NOW()
+        WHERE id = $1
+        "#,
+        id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn delete_user_with_activity(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    password: &str,
+    config: &AppConfig,
+    state: Option<&crate::web::state::AppState>,
+) -> Result<()> {
+    // Get the user's actor before deletion
+    let actor = super::actor::Actor::find_by_user_id(tx, id).await?;
+
+    // Delete the user
+    delete_user(tx, id, password).await?;
+
+    // If state is provided and actor exists, send ActivityPub Delete activity
+    if let (Some(state), Some(actor)) = (state, actor) {
+        // Construct the actor URL
+        if let Ok(actor_url) = format!("https://{}/users/{}", config.domain, actor.username).parse() {
+            // Send Delete activity - don't fail if this fails
+            if let Err(e) =
+                crate::web::handlers::activitypub::send_delete_activity(&actor, actor_url, state).await
+            {
+                tracing::warn!("Failed to send Delete activity for user {}: {:?}", id, e);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 impl AuthUser for User {
@@ -448,14 +591,15 @@ impl AuthnBackend for Backend {
                 created_at,
                 updated_at,
                 banner_id,
-                preferred_language AS "preferred_language: _"
+                preferred_language AS "preferred_language: _",
+                deleted_at
             FROM users
             WHERE login_name = $1"#,
             creds.login_name
         );
         let user = q.fetch_optional(&self.db).await?;
 
-        Ok(user.filter(|user| user.verify_password(&creds.password).is_ok()))
+        Ok(user.filter(|user| user.deleted_at.is_none() && user.verify_password(&creds.password).is_ok()))
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
@@ -471,12 +615,14 @@ impl AuthnBackend for Backend {
                 created_at,
                 updated_at,
                 banner_id,
-                preferred_language AS "preferred_language: _"
+                preferred_language AS "preferred_language: _",
+                deleted_at
             FROM users
             WHERE id = $1"#,
             user_id
         );
-        Ok(q.fetch_optional(&self.db).await?)
+        let user = q.fetch_optional(&self.db).await?;
+        Ok(user.filter(|user| user.deleted_at.is_none()))
     }
 }
 

@@ -2,8 +2,8 @@ use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::about::about;
 use crate::web::handlers::account::{
-    account, edit_account, edit_password, request_email_verification_code, save_language,
-    verify_email_verification_code,
+    account, delete_account, edit_account, edit_password, request_email_verification_code,
+    save_language, verify_email_verification_code,
 };
 use crate::web::handlers::activitypub::{
     activitypub_get_community, activitypub_get_post, activitypub_get_user,
@@ -267,6 +267,7 @@ impl App {
             .route("/api/v1/auth/login", post(api_login))
             .route("/api/v1/auth/logout", post(api_logout))
             .route("/api/v1/auth/me", get(api_me))
+            .route("/api/v1/account", delete(delete_account))
             .route("/api/v1/notifications", get(api_list_notifications))
             .route("/api/v1/notifications/unread-count", get(get_unread_notification_count))
             .route("/api/v1/notifications/mark-all-read", post(mark_all_notifications_read))

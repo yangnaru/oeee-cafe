@@ -3,14 +3,14 @@ use crate::models::email_verification_challenge::{
     create_email_verification_challenge, find_email_verification_challenge_by_id,
 };
 use crate::models::user::{
-    find_user_by_id, update_password, update_user_email_verified_at,
+    delete_user_with_activity, find_user_by_id, update_password, update_user_email_verified_at,
     update_user_preferred_language, update_user_with_activity, AuthSession, Language,
 };
 use crate::web::context::CommonContext;
 use crate::web::handlers::{get_bundle, ExtractAcceptLanguage, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::response::{IntoResponse, Redirect};
-use axum::{extract::State, http::StatusCode, response::Html, Form};
+use axum::{extract::State, http::StatusCode, response::Html, Form, Json};
 use axum_messages::Messages;
 use chrono::{TimeDelta, Utc};
 
@@ -415,4 +415,78 @@ pub async fn edit_account(
         ),
     );
     Ok(Redirect::to("/account").into_response())
+}
+
+#[derive(Deserialize)]
+pub struct DeleteAccountRequest {
+    password: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct DeleteAccountResponse {
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+pub async fn delete_account(
+    mut auth_session: AuthSession,
+    State(state): State<AppState>,
+    Json(payload): Json<DeleteAccountRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = match auth_session.user.as_ref() {
+        Some(user) => user.clone(),
+        None => {
+            return Ok((
+                StatusCode::UNAUTHORIZED,
+                Json(DeleteAccountResponse {
+                    success: false,
+                    error: Some("Not authenticated".to_string()),
+                }),
+            )
+                .into_response())
+        }
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Attempt to delete the user
+    match delete_user_with_activity(
+        &mut tx,
+        user.id,
+        &payload.password,
+        &state.config,
+        Some(&state),
+    )
+    .await
+    {
+        Ok(_) => {
+            tx.commit().await?;
+
+            // Log the user out
+            auth_session.logout().await?;
+
+            Ok((
+                StatusCode::OK,
+                Json(DeleteAccountResponse {
+                    success: true,
+                    error: None,
+                }),
+            )
+                .into_response())
+        }
+        Err(e) => {
+            tx.rollback().await?;
+
+            Ok((
+                StatusCode::BAD_REQUEST,
+                Json(DeleteAccountResponse {
+                    success: false,
+                    error: Some(e.to_string()),
+                }),
+            )
+                .into_response())
+        }
+    }
 }
