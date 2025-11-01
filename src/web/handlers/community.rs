@@ -1418,8 +1418,8 @@ pub async fn get_communities_list_json(
     all_community_ids.sort();
     all_community_ids.dedup();
 
-    // Fetch recent posts (3 per community) for all communities
-    let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 3).await?;
+    // Fetch recent posts (10 per community) for all communities
+    let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 10).await?;
 
     // Fetch members count for all communities
     let members_stats = get_communities_members_count(&mut tx, &all_community_ids).await?;
