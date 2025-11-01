@@ -24,12 +24,11 @@ impl From<anyhow::Error> for PushError {
 pub struct PushService {
     apns_client: Option<ApnsClient>,
     fcm_client: Option<FcmClient>,
-    fcm_server_key: String,
     db_pool: PgPool,
 }
 
 impl PushService {
-    pub fn new(config: &AppConfig, db_pool: PgPool) -> Result<Self> {
+    pub async fn new(config: &AppConfig, db_pool: PgPool) -> Result<Self> {
         let apns_client = if !config.apns_key_path.is_empty() {
             match ApnsClient::new(
                 &config.apns_key_path,
@@ -51,9 +50,17 @@ impl PushService {
             None
         };
 
-        let fcm_client = if !config.fcm_server_key.is_empty() {
-            tracing::info!("FCM client initialized successfully");
-            Some(FcmClient::new(&config.fcm_server_key))
+        let fcm_client = if !config.fcm_service_account_path.is_empty() && !config.fcm_project_id.is_empty() {
+            match FcmClient::new(&config.fcm_service_account_path, &config.fcm_project_id).await {
+                Ok(client) => {
+                    tracing::info!("FCM client initialized successfully");
+                    Some(client)
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize FCM client: {:?}", e);
+                    None
+                }
+            }
         } else {
             tracing::warn!("FCM configuration not provided, push notifications for Android will not work");
             None
@@ -62,7 +69,6 @@ impl PushService {
         Ok(Self {
             apns_client,
             fcm_client,
-            fcm_server_key: config.fcm_server_key.clone(),
             db_pool,
         })
     }
@@ -163,7 +169,7 @@ impl PushService {
     ) -> Result<(), PushError> {
         if let Some(client) = &self.fcm_client {
             client
-                .send_notification(&self.fcm_server_key, device_token, title, body, badge, data)
+                .send_notification(device_token, title, body, badge, data)
                 .await?;
         }
         Ok(())

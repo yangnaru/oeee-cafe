@@ -44,8 +44,9 @@ pub struct AppConfig {
     pub apns_key_path: String,
     pub apns_environment: String, // "production" or "sandbox"
 
-    // FCM configuration
-    pub fcm_server_key: String,
+    // FCM configuration (V1 API)
+    pub fcm_service_account_path: String,
+    pub fcm_project_id: String,
 }
 
 impl AppConfig {

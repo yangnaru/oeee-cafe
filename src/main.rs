@@ -177,11 +177,10 @@ fn main() {
 
             let redis_state = RedisStateManager::new(redis_pool.clone());
 
-            let push_service = PushService::new(&cfg, db_pool.clone()).unwrap_or_else(|e| {
-                tracing::warn!("Failed to initialize push service: {:?}", e);
-                tracing::warn!("Push notifications will not be available");
-                // Return a push service anyway (it will just log warnings when trying to send)
-                PushService::new(&cfg, db_pool.clone()).unwrap()
+            let push_service = PushService::new(&cfg, db_pool.clone()).await.unwrap_or_else(|e| {
+                tracing::error!("Failed to initialize push service: {:?}", e);
+                tracing::error!("Push notifications will not be available");
+                panic!("Failed to initialize push service");
             });
 
             let state = AppState {
