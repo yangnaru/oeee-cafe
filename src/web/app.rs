@@ -56,6 +56,7 @@ use crate::web::handlers::profile::{
 use crate::web::handlers::push_tokens::{
     delete_push_token_handler, list_push_tokens_handler, register_push_token_handler,
 };
+use crate::web::handlers::well_known::apple_app_site_association;
 use activitypub_federation::config::{FederationConfig, FederationMiddleware};
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
@@ -223,6 +224,7 @@ impl App {
 
         let activitypub_router = Router::new()
             .route("/.well-known/webfinger", get(activitypub_webfinger))
+            .route("/.well-known/apple-app-site-association", get(apple_app_site_association))
             .route("/ap/users/:login_name", get(activitypub_get_user))
             .route("/ap/posts/:post_id", get(activitypub_get_post))
             .route(
