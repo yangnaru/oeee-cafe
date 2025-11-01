@@ -443,6 +443,7 @@ pub async fn post_view(
                     GROUP BY post_id
                 ) comment_counts ON posts.id = comment_counts.post_id
                 WHERE posts.id = $1
+                AND posts.deleted_at IS NULL
                 "#,
                 parent_uuid
             )
@@ -2037,6 +2038,7 @@ pub async fn post_view_by_login_name(
                     GROUP BY post_id
                 ) comment_counts ON posts.id = comment_counts.post_id
                 WHERE posts.id = $1
+                AND posts.deleted_at IS NULL
                 "#,
                 parent_uuid
             )
