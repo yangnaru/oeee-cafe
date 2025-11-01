@@ -504,7 +504,11 @@ pub async fn delete_account_htmx(
     let user = match auth_session.user.as_ref() {
         Some(user) => user.clone(),
         None => {
-            return Ok(Redirect::to("/login").into_response());
+            return Ok((
+                StatusCode::OK,
+                [("HX-Redirect", "/login")],
+            )
+                .into_response());
         }
     };
 
@@ -535,14 +539,21 @@ pub async fn delete_account_htmx(
                 .into_response())
         }
         Err(e) => {
-            tx.rollback().await?;
+            // Don't commit the transaction on error
+            let _ = tx.rollback().await;
 
             // Return error message as HTML for HTMX to display
+            // Basic HTML escaping for safety
+            let error_msg = e.to_string()
+                .replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;");
             let error_html = format!(
-                r#"<div class="error-message">{}</div>"#,
-                e.to_string()
+                r#"<p class="error" style="color: red;">{}</p>"#,
+                error_msg
             );
-            Ok((StatusCode::BAD_REQUEST, Html(error_html)).into_response())
+            Ok((StatusCode::OK, Html(error_html)).into_response())
         }
     }
 }
