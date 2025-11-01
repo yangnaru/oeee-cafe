@@ -20,8 +20,8 @@ use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
     communities, community, community_comments, community_detail_json, community_iframe,
     create_community_form, do_accept_invitation, do_create_community, do_reject_invitation,
-    get_members, hx_do_edit_community, hx_edit_community, invite_user, members_page,
-    remove_member, retract_invitation,
+    get_communities_list_json, get_members, hx_do_edit_community, hx_edit_community, invite_user,
+    members_page, remove_member, retract_invitation,
 };
 use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
@@ -257,6 +257,7 @@ impl App {
             .route("/api/v1/profiles/:login_name", get(profile_json))
             .route("/api/v1/profiles/:login_name/followings", get(profile_followings_json))
             .route("/api/v1/communities/active", get(get_active_communities_json))
+            .route("/api/v1/communities", get(get_communities_list_json))
             .route("/api/v1/communities/:slug", get(community_detail_json))
             .route("/api/v1/comments/latest", get(get_latest_comments_json))
             .route("/api/v1/collaborate/sessions", get(get_active_sessions_json))

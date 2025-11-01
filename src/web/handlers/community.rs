@@ -15,8 +15,8 @@ use crate::models::user::{AuthSession, find_user_by_login_name};
 use crate::web::handlers::home::LoadMoreQuery;
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
 use crate::web::responses::{
-    CommunityComment, CommunityDetailResponse, CommunityInfo, CommunityPostThumbnail,
-    CommunityStats, PaginationMeta,
+    CommunityComment, CommunityDetailResponse, CommunitiesListResponse, CommunityInfo,
+    CommunityPostThumbnail, CommunityStats, CommunityWithPosts, PaginationMeta,
 };
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
@@ -1379,6 +1379,147 @@ pub async fn community_detail_json(
             has_more,
         },
         comments: comments_typed,
+    }))
+}
+
+/// Get communities list for mobile apps (my communities + public communities)
+pub async fn get_communities_list_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<Json<CommunitiesListResponse>, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Fetch user's own communities and participating communities if authenticated
+    let (own_communities_raw, participating_communities_raw) = if let Some(user) = &auth_session.user {
+        let own = get_own_communities(&mut tx, user.id).await?;
+        let participating = get_participating_communities(&mut tx, user.id).await?;
+        (own, participating)
+    } else {
+        (vec![], vec![])
+    };
+
+    // Combine own and participating communities
+    let mut my_communities_raw = own_communities_raw;
+    my_communities_raw.extend(participating_communities_raw);
+
+    // Fetch public communities (with at least 10 posts)
+    let public_communities_raw = get_public_communities(&mut tx).await?;
+    let public_communities_raw: Vec<_> = public_communities_raw
+        .into_iter()
+        .filter(|c| c.posts_count.unwrap_or(0) >= 10)
+        .take(20) // Return more communities for the dedicated communities tab
+        .collect();
+
+    // Collect all community IDs for batch queries
+    let mut all_community_ids: Vec<Uuid> = Vec::new();
+    all_community_ids.extend(my_communities_raw.iter().map(|c| c.id));
+    all_community_ids.extend(public_communities_raw.iter().map(|c| c.id));
+    all_community_ids.sort();
+    all_community_ids.dedup();
+
+    // Fetch recent posts (3 per community) for all communities
+    let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 3).await?;
+
+    // Fetch members count for all communities
+    let members_stats = get_communities_members_count(&mut tx, &all_community_ids).await?;
+
+    // Fetch owner login names for my communities
+    let owner_ids: Vec<Uuid> = my_communities_raw.iter().map(|c| c.owner_id).collect();
+    let owner_logins = if !owner_ids.is_empty() {
+        sqlx::query!(
+            r#"
+            SELECT id, login_name
+            FROM users
+            WHERE id = ANY($1)
+            "#,
+            &owner_ids
+        )
+        .fetch_all(&mut *tx)
+        .await?
+    } else {
+        Vec::new()
+    };
+
+    tx.commit().await?;
+
+    // Group posts by community_id
+    use std::collections::HashMap as StdHashMap;
+    let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
+    for post in recent_posts {
+        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
+        let image_prefix = &post.image_filename[..2];
+        posts.push(CommunityPostThumbnail {
+            id: post.id,
+            image_url: format!(
+                "{}/image/{}/{}",
+                state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+            ),
+            image_width: post.image_width,
+            image_height: post.image_height,
+            is_sensitive: post.is_sensitive,
+        });
+    }
+
+    // Create stats lookup map
+    let mut members_by_community: StdHashMap<Uuid, Option<i64>> = StdHashMap::new();
+    for stat in members_stats {
+        members_by_community.insert(stat.community_id, stat.members_count);
+    }
+
+    // Create owner login lookup map
+    let mut owner_login_by_id: StdHashMap<Uuid, String> = StdHashMap::new();
+    for owner in owner_logins {
+        owner_login_by_id.insert(owner.id, owner.login_name);
+    }
+
+    // Build my_communities with all metadata
+    let my_communities: Vec<CommunityWithPosts> = my_communities_raw
+        .into_iter()
+        .map(|community| {
+            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
+            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
+            let posts_count = recent_posts.len() as i64;
+            let owner_login_name = owner_login_by_id.get(&community.owner_id).cloned().unwrap_or_default();
+
+            CommunityWithPosts {
+                id: community.id,
+                name: community.name,
+                slug: community.slug,
+                description: community.description,
+                visibility: community.visibility,
+                owner_login_name,
+                posts_count: Some(posts_count),
+                members_count,
+                recent_posts,
+            }
+        })
+        .collect();
+
+    // Build public_communities with all metadata
+    let public_communities: Vec<CommunityWithPosts> = public_communities_raw
+        .into_iter()
+        .map(|community| {
+            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
+            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
+
+            CommunityWithPosts {
+                id: community.id,
+                name: community.name,
+                slug: community.slug,
+                description: community.description,
+                visibility: community.visibility,
+                owner_login_name: community.owner_login_name,
+                posts_count: community.posts_count,
+                members_count,
+                recent_posts,
+            }
+        })
+        .collect();
+
+    Ok(Json(CommunitiesListResponse {
+        my_communities,
+        public_communities,
     }))
 }
 

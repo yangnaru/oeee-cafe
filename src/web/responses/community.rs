@@ -5,10 +5,17 @@ use uuid::Uuid;
 use super::PaginationMeta;
 use crate::models::community::CommunityVisibility;
 
-/// Response for active communities list
+/// Response for active communities list (home page - public only)
 #[derive(Serialize, Debug)]
 pub struct CommunityListResponse {
     pub communities: Vec<CommunityWithPosts>,
+}
+
+/// Response for communities list (mobile - my + public)
+#[derive(Serialize, Debug)]
+pub struct CommunitiesListResponse {
+    pub my_communities: Vec<CommunityWithPosts>,
+    pub public_communities: Vec<CommunityWithPosts>,
 }
 
 #[derive(Serialize, Debug)]
