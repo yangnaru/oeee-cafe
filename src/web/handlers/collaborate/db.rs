@@ -239,6 +239,7 @@ pub async fn get_active_participants(
             updated_at: chrono::Utc::now(),
             banner_id: None,
             preferred_language: None,
+            deleted_at: None,
         })
         .collect())
 }

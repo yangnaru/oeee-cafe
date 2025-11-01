@@ -449,16 +449,10 @@ pub async fn delete_user(
         ));
     }
 
-    // Delete sessions for this user
-    query!(
-        r#"
-        DELETE FROM sessions
-        WHERE (data::json->>'user_id')::text = $1
-        "#,
-        id.to_string()
-    )
-    .execute(&mut **tx)
-    .await?;
+    // Note: Sessions are not deleted directly here because tower-sessions stores
+    // session data in binary format without a direct user_id reference.
+    // The user won't be able to log in again anyway because authentication
+    // checks filter out deleted users.
 
     // Delete push tokens (will cascade automatically)
     query!(
@@ -487,7 +481,7 @@ pub async fn delete_user(
         query!(
             r#"
             DELETE FROM follows
-            WHERE follower_id = $1 OR following_id = $1
+            WHERE follower_actor_id = $1 OR following_actor_id = $1
             "#,
             actor.id
         )
