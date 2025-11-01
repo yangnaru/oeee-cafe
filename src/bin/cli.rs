@@ -11,6 +11,7 @@ use oeee_cafe::{
     AppConfig,
 };
 use std::process::exit;
+use tracing::Level;
 use uuid::Uuid;
 
 #[derive(Parser)]
@@ -42,6 +43,12 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize tracing/logging
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(Level::WARN)
+        .finish();
+    let _ = tracing::subscriber::set_global_default(subscriber);
+
     let cli = Cli::parse();
 
     let cfg = AppConfig::new_from_file_and_env(&cli.config.unwrap()).unwrap_or_else(|e| {
