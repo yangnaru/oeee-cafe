@@ -1404,11 +1404,14 @@ pub async fn get_communities_list_json(
     my_communities_raw.extend(participating_communities_raw);
 
     // Deduplicate by community ID (in case user owns and participates in the same community)
-    let mut seen_ids = std::collections::HashSet::new();
-    my_communities_raw.retain(|c| seen_ids.insert(c.id));
+    let mut my_community_ids = HashSet::new();
+    my_communities_raw.retain(|c| my_community_ids.insert(c.id));
 
-    // Fetch public communities
-    let public_communities_raw = get_public_communities(&mut tx).await?;
+    // Fetch public communities and exclude ones that are already in my_communities
+    let public_communities_raw: Vec<_> = get_public_communities(&mut tx).await?
+        .into_iter()
+        .filter(|c| !my_community_ids.contains(&c.id))
+        .collect();
 
     // Collect all community IDs for batch queries
     let mut all_community_ids: Vec<Uuid> = Vec::new();
