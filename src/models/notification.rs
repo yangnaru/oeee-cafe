@@ -160,7 +160,7 @@ pub async fn list_notifications(
             images.width AS "post_image_width?",
             images.height AS "post_image_height?",
             c.content AS "comment_content?",
-            c.content_html AS comment_content_html,
+            c.content_html AS "comment_content_html?",
             g.content AS "guestbook_content?"
         FROM notifications n
         LEFT JOIN actors a ON n.actor_id = a.id
@@ -237,7 +237,7 @@ pub async fn get_notification_by_id(
             images.width AS "post_image_width?",
             images.height AS "post_image_height?",
             c.content AS "comment_content?",
-            c.content_html AS comment_content_html,
+            c.content_html AS "comment_content_html?",
             g.content AS "guestbook_content?"
         FROM notifications n
         LEFT JOIN actors a ON n.actor_id = a.id
