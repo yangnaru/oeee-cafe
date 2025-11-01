@@ -10,7 +10,7 @@ use crate::web::context::CommonContext;
 use crate::web::handlers::{get_bundle, ExtractAcceptLanguage, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::response::{IntoResponse, Redirect};
-use axum::{extract::State, http::StatusCode, response::Html, Form, Json};
+use axum::{extract::{Query, State}, http::StatusCode, response::Html, Form, Json};
 use axum_messages::Messages;
 use chrono::{TimeDelta, Utc};
 
@@ -499,7 +499,7 @@ pub struct DeleteAccountForm {
 pub async fn delete_account_htmx(
     mut auth_session: AuthSession,
     State(state): State<AppState>,
-    Form(form): Form<DeleteAccountForm>,
+    Query(form): Query<DeleteAccountForm>,
 ) -> Result<impl IntoResponse, AppError> {
     let user = match auth_session.user.as_ref() {
         Some(user) => user.clone(),
