@@ -14,7 +14,7 @@ use crate::models::post::{
     find_recent_posts_by_communities, SerializableThreadedPost,
 };
 use crate::models::hashtag::{get_hashtags_for_post, unlink_post_hashtags};
-use crate::models::reaction::{find_reactions_by_post_id_and_emoji, get_reaction_counts};
+use crate::models::reaction::{create_reaction, delete_reaction, find_reactions_by_post_id_and_emoji, find_user_reaction, get_reaction_counts, ReactionDraft};
 use crate::models::notification::{
     create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
     CreateNotificationParams, NotificationType,
@@ -891,4 +891,165 @@ pub async fn delete_post_api(
     tx.commit().await?;
 
     Ok(Json(DeletePostResponse { success: true }).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct AddReactionRequest {
+    // emoji comes from the URL path
+}
+
+#[derive(Serialize)]
+pub struct ReactionResponse {
+    pub reactions: Vec<ReactionCount>,
+}
+
+pub async fn add_reaction_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((post_id, emoji)): Path<(Uuid, String)>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = match auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find the user's actor
+    let actor = Actor::find_by_user_id(&mut tx, user.id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("No actor found for user"))?;
+
+    // Check if user has already reacted with this emoji
+    let existing_reaction = find_user_reaction(&mut tx, post_id, actor.id, &emoji).await?;
+    if existing_reaction.is_some() {
+        // Already reacted, just return current counts
+        let user_actor_id = Some(actor.id);
+        let reaction_counts = get_reaction_counts(&mut tx, post_id, user_actor_id).await?;
+        tx.commit().await?;
+
+        return Ok(Json(ReactionResponse {
+            reactions: reaction_counts
+                .into_iter()
+                .map(|rc| ReactionCount {
+                    emoji: rc.emoji,
+                    count: rc.count,
+                    reacted_by_user: rc.reacted_by_user,
+                })
+                .collect(),
+        })
+        .into_response());
+    }
+
+    // Create the reaction
+    let reaction = create_reaction(
+        &mut tx,
+        ReactionDraft {
+            post_id,
+            actor_id: actor.id,
+            emoji: emoji.clone(),
+        },
+        &state.config.domain,
+    )
+    .await?;
+
+    // Get the post to find its author
+    let post = find_post_by_id(&mut tx, post_id).await?;
+    if let Some(post) = post {
+        if let Some(author_id_str) = post.get("author_id").and_then(|v| v.as_ref()) {
+            if let Ok(author_id) = Uuid::parse_str(author_id_str) {
+                // Don't notify if reacting to own post
+                if author_id != actor.id {
+                    // Create notification for post author
+                    let notification = create_notification(
+                        &mut tx,
+                        CreateNotificationParams {
+                            recipient_id: author_id,
+                            actor_id: actor.id,
+                            post_id: Some(post_id),
+                            comment_id: None,
+                            notification_type: NotificationType::Reaction,
+                            reaction_iri: Some(reaction.iri.clone()),
+                            guestbook_entry_id: None,
+                        },
+                    )
+                    .await?;
+
+                    // Send push notification
+                    let push_service = state.push_service.clone();
+                    if let Ok(Some(notification_with_actor)) =
+                        get_notification_by_id(&mut tx, notification.id, author_id).await
+                    {
+                        let badge_count = get_unread_count(&mut tx, author_id)
+                            .await
+                            .ok()
+                            .and_then(|count| u32::try_from(count).ok());
+
+                        send_push_for_notification(&push_service, &notification_with_actor, badge_count).await;
+                    }
+                }
+            }
+        }
+    }
+
+    // Get updated reaction counts
+    let user_actor_id = Some(actor.id);
+    let reaction_counts = get_reaction_counts(&mut tx, post_id, user_actor_id).await?;
+
+    tx.commit().await?;
+
+    Ok(Json(ReactionResponse {
+        reactions: reaction_counts
+            .into_iter()
+            .map(|rc| ReactionCount {
+                emoji: rc.emoji,
+                count: rc.count,
+                reacted_by_user: rc.reacted_by_user,
+            })
+            .collect(),
+    })
+    .into_response())
+}
+
+pub async fn remove_reaction_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((post_id, emoji)): Path<(Uuid, String)>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = match auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find the user's actor
+    let actor = Actor::find_by_user_id(&mut tx, user.id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("No actor found for user"))?;
+
+    // Delete the reaction
+    let _ = delete_reaction(&mut tx, post_id, actor.id, &emoji).await;
+
+    // Get updated reaction counts
+    let user_actor_id = Some(actor.id);
+    let reaction_counts = get_reaction_counts(&mut tx, post_id, user_actor_id).await?;
+
+    tx.commit().await?;
+
+    Ok(Json(ReactionResponse {
+        reactions: reaction_counts
+            .into_iter()
+            .map(|rc| ReactionCount {
+                emoji: rc.emoji,
+                count: rc.count,
+                reacted_by_user: rc.reacted_by_user,
+            })
+            .collect(),
+    })
+    .into_response())
 }
