@@ -336,6 +336,7 @@ pub async fn post_relay_view(
         background_color => community.background_color,
         foreground_color => community.foreground_color,
         community_id => community_id.to_string(),
+        is_relay => true,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
@@ -2382,6 +2383,7 @@ pub async fn post_relay_view_by_login_name(
             background_color => community.background_color,
             foreground_color => community.foreground_color,
             community_id => community_id.to_string(),
+            is_relay => true,
             draft_post_count => common_ctx.draft_post_count,
             unread_notification_count => common_ctx.unread_notification_count,
             ftl_lang

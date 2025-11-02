@@ -74,7 +74,7 @@
     }
   };
 
-{% if parent_post %}
+{% if is_relay and parent_post %}
 {# We need cachebuster here because CORS policy is wrongly cached in community post list #}
   const parentPostImageUrl = "{{ r2_public_endpoint_url|safe }}/image/{{ parent_post.image_filename[:2] }}/{{ parent_post.image_filename | cachebuster }}";
   fetch(parentPostImageUrl)
