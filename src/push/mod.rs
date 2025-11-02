@@ -103,7 +103,7 @@ impl PushService {
                     }
                     Err(PushError::Other(e)) => {
                         tracing::warn!(
-                            "Failed to send APNs notification to token {}: {:?}",
+                            "Failed to send APNs notification to token {}: {}",
                             token.device_token,
                             e
                         );
@@ -131,7 +131,7 @@ impl PushService {
                     }
                     Err(PushError::Other(e)) => {
                         tracing::warn!(
-                            "Failed to send FCM notification to token {}: {:?}",
+                            "Failed to send FCM notification to token {}: {}",
                             token.device_token,
                             e
                         );

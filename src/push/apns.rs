@@ -1,6 +1,6 @@
 use a2::{
-    Client, ClientConfig, DefaultNotificationBuilder, Endpoint, ErrorReason, NotificationBuilder,
-    NotificationOptions,
+    Client, ClientConfig, DefaultNotificationBuilder, Endpoint, Error as A2Error, ErrorReason,
+    NotificationBuilder, NotificationOptions,
 };
 use std::fs::File;
 use std::sync::Arc;
@@ -66,7 +66,23 @@ impl ApnsClient {
         }
 
         let response = self.client.send(payload).await
-            .map_err(|e| PushError::Other(anyhow::anyhow!("APNs send error: {:?}", e)))?;
+            .map_err(|e| {
+                // Check if it's a response error with an invalid token reason
+                if let A2Error::ResponseError(ref resp) = e {
+                    if let Some(ref error_body) = resp.error {
+                        match error_body.reason {
+                            ErrorReason::Unregistered
+                            | ErrorReason::BadDeviceToken
+                            | ErrorReason::DeviceTokenNotForTopic => {
+                                return PushError::InvalidToken;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                // For all other errors, don't capture backtrace
+                PushError::Other(anyhow::Error::msg(format!("APNs send error: {:?}", e)))
+            })?;
 
         // Check for errors in the response indicating invalid token
         if let Some(error) = response.error {
@@ -77,7 +93,7 @@ impl ApnsClient {
                     return Err(PushError::InvalidToken);
                 }
                 _ => {
-                    return Err(PushError::Other(anyhow::anyhow!("APNs error: {:?}", error)));
+                    return Err(PushError::Other(anyhow::anyhow!("APNs error: {:?}", error).context("APNs returned error")));
                 }
             }
         }
