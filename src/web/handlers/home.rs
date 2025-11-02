@@ -237,7 +237,7 @@ pub async fn load_more_public_posts_json(
     Ok(Json(PostListResponse {
         posts: thumbnails,
         pagination: PaginationMeta {
-            offset: query.offset,
+            offset: query.offset + query.limit,
             limit: query.limit,
             total: None,
             has_more,
@@ -635,7 +635,7 @@ pub async fn get_post_comments_api(
     Ok(Json(CommentsListResponse {
         comments,
         pagination: PaginationMeta {
-            offset,
+            offset: offset + limit,
             limit,
             total: None,
             has_more,

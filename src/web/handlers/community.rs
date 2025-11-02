@@ -1581,7 +1581,7 @@ pub async fn get_public_communities_json(
     Ok(Json(PublicCommunitiesResponse {
         communities,
         pagination: PaginationMeta {
-            offset,
+            offset: offset + limit,
             limit,
             total: Some(total_count),
             has_more,
@@ -1703,7 +1703,7 @@ pub async fn search_public_communities_json(
     Ok(Json(PublicCommunitiesResponse {
         communities,
         pagination: PaginationMeta {
-            offset,
+            offset: offset + limit,
             limit,
             total: Some(total_count),
             has_more,
