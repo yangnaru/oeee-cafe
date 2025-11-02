@@ -808,7 +808,7 @@ pub async fn guestbook(
 }
 
 pub async fn profile_json(
-    _auth_session: AuthSession,
+    auth_session: AuthSession,
     State(state): State<AppState>,
     Path(login_name): Path<String>,
     Query(query): Query<LoadMoreQuery>,
@@ -819,6 +819,14 @@ pub async fn profile_json(
     let user = find_user_by_login_name(&mut tx, &login_name)
         .await?
         .ok_or_else(|| anyhow::anyhow!("User not found"))?;
+
+    // Check if current user is following this profile
+    let is_following_profile = match &auth_session.user {
+        Some(current_user) => {
+            is_following(&mut tx, current_user.id, user.id).await.unwrap_or(false)
+        }
+        None => false,
+    };
 
     // Get only public posts
     let public_posts = find_published_public_posts_by_author_id(&mut tx, user.id, query.limit, query.offset).await?;
@@ -909,6 +917,7 @@ pub async fn profile_json(
             id: user.id,
             login_name: user.login_name,
             display_name: user.display_name,
+            is_following: is_following_profile,
         },
         banner,
         posts: posts_typed,
@@ -982,4 +991,128 @@ pub async fn profile_followings_json(
             has_more,
         },
     }).into_response())
+}
+
+/// API endpoint to follow a user
+pub async fn follow_profile_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = match auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let target_user = find_user_by_login_name(&mut tx, &login_name).await?;
+
+    if target_user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let target_user = target_user.unwrap();
+
+    // Don't allow following yourself
+    if user.id == target_user.id {
+        return Ok(StatusCode::BAD_REQUEST.into_response());
+    }
+
+    follow_user(&mut tx, user.id, target_user.id).await?;
+
+    // Collect notification info to send push notifications after commit
+    let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
+
+    // Create notification for the user being followed
+    let follower_actor = Actor::find_by_user_id(&mut tx, user.id).await?;
+    if let Some(follower_actor) = follower_actor {
+        let recipient_id = target_user.id;
+        match create_notification(
+            &mut tx,
+            CreateNotificationParams {
+                recipient_id,
+                actor_id: follower_actor.id,
+                notification_type: NotificationType::Follow,
+                post_id: None,
+                comment_id: None,
+                reaction_iri: None,
+                guestbook_entry_id: None,
+            },
+        )
+        .await
+        {
+            Ok(notification) => {
+                tracing::info!("Created follow notification");
+                notification_info.push((notification.id, recipient_id));
+            }
+            Err(e) => tracing::warn!("Failed to create follow notification: {:?}", e),
+        }
+    }
+
+    tx.commit().await?;
+
+    // Send push notifications for created notifications
+    if !notification_info.is_empty() {
+        let push_service = state.push_service.clone();
+        let db_pool = state.db_pool.clone();
+        tokio::spawn(async move {
+            for (notification_id, recipient_id) in notification_info {
+                let mut tx = match db_pool.begin().await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        continue;
+                    }
+                };
+
+                if let Ok(Some(notification)) =
+                    get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                {
+                    // Get unread count for badge
+                    let badge_count = get_unread_count(&mut tx, recipient_id)
+                        .await
+                        .ok()
+                        .and_then(|count| u32::try_from(count).ok());
+
+                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                }
+                let _ = tx.commit().await;
+            }
+        });
+    }
+
+    Ok(StatusCode::OK.into_response())
+}
+
+/// API endpoint to unfollow a user
+pub async fn unfollow_profile_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(login_name): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = match auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let target_user = find_user_by_login_name(&mut tx, &login_name).await?;
+
+    if target_user.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let target_user = target_user.unwrap();
+
+    unfollow_user(&mut tx, user.id, target_user.id).await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::OK.into_response())
 }

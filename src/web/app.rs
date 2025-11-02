@@ -50,8 +50,8 @@ use crate::web::handlers::post::{
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
     do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile, do_write_guestbook_entry,
-    guestbook, profile, profile_banners_iframe, profile_followings_json, profile_iframe,
-    profile_json, profile_settings,
+    follow_profile_api, guestbook, profile, profile_banners_iframe, profile_followings_json,
+    profile_iframe, profile_json, profile_settings, unfollow_profile_api,
 };
 use crate::web::handlers::push_tokens::{
     delete_push_token_handler, list_push_tokens_handler, register_push_token_handler,
@@ -261,6 +261,8 @@ impl App {
             .route("/api/v1/search", get(search_json))
             .route("/api/v1/profiles/:login_name", get(profile_json))
             .route("/api/v1/profiles/:login_name/followings", get(profile_followings_json))
+            .route("/api/v1/profiles/:login_name/follow", post(follow_profile_api))
+            .route("/api/v1/profiles/:login_name/unfollow", post(unfollow_profile_api))
             .route("/api/v1/communities/active", get(get_active_communities_json))
             .route("/api/v1/communities/search", get(search_public_communities_json))
             .route("/api/v1/communities/public", get(get_public_communities_json))

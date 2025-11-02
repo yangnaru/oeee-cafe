@@ -22,6 +22,7 @@ pub struct ProfileUser {
     pub id: Uuid,
     pub login_name: String,
     pub display_name: String,
+    pub is_following: bool,
 }
 
 /// Profile banner information
