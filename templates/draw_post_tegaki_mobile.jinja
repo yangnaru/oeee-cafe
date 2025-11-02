@@ -2,7 +2,7 @@
 <html lang="{{ ftl_lang }}">
   <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>
       {% if parent_post %}
         Re: {{ parent_post.title }} @ {{ community_name }}
@@ -40,14 +40,7 @@
     body {
       margin: 0;
       padding: 0;
-      padding-top: env(safe-area-inset-top);
-      padding-right: env(safe-area-inset-right);
-      padding-bottom: env(safe-area-inset-bottom);
-      padding-left: env(safe-area-inset-left);
       overflow: hidden;
-    }
-    #tegaki {
-      height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
     }
     #tegaki-menu-bar > span:nth-child(1) {
       display: none;
