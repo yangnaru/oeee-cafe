@@ -686,6 +686,78 @@ pub async fn post_replay_view(
     Ok(Html(rendered).into_response())
 }
 
+pub async fn post_replay_view_mobile(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let uuid = match parse_id_with_legacy_support(&id, "/posts", &state)? {
+        ParsedId::Uuid(uuid) => uuid,
+        ParsedId::Redirect(redirect) => return Ok(redirect.into_response()),
+        ParsedId::InvalidId(error_response) => return Ok(error_response),
+    };
+    let db = &state.db_pool;
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
+    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    if post.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    // Check if post is in a private community and if user has access
+    let community_id = Uuid::parse_str(
+        post.as_ref()
+            .unwrap()
+            .get("community_id")
+            .and_then(|v| v.as_ref())
+            .ok_or_else(|| anyhow::anyhow!("community_id not found"))?,
+    )?;
+
+    let community = find_community_by_id(&mut tx, community_id).await?;
+    if let Some(ref comm) = community {
+        // If community is private, check if user is a member
+        if comm.visibility == crate::models::community::CommunityVisibility::Private {
+            match &auth_session.user {
+                Some(user) => {
+                    let user_role = get_user_role_in_community(&mut tx, user.id, comm.id).await?;
+                    if user_role.is_none() {
+                        // User is not a member of this private community
+                        return Ok(StatusCode::FORBIDDEN.into_response());
+                    }
+                }
+                None => {
+                    // Not logged in, cannot access private community
+                    return Ok(StatusCode::FORBIDDEN.into_response());
+                }
+            }
+        }
+    }
+
+    let template_filename = match post.clone().unwrap().get("replay_filename") {
+        Some(replay_filename) => {
+            let replay_filename = replay_filename.as_ref().unwrap();
+            if replay_filename.ends_with(".pch") {
+                "post_replay_view_pch_mobile.jinja"
+            } else if replay_filename.ends_with(".tgkr") {
+                "post_replay_view_tgkr_mobile.jinja"
+            } else {
+                "post_replay_view_pch_mobile.jinja"
+            }
+        }
+        None => "post_replay_view_pch_mobile.jinja",
+    };
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename).unwrap();
+    let rendered = template
+        .render(context! {
+            post => {
+                post.as_ref()
+            },
+            r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        })
+        .unwrap();
+    Ok(Html(rendered).into_response())
+}
+
 pub async fn post_publish_form(
     auth_session: AuthSession,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
