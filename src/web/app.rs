@@ -1,6 +1,7 @@
 use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::about::about;
+use crate::web::handlers::privacy::privacy;
 use crate::web::handlers::account::{
     account, delete_account, delete_account_htmx, edit_account, edit_password,
     get_account_json, request_email_verification_code, request_email_verification_json,
@@ -346,6 +347,7 @@ impl App {
             .route("/api/auth", get(get_auth_info))
             .route("/collaboration/:uuid/meta", get(get_collaboration_meta))
             .route("/about", get(about))
+            .route("/privacy", get(privacy))
             .route("/signup", get(signup))
             .route("/signup", post(do_signup))
             .route("/login", get(login))

@@ -297,3 +297,16 @@ account-content-settings-save = Save content settings
 cucumber-save = Save
 cucumber-undo = Undo
 cucumber-redo = Redo
+
+privacy-policy = Privacy Policy
+privacy-content = We respect your privacy. By default, we do not collect any personal information from users of Oeee Cafe.
+
+  Email Address: We only collect your email address if you voluntarily provide it when creating an account or updating your profile. Your email is used solely for account-related purposes, such as password recovery and account verification.
+
+  Data Usage: Any information you provide is used exclusively to operate and improve the Oeee Cafe service. We do not sell, rent, or share your personal information with third parties.
+
+  Data Security: We take reasonable measures to protect your information from unauthorized access or disclosure.
+
+  Your Rights: You have the right to access, modify, or delete your account and associated data at any time through your account settings.
+
+  If you have any questions about this privacy policy, please contact us.

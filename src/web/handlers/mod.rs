@@ -41,6 +41,7 @@ pub mod hashtag;
 pub mod home;
 pub mod notifications;
 pub mod post;
+pub mod privacy;
 pub mod profile;
 pub mod push_tokens;
 pub mod search;
