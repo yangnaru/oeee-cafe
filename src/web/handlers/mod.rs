@@ -144,7 +144,7 @@ fn get_bundle(
             };
             let ftl = LOCALES
                 .get(language)
-                .unwrap_or_else(|| LOCALES.get("ko").unwrap());
+                .unwrap_or_else(|| LOCALES.get("en").unwrap());
 
             let mut bundle = FluentBundle::new_concurrent(vec![language.parse().unwrap()]);
             bundle.add_resource(ftl).expect("Failed to add a resource.");
@@ -154,7 +154,7 @@ fn get_bundle(
         None => {
             let requested = parse_accepted_languages(accept_language.to_str().unwrap());
             let available = convert_vec_str_to_langids_lossy(["ko", "ja", "en"]);
-            let default = "ko".parse().expect("Failed to parse a langid.");
+            let default = "en".parse().expect("Failed to parse a langid.");
 
             let supported = negotiate_languages(
                 &requested,
@@ -165,7 +165,7 @@ fn get_bundle(
 
             let ftl = LOCALES
                 .get(supported.first().unwrap().language.as_str())
-                .unwrap_or_else(|| LOCALES.get("ko").unwrap());
+                .unwrap_or_else(|| LOCALES.get("en").unwrap());
 
             let mut bundle = FluentBundle::new_concurrent(vec![supported
                 .first()
