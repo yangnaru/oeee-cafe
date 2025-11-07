@@ -6,6 +6,7 @@ use crate::models::community::{
     create_community, create_invitation, find_community_by_id, find_community_by_slug,
     get_communities_members_count, get_community_members_with_details, get_community_stats,
     get_invitation_by_id, get_own_communities, get_participating_communities,
+    get_pending_invitations_with_details_for_user,
     get_pending_invitations_with_invitee_details_for_community, get_public_communities,
     get_public_communities_paginated, get_user_role_in_community, is_user_member,
     reject_invitation, remove_community_member, search_public_communities,
@@ -16,9 +17,11 @@ use crate::models::user::{AuthSession, find_user_by_login_name};
 use crate::web::handlers::home::LoadMoreQuery;
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
 use crate::web::responses::{
-    CommunityComment, CommunityDetailResponse, CommunityInfo,
-    CommunityPostThumbnail, CommunityStats, CommunityWithPosts, MyCommunitiesResponse, PaginationMeta,
-    PublicCommunitiesResponse,
+    CommunityComment, CommunityDetailResponse, CommunityInfo, CommunityInvitationResponse,
+    CommunityInvitationsListResponse, CommunityMemberResponse, CommunityMembersListResponse,
+    CommunityPostThumbnail, CommunityStats, CommunityWithPosts, CreateCommunityResponse,
+    InvitationCommunityInfo, InvitationUserInfo, MyCommunitiesResponse, PaginationMeta,
+    PublicCommunitiesResponse, UserInvitationResponse, UserInvitationsListResponse,
 };
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
@@ -1755,3 +1758,491 @@ pub async fn search_public_communities_json(
     }))
 }
 
+// ============================================================================
+// Member Management API Endpoints
+// ============================================================================
+
+/// Get community members list (JSON API for mobile)
+pub async fn get_community_members_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<Json<CommunityMembersListResponse>, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find community by slug
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+
+    if community.is_none() {
+        return Ok(Json(CommunityMembersListResponse { members: vec![] }));
+    }
+
+    let community = community.unwrap();
+
+    // Access control: verify user is a member for private communities
+    if community.visibility == CommunityVisibility::Private {
+        if let Some(user) = &auth_session.user {
+            let is_member = is_user_member(&mut tx, user.id, community.id).await?;
+            if !is_member {
+                return Ok(Json(CommunityMembersListResponse { members: vec![] }));
+            }
+        } else {
+            return Ok(Json(CommunityMembersListResponse { members: vec![] }));
+        }
+    }
+
+    // Get members with details
+    let members = get_community_members_with_details(&mut tx, community.id).await?;
+
+    // Convert to response format
+    let members_response: Vec<CommunityMemberResponse> = members
+        .into_iter()
+        .map(|m| {
+            let role_str = match m.role {
+                CommunityMemberRole::Owner => "owner",
+                CommunityMemberRole::Moderator => "moderator",
+                CommunityMemberRole::Member => "member",
+            };
+
+            CommunityMemberResponse {
+                id: m.id,
+                user_id: m.user_id,
+                username: m.login_name,
+                display_name: m.display_name,
+                avatar_url: None, // TODO: Add avatar support to database query
+                role: role_str.to_string(),
+                joined_at: m.joined_at,
+                invited_by_username: None, // TODO: Add to database query if needed
+            }
+        })
+        .collect();
+
+    tx.commit().await?;
+
+    Ok(Json(CommunityMembersListResponse {
+        members: members_response,
+    }))
+}
+
+/// Invite a user to a community (JSON API for mobile)
+#[derive(Deserialize)]
+pub struct InviteUserRequest {
+    pub login_name: String,
+}
+
+pub async fn invite_user_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    Json(request): Json<InviteUserRequest>,
+) -> Result<StatusCode, AppError> {
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find community
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+    let community = community.unwrap();
+
+    // Check if user has permission to invite (owner or moderator)
+    let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
+    match role {
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        _ => return Ok(StatusCode::FORBIDDEN),
+    }
+
+    // Find the invitee
+    let invitee = find_user_by_login_name(&mut tx, &request.login_name).await?;
+    if invitee.is_none() {
+        return Ok(StatusCode::BAD_REQUEST);
+    }
+    let invitee = invitee.unwrap();
+
+    // Check if user is already a member
+    if is_user_member(&mut tx, invitee.id, community.id).await? {
+        return Ok(StatusCode::CONFLICT);
+    }
+
+    // Create invitation
+    create_invitation(&mut tx, community.id, user.id, invitee.id).await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::CREATED)
+}
+
+/// Remove a member from a community (JSON API for mobile)
+pub async fn remove_member_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((slug, user_id)): Path<(String, Uuid)>,
+) -> Result<StatusCode, AppError> {
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find community
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+    let community = community.unwrap();
+
+    // Check if user has permission (owner or moderator)
+    let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
+    match role {
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        _ => return Ok(StatusCode::FORBIDDEN),
+    }
+
+    // Check if target is the owner
+    let target_role = get_user_role_in_community(&mut tx, user_id, community.id).await?;
+    if target_role == Some(CommunityMemberRole::Owner) {
+        return Ok(StatusCode::BAD_REQUEST);
+    }
+
+    // If moderator is trying to remove another moderator, only owner can do that
+    if role == Some(CommunityMemberRole::Moderator) && target_role == Some(CommunityMemberRole::Moderator) {
+        return Ok(StatusCode::FORBIDDEN);
+    }
+
+    // Remove the member
+    remove_community_member(&mut tx, community.id, user_id).await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Get community's pending invitations (JSON API for mobile)
+pub async fn get_community_invitations_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<Json<CommunityInvitationsListResponse>, AppError> {
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(Json(CommunityInvitationsListResponse { invitations: vec![] })),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find community
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    if community.is_none() {
+        return Ok(Json(CommunityInvitationsListResponse { invitations: vec![] }));
+    }
+    let community = community.unwrap();
+
+    // Check if user has permission (owner or moderator)
+    let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
+    match role {
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        _ => return Ok(Json(CommunityInvitationsListResponse { invitations: vec![] })),
+    }
+
+    // Get pending invitations with invitee details
+    let invitations = get_pending_invitations_with_invitee_details_for_community(&mut tx, community.id).await?;
+
+    // Convert to response format
+    // Note: Current model only has invitee details, need to fetch inviter separately or enhance the model
+    let invitations_response: Vec<CommunityInvitationResponse> = invitations
+        .into_iter()
+        .map(|inv| CommunityInvitationResponse {
+            id: inv.id,
+            community_id: community.id,
+            invitee: InvitationUserInfo {
+                id: inv.invitee_id,
+                username: inv.invitee_login_name,
+                display_name: inv.invitee_display_name,
+                avatar_url: None,
+            },
+            inviter: InvitationUserInfo {
+                id: user.id, // Using current user as placeholder - TODO: fetch actual inviter
+                username: user.login_name.clone(),
+                display_name: user.display_name.clone(),
+                avatar_url: None,
+            },
+            created_at: inv.created_at,
+        })
+        .collect();
+
+    tx.commit().await?;
+
+    Ok(Json(CommunityInvitationsListResponse {
+        invitations: invitations_response,
+    }))
+}
+
+// ============================================================================
+// Invitation Management API Endpoints
+// ============================================================================
+
+/// Get user's pending invitations (JSON API for mobile)
+pub async fn get_user_invitations_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<Json<UserInvitationsListResponse>, AppError> {
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(Json(UserInvitationsListResponse { invitations: vec![] })),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Get user's pending invitations with details
+    let invitations = get_pending_invitations_with_details_for_user(&mut tx, user.id).await?;
+
+    // Fetch communities to get description and visibility
+    let mut invitations_response = Vec::new();
+    for inv in invitations {
+        // Fetch the community to get description and visibility
+        if let Some(community) = find_community_by_id(&mut tx, inv.community_id).await? {
+            invitations_response.push(UserInvitationResponse {
+                id: inv.id,
+                community: InvitationCommunityInfo {
+                    id: inv.community_id,
+                    name: inv.community_name,
+                    slug: inv.community_slug,
+                    description: community.description,
+                    visibility: community.visibility,
+                },
+                inviter: InvitationUserInfo {
+                    id: inv.inviter_id,
+                    username: inv.inviter_login_name,
+                    display_name: inv.inviter_display_name,
+                    avatar_url: None,
+                },
+                created_at: inv.created_at,
+            });
+        }
+    }
+
+    tx.commit().await?;
+
+    Ok(Json(UserInvitationsListResponse {
+        invitations: invitations_response,
+    }))
+}
+
+/// Retract a pending invitation (JSON API for mobile)
+pub async fn retract_invitation_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path((slug, invitation_id)): Path<(String, Uuid)>,
+) -> Result<StatusCode, AppError> {
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find community
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+    let community = community.unwrap();
+
+    // Check if user has permission (owner or moderator)
+    let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
+    match role {
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        _ => return Ok(StatusCode::FORBIDDEN),
+    }
+
+    // Get invitation to verify it belongs to this community
+    let invitation = get_invitation_by_id(&mut tx, invitation_id).await?;
+    if invitation.is_none() {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+    let invitation = invitation.unwrap();
+
+    if invitation.community_id != community.id {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+
+    // Delete the invitation
+    sqlx::query!("DELETE FROM community_invitations WHERE id = $1", invitation_id)
+        .execute(&mut *tx)
+        .await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Community CRUD API Endpoints
+// ============================================================================
+
+/// Create a new community (JSON API for mobile)
+#[derive(Deserialize)]
+pub struct CreateCommunityRequest {
+    pub name: String,
+    pub slug: String,
+    pub description: String,
+    pub visibility: String,
+}
+
+pub async fn create_community_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Json(request): Json<CreateCommunityRequest>,
+) -> Result<Json<CreateCommunityResponse>, AppError> {
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(Json(CreateCommunityResponse {
+            community: CommunityInfo {
+                id: Uuid::nil(),
+                name: String::new(),
+                slug: String::new(),
+                description: String::new(),
+                visibility: CommunityVisibility::Public,
+                owner_id: Uuid::nil(),
+                background_color: None,
+                foreground_color: None,
+            },
+        })),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Validate slug format (alphanumeric, hyphens, underscores only)
+    if !request.slug.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return Ok(Json(CreateCommunityResponse {
+            community: CommunityInfo {
+                id: Uuid::nil(),
+                name: String::new(),
+                slug: String::new(),
+                description: String::new(),
+                visibility: CommunityVisibility::Public,
+                owner_id: Uuid::nil(),
+                background_color: None,
+                foreground_color: None,
+            },
+        }));
+    }
+
+    // Parse visibility
+    let visibility = match request.visibility.to_lowercase().as_str() {
+        "public" => CommunityVisibility::Public,
+        "unlisted" => CommunityVisibility::Unlisted,
+        "private" => CommunityVisibility::Private,
+        _ => CommunityVisibility::Public,
+    };
+
+    // Create community draft
+    let draft = CommunityDraft {
+        name: request.name,
+        slug: request.slug,
+        description: request.description,
+        visibility,
+    };
+
+    // Create community
+    let community = create_community(&mut tx, user.id, draft).await?;
+
+    // Create ActivityPub actor for the community
+    create_actor_for_community(&mut tx, &community, &state.config).await?;
+
+    // Add owner as member
+    add_community_member(&mut tx, community.id, user.id, CommunityMemberRole::Owner, None).await?;
+
+    tx.commit().await?;
+
+    Ok(Json(CreateCommunityResponse {
+        community: CommunityInfo {
+            id: community.id,
+            name: community.name,
+            slug: community.slug,
+            description: community.description,
+            visibility: community.visibility,
+            owner_id: community.owner_id,
+            background_color: community.background_color,
+            foreground_color: community.foreground_color,
+        },
+    }))
+}
+
+/// Update community (JSON API for mobile)
+#[derive(Deserialize)]
+pub struct UpdateCommunityRequest {
+    pub name: String,
+    pub description: String,
+    pub visibility: String,
+}
+
+pub async fn update_community_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    Json(request): Json<UpdateCommunityRequest>,
+) -> Result<StatusCode, AppError> {
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find community
+    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+    let community = community.unwrap();
+
+    // Check if user is the owner
+    let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
+    if role != Some(CommunityMemberRole::Owner) {
+        return Ok(StatusCode::FORBIDDEN);
+    }
+
+    // Parse new visibility
+    let new_visibility = match request.visibility.to_lowercase().as_str() {
+        "public" => CommunityVisibility::Public,
+        "unlisted" => CommunityVisibility::Unlisted,
+        "private" => CommunityVisibility::Private,
+        _ => community.visibility,
+    };
+
+    // Validate visibility change: can't change between private and public/unlisted
+    if (community.visibility == CommunityVisibility::Private && new_visibility != CommunityVisibility::Private) ||
+       (community.visibility != CommunityVisibility::Private && new_visibility == CommunityVisibility::Private) {
+        return Ok(StatusCode::BAD_REQUEST);
+    }
+
+    // Create updated draft
+    let draft = CommunityDraft {
+        name: request.name,
+        slug: community.slug.clone(), // Keep the same slug
+        description: request.description,
+        visibility: new_visibility,
+    };
+
+    // Update community with ActivityPub notification
+    update_community_with_activity(&mut tx, community.id, draft, &state.config, None).await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::OK)
+}

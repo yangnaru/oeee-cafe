@@ -96,3 +96,78 @@ pub struct CommunityComment {
     pub post_image_width: Option<i32>,
     pub post_image_height: Option<i32>,
 }
+
+/// Response for community members list
+#[derive(Serialize, Debug)]
+pub struct CommunityMembersListResponse {
+    pub members: Vec<CommunityMemberResponse>,
+}
+
+/// Community member with role information
+#[derive(Serialize, Debug)]
+pub struct CommunityMemberResponse {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub avatar_url: Option<String>,
+    pub role: String, // "owner", "moderator", "member"
+    pub joined_at: DateTime<Utc>,
+    pub invited_by_username: Option<String>,
+}
+
+/// Response for community's pending invitations list
+#[derive(Serialize, Debug)]
+pub struct CommunityInvitationsListResponse {
+    pub invitations: Vec<CommunityInvitationResponse>,
+}
+
+/// Community invitation with invitee details
+#[derive(Serialize, Debug)]
+pub struct CommunityInvitationResponse {
+    pub id: Uuid,
+    pub community_id: Uuid,
+    pub invitee: InvitationUserInfo,
+    pub inviter: InvitationUserInfo,
+    pub created_at: DateTime<Utc>,
+}
+
+/// User information for invitations
+#[derive(Serialize, Debug)]
+pub struct InvitationUserInfo {
+    pub id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub avatar_url: Option<String>,
+}
+
+/// Response for user's received invitations list
+#[derive(Serialize, Debug)]
+pub struct UserInvitationsListResponse {
+    pub invitations: Vec<UserInvitationResponse>,
+}
+
+/// User's invitation with full community details
+#[derive(Serialize, Debug)]
+pub struct UserInvitationResponse {
+    pub id: Uuid,
+    pub community: InvitationCommunityInfo,
+    pub inviter: InvitationUserInfo,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Community information for invitations
+#[derive(Serialize, Debug)]
+pub struct InvitationCommunityInfo {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub description: String,
+    pub visibility: CommunityVisibility,
+}
+
+/// Response after creating a community
+#[derive(Serialize, Debug)]
+pub struct CreateCommunityResponse {
+    pub community: CommunityInfo,
+}
