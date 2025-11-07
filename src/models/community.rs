@@ -536,14 +536,17 @@ pub async fn create_community(
     );
     let result = q.fetch_one(&mut **tx).await?;
 
-    // Add owner as a member
-    query!(
-        "INSERT INTO community_members (community_id, user_id, role) VALUES ($1, $2, 'owner')",
-        result.id,
-        owner_id
-    )
-    .execute(&mut **tx)
-    .await?;
+    // Only add owner as a member for private communities
+    // Public and unlisted communities don't require membership
+    if community_draft.visibility == CommunityVisibility::Private {
+        query!(
+            "INSERT INTO community_members (community_id, user_id, role) VALUES ($1, $2, 'owner')",
+            result.id,
+            owner_id
+        )
+        .execute(&mut **tx)
+        .await?;
+    }
 
     Ok(Community {
         id: result.id,
