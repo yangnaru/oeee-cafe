@@ -1406,6 +1406,17 @@ pub async fn delete_post(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result
     .execute(&mut **tx)
     .await?;
 
+    // Delete notifications referencing this post
+    query!(
+        "
+        DELETE FROM notifications
+        WHERE post_id = $1
+        ",
+        id
+    )
+    .execute(&mut **tx)
+    .await?;
+
     Ok(())
 }
 
