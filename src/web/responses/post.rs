@@ -4,6 +4,49 @@ use uuid::Uuid;
 
 use super::PaginationMeta;
 
+/// Nested image information (from images table)
+#[derive(Serialize, Debug)]
+pub struct ImageInfo {
+    pub filename: String,
+    pub width: i32,
+    pub height: i32,
+    pub tool: String,
+    pub paint_duration: String,
+}
+
+/// Nested author information (from users table)
+#[derive(Serialize, Debug)]
+pub struct AuthorInfo {
+    pub id: Uuid,
+    pub login_name: String,
+    pub display_name: String,
+}
+
+/// Nested community information for posts (simplified)
+#[derive(Serialize, Debug)]
+pub struct PostCommunityInfo {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+}
+
+/// Nested image information for child posts (simplified, URL-based)
+#[derive(Serialize, Debug)]
+pub struct ChildPostImage {
+    pub url: String,
+    pub width: i32,
+    pub height: i32,
+}
+
+/// Nested author information for child posts
+#[derive(Serialize, Debug)]
+pub struct ChildPostAuthor {
+    pub id: Uuid,
+    pub login_name: String,
+    pub display_name: String,
+    pub actor_handle: String,
+}
+
 /// Thumbnail representation of a post for list views
 #[derive(Serialize, Debug)]
 pub struct PostThumbnail {
@@ -35,20 +78,12 @@ pub struct PostDetail {
     pub id: Uuid,
     pub title: Option<String>,
     pub content: Option<String>,
-    pub author_id: Uuid,
-    pub login_name: String,
-    pub display_name: String,
-    pub paint_duration: String,
+    pub author: AuthorInfo,
     pub viewer_count: i32,
-    pub image_filename: String,
-    pub image_width: i32,
-    pub image_height: i32,
-    pub image_tool: String,
+    pub image: ImageInfo,
     pub is_sensitive: bool,
     pub published_at_utc: Option<String>,
-    pub community_id: Uuid,
-    pub community_name: String,
-    pub community_slug: String,
+    pub community: PostCommunityInfo,
     pub hashtags: Vec<String>,
 }
 
@@ -72,13 +107,8 @@ pub struct ChildPostResponse {
     pub id: Uuid,
     pub title: Option<String>,
     pub content: Option<String>,
-    pub author_id: Uuid,
-    pub user_login_name: String,
-    pub user_display_name: String,
-    pub user_actor_handle: String,
-    pub image_url: String,
-    pub image_width: i32,
-    pub image_height: i32,
+    pub author: ChildPostAuthor,
+    pub image: ChildPostImage,
     pub published_at: Option<DateTime<Utc>>,
     pub comments_count: i64,
     pub children: Vec<ChildPostResponse>,

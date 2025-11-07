@@ -22,10 +22,11 @@ use crate::models::notification::{
 use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
 use crate::web::responses::{
-    ChildPostResponse, CommentListResponse, CommentsListResponse, CommentWithPost,
-    CommunityListResponse, CommunityPostThumbnail, CommunityWithPosts, PaginationMeta,
-    PostDetail, PostDetailResponse, PostListResponse, PostThumbnail, ReactionCount,
-    ReactionsDetailResponse, Reactor, ThreadedCommentResponse,
+    AuthorInfo, ChildPostAuthor, ChildPostImage, ChildPostResponse, CommentListResponse,
+    CommentsListResponse, CommentWithPost, CommunityListResponse, CommunityPostThumbnail,
+    CommunityWithPosts, ImageInfo, PaginationMeta, PostCommunityInfo, PostDetail,
+    PostDetailResponse, PostListResponse, PostThumbnail, ReactionCount, ReactionsDetailResponse,
+    Reactor, ThreadedCommentResponse,
 };
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
@@ -383,16 +384,20 @@ fn threaded_post_to_response(
         id: post.id,
         title: post.title,
         content: post.content,
-        author_id: post.author_id,
-        user_login_name: post.user_login_name,
-        user_display_name: post.user_display_name,
-        user_actor_handle: post.user_actor_handle,
-        image_url: format!(
-            "{}/image/{}/{}",
-            r2_endpoint, image_prefix, post.image_filename
-        ),
-        image_width: post.image_width,
-        image_height: post.image_height,
+        author: ChildPostAuthor {
+            id: post.author_id,
+            login_name: post.user_login_name,
+            display_name: post.user_display_name,
+            actor_handle: post.user_actor_handle,
+        },
+        image: ChildPostImage {
+            url: format!(
+                "{}/image/{}/{}",
+                r2_endpoint, image_prefix, post.image_filename
+            ),
+            width: post.image_width,
+            height: post.image_height,
+        },
         published_at: post.published_at,
         comments_count: post.comments_count,
         children: post
@@ -425,16 +430,20 @@ pub async fn get_post_details_json(
                 id: p.id,
                 title: p.title,
                 content: p.content,
-                author_id: p.author_id,
-                user_login_name: p.login_name.clone(),
-                user_display_name: p.display_name,
-                user_actor_handle: format!("{}@{}", p.login_name, state.config.domain),
-                image_url: format!(
-                    "{}/image/{}/{}",
-                    state.config.r2_public_endpoint_url, image_prefix, p.image_filename
-                ),
-                image_width: p.image_width,
-                image_height: p.image_height,
+                author: ChildPostAuthor {
+                    id: p.author_id,
+                    login_name: p.login_name.clone(),
+                    display_name: p.display_name,
+                    actor_handle: format!("{}@{}", p.login_name, state.config.domain),
+                },
+                image: ChildPostImage {
+                    url: format!(
+                        "{}/image/{}/{}",
+                        state.config.r2_public_endpoint_url, image_prefix, p.image_filename
+                    ),
+                    width: p.image_width,
+                    height: p.image_height,
+                },
                 published_at: p.published_at_utc.and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok().map(|dt| dt.with_timezone(&chrono::Utc))),
                 comments_count: 0, // Not needed for parent display
                 children: Vec::new(), // Parent post doesn't show its own children in this context
@@ -472,20 +481,26 @@ pub async fn get_post_details_json(
         id: post_data.id,
         title: post_data.title,
         content: post_data.content,
-        author_id: post_data.author_id,
-        login_name: post_data.login_name,
-        display_name: post_data.display_name,
-        paint_duration: post_data.paint_duration,
+        author: AuthorInfo {
+            id: post_data.author_id,
+            login_name: post_data.login_name,
+            display_name: post_data.display_name,
+        },
         viewer_count: post_data.viewer_count,
-        image_filename: post_data.image_filename,
-        image_width: post_data.image_width,
-        image_height: post_data.image_height,
-        image_tool: post_data.image_tool,
+        image: ImageInfo {
+            filename: post_data.image_filename,
+            width: post_data.image_width,
+            height: post_data.image_height,
+            tool: post_data.image_tool,
+            paint_duration: post_data.paint_duration,
+        },
         is_sensitive: post_data.is_sensitive,
         published_at_utc: post_data.published_at_utc,
-        community_id: post_data.community_id,
-        community_name: post_data.community_name,
-        community_slug: post_data.community_slug,
+        community: PostCommunityInfo {
+            id: post_data.community_id,
+            name: post_data.community_name,
+            slug: post_data.community_slug,
+        },
         hashtags,
     };
 
