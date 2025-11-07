@@ -95,6 +95,13 @@ impl FcmClient {
             }
         }
 
+        // Add badge to data payload for Android clients to read
+        if let Some(badge_count) = badge {
+            let mut map = data_map.unwrap_or_else(std::collections::HashMap::new);
+            map.insert("badge".to_string(), badge_count.to_string());
+            data_map = Some(map);
+        }
+
         // Build the message
         let message = Message {
             token: Some(device_token.to_string()),
