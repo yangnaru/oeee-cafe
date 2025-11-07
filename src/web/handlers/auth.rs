@@ -210,6 +210,8 @@ pub struct UserInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub email_verified_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub banner_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preferred_language: Option<Language>,
@@ -305,6 +307,7 @@ pub async fn api_login(
                 login_name: user.login_name,
                 display_name: user.display_name,
                 email: user.email,
+                email_verified_at: user.email_verified_at.map(|dt| dt.to_rfc3339()),
                 banner_id: user.banner_id.map(|id| id.to_string()),
                 preferred_language: user.preferred_language,
             }),
@@ -353,6 +356,7 @@ pub async fn api_me(auth_session: AuthSession) -> impl IntoResponse {
                 login_name: user.login_name,
                 display_name: user.display_name,
                 email: user.email,
+                email_verified_at: user.email_verified_at.map(|dt| dt.to_rfc3339()),
                 banner_id: user.banner_id.map(|id| id.to_string()),
                 preferred_language: user.preferred_language,
             }),
@@ -451,6 +455,7 @@ pub async fn api_signup(
                 login_name: user.login_name,
                 display_name: user.display_name,
                 email: user.email,
+                email_verified_at: user.email_verified_at.map(|dt| dt.to_rfc3339()),
                 banner_id: user.banner_id.map(|id| id.to_string()),
                 preferred_language: user.preferred_language,
             }),
