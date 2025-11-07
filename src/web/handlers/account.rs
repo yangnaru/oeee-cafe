@@ -13,7 +13,8 @@ use axum::response::{IntoResponse, Redirect};
 use axum::{extract::{Query, State}, http::StatusCode, response::Html, Form, Json};
 use axum_messages::Messages;
 use chrono::{TimeDelta, Utc};
-
+use fluent::FluentResource;
+use intl_memoizer::concurrent::IntlLangMemoizer;
 use lettre::transport::smtp::authentication::Credentials as SmtpCredentials;
 use lettre::{Message, SmtpTransport, Transport};
 use minijinja::context;
@@ -312,69 +313,15 @@ pub async fn request_email_verification_code(
         .into_response());
     }
 
-    let db = &state.db_pool;
-    let mut tx = db.begin().await?;
-
-    let token = {
-        let mut rng = thread_rng();
-        let token: String = (0..6)
-            .map(|_| rng.gen_range(0..10).to_string())
-            .collect::<Vec<String>>()
-            .join("");
-        token
-    };
-
-    let expires_at = Utc::now() + TimeDelta::try_seconds(60 * 5).unwrap();
-
-    let email_verification_challenge = create_email_verification_challenge(
-        &mut tx,
+    // Use shared helper function to create challenge and send email
+    let email_verification_challenge = create_and_send_verification_email(
+        &state,
         auth_session.user.unwrap().id,
         &form.email,
-        &token,
-        expires_at,
+        &bundle,
     )
-    .await?;
-    let _ = tx.commit().await;
-
-    let email = Message::builder()
-        .from(
-            bundle
-                .format_pattern(
-                    bundle
-                        .get_message("email-from-address")
-                        .unwrap()
-                        .value()
-                        .unwrap(),
-                    None,
-                    &mut vec![],
-                )
-                .parse()
-                .unwrap(),
-        )
-        .to(form.email.clone().parse().unwrap())
-        .subject(
-            bundle.format_pattern(
-                bundle
-                    .get_message("account-change-email-subject")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            ),
-        )
-        .body(email_verification_challenge.token.clone().to_string())
-        .unwrap();
-
-    let mailer = SmtpTransport::relay(&state.config.smtp_host)
-        .unwrap()
-        .credentials(SmtpCredentials::new(
-            state.config.smtp_user.clone(),
-            state.config.smtp_password.clone(),
-        ))
-        .build();
-
-    let _ = mailer.send(&email).unwrap();
+    .await
+    .map_err(|e| anyhow::anyhow!(e))?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("email_verify.jinja")?;
     let ftl_lang = bundle.locales.first().unwrap().to_string();
@@ -575,4 +522,294 @@ pub async fn delete_account_htmx(
             Ok((StatusCode::OK, Html(error_html)).into_response())
         }
     }
+}
+
+// JSON API endpoints for mobile apps
+
+use crate::models::email_verification_challenge::EmailVerificationChallenge;
+
+// Helper function to create verification challenge and send email
+async fn create_and_send_verification_email(
+    state: &AppState,
+    user_id: Uuid,
+    email: &str,
+    bundle: &fluent::bundle::FluentBundle<&FluentResource, IntlLangMemoizer>,
+) -> Result<EmailVerificationChallenge, String> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await.map_err(|e| e.to_string())?;
+
+    // Generate 6-digit token
+    let token = {
+        let mut rng = thread_rng();
+        (0..6)
+            .map(|_| rng.gen_range(0..10).to_string())
+            .collect::<Vec<String>>()
+            .join("")
+    };
+
+    let expires_at = Utc::now() + TimeDelta::try_seconds(60 * 5).unwrap();
+
+    let email_verification_challenge = create_email_verification_challenge(
+        &mut tx,
+        user_id,
+        email,
+        &token,
+        expires_at,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    tx.commit().await.map_err(|e| e.to_string())?;
+
+    // Send email
+    let email_message = Message::builder()
+        .from(
+            bundle
+                .format_pattern(
+                    bundle
+                        .get_message("email-from-address")
+                        .unwrap()
+                        .value()
+                        .unwrap(),
+                    None,
+                    &mut vec![],
+                )
+                .parse()
+                .unwrap(),
+        )
+        .to(email.parse().unwrap())
+        .subject(
+            bundle.format_pattern(
+                bundle
+                    .get_message("account-change-email-subject")
+                    .unwrap()
+                    .value()
+                    .unwrap(),
+                None,
+                &mut vec![],
+            ),
+        )
+        .body(token.clone())
+        .unwrap();
+
+    let mailer = SmtpTransport::relay(&state.config.smtp_host)
+        .unwrap()
+        .credentials(SmtpCredentials::new(
+            state.config.smtp_user.clone(),
+            state.config.smtp_password.clone(),
+        ))
+        .build();
+
+    mailer.send(&email_message).map_err(|e| e.to_string())?;
+
+    Ok(email_verification_challenge)
+}
+
+#[derive(serde::Deserialize)]
+pub struct RequestEmailVerificationJson {
+    email: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct RequestEmailVerificationResponseJson {
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    challenge_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expires_in_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+pub async fn request_email_verification_json(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Json(payload): Json<RequestEmailVerificationJson>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = match auth_session.user.as_ref() {
+        Some(user) => user.clone(),
+        None => {
+            return Ok((
+                StatusCode::UNAUTHORIZED,
+                Json(RequestEmailVerificationResponseJson {
+                    success: false,
+                    challenge_id: None,
+                    email: None,
+                    expires_in_seconds: None,
+                    error: Some("Not authenticated".to_string()),
+                }),
+            )
+                .into_response())
+        }
+    };
+
+    // Check if email is already verified
+    if user.email.as_ref() == Some(&payload.email) && user.email_verified_at.is_some() {
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            Json(RequestEmailVerificationResponseJson {
+                success: false,
+                challenge_id: None,
+                email: None,
+                expires_in_seconds: None,
+                error: Some("EMAIL_ALREADY_VERIFIED".to_string()),
+            }),
+        )
+            .into_response());
+    }
+
+    // Validate email format - basic check for @ symbol and parseable email
+    if !payload.email.contains('@') || payload.email.parse::<lettre::Address>().is_err() {
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            Json(RequestEmailVerificationResponseJson {
+                success: false,
+                challenge_id: None,
+                email: None,
+                expires_in_seconds: None,
+                error: Some("INVALID_EMAIL".to_string()),
+            }),
+        )
+            .into_response());
+    }
+
+    let user_preferred_language = user.preferred_language;
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
+    // Create challenge and send email using shared helper
+    match create_and_send_verification_email(&state, user.id, &payload.email, &bundle).await {
+        Ok(email_verification_challenge) => Ok((
+            StatusCode::OK,
+            Json(RequestEmailVerificationResponseJson {
+                success: true,
+                challenge_id: Some(email_verification_challenge.id),
+                email: Some(payload.email),
+                expires_in_seconds: Some(300),
+                error: None,
+            }),
+        )
+            .into_response()),
+        Err(e) => Ok((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(RequestEmailVerificationResponseJson {
+                success: false,
+                challenge_id: None,
+                email: None,
+                expires_in_seconds: None,
+                error: Some(format!("Failed to send email: {}", e)),
+            }),
+        )
+            .into_response()),
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct VerifyEmailCodeJson {
+    challenge_id: Uuid,
+    token: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct VerifyEmailCodeResponseJson {
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+pub async fn verify_email_code_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Json(payload): Json<VerifyEmailCodeJson>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = match auth_session.user.as_ref() {
+        Some(user) => user.clone(),
+        None => {
+            return Ok((
+                StatusCode::UNAUTHORIZED,
+                Json(VerifyEmailCodeResponseJson {
+                    success: false,
+                    message: None,
+                    error: Some("Not authenticated".to_string()),
+                }),
+            )
+                .into_response())
+        }
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let challenge = find_email_verification_challenge_by_id(&mut tx, payload.challenge_id).await?;
+
+    if challenge.is_none() {
+        return Ok((
+            StatusCode::NOT_FOUND,
+            Json(VerifyEmailCodeResponseJson {
+                success: false,
+                message: None,
+                error: Some("CHALLENGE_NOT_FOUND".to_string()),
+            }),
+        )
+            .into_response());
+    }
+
+    let challenge = challenge.unwrap();
+    let now = Utc::now();
+
+    // Check if token matches
+    if challenge.token != payload.token {
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            Json(VerifyEmailCodeResponseJson {
+                success: false,
+                message: None,
+                error: Some("TOKEN_MISMATCH".to_string()),
+            }),
+        )
+            .into_response());
+    }
+
+    // Check if token is expired
+    if challenge.expires_at < now {
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            Json(VerifyEmailCodeResponseJson {
+                success: false,
+                message: None,
+                error: Some("TOKEN_EXPIRED".to_string()),
+            }),
+        )
+            .into_response());
+    }
+
+    // Update user email and verification timestamp
+    update_user_email_verified_at(&mut tx, user.id, challenge.email, now).await?;
+    tx.commit().await?;
+
+    Ok((
+        StatusCode::OK,
+        Json(VerifyEmailCodeResponseJson {
+            success: true,
+            message: Some("Email verified successfully".to_string()),
+            error: None,
+        }),
+    )
+        .into_response())
+}
+
+pub async fn get_account_json(
+    auth_session: AuthSession,
+) -> Result<impl IntoResponse, AppError> {
+    let user = match auth_session.user.as_ref() {
+        Some(user) => user.clone(),
+        None => {
+            return Ok((StatusCode::UNAUTHORIZED).into_response())
+        }
+    };
+
+    Ok((StatusCode::OK, Json(user)).into_response())
 }
