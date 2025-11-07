@@ -208,6 +208,12 @@ community-member-role-owner = 소유자
 community-member-role-moderator = 운영자
 community-member-role-member = 멤버
 
+community-delete-danger-zone = 위험 구역
+community-delete-warning = 커뮤니티를 삭제하면 되돌릴 수 없습니다. 이 커뮤니티의 모든 게시물도 함께 삭제됩니다.
+community-delete-confirm-prompt = 삭제를 확인하려면 커뮤니티 ID를 입력하세요
+community-delete-final-confirm = 정말 이 커뮤니티를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+community-delete-button = 커뮤니티 삭제
+
 invitations = 초대
 invitations-pending = 대기 중인 초대
 invitations-none = 대기 중인 초대가 없습니다

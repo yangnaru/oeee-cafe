@@ -206,6 +206,12 @@ community-member-role-owner = Owner
 community-member-role-moderator = Moderator
 community-member-role-member = Member
 
+community-delete-danger-zone = Danger Zone
+community-delete-warning = Deleting a community is permanent and cannot be undone. All posts in this community will also be deleted.
+community-delete-confirm-prompt = Type the community ID to confirm deletion
+community-delete-final-confirm = Are you sure you want to delete this community? This action cannot be undone.
+community-delete-button = Delete Community
+
 invitations = Invitations
 invitations-pending = Pending invitations
 invitations-none = You have no pending invitations

@@ -208,6 +208,12 @@ community-member-role-owner = 所有者
 community-member-role-moderator = 版主
 community-member-role-member = 成员
 
+community-delete-danger-zone = 危险区域
+community-delete-warning = 删除社区是永久性的，无法撤销。此社区中的所有作品也将被删除。
+community-delete-confirm-prompt = 输入社区ID以确认删除
+community-delete-final-confirm = 您确定要删除此社区吗？此操作无法撤销。
+community-delete-button = 删除社区
+
 invitations = 邀请
 invitations-pending = 待处理的邀请
 invitations-none = 没有待处理的邀请
