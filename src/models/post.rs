@@ -412,6 +412,8 @@ pub async fn find_published_posts_by_community_id(
     community_id: Uuid,
     limit: i64,
     offset: i64,
+    viewer_user_id: Option<Uuid>,
+    viewer_show_sensitive: bool,
 ) -> Result<Vec<SerializablePost>> {
     let q = query!(
         "
@@ -437,12 +439,15 @@ pub async fn find_published_posts_by_community_id(
             WHERE community_id = $1
             AND published_at IS NOT NULL
             AND posts.deleted_at IS NULL
+            AND (posts.is_sensitive = false OR $4 = true OR posts.author_id = $5)
             ORDER BY published_at DESC
             LIMIT $2 OFFSET $3
         ",
         community_id,
         limit,
-        offset
+        offset,
+        viewer_show_sensitive,
+        viewer_user_id
     );
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result
@@ -488,6 +493,8 @@ pub async fn find_recent_posts_by_communities(
     tx: &mut Transaction<'_, Postgres>,
     community_ids: &[Uuid],
     limit: i64,
+    viewer_user_id: Option<Uuid>,
+    viewer_show_sensitive: bool,
 ) -> Result<Vec<CommunityRecentPost>> {
     if community_ids.is_empty() {
         return Ok(Vec::new());
@@ -512,6 +519,7 @@ pub async fn find_recent_posts_by_communities(
             SELECT
                 p.id,
                 p.community_id,
+                p.author_id,
                 i.image_filename,
                 i.width as image_width,
                 i.height as image_height,
@@ -529,12 +537,15 @@ pub async fn find_recent_posts_by_communities(
             WHERE p.community_id = ANY($1)
                 AND p.published_at IS NOT NULL
                 AND p.deleted_at IS NULL
+                AND (p.is_sensitive = false OR $3 = true OR p.author_id = $4)
         ) ranked
         WHERE ranked.rn <= $2
         ORDER BY ranked.community_id, ranked.rn
         "#,
         community_ids,
-        limit
+        limit,
+        viewer_show_sensitive,
+        viewer_user_id
     )
     .fetch_all(&mut **tx)
     .await?;
@@ -1173,6 +1184,8 @@ pub async fn find_public_community_posts(
     tx: &mut Transaction<'_, Postgres>,
     limit: i64,
     offset: i64,
+    viewer_user_id: Option<Uuid>,
+    viewer_show_sensitive: bool,
 ) -> Result<Vec<SerializablePostForHome>> {
     let q = query!(
         "
@@ -1199,12 +1212,15 @@ pub async fn find_public_community_posts(
             WHERE communities.visibility = 'public'
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
+            AND (posts.is_sensitive = false OR $3 = true OR posts.author_id = $4)
             ORDER BY posts.published_at DESC
             LIMIT $1
             OFFSET $2
         ",
         limit,
-        offset
+        offset,
+        viewer_show_sensitive,
+        viewer_user_id
     );
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result
@@ -1234,6 +1250,8 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
     community_owner_id: Uuid,
     limit: i64,
     offset: i64,
+    viewer_user_id: Option<Uuid>,
+    viewer_show_sensitive: bool,
 ) -> Result<Vec<SerializablePostForHome>> {
     let q = query!(
         "
@@ -1261,13 +1279,16 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             AND communities.owner_id != $1
+            AND (posts.is_sensitive = false OR $4 = true OR posts.author_id = $5)
             ORDER BY posts.published_at DESC
             LIMIT $2
             OFFSET $3
         ",
         community_owner_id,
         limit,
-        offset
+        offset,
+        viewer_show_sensitive,
+        viewer_user_id
     );
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result
@@ -1295,6 +1316,7 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
 pub async fn find_following_posts_by_user_id(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
+    viewer_show_sensitive: bool,
 ) -> Result<Vec<SerializablePost>> {
     let q = query!(
         "
@@ -1325,9 +1347,11 @@ pub async fn find_following_posts_by_user_id(
             AND communities.visibility = 'public'
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
+            AND (posts.is_sensitive = false OR $2 = true OR posts.author_id = $1)
             ORDER BY posts.published_at DESC
         ",
-        user_id
+        user_id,
+        viewer_show_sensitive
     );
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result

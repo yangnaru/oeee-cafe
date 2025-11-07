@@ -4,7 +4,7 @@ use crate::models::email_verification_challenge::{
 };
 use crate::models::user::{
     delete_user_with_activity, find_user_by_id, update_password, update_user_email_verified_at,
-    update_user_preferred_language, update_user_with_activity, AuthSession, Language,
+    update_user_preferred_language, update_user_show_sensitive_content, update_user_with_activity, AuthSession, Language,
 };
 use crate::web::context::CommonContext;
 use crate::web::handlers::{get_bundle, ExtractAcceptLanguage, ExtractFtlLang};
@@ -79,6 +79,25 @@ pub async fn save_language(
         _ => None,
     };
     let _ = update_user_preferred_language(&mut tx, auth_session.user.unwrap().id, language).await;
+    let _ = tx.commit().await;
+
+    Ok(Redirect::to("/account").into_response())
+}
+
+#[derive(Deserialize)]
+pub struct ShowSensitiveContentForm {
+    pub show_sensitive_content: Option<String>,
+}
+
+pub async fn save_show_sensitive_content(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Form(form): Form<ShowSensitiveContentForm>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+    let show_sensitive_content = form.show_sensitive_content.as_deref() == Some("on");
+    let _ = update_user_show_sensitive_content(&mut tx, auth_session.user.unwrap().id, show_sensitive_content).await;
     let _ = tx.commit().await;
 
     Ok(Redirect::to("/account").into_response())

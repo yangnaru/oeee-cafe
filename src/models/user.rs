@@ -64,6 +64,7 @@ pub struct User {
     pub banner_id: Option<Uuid>,
     pub preferred_language: Option<Language>,
     pub deleted_at: Option<DateTime<Utc>>,
+    pub show_sensitive_content: bool,
 }
 
 impl User {
@@ -97,7 +98,8 @@ pub async fn update_user_preferred_language(
                 updated_at,
                 banner_id,
                 preferred_language AS "preferred_language: _",
-                deleted_at
+                deleted_at,
+                show_sensitive_content
         "#,
         preferred_language as _,
         id,
@@ -116,6 +118,53 @@ pub async fn update_user_preferred_language(
         banner_id: result.banner_id,
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
+        show_sensitive_content: result.show_sensitive_content,
+    })
+}
+
+pub async fn update_user_show_sensitive_content(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    show_sensitive_content: bool,
+) -> Result<User> {
+    let q = query_as!(
+        User,
+        r#"
+            UPDATE users
+            SET show_sensitive_content = $1, updated_at = now()
+            WHERE id = $2
+            RETURNING
+                id,
+                login_name,
+                password_hash,
+                display_name,
+                email,
+                email_verified_at,
+                created_at,
+                updated_at,
+                banner_id,
+                preferred_language AS "preferred_language: _",
+                deleted_at,
+                show_sensitive_content
+        "#,
+        show_sensitive_content,
+        id,
+    );
+    let result = q.fetch_one(&mut **tx).await?;
+
+    Ok(User {
+        id: result.id,
+        login_name: result.login_name,
+        password_hash: result.password_hash,
+        display_name: result.display_name,
+        email: result.email,
+        email_verified_at: result.email_verified_at,
+        created_at: result.created_at,
+        updated_at: result.updated_at,
+        banner_id: result.banner_id,
+        preferred_language: result.preferred_language,
+        deleted_at: result.deleted_at,
+        show_sensitive_content: result.show_sensitive_content,
     })
 }
 
@@ -142,7 +191,8 @@ pub async fn update_user_email_verified_at(
                 updated_at,
                 banner_id,
                 preferred_language AS "preferred_language: _",
-                deleted_at
+                deleted_at,
+                show_sensitive_content
         "#,
         email,
         email_verified_at,
@@ -162,6 +212,7 @@ pub async fn update_user_email_verified_at(
         banner_id: result.banner_id,
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
+        show_sensitive_content: result.show_sensitive_content,
     })
 }
 
@@ -194,7 +245,8 @@ pub async fn update_password(
                 updated_at,
                 banner_id,
                 preferred_language AS "preferred_language: _",
-                deleted_at
+                deleted_at,
+                show_sensitive_content
         "#,
         password_hash,
         id,
@@ -213,6 +265,7 @@ pub async fn update_password(
         banner_id: result.banner_id,
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
+        show_sensitive_content: result.show_sensitive_content,
     })
 }
 
@@ -239,7 +292,8 @@ pub async fn update_user(
                 updated_at,
                 banner_id,
                 preferred_language AS "preferred_language: _",
-                deleted_at
+                deleted_at,
+                show_sensitive_content
         "#,
         login_name,
         display_name,
@@ -259,6 +313,7 @@ pub async fn update_user(
         banner_id: result.banner_id,
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
+        show_sensitive_content: result.show_sensitive_content,
     })
 }
 
@@ -325,6 +380,7 @@ pub async fn create_user(
         banner_id: None,
         preferred_language: None,
         deleted_at: None,
+        show_sensitive_content: false,
     };
 
     // Create actor for the user
@@ -348,7 +404,8 @@ pub async fn find_user_by_id(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Re
             updated_at,
             banner_id,
             preferred_language AS "preferred_language: _",
-            deleted_at
+            deleted_at,
+            show_sensitive_content
         FROM users
         WHERE id = $1"#,
         id
@@ -374,7 +431,8 @@ pub async fn find_user_by_login_name(
             updated_at,
             banner_id,
             preferred_language AS "preferred_language: _",
-            deleted_at
+            deleted_at,
+            show_sensitive_content
         FROM users
         WHERE login_name = $1"#,
         login_name
@@ -586,7 +644,8 @@ impl AuthnBackend for Backend {
                 updated_at,
                 banner_id,
                 preferred_language AS "preferred_language: _",
-                deleted_at
+                deleted_at,
+                show_sensitive_content
             FROM users
             WHERE login_name = $1"#,
             creds.login_name
@@ -610,7 +669,8 @@ impl AuthnBackend for Backend {
                 updated_at,
                 banner_id,
                 preferred_language AS "preferred_language: _",
-                deleted_at
+                deleted_at,
+                show_sensitive_content
             FROM users
             WHERE id = $1"#,
             user_id

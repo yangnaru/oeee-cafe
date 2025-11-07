@@ -240,6 +240,7 @@ pub async fn get_active_participants(
             banner_id: None,
             preferred_language: None,
             deleted_at: None,
+            show_sensitive_content: false,
         })
         .collect())
 }

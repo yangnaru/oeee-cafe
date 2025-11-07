@@ -290,6 +290,8 @@ account-language-settings = Language settings
 account-language-auto = Auto
 account-language-current = Current language
 account-language-settings-save = Save language
+account-content-settings = Content settings
+account-show-sensitive-content = Show sensitive content
 
 cucumber-save = Save
 cucumber-undo = Undo

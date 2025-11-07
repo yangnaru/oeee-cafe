@@ -91,7 +91,13 @@ pub async fn community(
         }
     }
 
-    let posts = find_published_posts_by_community_id(&mut tx, community_uuid, 1000, 0).await?;
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
+    let posts = find_published_posts_by_community_id(&mut tx, community_uuid, 1000, 0, viewer_user_id, viewer_show_sensitive).await?;
     let comments = find_latest_comments_in_community(&mut tx, community_uuid, 5).await?;
     let stats = get_community_stats(&mut tx, community_uuid).await?;
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
@@ -194,7 +200,13 @@ pub async fn community_iframe(
         }
     }
 
-    let posts = find_published_posts_by_community_id(&mut tx, community_uuid, 1000, 0).await?;
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
+    let posts = find_published_posts_by_community_id(&mut tx, community_uuid, 1000, 0, viewer_user_id, viewer_show_sensitive).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("community_iframe.jinja")?;
     let rendered = template.render(context! {
@@ -250,8 +262,14 @@ pub async fn communities(
     all_community_ids.sort();
     all_community_ids.dedup();
 
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
     // Fetch recent posts (3 per community) for all communities
-    let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 3).await?;
+    let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 3, viewer_user_id, viewer_show_sensitive).await?;
 
     // Fetch members count (unique contributors) and posts count for all communities
     let members_stats = get_communities_members_count(&mut tx, &all_community_ids).await?;
@@ -1277,7 +1295,7 @@ pub async fn members_page(
 }
 
 pub async fn community_detail_json(
-    _auth_session: AuthSession,
+    auth_session: AuthSession,
     State(state): State<AppState>,
     Path(slug): Path<String>,
     Query(query): Query<LoadMoreQuery>,
@@ -1299,7 +1317,13 @@ pub async fn community_detail_json(
         // For now, return basic info but no posts/comments for private communities
     }
 
-    let posts = find_published_posts_by_community_id(&mut tx, community.id, query.limit, query.offset).await?;
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
+    let posts = find_published_posts_by_community_id(&mut tx, community.id, query.limit, query.offset, viewer_user_id, viewer_show_sensitive).await?;
     let comments = find_latest_comments_in_community(&mut tx, community.id, 5).await?;
     let stats = get_community_stats(&mut tx, community.id).await?;
 
@@ -1412,8 +1436,14 @@ pub async fn get_communities_list_json(
     // Collect community IDs for batch queries
     let all_community_ids: Vec<Uuid> = my_communities_raw.iter().map(|c| c.id).collect();
 
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
     // Fetch recent posts (10 per community) for all communities
-    let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 10).await?;
+    let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 10, viewer_user_id, viewer_show_sensitive).await?;
 
     // Fetch members count for all communities
     let members_stats = get_communities_members_count(&mut tx, &all_community_ids).await?;
@@ -1496,6 +1526,7 @@ pub async fn get_communities_list_json(
 }
 
 pub async fn get_public_communities_json(
+    auth_session: AuthSession,
     State(state): State<AppState>,
     Query(query): Query<LoadMoreQuery>,
 ) -> Result<Json<PublicCommunitiesResponse>, AppError> {
@@ -1515,9 +1546,15 @@ pub async fn get_public_communities_json(
     // Collect all community IDs for batch queries
     let community_ids: Vec<Uuid> = public_communities_raw.iter().map(|c| c.id).collect();
 
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
     // Fetch recent posts (10 per community) for all communities
     let recent_posts = if !community_ids.is_empty() {
-        find_recent_posts_by_communities(&mut tx, &community_ids, 10).await?
+        find_recent_posts_by_communities(&mut tx, &community_ids, 10, viewer_user_id, viewer_show_sensitive).await?
     } else {
         Vec::new()
     };
@@ -1603,6 +1640,7 @@ fn default_search_limit() -> i64 {
 }
 
 pub async fn search_public_communities_json(
+    auth_session: AuthSession,
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<PublicCommunitiesResponse>, AppError> {
@@ -1637,9 +1675,15 @@ pub async fn search_public_communities_json(
     // Collect all community IDs for batch queries
     let community_ids: Vec<Uuid> = public_communities_raw.iter().map(|c| c.id).collect();
 
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
     // Fetch recent posts (10 per community) for all communities
     let recent_posts = if !community_ids.is_empty() {
-        find_recent_posts_by_communities(&mut tx, &community_ids, 10).await?
+        find_recent_posts_by_communities(&mut tx, &community_ids, 10, viewer_user_id, viewer_show_sensitive).await?
     } else {
         Vec::new()
     };

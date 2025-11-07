@@ -14,7 +14,7 @@ pub struct SearchQuery {
 }
 
 pub async fn search_json(
-    _auth_session: AuthSession,
+    auth_session: AuthSession,
     State(state): State<AppState>,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<SearchResponse>, AppError> {
@@ -23,6 +23,13 @@ pub async fn search_json(
 
     let search_term = format!("%{}%", query.q);
     let limit = query.limit.unwrap_or(20).min(50);
+
+    // Get viewer preferences for sensitive content filtering
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
 
     // Search for users by login_name or display_name
     let users = sqlx::query!(
@@ -72,11 +79,14 @@ pub async fn search_json(
           AND posts.published_at IS NOT NULL
           AND posts.deleted_at IS NULL
           AND communities.visibility = 'public'
+          AND (posts.is_sensitive = false OR $3 = true OR posts.author_id = $4)
         ORDER BY posts.published_at DESC
         LIMIT $2
         "#,
         search_term,
-        limit
+        limit,
+        viewer_show_sensitive,
+        viewer_user_id
     )
     .fetch_all(&mut *tx)
     .await?;

@@ -3,7 +3,7 @@ use crate::models::user::Backend;
 use crate::web::handlers::about::about;
 use crate::web::handlers::account::{
     account, delete_account, delete_account_htmx, edit_account, edit_password,
-    request_email_verification_code, save_language, verify_email_verification_code,
+    request_email_verification_code, save_language, save_show_sensitive_content, verify_email_verification_code,
 };
 use crate::web::handlers::activitypub::{
     activitypub_get_community, activitypub_get_post, activitypub_get_user,
@@ -145,6 +145,7 @@ impl App {
             .route("/account", post(edit_account))
             .route("/account/password", post(edit_password))
             .route("/account/language", post(save_language))
+            .route("/account/show-sensitive-content", post(save_show_sensitive_content))
             .route(
                 "/account/request-verify-email",
                 post(request_email_verification_code),

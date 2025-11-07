@@ -83,6 +83,21 @@
       </fieldset>
       <input type="submit" value="{{ ftl_get_message("account-language-settings-save") }}" />
     </form>
+    <form action="/account/show-sensitive-content" method="post">
+      <fieldset>
+        <legend>{{ ftl_get_message("account-content-settings") }}</legend>
+        <p>
+          <label>
+            <input type="checkbox"
+                   name="show_sensitive_content"
+                   id="show_sensitive_content"
+                   {% if current_user.show_sensitive_content %}checked{% endif %}
+                   onchange="this.form.submit()" />
+            {{ ftl_get_message("account-show-sensitive-content") }}
+          </label>
+        </p>
+      </fieldset>
+    </form>
     <form id="delete-account-form"
           hx-delete="/account/delete"
           hx-confirm="{{ ftl_get_message("account-delete-confirm") }}"

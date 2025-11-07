@@ -292,6 +292,8 @@ account-language-settings = 语言设置
 account-language-auto = 自动
 account-language-current = 当前语言
 account-language-settings-save = 保存语言设置
+account-content-settings = 内容设置
+account-show-sensitive-content = 显示敏感内容
 
 cucumber-save = 保存
 cucumber-undo = 撤销

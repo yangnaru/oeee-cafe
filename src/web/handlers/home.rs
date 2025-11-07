@@ -51,7 +51,13 @@ pub async fn home(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let non_official_public_community_posts = find_public_community_posts(&mut tx, 18, 0).await?;
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
+    let non_official_public_community_posts = find_public_community_posts(&mut tx, 18, 0, viewer_user_id, viewer_show_sensitive).await?;
     let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
     // Filter to communities with at least 10 posts
@@ -63,7 +69,7 @@ pub async fn home(
     // Fetch recent posts and stats for active communities
     let community_ids: Vec<uuid::Uuid> = active_public_communities_raw.iter().map(|c| c.id).collect();
 
-    let recent_posts = find_recent_posts_by_communities(&mut tx, &community_ids, 3).await?;
+    let recent_posts = find_recent_posts_by_communities(&mut tx, &community_ids, 3, viewer_user_id, viewer_show_sensitive).await?;
     let community_stats = get_communities_members_count(&mut tx, &community_ids).await?;
 
     // Group posts by community_id
@@ -140,8 +146,9 @@ pub async fn my_timeline(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
+    let user = auth_session.user.clone().unwrap();
     let posts =
-        find_following_posts_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+        find_following_posts_by_user_id(&mut tx, user.id, user.show_sensitive_content).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("timeline.jinja")?;
     let rendered = template.render(context! {
@@ -182,14 +189,20 @@ pub struct CreateCommentRequest {
 }
 
 pub async fn load_more_public_posts(
-    _auth_session: AuthSession,
+    auth_session: AuthSession,
     State(state): State<AppState>,
     Query(query): Query<LoadMoreQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let posts = find_public_community_posts(&mut tx, query.limit, query.offset).await?;
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
+    let posts = find_public_community_posts(&mut tx, query.limit, query.offset, viewer_user_id, viewer_show_sensitive).await?;
 
     tx.commit().await?;
 
@@ -205,14 +218,20 @@ pub async fn load_more_public_posts(
 }
 
 pub async fn load_more_public_posts_json(
-    _auth_session: AuthSession,
+    auth_session: AuthSession,
     State(state): State<AppState>,
     Query(query): Query<LoadMoreQuery>,
 ) -> Result<Json<PostListResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let posts = find_public_community_posts(&mut tx, query.limit, query.offset).await?;
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
+    let posts = find_public_community_posts(&mut tx, query.limit, query.offset, viewer_user_id, viewer_show_sensitive).await?;
 
     tx.commit().await?;
 
@@ -247,11 +266,17 @@ pub async fn load_more_public_posts_json(
 }
 
 pub async fn get_active_communities_json(
-    _auth_session: AuthSession,
+    auth_session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Json<CommunityListResponse>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
+
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
 
     let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
@@ -268,7 +293,7 @@ pub async fn get_active_communities_json(
         .map(|c| c.id)
         .collect();
 
-    let recent_posts = find_recent_posts_by_communities(&mut tx, &community_ids, 10).await?;
+    let recent_posts = find_recent_posts_by_communities(&mut tx, &community_ids, 10, viewer_user_id, viewer_show_sensitive).await?;
     let community_stats = get_communities_members_count(&mut tx, &community_ids).await?;
 
     tx.commit().await?;

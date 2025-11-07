@@ -213,6 +213,8 @@ pub async fn find_posts_by_hashtag(
     tx: &mut Transaction<'_, Postgres>,
     hashtag_name: &str,
     limit: i64,
+    viewer_user_id: Option<sqlx::types::Uuid>,
+    viewer_show_sensitive: bool,
 ) -> Result<Vec<crate::models::post::SerializablePost>> {
     let posts = sqlx::query!(
         r#"
@@ -242,11 +244,14 @@ pub async fn find_posts_by_hashtag(
         AND posts.published_at IS NOT NULL
         AND posts.deleted_at IS NULL
         AND c.visibility = 'public'
+        AND (posts.is_sensitive = false OR $3 = true OR posts.author_id = $4)
         ORDER BY posts.published_at DESC
         LIMIT $2
         "#,
         hashtag_name,
-        limit
+        limit,
+        viewer_show_sensitive,
+        viewer_user_id
     )
     .fetch_all(&mut **tx)
     .await?;

@@ -37,8 +37,14 @@ pub async fn hashtag_view(
     }
     let hashtag = hashtag.unwrap();
 
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
     // Get posts for this hashtag
-    let posts = find_posts_by_hashtag(&mut tx, &normalized_name, 50).await?;
+    let posts = find_posts_by_hashtag(&mut tx, &normalized_name, 50, viewer_user_id, viewer_show_sensitive).await?;
 
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
