@@ -126,7 +126,7 @@ pub async fn get_own_communities(
 ) -> Result<Vec<Community>> {
     let q = query_as!(
         Community,
-        r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE owner_id = $1"#,
+        r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE owner_id = $1 AND deleted_at IS NULL"#,
         owner_id
     );
 
@@ -134,7 +134,7 @@ pub async fn get_own_communities(
 }
 
 pub async fn get_communities(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<Community>> {
-    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities"#);
+    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE deleted_at IS NULL"#);
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
@@ -149,7 +149,7 @@ pub async fn get_public_communities(
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             LEFT JOIN users ON communities.owner_id = users.id
-            WHERE communities.visibility = 'public'
+            WHERE communities.visibility = 'public' AND communities.deleted_at IS NULL
             GROUP BY communities.id, users.login_name
             HAVING MAX(posts.published_at) IS NOT NULL
             ORDER BY MAX(posts.published_at) DESC
@@ -172,7 +172,7 @@ pub async fn get_public_communities_paginated(
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             LEFT JOIN users ON communities.owner_id = users.id
-            WHERE communities.visibility = 'public'
+            WHERE communities.visibility = 'public' AND communities.deleted_at IS NULL
             GROUP BY communities.id, users.login_name
             HAVING MAX(posts.published_at) IS NOT NULL
             ORDER BY MAX(posts.published_at) DESC
@@ -194,7 +194,7 @@ pub async fn count_public_communities(
             SELECT COUNT(DISTINCT communities.id) AS "count!"
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
-            WHERE communities.visibility = 'public'
+            WHERE communities.visibility = 'public' AND communities.deleted_at IS NULL
             GROUP BY communities.id
             HAVING MAX(posts.published_at) IS NOT NULL
         "#
@@ -227,7 +227,7 @@ pub async fn search_public_communities(
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             LEFT JOIN users ON communities.owner_id = users.id
-            WHERE communities.visibility = 'public'
+            WHERE communities.visibility = 'public' AND communities.deleted_at IS NULL
               AND (communities.name ILIKE $1
                    OR communities.slug ILIKE $1
                    OR communities.description ILIKE $1)
@@ -263,7 +263,7 @@ pub async fn count_search_public_communities(
         r#"
             SELECT COUNT(*) AS "count!"
             FROM communities
-            WHERE communities.visibility = 'public'
+            WHERE communities.visibility = 'public' AND communities.deleted_at IS NULL
               AND (communities.name ILIKE $1
                    OR communities.slug ILIKE $1
                    OR communities.description ILIKE $1)
@@ -287,7 +287,7 @@ pub async fn get_active_public_communities_excluding_owner(
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             LEFT JOIN users ON communities.owner_id = users.id
-            WHERE communities.visibility = 'public' AND communities.owner_id != $1
+            WHERE communities.visibility = 'public' AND communities.deleted_at IS NULL AND communities.owner_id != $1
             GROUP BY communities.id, users.login_name
             HAVING MAX(posts.published_at) IS NOT NULL
             ORDER BY MAX(posts.published_at) DESC
@@ -323,7 +323,7 @@ pub async fn get_user_communities_with_latest_9_posts(
             LEFT JOIN users ON communities.owner_id = users.id
             LEFT JOIN posts ON communities.id = posts.community_id AND posts.published_at IS NOT NULL AND posts.deleted_at IS NULL
             WHERE communities.owner_id = $1
-            AND communities.visibility = 'public'
+            AND communities.visibility = 'public' AND communities.deleted_at IS NULL
             GROUP BY communities.id, users.login_name
             ORDER BY MAX(posts.published_at) DESC
             LIMIT 9
@@ -456,11 +456,11 @@ pub async fn get_known_communities(
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id
             LEFT JOIN users ON communities.owner_id = users.id
-            WHERE communities.id IN (
+            WHERE communities.deleted_at IS NULL AND (communities.id IN (
                 SELECT DISTINCT community_id
                 FROM posts
                 WHERE author_id = $1
-            ) OR communities.owner_id = $1
+            ) OR communities.owner_id = $1)
             GROUP BY communities.id, users.login_name
             ORDER BY MAX(posts.published_at) DESC
         "#,
@@ -481,7 +481,7 @@ pub async fn get_participating_communities(
             SELECT communities.id, communities.owner_id, communities.name, communities.slug, communities.description, communities.visibility as "visibility: _", communities.updated_at, communities.created_at, communities.background_color, communities.foreground_color
             FROM communities
             LEFT JOIN posts ON communities.id = posts.community_id
-            WHERE communities.id IN (
+            WHERE communities.deleted_at IS NULL AND communities.id IN (
                 SELECT DISTINCT community_id
                 FROM community_members
                 WHERE user_id = $1
@@ -499,7 +499,7 @@ pub async fn find_community_by_id(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
 ) -> Result<Option<Community>> {
-    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE id = $1"#, id);
+    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE id = $1 AND deleted_at IS NULL"#, id);
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
@@ -507,7 +507,7 @@ pub async fn find_community_by_slug(
     tx: &mut Transaction<'_, Postgres>,
     slug: String,
 ) -> Result<Option<Community>> {
-    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE slug = $1"#, slug);
+    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE slug = $1 AND deleted_at IS NULL"#, slug);
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
