@@ -294,6 +294,7 @@ account-language-current = 현재 언어
 account-language-settings-save = 언어 설정 저장
 account-content-settings = 콘텐츠 설정
 account-show-sensitive-content = 민감한 콘텐츠 표시
+account-content-settings-save = 콘텐츠 설정 저장
 
 cucumber-save = 저장
 cucumber-undo = 실행 취소
