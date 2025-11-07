@@ -49,7 +49,7 @@
   {% endif %}
 {% endblock title %}
 {% block head %}
-  {% if post_community and post_community.visibility != "Private" %}
+  {% if post_community and post_community.visibility != "private" %}
     <link rel="alternate"
           type="application/activity+json"
           href="https://{{ domain }}/ap/posts/{{ post.id }}" />
@@ -133,7 +133,7 @@
               {% endif %}
             </p>
             <p>{{ ftl_get_message("community") }}: <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
-              {% if current_user.id == post.author_id and (not post_community or post_community.visibility != "Private") and not post.parent_post_id %}
+              {% if current_user.id == post.author_id and (not post_community or post_community.visibility != "private") and not post.parent_post_id %}
                 (<a href="/@{{ post.login_name }}/{{ post_id }}/edit/community">{{ ftl_get_message("edit") }}</a>)
               {% endif %}
             </p>

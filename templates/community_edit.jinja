@@ -18,7 +18,7 @@
         <label>{{ ftl_get_message("community-description") }}:</label>
         <textarea name="description">{{ community.description }}</textarea>
     </div>
-    {% if community.visibility == "Private" %}
+    {% if community.visibility == "private" %}
     <div>
         <label>{{ ftl_get_message("community-visibility") }}:</label>
         <input type="text" value="{{ ftl_get_message("visibility-private") }}" disabled>
@@ -32,7 +32,7 @@
         <p>
             <label>
                 <input type="radio" name="visibility" value="public"
-                       {% if community.visibility == "Public" %}checked{% endif %} />
+                       {% if community.visibility == "public" %}checked{% endif %} />
                 {{ ftl_get_message("visibility-public") }}
                 <br />
                 <small>{{ ftl_get_message("visibility-public-description") }}</small>
@@ -41,7 +41,7 @@
         <p>
             <label>
                 <input type="radio" name="visibility" value="unlisted"
-                       {% if community.visibility == "Unlisted" %}checked{% endif %} />
+                       {% if community.visibility == "unlisted" %}checked{% endif %} />
                 {{ ftl_get_message("visibility-unlisted") }}
                 <br />
                 <small>{{ ftl_get_message("visibility-unlisted-description") }}</small>

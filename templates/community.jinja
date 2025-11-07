@@ -22,7 +22,7 @@
             {% if current_user.id == community.owner_id %}
               <button hx-get="/communities/{{ community_id }}/edit">{{ ftl_get_message("edit") }}</button>
             {% endif %}
-            {% if community.visibility == "Private" %}
+            {% if community.visibility == "private" %}
               <a href="/communities/@{{ community.slug }}/members" class="btn">{{ ftl_get_message("community-members") }}</a>
             {% endif %}
           </div>

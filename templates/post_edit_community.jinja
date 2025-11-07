@@ -116,9 +116,9 @@
                         {% if community.is_known %}
                           <span class="community-known-badge">{{ ftl_get_message("participating-community") }}</span>
                         {% endif %}
-                        {% if community.visibility == "Unlisted" %}
+                        {% if community.visibility == "unlisted" %}
                           <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
-                        {% elif community.visibility == "Private" %}
+                        {% elif community.visibility == "private" %}
                           <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
                         {% endif %}
                       </div>

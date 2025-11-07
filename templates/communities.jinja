@@ -30,9 +30,9 @@
                     <div class="community-move-card-header">
                       <div>
                         <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
-                        {% if community.visibility == "Unlisted" %}
+                        {% if community.visibility == "unlisted" %}
                           <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
-                        {% elif community.visibility == "Private" %}
+                        {% elif community.visibility == "private" %}
                           <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
                         {% endif %}
                       </div>
@@ -93,9 +93,9 @@
                     <div class="community-move-card-header">
                       <div>
                         <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
-                        {% if community.visibility == "Unlisted" %}
+                        {% if community.visibility == "unlisted" %}
                           <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
-                        {% elif community.visibility == "Private" %}
+                        {% elif community.visibility == "private" %}
                           <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
                         {% endif %}
                       </div>
