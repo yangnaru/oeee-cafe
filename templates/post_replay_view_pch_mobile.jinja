@@ -28,6 +28,11 @@
     <input type="hidden" id="viewer"/>
 </div>
 <script>
+    document.write(`
+        <applet-dummy name="pch" width="{{ post.image_width }}" height="{{ post.image_height }}">
+        </applet-dummy>
+    `);
+
     const url = "{{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}";
 
     fetch(url)
