@@ -1885,22 +1885,42 @@ pub async fn invite_user_json(
     data.insert("community_slug".to_string(), serde_json::json!(community.slug));
     data.insert("notification_type".to_string(), serde_json::json!("community_invite"));
 
+    tracing::info!(
+        "Sending community invitation push notification to user {}: title={}, body={}",
+        invitee.id,
+        title,
+        body
+    );
+
+    // Get unread notification count for badge
+    let mut badge_tx = db.begin().await?;
+    let unread_count = crate::models::notification::get_unread_count(&mut badge_tx, invitee.id).await.ok();
+    let _ = badge_tx.commit().await;
+
     // Send push notification (don't fail if this errors)
-    if let Err(e) = state.push_service
+    match state.push_service
         .send_notification_to_user(
             invitee.id,
             &title,
             &body,
-            None, // badge count
+            unread_count.map(|c| c as u32), // badge count
             Some(serde_json::Value::Object(data)),
         )
         .await
     {
-        tracing::warn!(
-            "Failed to send community invitation push notification to user {}: {:?}",
-            invitee.id,
-            e
-        );
+        Ok(_) => {
+            tracing::info!(
+                "Successfully sent community invitation push notification to user {}",
+                invitee.id
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to send community invitation push notification to user {}: {:?}",
+                invitee.id,
+                e
+            );
+        }
     }
 
     Ok(StatusCode::CREATED)
