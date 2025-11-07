@@ -10,7 +10,8 @@ use crate::models::community::{
     get_pending_invitations_with_invitee_details_for_community, get_public_communities,
     get_public_communities_paginated, get_user_role_in_community, is_user_member,
     reject_invitation, remove_community_member, search_public_communities,
-    update_community_with_activity, CommunityDraft, CommunityMemberRole, CommunityVisibility,
+    soft_delete_community, update_community_with_activity, CommunityDraft,
+    CommunityMemberRole, CommunityVisibility,
 };
 use crate::models::post::{find_published_posts_by_community_id, find_recent_posts_by_communities};
 use crate::models::user::{AuthSession, find_user_by_login_name};
@@ -2284,6 +2285,53 @@ pub async fn update_community_json(
 
     // Update community with ActivityPub notification
     update_community_with_activity(&mut tx, community.id, draft, &state.config, None).await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::OK)
+}
+
+/// DELETE handler for web interface (HTMX)
+pub async fn hx_delete_community(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    // Verify user is authenticated
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Attempt to delete the community
+    soft_delete_community(&mut tx, &slug, user.id).await?;
+
+    tx.commit().await?;
+
+    // Redirect to communities list
+    Ok(([("HX-Redirect", "/communities")],).into_response())
+}
+
+/// DELETE handler for API (mobile apps)
+pub async fn delete_community_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<StatusCode, AppError> {
+    // Verify user is authenticated
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Attempt to delete the community
+    soft_delete_community(&mut tx, &slug, user.id).await?;
 
     tx.commit().await?;
 

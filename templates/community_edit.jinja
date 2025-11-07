@@ -54,3 +54,59 @@
         <button class="btn">{{ ftl_get_message("save") }}</button>
     </div>
 </form>
+
+<div class="danger-zone" style="margin-top: 3rem; padding: 1.5rem; border: 2px solid #dc2626; border-radius: 0.5rem; background-color: #fef2f2;">
+    <h3 style="color: #991b1b; margin-top: 0;">{{ ftl_get_message("community-delete-danger-zone") }}</h3>
+    <p style="color: #991b1b; margin-bottom: 1rem;">
+        {{ ftl_get_message("community-delete-warning") }}
+    </p>
+
+    <form id="delete-community-form" style="margin-top: 1rem;">
+        <label for="confirm-slug" style="display: block; margin-bottom: 0.5rem;">
+            {{ ftl_get_message("community-delete-confirm-prompt") }} <strong>{{ community.slug }}</strong>:
+        </label>
+        <input
+            type="text"
+            id="confirm-slug"
+            name="confirm-slug"
+            autocomplete="off"
+            style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #d1d5db; border-radius: 0.375rem;"
+        />
+
+        <button
+            type="button"
+            id="delete-community-btn"
+            class="btn"
+            disabled
+            hx-delete="/communities/{{ community_id }}/delete"
+            hx-confirm="{{ ftl_get_message("community-delete-final-confirm") }}"
+            hx-target="body"
+            hx-swap="innerHTML"
+            style="background-color: #dc2626; color: white; cursor: not-allowed;"
+        >
+            {{ ftl_get_message("community-delete-button") }}
+        </button>
+    </form>
+</div>
+
+<script>
+(function() {
+    const confirmInput = document.getElementById('confirm-slug');
+    const deleteBtn = document.getElementById('delete-community-btn');
+    const communitySlug = '{{ community.slug }}';
+
+    if (confirmInput && deleteBtn) {
+        confirmInput.addEventListener('input', function(e) {
+            if (e.target.value === communitySlug) {
+                deleteBtn.disabled = false;
+                deleteBtn.style.cursor = 'pointer';
+                deleteBtn.style.backgroundColor = '#dc2626';
+            } else {
+                deleteBtn.disabled = true;
+                deleteBtn.style.cursor = 'not-allowed';
+                deleteBtn.style.backgroundColor = '#9ca3af';
+            }
+        });
+    }
+})();
+</script>

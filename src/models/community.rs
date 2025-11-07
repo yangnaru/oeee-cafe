@@ -1161,3 +1161,51 @@ pub async fn reject_invitation(
 
     Ok(())
 }
+
+/// Soft delete a community and all its posts
+pub async fn soft_delete_community(
+    tx: &mut Transaction<'_, Postgres>,
+    slug: &str,
+    user_id: Uuid,
+) -> Result<()> {
+    // First, verify the community exists and user is the owner
+    let community = query!(
+        r#"
+        SELECT id, owner_id, deleted_at
+        FROM communities
+        WHERE slug = $1
+        "#,
+        slug
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    let community = community.ok_or_else(|| anyhow::anyhow!("Community not found"))?;
+
+    // Check if already deleted
+    if community.deleted_at.is_some() {
+        return Err(anyhow::anyhow!("Community already deleted"));
+    }
+
+    // Verify ownership
+    if community.owner_id != user_id {
+        return Err(anyhow::anyhow!("Only the owner can delete this community"));
+    }
+
+    // Soft delete the community
+    query!(
+        r#"
+        UPDATE communities
+        SET deleted_at = now()
+        WHERE id = $1
+        "#,
+        community.id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Soft delete all posts in the community with cascade reason
+    crate::models::post::soft_delete_community_posts(tx, community.id).await?;
+
+    Ok(())
+}

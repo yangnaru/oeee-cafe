@@ -2018,8 +2018,8 @@ impl ActivityHandler for Delete {
         )) {
             if let Ok(post_id) = uuid::Uuid::parse_str(post_id_str) {
                 // Mark the post as deleted in our database
-                use crate::models::post::delete_post;
-                if let Err(e) = delete_post(&mut tx, post_id).await {
+                use crate::models::post::{delete_post, PostDeletionReason};
+                if let Err(e) = delete_post(&mut tx, post_id, PostDeletionReason::UserDeleted).await {
                     tracing::warn!(
                         "Failed to delete post {} from Delete activity: {:?}",
                         post_id,

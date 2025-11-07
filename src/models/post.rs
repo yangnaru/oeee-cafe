@@ -10,6 +10,14 @@ use uuid::Uuid;
 
 use super::community::CommunityVisibility;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Type, Serialize, Deserialize)]
+#[sqlx(type_name = "post_deletion_reason", rename_all = "snake_case")]
+pub enum PostDeletionReason {
+    UserDeleted,
+    CommunityCascade,
+    Moderation,
+}
+
 #[derive(Clone, Debug)]
 pub struct Post {
     pub id: Uuid,
@@ -1376,19 +1384,21 @@ pub async fn find_following_posts_by_user_id(
         .collect())
 }
 
-pub async fn delete_post(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<()> {
+pub async fn delete_post(tx: &mut Transaction<'_, Postgres>, id: Uuid, reason: PostDeletionReason) -> Result<()> {
     let q = query!(
         "
         UPDATE posts
         SET
             deleted_at = now(),
+            deletion_reason = $2,
             title = NULL,
             content = NULL,
             is_sensitive = NULL
         WHERE id = $1
         RETURNING image_id
     ",
-        id
+        id,
+        reason as PostDeletionReason
     )
     .fetch_one(&mut **tx)
     .await?;
@@ -1420,6 +1430,46 @@ pub async fn delete_post(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result
     Ok(())
 }
 
+pub async fn soft_delete_community_posts(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+) -> Result<()> {
+    query!(
+        "
+        UPDATE posts
+        SET
+            deleted_at = now(),
+            deletion_reason = 'community_cascade',
+            title = NULL,
+            content = NULL,
+            is_sensitive = NULL
+        WHERE community_id = $1
+          AND deleted_at IS NULL
+        ",
+        community_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Note: We do NOT delete images or R2 objects for community cascade deletions
+    // This allows for potential recovery if the community is restored
+
+    // Delete notifications for posts in this community
+    query!(
+        "
+        DELETE FROM notifications
+        WHERE post_id IN (
+            SELECT id FROM posts WHERE community_id = $1
+        )
+        ",
+        community_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
 pub async fn delete_post_with_activity(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
@@ -1440,7 +1490,7 @@ pub async fn delete_post_with_activity(
     let author_id = uuid::Uuid::parse_str(author_id_str)?;
 
     // Perform the deletion
-    delete_post(tx, id).await?;
+    delete_post(tx, id, PostDeletionReason::UserDeleted).await?;
 
     // If app_state is provided, send ActivityPub Delete activity
     if let Some(state) = app_state {

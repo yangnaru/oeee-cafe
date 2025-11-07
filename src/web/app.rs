@@ -22,11 +22,12 @@ use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
     communities, community, community_comments, community_detail_json, community_iframe,
     create_community_form, create_community_json, do_accept_invitation, do_create_community,
-    do_reject_invitation, get_communities_list_json, get_community_invitations_json,
-    get_community_members_json, get_public_communities_json, get_user_invitations_json,
-    get_members, hx_do_edit_community, hx_edit_community, invite_user, invite_user_json,
-    members_page, remove_member, remove_member_json, retract_invitation,
-    retract_invitation_json, search_public_communities_json, update_community_json,
+    delete_community_json, do_reject_invitation, get_communities_list_json,
+    get_community_invitations_json, get_community_members_json, get_public_communities_json,
+    get_user_invitations_json, get_members, hx_delete_community, hx_do_edit_community,
+    hx_edit_community, invite_user, invite_user_json, members_page, remove_member,
+    remove_member_json, retract_invitation, retract_invitation_json,
+    search_public_communities_json, update_community_json,
 };
 use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
@@ -276,6 +277,7 @@ impl App {
             .route("/api/v1/communities", post(create_community_json))
             .route("/api/v1/communities/:slug", get(community_detail_json))
             .route("/api/v1/communities/:slug", put(update_community_json))
+            .route("/api/v1/communities/:slug", delete(delete_community_json))
             .route("/api/v1/communities/:slug/members", get(get_community_members_json))
             .route("/api/v1/communities/:slug/members", post(invite_user_json))
             .route("/api/v1/communities/:slug/members/:user_id", delete(remove_member_json))
@@ -302,6 +304,7 @@ impl App {
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))
             .route("/communities/:id", put(hx_do_edit_community))
+            .route("/communities/:id/delete", delete(hx_delete_community))
             .route("/communities/:id/edit", get(hx_edit_community))
             .route("/communities/:id/comments", get(community_comments))
             .route("/communities/:id/embed", get(community_iframe))
