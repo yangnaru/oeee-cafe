@@ -480,6 +480,7 @@ pub async fn get_post_details_json(
         image_filename: post_data.image_filename,
         image_width: post_data.image_width,
         image_height: post_data.image_height,
+        image_tool: post_data.image_tool,
         is_sensitive: post_data.is_sensitive,
         published_at_utc: post_data.published_at_utc,
         community_id: post_data.community_id,

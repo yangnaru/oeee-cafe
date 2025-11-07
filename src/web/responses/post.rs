@@ -43,6 +43,7 @@ pub struct PostDetail {
     pub image_filename: String,
     pub image_width: i32,
     pub image_height: i32,
+    pub image_tool: String,
     pub is_sensitive: bool,
     pub published_at_utc: Option<String>,
     pub community_id: Uuid,
