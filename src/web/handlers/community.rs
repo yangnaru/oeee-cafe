@@ -2256,8 +2256,7 @@ pub async fn update_community_json(
     let community = community.unwrap();
 
     // Check if user is the owner
-    let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
-    if role != Some(CommunityMemberRole::Owner) {
+    if user.id != community.owner_id {
         return Ok(StatusCode::FORBIDDEN);
     }
 
