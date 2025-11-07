@@ -1876,6 +1876,33 @@ pub async fn invite_user_json(
 
     tx.commit().await?;
 
+    // Send push notification to invitee
+    let title = "Community Invitation".to_string();
+    let body = format!("{} invited you to join @{}", user.display_name, community.slug);
+
+    let mut data = serde_json::Map::new();
+    data.insert("community_id".to_string(), serde_json::json!(community.id.to_string()));
+    data.insert("community_slug".to_string(), serde_json::json!(community.slug));
+    data.insert("notification_type".to_string(), serde_json::json!("community_invite"));
+
+    // Send push notification (don't fail if this errors)
+    if let Err(e) = state.push_service
+        .send_notification_to_user(
+            invitee.id,
+            &title,
+            &body,
+            None, // badge count
+            Some(serde_json::Value::Object(data)),
+        )
+        .await
+    {
+        tracing::warn!(
+            "Failed to send community invitation push notification to user {}: {:?}",
+            invitee.id,
+            e
+        );
+    }
+
     Ok(StatusCode::CREATED)
 }
 
