@@ -2,19 +2,19 @@ use crate::app_error::AppError;
 use crate::models::actor::create_actor_for_community;
 use crate::models::comment::find_latest_comments_in_community;
 use crate::models::community::{
-    accept_invitation, add_community_member, count_public_communities, count_search_public_communities,
-    create_community, create_invitation, find_community_by_id, find_community_by_slug,
-    get_communities_members_count, get_community_members_with_details, get_community_stats,
-    get_invitation_by_id, get_own_communities, get_participating_communities,
+    accept_invitation, add_community_member, count_public_communities,
+    count_search_public_communities, create_community, create_invitation, find_community_by_id,
+    find_community_by_slug, get_communities_members_count, get_community_members_with_details,
+    get_community_stats, get_invitation_by_id, get_own_communities, get_participating_communities,
     get_pending_invitations_with_details_for_user,
     get_pending_invitations_with_invitee_details_for_community, get_public_communities,
     get_public_communities_paginated, get_user_role_in_community, is_user_member,
     reject_invitation, remove_community_member, search_public_communities,
-    slug_conflicts_with_user, soft_delete_community, update_community_with_activity, CommunityDraft,
-    CommunityMemberRole, CommunityVisibility,
+    slug_conflicts_with_user, soft_delete_community, update_community_with_activity,
+    CommunityDraft, CommunityMemberRole, CommunityVisibility,
 };
 use crate::models::post::{find_published_posts_by_community_id, find_recent_posts_by_communities};
-use crate::models::user::{AuthSession, find_user_by_login_name};
+use crate::models::user::{find_user_by_login_name, AuthSession};
 use crate::web::handlers::home::LoadMoreQuery;
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
 use crate::web::responses::{
@@ -28,7 +28,12 @@ use crate::web::state::AppState;
 use axum::extract::{Path, Query};
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
-use axum::{extract::State, http::StatusCode, response::{Html, Json}, Form};
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::{Html, Json},
+    Form,
+};
 use axum_messages::Messages;
 use minijinja::context;
 use serde::Deserialize;
@@ -50,7 +55,8 @@ pub async fn community(
 
     let (community, community_id) = if id.starts_with('@') {
         // Handle @slug format
-        let slug = id.strip_prefix('@')
+        let slug = id
+            .strip_prefix('@')
             .ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?
             .to_string();
         let community = find_community_by_slug(&mut tx, slug).await?;
@@ -99,10 +105,19 @@ pub async fn community(
         (None, false)
     };
 
-    let posts = find_published_posts_by_community_id(&mut tx, community_uuid, 1000, 0, viewer_user_id, viewer_show_sensitive).await?;
+    let posts = find_published_posts_by_community_id(
+        &mut tx,
+        community_uuid,
+        1000,
+        0,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
     let comments = find_latest_comments_in_community(&mut tx, community_uuid, 5).await?;
     let stats = get_community_stats(&mut tx, community_uuid).await?;
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("community.jinja")?;
 
@@ -158,7 +173,10 @@ pub async fn community_iframe(
 
     let community = if id.starts_with('@') {
         // Handle @slug format
-        let slug = id.strip_prefix('@').ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?.to_string();
+        let slug = id
+            .strip_prefix('@')
+            .ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?
+            .to_string();
         find_community_by_slug(&mut tx, slug).await?
     } else {
         // Handle UUID format - redirect to @slug
@@ -204,7 +222,15 @@ pub async fn community_iframe(
         (None, false)
     };
 
-    let posts = find_published_posts_by_community_id(&mut tx, community_uuid, 1000, 0, viewer_user_id, viewer_show_sensitive).await?;
+    let posts = find_published_posts_by_community_id(
+        &mut tx,
+        community_uuid,
+        1000,
+        0,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("community_iframe.jinja")?;
     let rendered = template.render(context! {
@@ -267,7 +293,14 @@ pub async fn communities(
     };
 
     // Fetch recent posts (3 per community) for all communities
-    let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 3, viewer_user_id, viewer_show_sensitive).await?;
+    let recent_posts = find_recent_posts_by_communities(
+        &mut tx,
+        &all_community_ids,
+        3,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
 
     // Fetch members count (unique contributors) and posts count for all communities
     let members_stats = get_communities_members_count(&mut tx, &all_community_ids).await?;
@@ -293,7 +326,8 @@ pub async fn communities(
     };
 
     // Fetch owner login names for own and participating communities
-    let owner_ids: Vec<Uuid> = own_communities_raw.iter()
+    let owner_ids: Vec<Uuid> = own_communities_raw
+        .iter()
         .chain(participating_communities_raw.iter())
         .map(|c| c.owner_id)
         .collect();
@@ -318,7 +352,9 @@ pub async fn communities(
     let mut posts_by_community: StdHashMap<Uuid, Vec<serde_json::Value>> = StdHashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community.entry(community_id).or_insert_with(Vec::new);
+            let posts = posts_by_community
+                .entry(community_id)
+                .or_insert_with(Vec::new);
             posts.push(serde_json::json!({
                 "id": post.id.to_string(),
                 "image_filename": post.image_filename,
@@ -352,10 +388,22 @@ pub async fn communities(
     let own_communities: Vec<serde_json::Value> = own_communities_raw
         .into_iter()
         .map(|community| {
-            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
-            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
-            let posts_count = posts_count_by_community.get(&community.id).cloned().unwrap_or(None);
-            let owner_login_name = owner_login_by_id.get(&community.owner_id).cloned().unwrap_or_default();
+            let recent_posts = posts_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or_default();
+            let members_count = members_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or(None);
+            let posts_count = posts_count_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or(None);
+            let owner_login_name = owner_login_by_id
+                .get(&community.owner_id)
+                .cloned()
+                .unwrap_or_default();
 
             serde_json::json!({
                 "id": community.id.to_string(),
@@ -375,8 +423,14 @@ pub async fn communities(
     let public_communities: Vec<serde_json::Value> = public_communities_raw
         .iter()
         .map(|community| {
-            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
-            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
+            let recent_posts = posts_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or_default();
+            let members_count = members_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or(None);
 
             serde_json::json!({
                 "id": community.id.to_string(),
@@ -408,10 +462,22 @@ pub async fn communities(
     let participating_communities: Vec<serde_json::Value> = participating_communities_raw
         .into_iter()
         .map(|community| {
-            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
-            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
-            let posts_count = posts_count_by_community.get(&community.id).cloned().unwrap_or(None);
-            let owner_login_name = owner_login_by_id.get(&community.owner_id).cloned().unwrap_or_default();
+            let recent_posts = posts_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or_default();
+            let members_count = members_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or(None);
+            let posts_count = posts_count_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or(None);
+            let owner_login_name = owner_login_by_id
+                .get(&community.owner_id)
+                .cloned()
+                .unwrap_or_default();
 
             serde_json::json!({
                 "id": community.id.to_string(),
@@ -427,7 +493,8 @@ pub async fn communities(
         })
         .collect();
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     tx.commit().await?;
 
@@ -522,7 +589,8 @@ pub async fn do_create_community(
                                 .map(|u| u.preferred_language)
                                 .unwrap_or_else(|| None);
                             let bundle = get_bundle(&accept_language, user_preferred_language);
-                            let error_message = safe_get_message(&bundle, "community-slug-conflict-error");
+                            let error_message =
+                                safe_get_message(&bundle, "community-slug-conflict-error");
                             messages.error(error_message);
                             return Ok(Redirect::to("/communities/new").into_response());
                         }
@@ -547,7 +615,8 @@ pub async fn create_community_form(
 ) -> Result<Html<String>, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("create_community.jinja")?;
     let rendered = template.render(context! {
@@ -572,7 +641,10 @@ pub async fn hx_edit_community(
 
     let community = if id.starts_with('@') {
         // Handle @slug format
-        let slug = id.strip_prefix('@').ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?.to_string();
+        let slug = id
+            .strip_prefix('@')
+            .ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?
+            .to_string();
         find_community_by_slug(&mut tx, slug).await?
     } else {
         // Handle UUID format - redirect to @slug
@@ -592,11 +664,17 @@ pub async fn hx_edit_community(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    if community.as_ref().ok_or_else(|| AppError::NotFound("Community".to_string()))?.owner_id != auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id {
+    if community
+        .as_ref()
+        .ok_or_else(|| AppError::NotFound("Community".to_string()))?
+        .owner_id
+        != auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id
+    {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("community_edit.jinja")?;
     let rendered = template.render(context! {
@@ -627,7 +705,10 @@ pub async fn hx_do_edit_community(
 
     let (community_uuid, original_slug) = if id.starts_with('@') {
         // Handle @slug format
-        let slug = id.strip_prefix('@').ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?.to_string();
+        let slug = id
+            .strip_prefix('@')
+            .ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?
+            .to_string();
         let community = find_community_by_slug(&mut tx, slug.clone()).await?;
         if let Some(community) = community {
             (community.id, community.slug)
@@ -692,7 +773,12 @@ pub async fn hx_do_edit_community(
                     .map(|u| u.preferred_language)
                     .unwrap_or_else(|| None);
                 let bundle = get_bundle(&accept_language, user_preferred_language);
-                let ftl_lang = bundle.locales.first().map(|l| l.to_string()).unwrap_or_else(|| "en".to_string()).to_string();
+                let ftl_lang = bundle
+                    .locales
+                    .first()
+                    .map(|l| l.to_string())
+                    .unwrap_or_else(|| "en".to_string())
+                    .to_string();
                 let rendered = template
                     .eval_to_state(context! {
                         current_user => auth_session.user,
@@ -720,9 +806,7 @@ pub async fn hx_do_edit_community(
                             .map(|u| u.preferred_language)
                             .unwrap_or_else(|| None);
                         let bundle = get_bundle(&accept_language, user_preferred_language);
-                        Some(
-                            safe_get_message(&bundle, "community-slug-conflict-error"),
-                        )
+                        Some(safe_get_message(&bundle, "community-slug-conflict-error"))
                     } else {
                         None
                     }
@@ -744,7 +828,12 @@ pub async fn hx_do_edit_community(
                 .map(|u| u.preferred_language)
                 .unwrap_or_else(|| None);
             let bundle = get_bundle(&accept_language, user_preferred_language);
-            let ftl_lang = bundle.locales.first().map(|l| l.to_string()).unwrap_or_else(|| "en".to_string()).to_string();
+            let ftl_lang = bundle
+                .locales
+                .first()
+                .map(|l| l.to_string())
+                .unwrap_or_else(|| "en".to_string())
+                .to_string();
             let rendered = template.render(context! {
                 current_user => auth_session.user,
                 community => current_community,
@@ -770,7 +859,10 @@ pub async fn community_comments(
 
     let community = if id.starts_with('@') {
         // Handle @slug format
-        let slug = id.strip_prefix('@').ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?.to_string();
+        let slug = id
+            .strip_prefix('@')
+            .ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?
+            .to_string();
         find_community_by_slug(&mut tx, slug).await?
     } else {
         // Handle UUID format - redirect to @slug
@@ -812,9 +904,11 @@ pub async fn community_comments(
 
     // Get more comments for the dedicated comments page (100 instead of 5)
     let comments = find_latest_comments_in_community(&mut tx, community_uuid, 100).await?;
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("community_comments.jinja")?;
+    let template: minijinja::Template<'_, '_> =
+        state.env.get_template("community_comments.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         community => community,
@@ -839,7 +933,9 @@ pub async fn get_members(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
 
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
@@ -903,7 +999,9 @@ pub async fn invite_user(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
 
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
@@ -920,7 +1018,7 @@ pub async fn invite_user(
     // Check if user is owner or moderator
     let role = get_user_role_in_community(&mut tx, inviter.id, community.id).await?;
     match role {
-        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {}
         _ => return Ok(StatusCode::FORBIDDEN.into_response()),
     }
 
@@ -928,7 +1026,9 @@ pub async fn invite_user(
     let invitee = find_user_by_login_name(&mut tx, &form.login_name).await?;
     if invitee.is_none() {
         messages.error(safe_get_message(&bundle, "community-invite-user-not-found"));
-        return Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response());
+        return Ok(
+            Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response(),
+        );
     }
     let invitee = invitee.ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
@@ -936,7 +1036,9 @@ pub async fn invite_user(
     let already_member = is_user_member(&mut tx, invitee.id, community.id).await?;
     if already_member {
         messages.error(safe_get_message(&bundle, "community-invite-already-member"));
-        return Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response());
+        return Ok(
+            Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response(),
+        );
     }
 
     // Create invitation
@@ -946,12 +1048,24 @@ pub async fn invite_user(
 
             // Send push notification to invitee
             let title = "Community Invitation".to_string();
-            let body = format!("{} invited you to join @{}", inviter.display_name, community.slug);
+            let body = format!(
+                "{} invited you to join @{}",
+                inviter.display_name, community.slug
+            );
 
             let mut data = serde_json::Map::new();
-            data.insert("community_id".to_string(), serde_json::json!(community.id.to_string()));
-            data.insert("community_slug".to_string(), serde_json::json!(community.slug));
-            data.insert("notification_type".to_string(), serde_json::json!("community_invite"));
+            data.insert(
+                "community_id".to_string(),
+                serde_json::json!(community.id.to_string()),
+            );
+            data.insert(
+                "community_slug".to_string(),
+                serde_json::json!(community.slug),
+            );
+            data.insert(
+                "notification_type".to_string(),
+                serde_json::json!("community_invite"),
+            );
 
             tracing::info!(
                 "Sending community invitation push notification to user {}: title={}, body={}",
@@ -962,11 +1076,15 @@ pub async fn invite_user(
 
             // Get unread notification count for badge
             let mut badge_tx = db.begin().await?;
-            let unread_count = crate::models::notification::get_unread_count(&mut badge_tx, invitee.id).await.ok();
+            let unread_count =
+                crate::models::notification::get_unread_count(&mut badge_tx, invitee.id)
+                    .await
+                    .ok();
             let _ = badge_tx.commit().await;
 
             // Send push notification (don't fail if this errors)
-            match state.push_service
+            match state
+                .push_service
                 .send_notification_to_user(
                     invitee.id,
                     &title,
@@ -1000,8 +1118,15 @@ pub async fn invite_user(
             if let Some(db_err) = e.downcast_ref::<sqlx::Error>() {
                 if let sqlx::Error::Database(ref err) = db_err {
                     if err.is_unique_violation() {
-                        messages.error(safe_get_message(&bundle, "community-invite-already-invited"));
-                        return Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response());
+                        messages.error(safe_get_message(
+                            &bundle,
+                            "community-invite-already-invited",
+                        ));
+                        return Ok(Redirect::to(&format!(
+                            "/communities/@{}/members",
+                            community.slug
+                        ))
+                        .into_response());
                     }
                 }
             }
@@ -1020,7 +1145,9 @@ pub async fn remove_member(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
 
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
@@ -1037,7 +1164,7 @@ pub async fn remove_member(
     // Check if current user is owner or moderator
     let current_role = get_user_role_in_community(&mut tx, current_user.id, community.id).await?;
     match current_role {
-        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {}
         _ => return Ok(StatusCode::FORBIDDEN.into_response()),
     }
 
@@ -1106,18 +1233,31 @@ pub async fn do_accept_invitation(
         user.id,
         CommunityMemberRole::Member,
         Some(inviter_id),
-    ).await?;
+    )
+    .await?;
 
     tx.commit().await?;
 
     // Send push notification to inviter
     let title = "Invitation Accepted".to_string();
-    let body = format!("{} accepted your invitation to join @{}", user.display_name, community.slug);
+    let body = format!(
+        "{} accepted your invitation to join @{}",
+        user.display_name, community.slug
+    );
 
     let mut data = serde_json::Map::new();
-    data.insert("community_id".to_string(), serde_json::json!(community.id.to_string()));
-    data.insert("community_slug".to_string(), serde_json::json!(community.slug));
-    data.insert("notification_type".to_string(), serde_json::json!("invitation_accepted"));
+    data.insert(
+        "community_id".to_string(),
+        serde_json::json!(community.id.to_string()),
+    );
+    data.insert(
+        "community_slug".to_string(),
+        serde_json::json!(community.slug),
+    );
+    data.insert(
+        "notification_type".to_string(),
+        serde_json::json!("invitation_accepted"),
+    );
 
     tracing::info!(
         "Sending invitation accepted push notification to user {}: title={}, body={}",
@@ -1128,11 +1268,14 @@ pub async fn do_accept_invitation(
 
     // Get unread notification count for badge
     let mut badge_tx = db.begin().await?;
-    let unread_count = crate::models::notification::get_unread_count(&mut badge_tx, inviter_id).await.ok();
+    let unread_count = crate::models::notification::get_unread_count(&mut badge_tx, inviter_id)
+        .await
+        .ok();
     let _ = badge_tx.commit().await;
 
     // Send push notification (don't fail if this errors)
-    match state.push_service
+    match state
+        .push_service
         .send_notification_to_user(
             inviter_id,
             &title,
@@ -1207,12 +1350,24 @@ pub async fn do_reject_invitation(
 
     // Send push notification to inviter
     let title = "Invitation Declined".to_string();
-    let body = format!("{} declined your invitation to join @{}", user.display_name, community.slug);
+    let body = format!(
+        "{} declined your invitation to join @{}",
+        user.display_name, community.slug
+    );
 
     let mut data = serde_json::Map::new();
-    data.insert("community_id".to_string(), serde_json::json!(community.id.to_string()));
-    data.insert("community_slug".to_string(), serde_json::json!(community.slug));
-    data.insert("notification_type".to_string(), serde_json::json!("invitation_rejected"));
+    data.insert(
+        "community_id".to_string(),
+        serde_json::json!(community.id.to_string()),
+    );
+    data.insert(
+        "community_slug".to_string(),
+        serde_json::json!(community.slug),
+    );
+    data.insert(
+        "notification_type".to_string(),
+        serde_json::json!("invitation_rejected"),
+    );
 
     tracing::info!(
         "Sending invitation rejected push notification to user {}: title={}, body={}",
@@ -1223,11 +1378,14 @@ pub async fn do_reject_invitation(
 
     // Get unread notification count for badge
     let mut badge_tx = db.begin().await?;
-    let unread_count = crate::models::notification::get_unread_count(&mut badge_tx, inviter_id).await.ok();
+    let unread_count = crate::models::notification::get_unread_count(&mut badge_tx, inviter_id)
+        .await
+        .ok();
     let _ = badge_tx.commit().await;
 
     // Send push notification (don't fail if this errors)
-    match state.push_service
+    match state
+        .push_service
         .send_notification_to_user(
             inviter_id,
             &title,
@@ -1266,7 +1424,9 @@ pub async fn retract_invitation(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
 
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
@@ -1283,7 +1443,7 @@ pub async fn retract_invitation(
     // Check if user is owner or moderator
     let user_role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
     match user_role {
-        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {}
         _ => return Ok(StatusCode::FORBIDDEN.into_response()),
     }
 
@@ -1313,7 +1473,9 @@ pub async fn members_page(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
 
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
@@ -1323,7 +1485,8 @@ pub async fn members_page(
 
     // For private/unlisted communities, only members can view member list
     // For public communities, anyone can view
-    let user_role = if community.visibility != crate::models::community::CommunityVisibility::Public {
+    let user_role = if community.visibility != crate::models::community::CommunityVisibility::Public
+    {
         // Private or unlisted community - require membership
         let user = match &auth_session.user {
             Some(user) => user,
@@ -1365,7 +1528,9 @@ pub async fn members_page(
     // Fetch pending invitations with invitee details in a single query (no N+1)
     let pending_invitations = match user_role {
         Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {
-            let invitations = get_pending_invitations_with_invitee_details_for_community(&mut tx, community.id).await?;
+            let invitations =
+                get_pending_invitations_with_invitee_details_for_community(&mut tx, community.id)
+                    .await?;
             invitations
                 .into_iter()
                 .map(|invitation| {
@@ -1377,15 +1542,17 @@ pub async fn members_page(
                     })
                 })
                 .collect()
-        },
+        }
         _ => Vec::new(),
     };
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     tx.commit().await?;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("community_members.jinja")?;
+    let template: minijinja::Template<'_, '_> =
+        state.env.get_template("community_members.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         community,
@@ -1432,7 +1599,15 @@ pub async fn community_detail_json(
         (None, false)
     };
 
-    let posts = find_published_posts_by_community_id(&mut tx, community.id, query.limit, query.offset, viewer_user_id, viewer_show_sensitive).await?;
+    let posts = find_published_posts_by_community_id(
+        &mut tx,
+        community.id,
+        query.limit,
+        query.offset,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
     let comments = find_latest_comments_in_community(&mut tx, community.id, 5).await?;
     let stats = get_community_stats(&mut tx, community.id).await?;
 
@@ -1526,13 +1701,14 @@ pub async fn get_communities_list_json(
     let mut tx = db.begin().await?;
 
     // Fetch user's own communities and participating communities if authenticated
-    let (own_communities_raw, participating_communities_raw) = if let Some(user) = &auth_session.user {
-        let own = get_own_communities(&mut tx, user.id).await?;
-        let participating = get_participating_communities(&mut tx, user.id).await?;
-        (own, participating)
-    } else {
-        (vec![], vec![])
-    };
+    let (own_communities_raw, participating_communities_raw) =
+        if let Some(user) = &auth_session.user {
+            let own = get_own_communities(&mut tx, user.id).await?;
+            let participating = get_participating_communities(&mut tx, user.id).await?;
+            (own, participating)
+        } else {
+            (vec![], vec![])
+        };
 
     // Combine own and participating communities and deduplicate by ID
     let mut my_communities_raw = own_communities_raw;
@@ -1552,7 +1728,14 @@ pub async fn get_communities_list_json(
     };
 
     // Fetch recent posts (10 per community) for all communities
-    let recent_posts = find_recent_posts_by_communities(&mut tx, &all_community_ids, 10, viewer_user_id, viewer_show_sensitive).await?;
+    let recent_posts = find_recent_posts_by_communities(
+        &mut tx,
+        &all_community_ids,
+        10,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
 
     // Fetch members count for all communities
     let members_stats = get_communities_members_count(&mut tx, &all_community_ids).await?;
@@ -1581,7 +1764,9 @@ pub async fn get_communities_list_json(
     let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community.entry(community_id).or_insert_with(Vec::new);
+            let posts = posts_by_community
+                .entry(community_id)
+                .or_insert_with(Vec::new);
             let image_prefix = &post.image_filename[..2];
             posts.push(CommunityPostThumbnail {
                 id: post.id,
@@ -1612,10 +1797,19 @@ pub async fn get_communities_list_json(
     let communities: Vec<CommunityWithPosts> = my_communities_raw
         .into_iter()
         .map(|community| {
-            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
-            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
+            let recent_posts = posts_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or_default();
+            let members_count = members_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or(None);
             let posts_count = recent_posts.len() as i64;
-            let owner_login_name = owner_login_by_id.get(&community.owner_id).cloned().unwrap_or_default();
+            let owner_login_name = owner_login_by_id
+                .get(&community.owner_id)
+                .cloned()
+                .unwrap_or_default();
 
             CommunityWithPosts {
                 id: community.id,
@@ -1631,9 +1825,7 @@ pub async fn get_communities_list_json(
         })
         .collect();
 
-    Ok(Json(MyCommunitiesResponse {
-        communities,
-    }))
+    Ok(Json(MyCommunitiesResponse { communities }))
 }
 
 pub async fn get_public_communities_json(
@@ -1665,7 +1857,14 @@ pub async fn get_public_communities_json(
 
     // Fetch recent posts (10 per community) for all communities
     let recent_posts = if !community_ids.is_empty() {
-        find_recent_posts_by_communities(&mut tx, &community_ids, 10, viewer_user_id, viewer_show_sensitive).await?
+        find_recent_posts_by_communities(
+            &mut tx,
+            &community_ids,
+            10,
+            viewer_user_id,
+            viewer_show_sensitive,
+        )
+        .await?
     } else {
         Vec::new()
     };
@@ -1684,7 +1883,9 @@ pub async fn get_public_communities_json(
     let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community.entry(community_id).or_insert_with(Vec::new);
+            let posts = posts_by_community
+                .entry(community_id)
+                .or_insert_with(Vec::new);
             let image_prefix = &post.image_filename[..2];
             posts.push(CommunityPostThumbnail {
                 id: post.id,
@@ -1709,8 +1910,14 @@ pub async fn get_public_communities_json(
     let communities: Vec<CommunityWithPosts> = public_communities_raw
         .into_iter()
         .map(|community| {
-            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
-            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
+            let recent_posts = posts_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or_default();
+            let members_count = members_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or(None);
 
             CommunityWithPosts {
                 id: community.id,
@@ -1780,7 +1987,8 @@ pub async fn search_public_communities_json(
     let offset = query.offset.max(0);
 
     // Search public communities
-    let public_communities_raw = search_public_communities(&mut tx, search_query, limit, offset).await?;
+    let public_communities_raw =
+        search_public_communities(&mut tx, search_query, limit, offset).await?;
 
     // Get total count for search results
     let total_count = count_search_public_communities(&mut tx, search_query).await?;
@@ -1796,7 +2004,14 @@ pub async fn search_public_communities_json(
 
     // Fetch recent posts (10 per community) for all communities
     let recent_posts = if !community_ids.is_empty() {
-        find_recent_posts_by_communities(&mut tx, &community_ids, 10, viewer_user_id, viewer_show_sensitive).await?
+        find_recent_posts_by_communities(
+            &mut tx,
+            &community_ids,
+            10,
+            viewer_user_id,
+            viewer_show_sensitive,
+        )
+        .await?
     } else {
         Vec::new()
     };
@@ -1815,7 +2030,9 @@ pub async fn search_public_communities_json(
     let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community.entry(community_id).or_insert_with(Vec::new);
+            let posts = posts_by_community
+                .entry(community_id)
+                .or_insert_with(Vec::new);
             let image_prefix = &post.image_filename[..2];
             posts.push(CommunityPostThumbnail {
                 id: post.id,
@@ -1840,8 +2057,14 @@ pub async fn search_public_communities_json(
     let communities: Vec<CommunityWithPosts> = public_communities_raw
         .into_iter()
         .map(|community| {
-            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
-            let members_count = members_by_community.get(&community.id).cloned().unwrap_or(None);
+            let recent_posts = posts_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or_default();
+            let members_count = members_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or(None);
 
             CommunityWithPosts {
                 id: community.id,
@@ -1884,7 +2107,9 @@ pub async fn get_community_members_json(
     let mut tx = db.begin().await?;
 
     // Find community by slug
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
 
     if community.is_none() {
         return Ok(Json(CommunityMembersListResponse { members: vec![] }));
@@ -1958,7 +2183,9 @@ pub async fn invite_user_json(
     let mut tx = db.begin().await?;
 
     // Find community
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND);
     }
@@ -1967,7 +2194,7 @@ pub async fn invite_user_json(
     // Check if user has permission to invite (owner or moderator)
     let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
     match role {
-        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {}
         _ => return Ok(StatusCode::FORBIDDEN),
     }
 
@@ -1990,12 +2217,24 @@ pub async fn invite_user_json(
 
     // Send push notification to invitee
     let title = "Community Invitation".to_string();
-    let body = format!("{} invited you to join @{}", user.display_name, community.slug);
+    let body = format!(
+        "{} invited you to join @{}",
+        user.display_name, community.slug
+    );
 
     let mut data = serde_json::Map::new();
-    data.insert("community_id".to_string(), serde_json::json!(community.id.to_string()));
-    data.insert("community_slug".to_string(), serde_json::json!(community.slug));
-    data.insert("notification_type".to_string(), serde_json::json!("community_invite"));
+    data.insert(
+        "community_id".to_string(),
+        serde_json::json!(community.id.to_string()),
+    );
+    data.insert(
+        "community_slug".to_string(),
+        serde_json::json!(community.slug),
+    );
+    data.insert(
+        "notification_type".to_string(),
+        serde_json::json!("community_invite"),
+    );
 
     tracing::info!(
         "Sending community invitation push notification to user {}: title={}, body={}",
@@ -2006,11 +2245,14 @@ pub async fn invite_user_json(
 
     // Get unread notification count for badge
     let mut badge_tx = db.begin().await?;
-    let unread_count = crate::models::notification::get_unread_count(&mut badge_tx, invitee.id).await.ok();
+    let unread_count = crate::models::notification::get_unread_count(&mut badge_tx, invitee.id)
+        .await
+        .ok();
     let _ = badge_tx.commit().await;
 
     // Send push notification (don't fail if this errors)
-    match state.push_service
+    match state
+        .push_service
         .send_notification_to_user(
             invitee.id,
             &title,
@@ -2053,7 +2295,9 @@ pub async fn remove_member_json(
     let mut tx = db.begin().await?;
 
     // Find community
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND);
     }
@@ -2062,7 +2306,7 @@ pub async fn remove_member_json(
     // Check if user has permission (owner or moderator)
     let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
     match role {
-        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {}
         _ => return Ok(StatusCode::FORBIDDEN),
     }
 
@@ -2073,7 +2317,9 @@ pub async fn remove_member_json(
     }
 
     // If moderator is trying to remove another moderator, only owner can do that
-    if role == Some(CommunityMemberRole::Moderator) && target_role == Some(CommunityMemberRole::Moderator) {
+    if role == Some(CommunityMemberRole::Moderator)
+        && target_role == Some(CommunityMemberRole::Moderator)
+    {
         return Ok(StatusCode::FORBIDDEN);
     }
 
@@ -2093,28 +2339,41 @@ pub async fn get_community_invitations_json(
 ) -> Result<Json<CommunityInvitationsListResponse>, AppError> {
     let user = match &auth_session.user {
         Some(u) => u,
-        None => return Ok(Json(CommunityInvitationsListResponse { invitations: vec![] })),
+        None => {
+            return Ok(Json(CommunityInvitationsListResponse {
+                invitations: vec![],
+            }))
+        }
     };
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     // Find community
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
     if community.is_none() {
-        return Ok(Json(CommunityInvitationsListResponse { invitations: vec![] }));
+        return Ok(Json(CommunityInvitationsListResponse {
+            invitations: vec![],
+        }));
     }
     let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Check if user has permission (owner or moderator)
     let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
     match role {
-        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
-        _ => return Ok(Json(CommunityInvitationsListResponse { invitations: vec![] })),
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {}
+        _ => {
+            return Ok(Json(CommunityInvitationsListResponse {
+                invitations: vec![],
+            }))
+        }
     }
 
     // Get pending invitations with invitee details
-    let invitations = get_pending_invitations_with_invitee_details_for_community(&mut tx, community.id).await?;
+    let invitations =
+        get_pending_invitations_with_invitee_details_for_community(&mut tx, community.id).await?;
 
     // Convert to response format
     // Note: Current model only has invitee details, need to fetch inviter separately or enhance the model
@@ -2157,7 +2416,11 @@ pub async fn get_user_invitations_json(
 ) -> Result<Json<UserInvitationsListResponse>, AppError> {
     let user = match &auth_session.user {
         Some(u) => u,
-        None => return Ok(Json(UserInvitationsListResponse { invitations: vec![] })),
+        None => {
+            return Ok(Json(UserInvitationsListResponse {
+                invitations: vec![],
+            }))
+        }
     };
 
     let db = &state.db_pool;
@@ -2213,7 +2476,9 @@ pub async fn retract_invitation_json(
     let mut tx = db.begin().await?;
 
     // Find community
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND);
     }
@@ -2222,7 +2487,7 @@ pub async fn retract_invitation_json(
     // Check if user has permission (owner or moderator)
     let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
     match role {
-        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {},
+        Some(CommunityMemberRole::Owner) | Some(CommunityMemberRole::Moderator) => {}
         _ => return Ok(StatusCode::FORBIDDEN),
     }
 
@@ -2238,9 +2503,12 @@ pub async fn retract_invitation_json(
     }
 
     // Delete the invitation
-    sqlx::query!("DELETE FROM community_invitations WHERE id = $1", invitation_id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query!(
+        "DELETE FROM community_invitations WHERE id = $1",
+        invitation_id
+    )
+    .execute(&mut *tx)
+    .await?;
 
     tx.commit().await?;
 
@@ -2267,25 +2535,31 @@ pub async fn create_community_json(
 ) -> Result<Json<CreateCommunityResponse>, AppError> {
     let user = match &auth_session.user {
         Some(u) => u,
-        None => return Ok(Json(CreateCommunityResponse {
-            community: CommunityInfo {
-                id: Uuid::nil(),
-                name: String::new(),
-                slug: String::new(),
-                description: String::new(),
-                visibility: CommunityVisibility::Public,
-                owner_id: Uuid::nil(),
-                background_color: None,
-                foreground_color: None,
-            },
-        })),
+        None => {
+            return Ok(Json(CreateCommunityResponse {
+                community: CommunityInfo {
+                    id: Uuid::nil(),
+                    name: String::new(),
+                    slug: String::new(),
+                    description: String::new(),
+                    visibility: CommunityVisibility::Public,
+                    owner_id: Uuid::nil(),
+                    background_color: None,
+                    foreground_color: None,
+                },
+            }))
+        }
     };
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
     // Validate slug format (alphanumeric, hyphens, underscores only)
-    if !request.slug.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+    if !request
+        .slug
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
         return Ok(Json(CreateCommunityResponse {
             community: CommunityInfo {
                 id: Uuid::nil(),
@@ -2361,7 +2635,9 @@ pub async fn update_community_json(
     let mut tx = db.begin().await?;
 
     // Find community
-    let community = find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string()).await?;
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND);
     }
@@ -2381,8 +2657,11 @@ pub async fn update_community_json(
     };
 
     // Validate visibility change: can't change between private and public/unlisted
-    if (community.visibility == CommunityVisibility::Private && new_visibility != CommunityVisibility::Private) ||
-       (community.visibility != CommunityVisibility::Private && new_visibility == CommunityVisibility::Private) {
+    if (community.visibility == CommunityVisibility::Private
+        && new_visibility != CommunityVisibility::Private)
+        || (community.visibility != CommunityVisibility::Private
+            && new_visibility == CommunityVisibility::Private)
+    {
         return Ok(StatusCode::BAD_REQUEST);
     }
 

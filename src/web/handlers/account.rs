@@ -4,13 +4,19 @@ use crate::models::email_verification_challenge::{
 };
 use crate::models::user::{
     delete_user_with_activity, find_user_by_id, update_password, update_user_email_verified_at,
-    update_user_preferred_language, update_user_show_sensitive_content, update_user_with_activity, AuthSession, Language,
+    update_user_preferred_language, update_user_show_sensitive_content, update_user_with_activity,
+    AuthSession, Language,
 };
 use crate::web::context::CommonContext;
 use crate::web::handlers::{get_bundle, safe_get_message, ExtractAcceptLanguage, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::response::{IntoResponse, Redirect};
-use axum::{extract::{Query, State}, http::StatusCode, response::Html, Form, Json};
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    response::Html,
+    Form, Json,
+};
 use axum_messages::Messages;
 use chrono::{TimeDelta, Utc};
 use fluent::FluentResource;
@@ -78,7 +84,12 @@ pub async fn save_language(
         Some("zh") => Some(Language::Zh),
         _ => None,
     };
-    let _ = update_user_preferred_language(&mut tx, auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id, language).await;
+    let _ = update_user_preferred_language(
+        &mut tx,
+        auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id,
+        language,
+    )
+    .await;
     let _ = tx.commit().await;
 
     Ok(Redirect::to("/account").into_response())
@@ -97,7 +108,12 @@ pub async fn save_show_sensitive_content(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let show_sensitive_content = form.show_sensitive_content.as_deref() == Some("on");
-    let _ = update_user_show_sensitive_content(&mut tx, auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id, show_sensitive_content).await;
+    let _ = update_user_show_sensitive_content(
+        &mut tx,
+        auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id,
+        show_sensitive_content,
+    )
+    .await;
     let _ = tx.commit().await;
 
     Ok(Redirect::to("/account").into_response())
@@ -129,31 +145,35 @@ pub async fn edit_password(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let user_id = current_user.id;
-    let user = find_user_by_id(&mut tx, user_id).await?
+    let user = find_user_by_id(&mut tx, user_id)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     if user.verify_password(&form.current_password).is_err() {
-        messages.error(safe_get_message(&bundle, "account-change-password-error-incorrect-current"));
+        messages.error(safe_get_message(
+            &bundle,
+            "account-change-password-error-incorrect-current",
+        ));
         return Ok(Redirect::to("/account").into_response());
     }
     if form.new_password != form.new_password_confirm {
-        messages.error(
-            safe_get_message(&bundle, "account-change-password-error-new-mismatch")
-        );
+        messages.error(safe_get_message(
+            &bundle,
+            "account-change-password-error-new-mismatch",
+        ));
         return Ok(Redirect::to("/account").into_response());
     }
     if form.new_password.len() < 8 {
-        messages.error(
-            safe_get_message(&bundle, "account-change-password-error-too-short")
-        );
+        messages.error(safe_get_message(
+            &bundle,
+            "account-change-password-error-too-short",
+        ));
         return Ok(Redirect::to("/account").into_response());
     }
     let _ = update_password(&mut tx, user_id, form.new_password).await;
     let _ = tx.commit().await;
 
-    messages.success(
-        safe_get_message(&bundle, "account-change-password-success")
-    );
+    messages.success(safe_get_message(&bundle, "account-change-password-success"));
     Ok(Redirect::to("/account").into_response())
 }
 
@@ -179,7 +199,11 @@ pub async fn verify_email_verification_code(
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     if challenge.token != form.token {
-        let ftl_lang = bundle.locales.first().map(|l| l.to_string()).unwrap_or_else(|| "en".to_string());
+        let ftl_lang = bundle
+            .locales
+            .first()
+            .map(|l| l.to_string())
+            .unwrap_or_else(|| "en".to_string());
         let rendered = template.render(context! {
             challenge_id => challenge.id,
             email => challenge.email,
@@ -192,7 +216,11 @@ pub async fn verify_email_verification_code(
     }
 
     if challenge.expires_at < now {
-        let ftl_lang = bundle.locales.first().map(|l| l.to_string()).unwrap_or_else(|| "en".to_string());
+        let ftl_lang = bundle
+            .locales
+            .first()
+            .map(|l| l.to_string())
+            .unwrap_or_else(|| "en".to_string());
         let rendered = template.render(context! {
             challenge_id => challenge.id,
             email => challenge.email,
@@ -213,7 +241,11 @@ pub async fn verify_email_verification_code(
     .await;
     let _ = tx.commit().await;
 
-    let ftl_lang = bundle.locales.first().map(|l| l.to_string()).unwrap_or_else(|| "en".to_string());
+    let ftl_lang = bundle
+        .locales
+        .first()
+        .map(|l| l.to_string())
+        .unwrap_or_else(|| "en".to_string());
     let rendered = template.render(context! {
         challenge_id => challenge.id,
         email => challenge.email,
@@ -245,10 +277,17 @@ pub async fn request_email_verification_code(
     let edit_email_template = state.env.get_template("email_edit.jinja")?;
 
     let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
-    if current_user.email.as_ref().is_some_and(|email| email == &form.email)
+    if current_user
+        .email
+        .as_ref()
+        .is_some_and(|email| email == &form.email)
         && current_user.email_verified_at.is_some()
     {
-        let ftl_lang = bundle.locales.first().map(|l| l.to_string()).unwrap_or_else(|| "en".to_string());
+        let ftl_lang = bundle
+            .locales
+            .first()
+            .map(|l| l.to_string())
+            .unwrap_or_else(|| "en".to_string());
         return Ok(Html(edit_email_template.render(context! {
             current_user => auth_session.user,
             message => safe_get_message(&bundle, "account-change-email-error-already-verified"),
@@ -268,7 +307,11 @@ pub async fn request_email_verification_code(
     .map_err(|e| anyhow::anyhow!(e))?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("email_verify.jinja")?;
-    let ftl_lang = bundle.locales.first().map(|l| l.to_string()).unwrap_or_else(|| "en".to_string());
+    let ftl_lang = bundle
+        .locales
+        .first()
+        .map(|l| l.to_string())
+        .unwrap_or_else(|| "en".to_string());
 
     let rendered = template.render(context! {
         challenge_id => email_verification_challenge.id,
@@ -313,9 +356,7 @@ pub async fn edit_account(
     .await;
     let _ = tx.commit().await;
 
-    messages.success(
-        safe_get_message(&bundle, "account-info-edit-success")
-    );
+    messages.success(safe_get_message(&bundle, "account-info-edit-success"));
     Ok(Redirect::to("/account").into_response())
 }
 
@@ -406,11 +447,7 @@ pub async fn delete_account_htmx(
     let user = match auth_session.user.as_ref() {
         Some(user) => user.clone(),
         None => {
-            return Ok((
-                StatusCode::OK,
-                [("HX-Redirect", "/login")],
-            )
-                .into_response());
+            return Ok((StatusCode::OK, [("HX-Redirect", "/login")]).into_response());
         }
     };
 
@@ -434,11 +471,7 @@ pub async fn delete_account_htmx(
             auth_session.logout().await?;
 
             // Redirect to homepage with HX-Redirect header
-            Ok((
-                StatusCode::OK,
-                [("HX-Redirect", "/")],
-            )
-                .into_response())
+            Ok((StatusCode::OK, [("HX-Redirect", "/")]).into_response())
         }
         Err(e) => {
             // Don't commit the transaction on error
@@ -446,15 +479,13 @@ pub async fn delete_account_htmx(
 
             // Return error message as HTML for HTMX to display
             // Basic HTML escaping for safety
-            let error_msg = e.to_string()
+            let error_msg = e
+                .to_string()
                 .replace('&', "&amp;")
                 .replace('<', "&lt;")
                 .replace('>', "&gt;")
                 .replace('"', "&quot;");
-            let error_html = format!(
-                r#"<p class="error" style="color: red;">{}</p>"#,
-                error_msg
-            );
+            let error_html = format!(r#"<p class="error" style="color: red;">{}</p>"#, error_msg);
             Ok((StatusCode::OK, Html(error_html)).into_response())
         }
     }
@@ -483,17 +514,13 @@ async fn create_and_send_verification_email(
             .join("")
     };
 
-    let expires_at = Utc::now() + TimeDelta::try_seconds(60 * 5).expect("5 minutes is a valid duration");
+    let expires_at =
+        Utc::now() + TimeDelta::try_seconds(60 * 5).expect("5 minutes is a valid duration");
 
-    let email_verification_challenge = create_email_verification_challenge(
-        &mut tx,
-        user_id,
-        email,
-        &token,
-        expires_at,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let email_verification_challenge =
+        create_email_verification_challenge(&mut tx, user_id, email, &token, expires_at)
+            .await
+            .map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())?;
 
     // Send email
@@ -503,10 +530,10 @@ async fn create_and_send_verification_email(
                 .parse()
                 .map_err(|e: lettre::address::AddressError| e.to_string())?,
         )
-        .to(email.parse().map_err(|e: lettre::address::AddressError| e.to_string())?)
-        .subject(
-            safe_get_message(&bundle, "account-change-email-subject")
-        )
+        .to(email
+            .parse()
+            .map_err(|e: lettre::address::AddressError| e.to_string())?)
+        .subject(safe_get_message(&bundle, "account-change-email-subject"))
         .body(token.clone())
         .map_err(|e| format!("Failed to build email message: {}", e))?;
 
@@ -676,7 +703,8 @@ pub async fn verify_email_code_json(
             .into_response());
     }
 
-    let challenge = challenge.ok_or_else(|| AppError::NotFound("Email verification challenge".to_string()))?;
+    let challenge =
+        challenge.ok_or_else(|| AppError::NotFound("Email verification challenge".to_string()))?;
     let now = Utc::now();
 
     // Check if token matches
@@ -720,14 +748,10 @@ pub async fn verify_email_code_json(
         .into_response())
 }
 
-pub async fn get_account_json(
-    auth_session: AuthSession,
-) -> Result<impl IntoResponse, AppError> {
+pub async fn get_account_json(auth_session: AuthSession) -> Result<impl IntoResponse, AppError> {
     let user = match auth_session.user.as_ref() {
         Some(user) => user.clone(),
-        None => {
-            return Ok((StatusCode::UNAUTHORIZED).into_response())
-        }
+        None => return Ok((StatusCode::UNAUTHORIZED).into_response()),
     };
 
     Ok((StatusCode::OK, Json(user)).into_response())

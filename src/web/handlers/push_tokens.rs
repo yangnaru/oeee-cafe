@@ -49,14 +49,9 @@ pub async fn register_push_token_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let token = register_push_token(
-        &mut tx,
-        user.id,
-        payload.device_token,
-        payload.platform,
-    )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let token = register_push_token(&mut tx, user.id, payload.device_token, payload.platform)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     tx.commit()
         .await

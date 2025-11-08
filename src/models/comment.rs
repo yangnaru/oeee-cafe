@@ -202,22 +202,25 @@ pub async fn build_comment_thread_tree(
     .await?;
 
     // Build maps for efficient tree construction
-    let mut comment_data: HashMap<Uuid, (
-        Uuid, // post_id
-        Uuid, // actor_id
-        Option<Uuid>, // parent_comment_id
-        Option<String>, // content
-        Option<String>, // content_html
-        Option<String>, // iri
-        String, // actor_name
-        String, // actor_handle
-        String, // actor_url
-        Option<String>, // actor_login_name
-        bool, // is_local
-        DateTime<Utc>, // updated_at
-        DateTime<Utc>, // created_at
-        Option<DateTime<Utc>>, // deleted_at
-    )> = HashMap::new();
+    let mut comment_data: HashMap<
+        Uuid,
+        (
+            Uuid,                  // post_id
+            Uuid,                  // actor_id
+            Option<Uuid>,          // parent_comment_id
+            Option<String>,        // content
+            Option<String>,        // content_html
+            Option<String>,        // iri
+            String,                // actor_name
+            String,                // actor_handle
+            String,                // actor_url
+            Option<String>,        // actor_login_name
+            bool,                  // is_local
+            DateTime<Utc>,         // updated_at
+            DateTime<Utc>,         // created_at
+            Option<DateTime<Utc>>, // deleted_at
+        ),
+    > = HashMap::new();
 
     let mut children_map: HashMap<Option<Uuid>, Vec<Uuid>> = HashMap::new();
 
@@ -256,16 +259,43 @@ pub async fn build_comment_thread_tree(
     // Recursive function to build subtree
     fn build_subtree(
         comment_id: Uuid,
-        comment_data: &HashMap<Uuid, (
-            Uuid, Uuid, Option<Uuid>, Option<String>, Option<String>, Option<String>,
-            String, String, String, Option<String>, bool, DateTime<Utc>, DateTime<Utc>,
-            Option<DateTime<Utc>>
-        )>,
+        comment_data: &HashMap<
+            Uuid,
+            (
+                Uuid,
+                Uuid,
+                Option<Uuid>,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                String,
+                String,
+                String,
+                Option<String>,
+                bool,
+                DateTime<Utc>,
+                DateTime<Utc>,
+                Option<DateTime<Utc>>,
+            ),
+        >,
         children_map: &HashMap<Option<Uuid>, Vec<Uuid>>,
     ) -> Option<SerializableThreadedComment> {
-        let (post_id, actor_id, parent_comment_id, content, content_html, iri,
-             actor_name, actor_handle, actor_url, actor_login_name, is_local,
-             updated_at, created_at, deleted_at) = comment_data.get(&comment_id)?;
+        let (
+            post_id,
+            actor_id,
+            parent_comment_id,
+            content,
+            content_html,
+            iri,
+            actor_name,
+            actor_handle,
+            actor_url,
+            actor_login_name,
+            is_local,
+            updated_at,
+            created_at,
+            deleted_at,
+        ) = comment_data.get(&comment_id)?;
 
         let children = children_map
             .get(&Some(comment_id))
@@ -435,9 +465,15 @@ pub async fn build_comment_thread_tree_paginated(
         // Handle optional fields from LEFT JOIN
         let Some(id) = row.id else { continue };
         let Some(post_id) = row.post_id else { continue };
-        let Some(actor_id) = row.actor_id else { continue };
-        let Some(created_at) = row.created_at else { continue };
-        let Some(updated_at) = row.updated_at else { continue };
+        let Some(actor_id) = row.actor_id else {
+            continue;
+        };
+        let Some(created_at) = row.created_at else {
+            continue;
+        };
+        let Some(updated_at) = row.updated_at else {
+            continue;
+        };
 
         // Actor fields can be NULL from LEFT JOIN
         let actor_name = row.actor_name.unwrap_or_default();
@@ -738,10 +774,7 @@ pub async fn find_comment_by_iri(
     Ok(comment)
 }
 
-pub async fn delete_comment_by_iri(
-    tx: &mut Transaction<'_, Postgres>,
-    iri: &str,
-) -> Result<bool> {
+pub async fn delete_comment_by_iri(tx: &mut Transaction<'_, Postgres>, iri: &str) -> Result<bool> {
     // First find the comment to get its ID
     let comment = sqlx::query!(
         r#"
@@ -839,10 +872,7 @@ pub async fn find_users_by_login_names(
     .fetch_all(&mut **tx)
     .await?;
 
-    Ok(users
-        .into_iter()
-        .map(|u| (u.id, u.login_name))
-        .collect())
+    Ok(users.into_iter().map(|u| (u.id, u.login_name)).collect())
 }
 
 /// Soft-delete a comment by setting deleted_at and nulling out content

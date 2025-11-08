@@ -17,7 +17,8 @@ pub struct FcmClient {
 impl FcmClient {
     pub async fn new(service_account_path: &str, project_id: &str) -> Result<Self, anyhow::Error> {
         // Read the service account key
-        let service_account_key = yup_oauth2::read_service_account_key(service_account_path).await?;
+        let service_account_key =
+            yup_oauth2::read_service_account_key(service_account_path).await?;
 
         // Create an authenticator
         let auth = ServiceAccountAuthenticator::builder(service_account_key)
@@ -32,8 +33,7 @@ impl FcmClient {
             .enable_http2()
             .build();
 
-        let client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
-            .build(https);
+        let client = hyper_util::client::legacy::Client::builder(TokioExecutor::new()).build(https);
 
         // Create the FCM hub
         let hub = FirebaseCloudMessaging::new(client, auth);
@@ -119,11 +119,7 @@ impl FcmClient {
         };
 
         // Send the message
-        let result = self.hub
-            .projects()
-            .messages_send(req, &parent)
-            .doit()
-            .await;
+        let result = self.hub.projects().messages_send(req, &parent).doit().await;
 
         match result {
             Ok(_) => Ok(()),
@@ -139,10 +135,7 @@ impl FcmClient {
                     return Err(PushError::InvalidToken);
                 }
 
-                Err(PushError::Other(anyhow::anyhow!(
-                    "FCM error: {:?}",
-                    e
-                )))
+                Err(PushError::Other(anyhow::anyhow!("FCM error: {:?}", e)))
             }
         }
     }

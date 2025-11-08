@@ -1,13 +1,13 @@
 pub mod common;
-pub mod post;
 pub mod community;
 pub mod notification;
-pub mod search;
+pub mod post;
 pub mod profile;
+pub mod search;
 
 pub use common::*;
-pub use post::*;
 pub use community::*;
 pub use notification::*;
-pub use search::*;
+pub use post::*;
 pub use profile::*;
+pub use search::*;

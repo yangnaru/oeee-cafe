@@ -1,7 +1,10 @@
 use crate::app_error::AppError;
 use crate::models::actor::Actor;
 use crate::models::banner::find_banner_by_id;
-use crate::models::follow::{count_followings_by_user_id, find_followings_by_user_id, follow_user, is_following, unfollow_user};
+use crate::models::follow::{
+    count_followings_by_user_id, find_followings_by_user_id, follow_user, is_following,
+    unfollow_user,
+};
 use crate::models::guestbook_entry::{
     add_guestbook_entry_reply, create_guestbook_entry, delete_guestbook_entry,
     find_guestbook_entries_by_recipient_id, find_guestbook_entry_by_id, GuestbookEntryDraft,
@@ -44,15 +47,11 @@ pub async fn do_follow_profile(
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    follow_user(
-        &mut tx,
-        current_user.id,
-        user.id,
-    )
-    .await?;
+    follow_user(&mut tx, current_user.id, user.id).await?;
 
     // Collect notification info (id, recipient_id) to send push notifications after commit
     let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
@@ -94,7 +93,10 @@ pub async fn do_follow_profile(
                 let mut tx = match db_pool.begin().await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        tracing::warn!(
+                            "Failed to begin transaction for push notification: {:?}",
+                            e
+                        );
                         continue;
                     }
                 };
@@ -108,7 +110,8 @@ pub async fn do_follow_profile(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count)
+                        .await;
                 }
                 let _ = tx.commit().await;
             }
@@ -135,15 +138,11 @@ pub async fn do_unfollow_profile(
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    let _ = unfollow_user(
-        &mut tx,
-        current_user.id,
-        user.id,
-    )
-    .await;
+    let _ = unfollow_user(&mut tx, current_user.id, user.id).await;
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("follow_button.jinja")?;
@@ -164,27 +163,33 @@ pub async fn profile(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    let published_posts =
-        find_published_posts_by_author_id(&mut tx, user.id).await?;
+    let published_posts = find_published_posts_by_author_id(&mut tx, user.id).await?;
     use crate::models::community::CommunityVisibility;
     let public_community_posts = published_posts
         .iter()
-        .filter(|post| post.community_visibility == Some(CommunityVisibility::Public) || post.community_visibility.is_none())
+        .filter(|post| {
+            post.community_visibility == Some(CommunityVisibility::Public)
+                || post.community_visibility.is_none()
+        })
         .collect::<Vec<_>>();
     let private_community_posts = published_posts
         .iter()
-        .filter(|post| post.community_visibility != Some(CommunityVisibility::Public) && post.community_visibility.is_some())
+        .filter(|post| {
+            post.community_visibility != Some(CommunityVisibility::Public)
+                && post.community_visibility.is_some()
+        })
         .collect::<Vec<_>>();
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let mut is_current_user_following = false;
     if let Some(current_user) = auth_session.user.clone() {
-        is_current_user_following =
-            is_following(&mut tx, current_user.id, user.id).await?;
+        is_current_user_following = is_following(&mut tx, current_user.id, user.id).await?;
     }
 
     let followings = find_followings_by_user_id(&mut tx, user.id, 9999, 0, false).await?;
@@ -234,7 +239,8 @@ pub async fn profile_iframe(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     let posts = find_published_public_posts_by_author_id(&mut tx, user.id, 1000, 0).await?;
@@ -258,7 +264,8 @@ pub async fn profile_banners_iframe(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     let followings = find_followings_by_user_id(&mut tx, user.id, 9999, 0, false).await?;
@@ -286,7 +293,8 @@ pub async fn do_move_link_down(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     if user.id != current_user.id {
@@ -294,7 +302,9 @@ pub async fn do_move_link_down(
     }
 
     let links = find_links_by_user_id(&mut tx, current_user.id).await?;
-    let link = links.iter().find(|link| link.id == link_id)
+    let link = links
+        .iter()
+        .find(|link| link.id == link_id)
         .ok_or_else(|| AppError::NotFound("Link".to_string()))?;
 
     let index = link.index;
@@ -325,7 +335,8 @@ pub async fn do_move_link_up(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     if user.id != current_user.id {
@@ -333,9 +344,10 @@ pub async fn do_move_link_up(
     }
 
     let links = find_links_by_user_id(&mut tx, current_user.id).await?;
-    let link = links.iter().find(|link| link.id == link_id)
+    let link = links
+        .iter()
+        .find(|link| link.id == link_id)
         .ok_or_else(|| AppError::NotFound("Link".to_string()))?;
-
 
     // link already unwrapped above
     let index = link.index;
@@ -372,7 +384,8 @@ pub async fn do_delete_link(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     if user.id != current_user.id {
@@ -380,7 +393,9 @@ pub async fn do_delete_link(
     }
 
     let links = find_links_by_user_id(&mut tx, current_user.id).await?;
-    let _link = links.iter().find(|link| link.id == link_id)
+    let _link = links
+        .iter()
+        .find(|link| link.id == link_id)
         .ok_or_else(|| AppError::NotFound("Link".to_string()))?;
 
     delete_link(&mut tx, link_id).await?;
@@ -411,7 +426,8 @@ pub async fn do_add_link(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     if user.id != current_user.id {
@@ -454,12 +470,14 @@ pub async fn profile_settings(
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_id(&mut tx, current_user.id).await?
+    let user = find_user_by_id(&mut tx, current_user.id)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     // User is already the current user from auth, no need for ownership check
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let links = find_links_by_user_id(&mut tx, user.id).await?;
 
@@ -492,21 +510,24 @@ pub async fn do_reply_guestbook_entry(
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?
+    let entry = find_guestbook_entry_by_id(&mut tx, entry_id)
+        .await?
         .ok_or_else(|| AppError::NotFound("Guestbook entry".to_string()))?;
 
     if entry.recipient_id != current_user.id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let author = find_user_by_login_name(&mut tx, &login_name).await?
+    let author = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     if author.id != entry.recipient_id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let mut guestbook_entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?
+    let mut guestbook_entry = find_guestbook_entry_by_id(&mut tx, entry_id)
+        .await?
         .ok_or_else(|| AppError::NotFound("Guestbook entry".to_string()))?;
 
     let replied_at = add_guestbook_entry_reply(&mut tx, entry_id, form.content.clone()).await?;
@@ -553,7 +574,10 @@ pub async fn do_reply_guestbook_entry(
                 let mut tx = match db_pool.begin().await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        tracing::warn!(
+                            "Failed to begin transaction for push notification: {:?}",
+                            e
+                        );
                         continue;
                     }
                 };
@@ -567,7 +591,8 @@ pub async fn do_reply_guestbook_entry(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count)
+                        .await;
                 }
                 let _ = tx.commit().await;
             }
@@ -600,17 +625,17 @@ pub async fn do_delete_guestbook_entry(
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?
+    let entry = find_guestbook_entry_by_id(&mut tx, entry_id)
+        .await?
         .ok_or_else(|| AppError::NotFound("Guestbook entry".to_string()))?;
 
-    if entry.author_id != current_user.id
-        && entry.recipient_id != current_user.id
-    {
+    if entry.author_id != current_user.id && entry.recipient_id != current_user.id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
     // Check if login_name matches recipient_id
-    let recipient = find_user_by_login_name(&mut tx, &login_name).await?
+    let recipient = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
     if recipient.id != entry.recipient_id {
         return Ok(StatusCode::FORBIDDEN.into_response());
@@ -634,7 +659,8 @@ pub async fn do_write_guestbook_entry(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
     let current_user_id = current_user.id;
-    let recipient_user = find_user_by_login_name(&mut tx, &login_name).await?
+    let recipient_user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
     let recipient_id = recipient_user.id;
 
@@ -693,7 +719,10 @@ pub async fn do_write_guestbook_entry(
                 let mut tx = match db_pool.begin().await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        tracing::warn!(
+                            "Failed to begin transaction for push notification: {:?}",
+                            e
+                        );
                         continue;
                     }
                 };
@@ -707,7 +736,8 @@ pub async fn do_write_guestbook_entry(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count)
+                        .await;
                 }
                 let _ = tx.commit().await;
             }
@@ -732,14 +762,14 @@ pub async fn guestbook(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    let guestbook_entries =
-        find_guestbook_entries_by_recipient_id(&mut tx, user.id)
-            .await?;
+    let guestbook_entries = find_guestbook_entries_by_recipient_id(&mut tx, user.id).await?;
 
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let banner = match user.banner_id {
         Some(banner_id) => Some(find_banner_by_id(&mut tx, banner_id).await?),
@@ -748,8 +778,7 @@ pub async fn guestbook(
 
     let mut is_current_user_following = false;
     if let Some(current_user) = auth_session.user.clone() {
-        is_current_user_following =
-            is_following(&mut tx, current_user.id, user.id).await?;
+        is_current_user_following = is_following(&mut tx, current_user.id, user.id).await?;
     }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook.jinja")?;
@@ -782,14 +811,16 @@ pub async fn profile_json(
 
     // Check if current user is following this profile
     let is_following_profile = match &auth_session.user {
-        Some(current_user) => {
-            is_following(&mut tx, current_user.id, user.id).await.unwrap_or(false)
-        }
+        Some(current_user) => is_following(&mut tx, current_user.id, user.id)
+            .await
+            .unwrap_or(false),
         None => false,
     };
 
     // Get only public posts
-    let public_posts = find_published_public_posts_by_author_id(&mut tx, user.id, query.limit, query.offset).await?;
+    let public_posts =
+        find_published_public_posts_by_author_id(&mut tx, user.id, query.limit, query.offset)
+            .await?;
 
     // Get banner
     let banner = match user.banner_id {
@@ -904,11 +935,13 @@ pub async fn profile_followings_json(
     let mut tx = db.begin().await?;
 
     // Find user by login name
-    let user = find_user_by_login_name(&mut tx, &login_name).await?
+    let user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     // Get followings with pagination
-    let followings = find_followings_by_user_id(&mut tx, user.id, query.limit, query.offset, false).await?;
+    let followings =
+        find_followings_by_user_id(&mut tx, user.id, query.limit, query.offset, false).await?;
 
     tx.commit().await?;
 
@@ -945,7 +978,8 @@ pub async fn profile_followings_json(
             total: None,
             has_more,
         },
-    }).into_response())
+    })
+    .into_response())
 }
 
 /// API endpoint to follow a user
@@ -960,7 +994,8 @@ pub async fn follow_profile_api(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let target_user = find_user_by_login_name(&mut tx, &login_name).await?
+    let target_user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     // Don't allow following yourself
@@ -1010,7 +1045,10 @@ pub async fn follow_profile_api(
                 let mut tx = match db_pool.begin().await {
                     Ok(tx) => tx,
                     Err(e) => {
-                        tracing::warn!("Failed to begin transaction for push notification: {:?}", e);
+                        tracing::warn!(
+                            "Failed to begin transaction for push notification: {:?}",
+                            e
+                        );
                         continue;
                     }
                 };
@@ -1024,7 +1062,8 @@ pub async fn follow_profile_api(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count)
+                        .await;
                 }
                 let _ = tx.commit().await;
             }
@@ -1046,7 +1085,8 @@ pub async fn unfollow_profile_api(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let target_user = find_user_by_login_name(&mut tx, &login_name).await?
+    let target_user = find_user_by_login_name(&mut tx, &login_name)
+        .await?
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     unfollow_user(&mut tx, user.id, target_user.id).await?;

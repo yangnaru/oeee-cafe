@@ -84,7 +84,9 @@ fn main() {
                     .unwrap_or_else(|| LOCALES.get("ko").expect("Korean locale must exist"));
 
                 // Create bundle
-                let mut bundle = FluentBundle::new_concurrent(vec![lang.parse().expect("Language string should be valid")]);
+                let mut bundle = FluentBundle::new_concurrent(vec![lang
+                    .parse()
+                    .expect("Language string should be valid")]);
                 bundle.add_resource(ftl).expect("Failed to add a resource.");
 
                 // Get and format the message
@@ -117,7 +119,9 @@ fn main() {
                     .unwrap_or_else(|| LOCALES.get("ko").expect("Korean locale must exist"));
 
                 // Create bundle
-                let mut bundle = FluentBundle::new_concurrent(vec![lang.parse().expect("Language string should be valid")]);
+                let mut bundle = FluentBundle::new_concurrent(vec![lang
+                    .parse()
+                    .expect("Language string should be valid")]);
                 bundle.add_resource(ftl).expect("Failed to add a resource.");
 
                 // Convert minijinja values to FluentArgs by deserializing to HashMap
@@ -180,11 +184,13 @@ fn main() {
 
             let redis_state = RedisStateManager::new(redis_pool.clone());
 
-            let push_service = PushService::new(&cfg, db_pool.clone()).await.unwrap_or_else(|e| {
-                tracing::error!("Failed to initialize push service: {:?}", e);
-                tracing::error!("Push notifications will not be available");
-                panic!("Failed to initialize push service");
-            });
+            let push_service = PushService::new(&cfg, db_pool.clone())
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to initialize push service: {:?}", e);
+                    tracing::error!("Push notifications will not be available");
+                    panic!("Failed to initialize push service");
+                });
 
             let state = AppState {
                 config: cfg.clone(),
@@ -195,6 +201,11 @@ fn main() {
                 push_service: Arc::new(push_service),
             };
 
-            App::new(state).await.expect("Failed to create app").serve().await.expect("Failed to serve app")
+            App::new(state)
+                .await
+                .expect("Failed to create app")
+                .serve()
+                .await
+                .expect("Failed to serve app")
         });
 }

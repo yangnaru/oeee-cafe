@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use fluent::{FluentArgs, FluentResource};
 use fluent::bundle::FluentBundle;
+use fluent::{FluentArgs, FluentResource};
 use intl_memoizer::concurrent::IntlLangMemoizer;
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction, Type};
@@ -414,17 +414,18 @@ pub async fn send_push_for_notification(
     badge_count: Option<u32>,
 ) {
     // Get recipient's preferred language
-    let preferred_language = match get_user_language_preference(pool, notification.recipient_id).await {
-        Ok(lang) => lang,
-        Err(e) => {
-            tracing::warn!(
+    let preferred_language =
+        match get_user_language_preference(pool, notification.recipient_id).await {
+            Ok(lang) => lang,
+            Err(e) => {
+                tracing::warn!(
                 "Failed to get language preference for user {}: {:?}. Using English as fallback.",
                 notification.recipient_id,
                 e
             );
-            None
-        }
-    };
+                None
+            }
+        };
 
     // Format notification message based on type and user's language
     let (title, body) = format_notification_message(notification, preferred_language);
@@ -433,14 +434,26 @@ pub async fn send_push_for_notification(
 
     // Add custom data for deep linking
     let mut data = serde_json::Map::new();
-    data.insert("notification_id".to_string(), serde_json::json!(notification.id.to_string()));
-    data.insert("notification_type".to_string(), serde_json::json!(format!("{:?}", notification.notification_type)));
+    data.insert(
+        "notification_id".to_string(),
+        serde_json::json!(notification.id.to_string()),
+    );
+    data.insert(
+        "notification_type".to_string(),
+        serde_json::json!(format!("{:?}", notification.notification_type)),
+    );
 
     if let Some(post_id) = notification.post_id {
-        data.insert("post_id".to_string(), serde_json::json!(post_id.to_string()));
+        data.insert(
+            "post_id".to_string(),
+            serde_json::json!(post_id.to_string()),
+        );
     }
     if let Some(comment_id) = notification.comment_id {
-        data.insert("comment_id".to_string(), serde_json::json!(comment_id.to_string()));
+        data.insert(
+            "comment_id".to_string(),
+            serde_json::json!(comment_id.to_string()),
+        );
     }
 
     // Send push notification (don't fail if this errors)
@@ -482,7 +495,9 @@ async fn get_user_language_preference(
 }
 
 /// Helper function to get a Fluent bundle for the given language
-fn get_fluent_bundle(language: Option<Language>) -> FluentBundle<&'static FluentResource, IntlLangMemoizer> {
+fn get_fluent_bundle(
+    language: Option<Language>,
+) -> FluentBundle<&'static FluentResource, IntlLangMemoizer> {
     let lang_code = match language {
         Some(Language::Ko) => "ko",
         Some(Language::Ja) => "ja",
@@ -495,7 +510,9 @@ fn get_fluent_bundle(language: Option<Language>) -> FluentBundle<&'static Fluent
         .get(lang_code)
         .unwrap_or_else(|| LOCALES.get("en").expect("English locale must exist"));
 
-    let mut bundle = FluentBundle::new_concurrent(vec![lang_code.parse().expect("Language code should be valid")]);
+    let mut bundle = FluentBundle::new_concurrent(vec![lang_code
+        .parse()
+        .expect("Language code should be valid")]);
     bundle.add_resource(ftl).expect("Failed to add a resource.");
     bundle
 }
@@ -506,10 +523,16 @@ fn get_localized_message(
     key: &str,
     args: Option<&FluentArgs>,
 ) -> String {
-    let message = bundle.get_message(key).expect(&format!("Message {} not found", key));
-    let pattern = message.value().expect(&format!("Message {} has no value", key));
+    let message = bundle
+        .get_message(key)
+        .expect(&format!("Message {} not found", key));
+    let pattern = message
+        .value()
+        .expect(&format!("Message {} has no value", key));
     let mut errors = vec![];
-    bundle.format_pattern(pattern, args, &mut errors).to_string()
+    bundle
+        .format_pattern(pattern, args, &mut errors)
+        .to_string()
 }
 
 /// Format a notification into a user-friendly push notification message
@@ -525,7 +548,8 @@ fn format_notification_message(
 
     match notification.notification_type {
         NotificationType::Comment => {
-            let title = get_localized_message(&bundle, "push-notification-comment-title", Some(&args));
+            let title =
+                get_localized_message(&bundle, "push-notification-comment-title", Some(&args));
 
             let body = if let Some(content) = &notification.comment_content {
                 content.clone()
@@ -538,8 +562,10 @@ fn format_notification_message(
             let emoji = notification.reaction_emoji.as_deref().unwrap_or("❤️");
             args.set("emoji", emoji.to_string());
 
-            let title = get_localized_message(&bundle, "push-notification-reaction-title", Some(&args));
-            let body = get_localized_message(&bundle, "push-notification-reaction-body", Some(&args));
+            let title =
+                get_localized_message(&bundle, "push-notification-reaction-title", Some(&args));
+            let body =
+                get_localized_message(&bundle, "push-notification-reaction-body", Some(&args));
             (title, body)
         }
         NotificationType::Follow => {
@@ -548,17 +574,26 @@ fn format_notification_message(
             (title, body)
         }
         NotificationType::GuestbookEntry => {
-            let title = get_localized_message(&bundle, "push-notification-guestbook-entry-title", Some(&args));
+            let title = get_localized_message(
+                &bundle,
+                "push-notification-guestbook-entry-title",
+                Some(&args),
+            );
             let body = notification.guestbook_content.clone().unwrap_or_default();
             (title, body)
         }
         NotificationType::GuestbookReply => {
-            let title = get_localized_message(&bundle, "push-notification-guestbook-reply-title", Some(&args));
+            let title = get_localized_message(
+                &bundle,
+                "push-notification-guestbook-reply-title",
+                Some(&args),
+            );
             let body = notification.guestbook_content.clone().unwrap_or_default();
             (title, body)
         }
         NotificationType::Mention => {
-            let title = get_localized_message(&bundle, "push-notification-mention-title", Some(&args));
+            let title =
+                get_localized_message(&bundle, "push-notification-mention-title", Some(&args));
 
             let body = if let Some(content) = &notification.comment_content {
                 content.clone()
@@ -568,12 +603,17 @@ fn format_notification_message(
             (title, body)
         }
         NotificationType::PostReply => {
-            let title = get_localized_message(&bundle, "push-notification-post-reply-title", Some(&args));
+            let title =
+                get_localized_message(&bundle, "push-notification-post-reply-title", Some(&args));
             let body = notification.post_title.clone().unwrap_or_default();
             (title, body)
         }
         NotificationType::CommentReply => {
-            let title = get_localized_message(&bundle, "push-notification-comment-reply-title", Some(&args));
+            let title = get_localized_message(
+                &bundle,
+                "push-notification-comment-reply-title",
+                Some(&args),
+            );
 
             let body = if let Some(content) = &notification.comment_content {
                 content.clone()
@@ -583,13 +623,22 @@ fn format_notification_message(
             (title, body)
         }
         NotificationType::CommunityPost => {
-            let title = get_localized_message(&bundle, "push-notification-community-post-title", None);
+            let title =
+                get_localized_message(&bundle, "push-notification-community-post-title", None);
 
             let body = if let Some(post_title) = &notification.post_title {
                 args.set("title", post_title.clone());
-                get_localized_message(&bundle, "push-notification-community-post-body-with-title", Some(&args))
+                get_localized_message(
+                    &bundle,
+                    "push-notification-community-post-body-with-title",
+                    Some(&args),
+                )
             } else {
-                get_localized_message(&bundle, "push-notification-community-post-body", Some(&args))
+                get_localized_message(
+                    &bundle,
+                    "push-notification-community-post-body",
+                    Some(&args),
+                )
             };
             (title, body)
         }

@@ -727,7 +727,10 @@ pub async fn find_post_by_id(
         );
 
         map.insert("image_id".to_string(), Some(row.image_id.to_string()));
-        map.insert("image_tool".to_string(), Some(row.image_tool.unwrap_or_default()));
+        map.insert(
+            "image_tool".to_string(),
+            Some(row.image_tool.unwrap_or_default()),
+        );
         map.insert("image_width".to_string(), Some(row.width.to_string()));
         map.insert("image_height".to_string(), Some(row.height.to_string()));
         map.insert("image_filename".to_string(), Some(row.image_filename));
@@ -908,7 +911,7 @@ pub async fn find_child_posts_by_parent_id(
                 image_height: row.height,
                 published_at: row.published_at,
                 published_at_formatted,
-                comments_count: 0, // Will be populated by build_thread_tree
+                comments_count: 0,    // Will be populated by build_thread_tree
                 children: Vec::new(), // Will be populated by build_thread_tree
             }
         })
@@ -997,19 +1000,46 @@ pub async fn build_thread_tree(
 
     // Build a map to track children for each parent
     let mut children_map: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
-    let mut post_data: HashMap<Uuid, (Option<String>, Option<String>, Uuid, String, String, String, String, i32, i32, Option<chrono::DateTime<chrono::Utc>>, i64)> = HashMap::new();
+    let mut post_data: HashMap<
+        Uuid,
+        (
+            Option<String>,
+            Option<String>,
+            Uuid,
+            String,
+            String,
+            String,
+            String,
+            i32,
+            i32,
+            Option<chrono::DateTime<chrono::Utc>>,
+            i64,
+        ),
+    > = HashMap::new();
 
     for row in &rows {
         // Skip posts with missing required data
         let Some(id) = row.id else { continue };
-        let Some(author_id) = row.author_id else { continue };
-        let Some(login_name) = &row.login_name else { continue };
-        let Some(display_name) = &row.display_name else { continue };
-        let Some(actor_handle) = &row.actor_handle else { continue };
-        let Some(image_filename) = &row.image_filename else { continue };
+        let Some(author_id) = row.author_id else {
+            continue;
+        };
+        let Some(login_name) = &row.login_name else {
+            continue;
+        };
+        let Some(display_name) = &row.display_name else {
+            continue;
+        };
+        let Some(actor_handle) = &row.actor_handle else {
+            continue;
+        };
+        let Some(image_filename) = &row.image_filename else {
+            continue;
+        };
         let Some(width) = row.width else { continue };
         let Some(height) = row.height else { continue };
-        let Some(comments_count) = row.comments_count else { continue };
+        let Some(comments_count) = row.comments_count else {
+            continue;
+        };
 
         post_data.insert(
             id,
@@ -1029,17 +1059,47 @@ pub async fn build_thread_tree(
         );
 
         if let Some(parent_id) = row.parent_post_id {
-            children_map.entry(parent_id).or_insert_with(Vec::new).push(id);
+            children_map
+                .entry(parent_id)
+                .or_insert_with(Vec::new)
+                .push(id);
         }
     }
 
     // Recursive function to build tree for a given post ID
     fn build_subtree(
         post_id: Uuid,
-        post_data: &HashMap<Uuid, (Option<String>, Option<String>, Uuid, String, String, String, String, i32, i32, Option<chrono::DateTime<chrono::Utc>>, i64)>,
+        post_data: &HashMap<
+            Uuid,
+            (
+                Option<String>,
+                Option<String>,
+                Uuid,
+                String,
+                String,
+                String,
+                String,
+                i32,
+                i32,
+                Option<chrono::DateTime<chrono::Utc>>,
+                i64,
+            ),
+        >,
         children_map: &HashMap<Uuid, Vec<Uuid>>,
     ) -> Option<SerializableThreadedPost> {
-        let (title, content, author_id, login_name, display_name, actor_handle, image_filename, width, height, published_at, comments_count) = post_data.get(&post_id)?;
+        let (
+            title,
+            content,
+            author_id,
+            login_name,
+            display_name,
+            actor_handle,
+            image_filename,
+            width,
+            height,
+            published_at,
+            comments_count,
+        ) = post_data.get(&post_id)?;
 
         // Format the published_at date
         let published_at_formatted = published_at.as_ref().map(|dt| {
@@ -1378,7 +1438,11 @@ pub async fn find_following_posts_by_user_id(
         .collect())
 }
 
-pub async fn delete_post(tx: &mut Transaction<'_, Postgres>, id: Uuid, reason: PostDeletionReason) -> Result<()> {
+pub async fn delete_post(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    reason: PostDeletionReason,
+) -> Result<()> {
     let q = query!(
         "
         UPDATE posts

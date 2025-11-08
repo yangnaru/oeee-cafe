@@ -39,7 +39,11 @@ pub async fn list_notifications(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
+    let user = auth_session
+        .user
+        .as_ref()
+        .ok_or(AppError::Unauthorized)?
+        .clone();
 
     // Fetch notifications using the new notification system
     let notifications = fetch_notifications(&mut tx, user.id, 50, 0).await?;
@@ -62,7 +66,8 @@ pub async fn list_notifications(
         .collect();
 
     // Get common context (includes unread_notification_count and draft_post_count)
-    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     tx.commit().await?;
 
@@ -90,7 +95,11 @@ pub async fn mark_notification_read(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
+    let user = auth_session
+        .user
+        .as_ref()
+        .ok_or(AppError::Unauthorized)?
+        .clone();
 
     let success = mark_notification_as_read(&mut tx, notification_id, user.id).await?;
 
@@ -126,7 +135,11 @@ pub async fn mark_all_notifications_read(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
+    let user = auth_session
+        .user
+        .as_ref()
+        .ok_or(AppError::Unauthorized)?
+        .clone();
 
     let count = mark_all_notifications_as_read(&mut tx, user.id).await?;
 
@@ -146,7 +159,11 @@ pub async fn get_unread_notification_count(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
+    let user = auth_session
+        .user
+        .as_ref()
+        .ok_or(AppError::Unauthorized)?
+        .clone();
 
     let count = get_unread_count(&mut tx, user.id).await?;
 
@@ -164,7 +181,11 @@ pub async fn delete_notification_handler(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
+    let user = auth_session
+        .user
+        .as_ref()
+        .ok_or(AppError::Unauthorized)?
+        .clone();
 
     let success = delete_notification(&mut tx, notification_id, user.id).await?;
 
@@ -203,7 +224,11 @@ pub async fn api_list_notifications(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
+    let user = auth_session
+        .user
+        .as_ref()
+        .ok_or(AppError::Unauthorized)?
+        .clone();
 
     // Fetch notifications with pagination
     let notifications = fetch_notifications(&mut tx, user.id, params.limit, params.offset).await?;
@@ -220,9 +245,10 @@ pub async fn api_list_notifications(
         .into_iter()
         .map(|n| {
             // Build full image URL if filename exists
-            let post_image_url = n.post_image_filename.as_ref().map(|filename| {
-                format!("{}/image/{}/{}", r2_base_url, &filename[0..2], filename)
-            });
+            let post_image_url = n
+                .post_image_filename
+                .as_ref()
+                .map(|filename| format!("{}/image/{}/{}", r2_base_url, &filename[0..2], filename));
 
             NotificationItem {
                 id: n.id,
@@ -267,7 +293,11 @@ pub async fn api_mark_notification_read(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
+    let user = auth_session
+        .user
+        .as_ref()
+        .ok_or(AppError::Unauthorized)?
+        .clone();
 
     let success = mark_notification_as_read(&mut tx, notification_id, user.id).await?;
 
@@ -292,9 +322,10 @@ pub async fn api_mark_notification_read(
     if let Some(n) = notification {
         // Build full image URL if filename exists
         let r2_base_url = &state.config.r2_public_endpoint_url;
-        let post_image_url = n.post_image_filename.as_ref().map(|filename| {
-            format!("{}/image/{}/{}", r2_base_url, &filename[0..2], filename)
-        });
+        let post_image_url = n
+            .post_image_filename
+            .as_ref()
+            .map(|filename| format!("{}/image/{}/{}", r2_base_url, &filename[0..2], filename));
 
         let notification_item = NotificationItem {
             id: n.id,
@@ -349,7 +380,11 @@ pub async fn api_delete_notification(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
+    let user = auth_session
+        .user
+        .as_ref()
+        .ok_or(AppError::Unauthorized)?
+        .clone();
 
     let success = delete_notification(&mut tx, notification_id, user.id).await?;
 

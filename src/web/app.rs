@@ -1,21 +1,18 @@
 use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::about::about;
-use crate::web::handlers::privacy::privacy;
 use crate::web::handlers::account::{
-    account, delete_account, delete_account_htmx, edit_account, edit_password,
-    get_account_json, request_email_verification_code, request_email_verification_json,
-    save_language, save_show_sensitive_content, verify_email_code_json, verify_email_verification_code,
+    account, delete_account, delete_account_htmx, edit_account, edit_password, get_account_json,
+    request_email_verification_code, request_email_verification_json, save_language,
+    save_show_sensitive_content, verify_email_code_json, verify_email_verification_code,
 };
 use crate::web::handlers::activitypub::{
     activitypub_get_community, activitypub_get_post, activitypub_get_user,
     activitypub_post_community_inbox, activitypub_post_shared_inbox,
     activitypub_post_user_followers, activitypub_post_user_inbox, activitypub_webfinger,
 };
-use crate::web::handlers::auth::{api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup};
-use crate::web::handlers::password_reset::{
-    password_reset_request, password_reset_request_page,
-    password_reset_verify, password_reset_verify_page,
+use crate::web::handlers::auth::{
+    api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup,
 };
 use crate::web::handlers::collaborate::{
     collaborate_lobby, create_collaborative_session, get_active_sessions_json, get_auth_info,
@@ -25,12 +22,12 @@ use crate::web::handlers::collaborate::{
 use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
     communities, community, community_comments, community_detail_json, community_iframe,
-    create_community_form, create_community_json, do_accept_invitation, do_create_community,
-    delete_community_json, do_reject_invitation, get_communities_list_json,
-    get_community_invitations_json, get_community_members_json, get_public_communities_json,
-    get_user_invitations_json, get_members, hx_delete_community, hx_do_edit_community,
-    hx_edit_community, invite_user, invite_user_json, members_page, remove_member,
-    remove_member_json, retract_invitation, retract_invitation_json,
+    create_community_form, create_community_json, delete_community_json, do_accept_invitation,
+    do_create_community, do_reject_invitation, get_communities_list_json,
+    get_community_invitations_json, get_community_members_json, get_members,
+    get_public_communities_json, get_user_invitations_json, hx_delete_community,
+    hx_do_edit_community, hx_edit_community, invite_user, invite_user_json, members_page,
+    remove_member, remove_member_json, retract_invitation, retract_invitation_json,
     search_public_communities_json, update_community_json,
 };
 use crate::web::handlers::draw::{
@@ -40,23 +37,28 @@ use crate::web::handlers::draw::{
 use crate::web::handlers::handler_404;
 use crate::web::handlers::hashtag::{hashtag_autocomplete, hashtag_discovery, hashtag_view};
 use crate::web::handlers::home::{
-    add_reaction_api, create_comment_api, delete_comment_api, delete_post_api, get_active_communities_json, get_latest_comments_json,
-    get_post_comments_api, get_post_details_json, get_post_reactions_by_emoji_json, home,
-    load_more_public_posts, load_more_public_posts_json, my_timeline, remove_reaction_api,
+    add_reaction_api, create_comment_api, delete_comment_api, delete_post_api,
+    get_active_communities_json, get_latest_comments_json, get_post_comments_api,
+    get_post_details_json, get_post_reactions_by_emoji_json, home, load_more_public_posts,
+    load_more_public_posts_json, my_timeline, remove_reaction_api,
 };
-use crate::web::handlers::search::search_json;
 use crate::web::handlers::notifications::{
     api_delete_notification, api_list_notifications, api_mark_notification_read,
     delete_notification_handler, get_unread_notification_count, list_notifications,
     mark_all_notifications_read, mark_notification_read,
 };
+use crate::web::handlers::password_reset::{
+    password_reset_request, password_reset_request_page, password_reset_verify,
+    password_reset_verify_page,
+};
 use crate::web::handlers::post::{
     add_reaction, do_create_comment, do_post_edit_community, draft_posts, draft_posts_api,
     hx_delete_post, hx_do_edit_post, hx_edit_post, post_edit_community, post_publish,
     post_publish_form, post_reactions_detail, post_relay_view, post_relay_view_by_login_name,
-    post_replay_view, post_replay_view_by_login_name, post_view_by_login_name,
-    redirect_post_to_login_name, remove_reaction, post_replay_view_mobile,
+    post_replay_view, post_replay_view_by_login_name, post_replay_view_mobile,
+    post_view_by_login_name, redirect_post_to_login_name, remove_reaction,
 };
+use crate::web::handlers::privacy::privacy;
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
     do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile, do_write_guestbook_entry,
@@ -66,6 +68,7 @@ use crate::web::handlers::profile::{
 use crate::web::handlers::push_tokens::{
     delete_push_token_handler, list_push_tokens_handler, register_push_token_handler,
 };
+use crate::web::handlers::search::search_json;
 use crate::web::handlers::well_known::apple_app_site_association;
 use activitypub_federation::config::{FederationConfig, FederationMiddleware};
 use anyhow::Result;
@@ -155,7 +158,10 @@ impl App {
             .route("/account", post(edit_account))
             .route("/account/password", post(edit_password))
             .route("/account/language", post(save_language))
-            .route("/account/show-sensitive-content", post(save_show_sensitive_content))
+            .route(
+                "/account/show-sensitive-content",
+                post(save_show_sensitive_content),
+            )
             .route(
                 "/account/request-verify-email",
                 post(request_email_verification_code),
@@ -206,7 +212,8 @@ impl App {
             .route("/banners/draw/finish", post(banner_draw_finish))
             .route("/posts/:id/publish", get(post_publish_form))
             .route("/posts/:id/replay", get(post_replay_view))
-            .route("/posts/:id/replay/mobile", get(post_replay_view_mobile))            .route("/@:login_name/follow", post(do_follow_profile))
+            .route("/posts/:id/replay/mobile", get(post_replay_view_mobile))
+            .route("/@:login_name/follow", post(do_follow_profile))
             .route("/@:login_name/unfollow", post(do_unfollow_profile))
             .route("/@:login_name/guestbook", post(do_write_guestbook_entry))
             .route(
@@ -258,53 +265,119 @@ impl App {
 
         let app = Router::new()
             .route("/", get(home))
-            .route("/.well-known/apple-app-site-association", get(apple_app_site_association))
+            .route(
+                "/.well-known/apple-app-site-association",
+                get(apple_app_site_association),
+            )
             .route("/api/home/posts", get(load_more_public_posts))
             .route("/api/v1/posts/public", get(load_more_public_posts_json))
             .route("/api/v1/posts/drafts", get(draft_posts_api))
             .route("/api/v1/posts/:post_id", get(get_post_details_json))
             .route("/api/v1/posts/:post_id", delete(delete_post_api))
-            .route("/api/v1/posts/:post_id/comments", get(get_post_comments_api))
+            .route(
+                "/api/v1/posts/:post_id/comments",
+                get(get_post_comments_api),
+            )
             .route("/api/v1/posts/:post_id/comments", post(create_comment_api))
             .route("/api/v1/comments/:comment_id", delete(delete_comment_api))
-            .route("/api/v1/posts/:post_id/reactions/:emoji", get(get_post_reactions_by_emoji_json))
-            .route("/api/v1/posts/:post_id/reactions/:emoji", post(add_reaction_api))
-            .route("/api/v1/posts/:post_id/reactions/:emoji", delete(remove_reaction_api))
+            .route(
+                "/api/v1/posts/:post_id/reactions/:emoji",
+                get(get_post_reactions_by_emoji_json),
+            )
+            .route(
+                "/api/v1/posts/:post_id/reactions/:emoji",
+                post(add_reaction_api),
+            )
+            .route(
+                "/api/v1/posts/:post_id/reactions/:emoji",
+                delete(remove_reaction_api),
+            )
             .route("/api/v1/search", get(search_json))
             .route("/api/v1/profiles/:login_name", get(profile_json))
-            .route("/api/v1/profiles/:login_name/followings", get(profile_followings_json))
-            .route("/api/v1/profiles/:login_name/follow", post(follow_profile_api))
-            .route("/api/v1/profiles/:login_name/unfollow", post(unfollow_profile_api))
-            .route("/api/v1/communities/active", get(get_active_communities_json))
-            .route("/api/v1/communities/search", get(search_public_communities_json))
-            .route("/api/v1/communities/public", get(get_public_communities_json))
+            .route(
+                "/api/v1/profiles/:login_name/followings",
+                get(profile_followings_json),
+            )
+            .route(
+                "/api/v1/profiles/:login_name/follow",
+                post(follow_profile_api),
+            )
+            .route(
+                "/api/v1/profiles/:login_name/unfollow",
+                post(unfollow_profile_api),
+            )
+            .route(
+                "/api/v1/communities/active",
+                get(get_active_communities_json),
+            )
+            .route(
+                "/api/v1/communities/search",
+                get(search_public_communities_json),
+            )
+            .route(
+                "/api/v1/communities/public",
+                get(get_public_communities_json),
+            )
             .route("/api/v1/communities", get(get_communities_list_json))
             .route("/api/v1/communities", post(create_community_json))
             .route("/api/v1/communities/:slug", get(community_detail_json))
             .route("/api/v1/communities/:slug", put(update_community_json))
             .route("/api/v1/communities/:slug", delete(delete_community_json))
-            .route("/api/v1/communities/:slug/members", get(get_community_members_json))
+            .route(
+                "/api/v1/communities/:slug/members",
+                get(get_community_members_json),
+            )
             .route("/api/v1/communities/:slug/members", post(invite_user_json))
-            .route("/api/v1/communities/:slug/members/:user_id", delete(remove_member_json))
-            .route("/api/v1/communities/:slug/invitations", get(get_community_invitations_json))
-            .route("/api/v1/communities/:slug/invitations/:invitation_id", delete(retract_invitation_json))
+            .route(
+                "/api/v1/communities/:slug/members/:user_id",
+                delete(remove_member_json),
+            )
+            .route(
+                "/api/v1/communities/:slug/invitations",
+                get(get_community_invitations_json),
+            )
+            .route(
+                "/api/v1/communities/:slug/invitations/:invitation_id",
+                delete(retract_invitation_json),
+            )
             .route("/api/v1/invitations", get(get_user_invitations_json))
             .route("/api/v1/comments/latest", get(get_latest_comments_json))
-            .route("/api/v1/collaborate/sessions", get(get_active_sessions_json))
-            .route("/api/v1/collaborate/sessions", post(create_collaborative_session))
+            .route(
+                "/api/v1/collaborate/sessions",
+                get(get_active_sessions_json),
+            )
+            .route(
+                "/api/v1/collaborate/sessions",
+                post(create_collaborative_session),
+            )
             .route("/api/v1/auth/login", post(api_login))
             .route("/api/v1/auth/logout", post(api_logout))
             .route("/api/v1/auth/signup", post(api_signup))
             .route("/api/v1/auth/me", get(api_me))
             .route("/api/v1/account", get(get_account_json))
             .route("/api/v1/account", delete(delete_account))
-            .route("/api/v1/account/request-verify-email", post(request_email_verification_json))
+            .route(
+                "/api/v1/account/request-verify-email",
+                post(request_email_verification_json),
+            )
             .route("/api/v1/account/verify-email", post(verify_email_code_json))
             .route("/api/v1/notifications", get(api_list_notifications))
-            .route("/api/v1/notifications/unread-count", get(get_unread_notification_count))
-            .route("/api/v1/notifications/mark-all-read", post(mark_all_notifications_read))
-            .route("/api/v1/notifications/:notification_id/mark-read", post(api_mark_notification_read))
-            .route("/api/v1/notifications/:notification_id", delete(api_delete_notification))
+            .route(
+                "/api/v1/notifications/unread-count",
+                get(get_unread_notification_count),
+            )
+            .route(
+                "/api/v1/notifications/mark-all-read",
+                post(mark_all_notifications_read),
+            )
+            .route(
+                "/api/v1/notifications/:notification_id/mark-read",
+                post(api_mark_notification_read),
+            )
+            .route(
+                "/api/v1/notifications/:notification_id",
+                delete(api_delete_notification),
+            )
             .route("/communities", get(communities))
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))
@@ -374,7 +447,9 @@ impl App {
 
         // run our app with hyper, listening globally
         let addr = SocketAddr::from(([0, 0, 0, 0], self.state.config.port));
-        let listener = tokio::net::TcpListener::bind(addr).await.expect("Failed to bind TCP listener");
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
+            .expect("Failed to bind TCP listener");
         tracing::info!("listening on {}", addr);
 
         // Ensure we use a shutdown signal to abort the background tasks.

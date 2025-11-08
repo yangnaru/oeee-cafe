@@ -61,7 +61,10 @@ pub async fn do_signup(
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     if form.password != form.password_confirm {
-        messages.error(safe_get_message(&bundle, "account-change-password-error-mismatch"));
+        messages.error(safe_get_message(
+            &bundle,
+            "account-change-password-error-mismatch",
+        ));
         return Ok(Redirect::to("/signup").into_response());
     }
 
@@ -316,11 +319,7 @@ pub async fn api_logout(
     }
 
     match auth_session.logout().await {
-        Ok(_) => (
-            StatusCode::OK,
-            Json(LogoutResponse { success: true }),
-        )
-            .into_response(),
+        Ok(_) => (StatusCode::OK, Json(LogoutResponse { success: true })).into_response(),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(LogoutResponse { success: false }),
@@ -427,7 +426,8 @@ pub async fn api_signup(
                         if db_error.code().as_deref() == Some("23505") {
                             // Check if the error message mentions login_name
                             if db_error.message().contains("login_name") {
-                                "This login name is already taken. Please choose a different one.".to_string()
+                                "This login name is already taken. Please choose a different one."
+                                    .to_string()
                             } else {
                                 "A user with this information already exists.".to_string()
                             }
@@ -435,7 +435,7 @@ pub async fn api_signup(
                             "Failed to create user.".to_string()
                         }
                     }
-                    _ => "Failed to create user.".to_string()
+                    _ => "Failed to create user.".to_string(),
                 }
             } else {
                 e.to_string()

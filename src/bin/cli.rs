@@ -54,7 +54,9 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    let config_path = cli.config.ok_or_else(|| anyhow::anyhow!("Config file path required"))?;
+    let config_path = cli
+        .config
+        .ok_or_else(|| anyhow::anyhow!("Config file path required"))?;
     let cfg = AppConfig::new_from_file_and_env(&config_path).unwrap_or_else(|e| {
         eprintln!("error: {}", e);
         exit(1);
@@ -154,7 +156,11 @@ async fn main() -> Result<()> {
                     let tokens = get_user_tokens(&mut tx, user.id).await?;
                     println!("User has {} push token(s) registered:", tokens.len());
                     for token in &tokens {
-                        println!("  - {:?}: {}...", token.platform, &token.device_token[..token.device_token.len().min(20)]);
+                        println!(
+                            "  - {:?}: {}...",
+                            token.platform,
+                            &token.device_token[..token.device_token.len().min(20)]
+                        );
                     }
 
                     if tokens.is_empty() {

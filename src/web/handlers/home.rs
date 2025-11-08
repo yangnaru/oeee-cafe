@@ -2,28 +2,31 @@ use super::ExtractFtlLang;
 use crate::app_error::AppError;
 use crate::models::actor::Actor;
 use crate::models::comment::{
-    build_comment_thread_tree_paginated, create_comment, find_latest_comments_from_public_communities,
-    CommentDraft,
+    build_comment_thread_tree_paginated, create_comment,
+    find_latest_comments_from_public_communities, CommentDraft,
 };
 use crate::models::community::{
     get_communities_members_count, get_public_communities, is_user_member, Community,
 };
-use crate::models::post::{
-    build_thread_tree, delete_post_with_activity, find_following_posts_by_user_id,
-    find_post_by_id, find_post_detail_for_json, find_public_community_posts,
-    find_recent_posts_by_communities, SerializableThreadedPost,
-};
 use crate::models::hashtag::{get_hashtags_for_post, unlink_post_hashtags};
-use crate::models::reaction::{create_reaction, delete_reaction, find_reactions_by_post_id_and_emoji, find_user_reaction, get_reaction_counts, ReactionDraft};
 use crate::models::notification::{
     create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
     CreateNotificationParams, NotificationType,
+};
+use crate::models::post::{
+    build_thread_tree, delete_post_with_activity, find_following_posts_by_user_id, find_post_by_id,
+    find_post_detail_for_json, find_public_community_posts, find_recent_posts_by_communities,
+    SerializableThreadedPost,
+};
+use crate::models::reaction::{
+    create_reaction, delete_reaction, find_reactions_by_post_id_and_emoji, find_user_reaction,
+    get_reaction_counts, ReactionDraft,
 };
 use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
 use crate::web::responses::{
     AuthorInfo, ChildPostAuthor, ChildPostImage, ChildPostResponse, CommentListResponse,
-    CommentsListResponse, CommentWithPost, CommunityListResponse, CommunityPostThumbnail,
+    CommentWithPost, CommentsListResponse, CommunityListResponse, CommunityPostThumbnail,
     CommunityWithPosts, ImageInfo, PaginationMeta, PostCommunityInfo, PostDetail,
     PostDetailResponse, PostListResponse, PostThumbnail, ReactionCount, ReactionsDetailResponse,
     Reactor, ThreadedCommentResponse,
@@ -57,7 +60,8 @@ pub async fn home(
         (None, false)
     };
 
-    let non_official_public_community_posts = find_public_community_posts(&mut tx, 18, 0, viewer_user_id, viewer_show_sensitive).await?;
+    let non_official_public_community_posts =
+        find_public_community_posts(&mut tx, 18, 0, viewer_user_id, viewer_show_sensitive).await?;
     let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
     // Filter to communities with at least 10 posts
@@ -67,9 +71,17 @@ pub async fn home(
         .collect();
 
     // Fetch recent posts and stats for active communities
-    let community_ids: Vec<uuid::Uuid> = active_public_communities_raw.iter().map(|c| c.id).collect();
+    let community_ids: Vec<uuid::Uuid> =
+        active_public_communities_raw.iter().map(|c| c.id).collect();
 
-    let recent_posts = find_recent_posts_by_communities(&mut tx, &community_ids, 3, viewer_user_id, viewer_show_sensitive).await?;
+    let recent_posts = find_recent_posts_by_communities(
+        &mut tx,
+        &community_ids,
+        3,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
     let community_stats = get_communities_members_count(&mut tx, &community_ids).await?;
 
     // Group posts by community_id
@@ -77,7 +89,9 @@ pub async fn home(
     let mut posts_by_community: HashMap<uuid::Uuid, Vec<serde_json::Value>> = HashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community.entry(community_id).or_insert_with(Vec::new);
+            let posts = posts_by_community
+                .entry(community_id)
+                .or_insert_with(Vec::new);
             posts.push(serde_json::json!({
                 "id": post.id.to_string(),
                 "image_filename": post.image_filename,
@@ -98,8 +112,14 @@ pub async fn home(
     let active_public_communities: Vec<serde_json::Value> = active_public_communities_raw
         .into_iter()
         .map(|community| {
-            let recent_posts = posts_by_community.get(&community.id).cloned().unwrap_or_default();
-            let members_count = stats_by_community.get(&community.id).cloned().unwrap_or(None);
+            let recent_posts = posts_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or_default();
+            let members_count = stats_by_community
+                .get(&community.id)
+                .cloned()
+                .unwrap_or(None);
 
             serde_json::json!({
                 "id": community.id.to_string(),
@@ -147,7 +167,11 @@ pub async fn my_timeline(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
+    let user = auth_session
+        .user
+        .as_ref()
+        .ok_or(AppError::Unauthorized)?
+        .clone();
     let posts =
         find_following_posts_by_user_id(&mut tx, user.id, user.show_sensitive_content).await?;
 
@@ -202,11 +226,19 @@ pub async fn load_more_public_posts(
         (None, false)
     };
 
-    let posts = find_public_community_posts(&mut tx, query.limit, query.offset, viewer_user_id, viewer_show_sensitive).await?;
+    let posts = find_public_community_posts(
+        &mut tx,
+        query.limit,
+        query.offset,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
 
     tx.commit().await?;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("home_posts_fragment.jinja")?;
+    let template: minijinja::Template<'_, '_> =
+        state.env.get_template("home_posts_fragment.jinja")?;
     let rendered = template.render(context! {
         posts,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
@@ -231,7 +263,14 @@ pub async fn load_more_public_posts_json(
         (None, false)
     };
 
-    let posts = find_public_community_posts(&mut tx, query.limit, query.offset, viewer_user_id, viewer_show_sensitive).await?;
+    let posts = find_public_community_posts(
+        &mut tx,
+        query.limit,
+        query.offset,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
 
     tx.commit().await?;
 
@@ -288,12 +327,17 @@ pub async fn get_active_communities_json(
         .collect();
 
     // Fetch recent posts and stats for active communities
-    let community_ids: Vec<uuid::Uuid> = active_public_communities_raw
-        .iter()
-        .map(|c| c.id)
-        .collect();
+    let community_ids: Vec<uuid::Uuid> =
+        active_public_communities_raw.iter().map(|c| c.id).collect();
 
-    let recent_posts = find_recent_posts_by_communities(&mut tx, &community_ids, 10, viewer_user_id, viewer_show_sensitive).await?;
+    let recent_posts = find_recent_posts_by_communities(
+        &mut tx,
+        &community_ids,
+        10,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
     let community_stats = get_communities_members_count(&mut tx, &community_ids).await?;
 
     tx.commit().await?;
@@ -334,10 +378,7 @@ pub async fn get_active_communities_json(
                 .get(&community.id)
                 .cloned()
                 .unwrap_or_default();
-            let members_count = stats_by_community
-                .get(&community.id)
-                .cloned()
-                .flatten();
+            let members_count = stats_by_community.get(&community.id).cloned().flatten();
 
             CommunityWithPosts {
                 id: community.id,
@@ -471,8 +512,12 @@ pub async fn get_post_details_json(
                     width: p.image_width,
                     height: p.image_height,
                 },
-                published_at: p.published_at_utc.and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok().map(|dt| dt.with_timezone(&chrono::Utc))),
-                comments_count: 0, // Not needed for parent display
+                published_at: p.published_at_utc.and_then(|s| {
+                    chrono::DateTime::parse_from_rfc3339(&s)
+                        .ok()
+                        .map(|dt| dt.with_timezone(&chrono::Utc))
+                }),
+                comments_count: 0,    // Not needed for parent display
                 children: Vec::new(), // Parent post doesn't show its own children in this context
             }
         })
@@ -497,10 +542,7 @@ pub async fn get_post_details_json(
 
     // Get hashtags for this post
     let hashtags_data = get_hashtags_for_post(&mut tx, post_id).await?;
-    let hashtags: Vec<String> = hashtags_data
-        .into_iter()
-        .map(|h| h.display_name)
-        .collect();
+    let hashtags: Vec<String> = hashtags_data.into_iter().map(|h| h.display_name).collect();
 
     tx.commit().await?;
 
@@ -523,7 +565,11 @@ pub async fn get_post_details_json(
         },
         is_sensitive: post_data.is_sensitive,
         published_at_utc: post_data.published_at_utc,
-        community: match (post_data.community_id, post_data.community_name, post_data.community_slug) {
+        community: match (
+            post_data.community_id,
+            post_data.community_name,
+            post_data.community_slug,
+        ) {
             (Some(id), Some(name), Some(slug)) => Some(PostCommunityInfo { id, name, slug }),
             _ => None,
         },
@@ -633,10 +679,10 @@ pub async fn get_post_comments_api(
                     .into());
                 }
             } else {
-                return Err(
-                    anyhow::anyhow!("Authentication required to view comments in private community")
-                        .into(),
-                );
+                return Err(anyhow::anyhow!(
+                    "Authentication required to view comments in private community"
+                )
+                .into());
             }
         }
     }
@@ -648,7 +694,9 @@ pub async fn get_post_comments_api(
     tx.commit().await?;
 
     // Convert to response format
-    fn convert_to_response(comment: crate::models::comment::SerializableThreadedComment) -> ThreadedCommentResponse {
+    fn convert_to_response(
+        comment: crate::models::comment::SerializableThreadedComment,
+    ) -> ThreadedCommentResponse {
         ThreadedCommentResponse {
             id: comment.id,
             post_id: comment.post_id,
@@ -663,14 +711,16 @@ pub async fn get_post_comments_api(
             created_at: comment.created_at,
             updated_at: comment.updated_at,
             deleted_at: comment.deleted_at,
-            children: comment.children.into_iter().map(convert_to_response).collect(),
+            children: comment
+                .children
+                .into_iter()
+                .map(convert_to_response)
+                .collect(),
         }
     }
 
-    let comments: Vec<ThreadedCommentResponse> = comments_data
-        .into_iter()
-        .map(convert_to_response)
-        .collect();
+    let comments: Vec<ThreadedCommentResponse> =
+        comments_data.into_iter().map(convert_to_response).collect();
 
     // Determine if there are more comments
     let has_more = comments.len() as i64 == limit;
@@ -741,7 +791,10 @@ pub async fn create_comment_api(
         if comm.visibility == crate::models::community::CommunityVisibility::Private {
             let is_member = is_user_member(&mut tx, user.id, comm.id).await?;
             if !is_member {
-                return Err(anyhow::anyhow!("You must be a member to comment in this private community").into());
+                return Err(anyhow::anyhow!(
+                    "You must be a member to comment in this private community"
+                )
+                .into());
             }
         }
     }
@@ -861,7 +914,8 @@ pub async fn create_comment_api(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count)
+                        .await;
                 }
                 let _ = tx.commit().await;
             }
@@ -936,7 +990,12 @@ pub async fn delete_comment_api(
     }
 
     // Delete the comment
-    crate::models::comment::delete_comment(&mut tx, comment_uuid, crate::models::comment::CommentDeletionReason::UserDeleted).await?;
+    crate::models::comment::delete_comment(
+        &mut tx,
+        comment_uuid,
+        crate::models::comment::CommentDeletionReason::UserDeleted,
+    )
+    .await?;
 
     tx.commit().await?;
 
@@ -1087,7 +1146,13 @@ pub async fn add_reaction_api(
                             .ok()
                             .and_then(|count| u32::try_from(count).ok());
 
-                        send_push_for_notification(&push_service, &state.db_pool, &notification_with_actor, badge_count).await;
+                        send_push_for_notification(
+                            &push_service,
+                            &state.db_pool,
+                            &notification_with_actor,
+                            badge_count,
+                        )
+                        .await;
                     }
                 }
             }

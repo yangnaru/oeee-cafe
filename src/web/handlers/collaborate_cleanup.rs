@@ -264,8 +264,8 @@ async fn cleanup_inactive_sessions(
     inactive_sessions_cleaned: &mut i32,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Find sessions that have been inactive for more than the threshold
-    let inactive_cutoff =
-        chrono::Utc::now().naive_utc() - chrono::Duration::from_std(inactive_threshold).expect("Valid duration");
+    let inactive_cutoff = chrono::Utc::now().naive_utc()
+        - chrono::Duration::from_std(inactive_threshold).expect("Valid duration");
 
     let inactive_sessions = sqlx::query!(
         r#"

@@ -244,8 +244,13 @@ impl Object for Actor {
 
     async fn into_json(self, _data: &Data<Self::DataType>) -> Result<Self::Kind, Self::Error> {
         let public_key = PublicKey {
-            id: format!("{}#main-key", self.iri).parse().map_err(|e| anyhow::anyhow!("Invalid IRI URL: {}", e))?,
-            owner: self.iri.parse().map_err(|e| anyhow::anyhow!("Invalid IRI URL: {}", e))?,
+            id: format!("{}#main-key", self.iri)
+                .parse()
+                .map_err(|e| anyhow::anyhow!("Invalid IRI URL: {}", e))?,
+            owner: self
+                .iri
+                .parse()
+                .map_err(|e| anyhow::anyhow!("Invalid IRI URL: {}", e))?,
             public_key_pem: self.public_key_pem,
         };
 
@@ -426,7 +431,10 @@ pub async fn activitypub_webfinger(
         if let Some(actor) = actor {
             return Ok(Json(build_webfinger_response(
                 query.resource,
-                actor.iri.parse().map_err(|e| anyhow::anyhow!("Invalid actor IRI: {}", e))?,
+                actor
+                    .iri
+                    .parse()
+                    .map_err(|e| anyhow::anyhow!("Invalid actor IRI: {}", e))?,
             ))
             .into_response());
         }
@@ -445,7 +453,10 @@ pub async fn activitypub_webfinger(
         if let Some(actor) = actor {
             return Ok(Json(build_webfinger_response(
                 query.resource,
-                actor.iri.parse().map_err(|e| anyhow::anyhow!("Invalid actor IRI: {}", e))?,
+                actor
+                    .iri
+                    .parse()
+                    .map_err(|e| anyhow::anyhow!("Invalid actor IRI: {}", e))?,
             ))
             .into_response());
         }
@@ -463,8 +474,12 @@ pub async fn activitypub_get_user(
     let db = &data.app_data().db_pool;
     let mut tx = db.begin().await?;
 
-    if let Some(actor) =
-        Actor::find_by_user_id(&mut tx, Uuid::parse_str(&actor_id).map_err(|e| anyhow::anyhow!("Invalid actor UUID: {}: {}", actor_id, e))?).await?
+    if let Some(actor) = Actor::find_by_user_id(
+        &mut tx,
+        Uuid::parse_str(&actor_id)
+            .map_err(|e| anyhow::anyhow!("Invalid actor UUID: {}: {}", actor_id, e))?,
+    )
+    .await?
     {
         let json_actor = actor.into_json(&data).await?;
         let context = [
@@ -495,8 +510,12 @@ pub async fn activitypub_get_community(
     let db = &data.app_data().db_pool;
     let mut tx = db.begin().await?;
 
-    if let Some(actor) =
-        Actor::find_by_community_id(&mut tx, Uuid::parse_str(&community_id).map_err(|e| anyhow::anyhow!("Invalid community UUID: {}: {}", community_id, e))?).await?
+    if let Some(actor) = Actor::find_by_community_id(
+        &mut tx,
+        Uuid::parse_str(&community_id)
+            .map_err(|e| anyhow::anyhow!("Invalid community UUID: {}: {}", community_id, e))?,
+    )
+    .await?
     {
         let json_actor = actor.into_json(&data).await?;
         let context = [
@@ -533,7 +552,8 @@ pub async fn activitypub_get_post(
         // Check community visibility - only expose posts from public and unlisted communities via ActivityPub
         // Private community posts should not be accessible
         // Personal posts (no community) are always accessible
-        let community_id = post.get("community_id")
+        let community_id = post
+            .get("community_id")
             .and_then(|v| v.as_ref())
             .and_then(|s| Uuid::parse_str(s).ok());
 
@@ -547,10 +567,10 @@ pub async fn activitypub_get_post(
         }
 
         let author_id = Uuid::parse_str(
-        post.get("author_id")
-            .and_then(|v| v.as_ref())
-            .ok_or_else(|| anyhow::anyhow!("Missing author_id in post"))?
-    )?;
+            post.get("author_id")
+                .and_then(|v| v.as_ref())
+                .ok_or_else(|| anyhow::anyhow!("Missing author_id in post"))?,
+        )?;
 
         // Find the author's actor, create if it doesn't exist
         let author_actor = Actor::find_by_user_id(&mut tx, author_id).await?;
@@ -1004,7 +1024,8 @@ impl ActivityHandler for Undo {
                 tracing::info!("Undo type: Follow");
 
                 // Find the target actor being unfollowed
-                let following_actor = Actor::find_by_iri(&mut tx, follow.object.to_string()).await?;
+                let following_actor =
+                    Actor::find_by_iri(&mut tx, follow.object.to_string()).await?;
                 let following_actor =
                     following_actor.ok_or_else(|| anyhow::anyhow!("Target actor not found"))?;
 
@@ -1014,7 +1035,8 @@ impl ActivityHandler for Undo {
                     follower_actor.ok_or_else(|| anyhow::anyhow!("Follower actor not found"))?;
 
                 // Remove the follow relationship
-                follow::unfollow_by_actor_ids(&mut tx, follower_actor.id, following_actor.id).await?;
+                follow::unfollow_by_actor_ids(&mut tx, follower_actor.id, following_actor.id)
+                    .await?;
                 tracing::info!(
                     "Removed follow relationship: {} -> {}",
                     follower_actor.iri,
@@ -1037,7 +1059,10 @@ impl ActivityHandler for Undo {
                 }
             }
             UndoObject::EmojiReact(react) => {
-                tracing::info!("Undo type: EmojiReact (removing {} reaction)", react.content);
+                tracing::info!(
+                    "Undo type: EmojiReact (removing {} reaction)",
+                    react.content
+                );
                 tracing::info!("Reaction IRI: {}", react.id);
 
                 // Delete reaction by IRI
@@ -1388,9 +1413,13 @@ impl ActivityHandler for Create {
                                     {
                                         Ok(notification) => {
                                             tracing::info!("Created notification for comment from federated actor");
-                                            notification_info.push((notification.id, post_author_id));
+                                            notification_info
+                                                .push((notification.id, post_author_id));
                                         }
-                                        Err(e) => tracing::warn!("Failed to create notification for comment: {:?}", e),
+                                        Err(e) => tracing::warn!(
+                                            "Failed to create notification for comment: {:?}",
+                                            e
+                                        ),
                                     }
                                 }
 
@@ -1410,16 +1439,29 @@ impl ActivityHandler for Create {
                                                 }
                                             };
 
-                                            if let Ok(Some(notification)) =
-                                                get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                                            if let Ok(Some(notification)) = get_notification_by_id(
+                                                &mut tx,
+                                                notification_id,
+                                                recipient_id,
+                                            )
+                                            .await
                                             {
                                                 // Get unread count for badge
-                                                let badge_count = get_unread_count(&mut tx, recipient_id)
-                                                    .await
-                                                    .ok()
-                                                    .and_then(|count| u32::try_from(count).ok());
+                                                let badge_count =
+                                                    get_unread_count(&mut tx, recipient_id)
+                                                        .await
+                                                        .ok()
+                                                        .and_then(|count| {
+                                                            u32::try_from(count).ok()
+                                                        });
 
-                                                send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
+                                                send_push_for_notification(
+                                                    &push_service,
+                                                    &db_pool,
+                                                    &notification,
+                                                    badge_count,
+                                                )
+                                                .await;
                                             }
                                             let _ = tx.commit().await;
                                         }
@@ -1659,7 +1701,9 @@ pub async fn create_note_from_post(
     let cc = vec![format!("{}/followers", author_actor.iri)];
 
     // Get published date
-    let published = post.get("published_at_utc").ok_or_else(|| anyhow::anyhow!("Missing published_at_utc"))?;
+    let published = post
+        .get("published_at_utc")
+        .ok_or_else(|| anyhow::anyhow!("Missing published_at_utc"))?;
 
     let note = Note::new(
         note_id,
@@ -1738,7 +1782,9 @@ pub async fn create_updated_note_from_post(
     let cc = vec![format!("{}/followers", author_actor.iri)];
 
     // Get published date
-    let published = post.get("published_at_utc").ok_or_else(|| anyhow::anyhow!("Missing published_at_utc"))?;
+    let published = post
+        .get("published_at_utc")
+        .ok_or_else(|| anyhow::anyhow!("Missing published_at_utc"))?;
 
     // Use current time for ActivityPub update timestamp
     let updated = chrono::Utc::now().to_rfc3339();
@@ -1905,7 +1951,10 @@ pub struct Tombstone {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Delete {
-    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "actor_from_signature_deser")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "actor_from_signature_deser"
+    )]
     actor: Option<ObjectId<Actor>>,
     object: Tombstone,
     r#type: DeleteType,
@@ -2024,7 +2073,8 @@ impl ActivityHandler for Delete {
             if let Ok(post_id) = uuid::Uuid::parse_str(post_id_str) {
                 // Mark the post as deleted in our database
                 use crate::models::post::{delete_post, PostDeletionReason};
-                if let Err(e) = delete_post(&mut tx, post_id, PostDeletionReason::UserDeleted).await {
+                if let Err(e) = delete_post(&mut tx, post_id, PostDeletionReason::UserDeleted).await
+                {
                     tracing::warn!(
                         "Failed to delete post {} from Delete activity: {:?}",
                         post_id,
@@ -2199,7 +2249,10 @@ impl ActivityHandler for Like {
                                         tracing::info!("Created notification for ❤️ reaction from federated actor");
                                         notification_info.push((notification.id, post_author_id));
                                     }
-                                    Err(e) => tracing::warn!("Failed to create notification for ❤️ reaction: {:?}", e),
+                                    Err(e) => tracing::warn!(
+                                        "Failed to create notification for ❤️ reaction: {:?}",
+                                        e
+                                    ),
                                 }
                             }
 
@@ -2219,16 +2272,27 @@ impl ActivityHandler for Like {
                                             }
                                         };
 
-                                        if let Ok(Some(notification)) =
-                                            get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                                        if let Ok(Some(notification)) = get_notification_by_id(
+                                            &mut tx,
+                                            notification_id,
+                                            recipient_id,
+                                        )
+                                        .await
                                         {
                                             // Get unread count for badge
-                                            let badge_count = get_unread_count(&mut tx, recipient_id)
-                                                .await
-                                                .ok()
-                                                .and_then(|count| u32::try_from(count).ok());
+                                            let badge_count =
+                                                get_unread_count(&mut tx, recipient_id)
+                                                    .await
+                                                    .ok()
+                                                    .and_then(|count| u32::try_from(count).ok());
 
-                                            send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
+                                            send_push_for_notification(
+                                                &push_service,
+                                                &db_pool,
+                                                &notification,
+                                                badge_count,
+                                            )
+                                            .await;
                                         }
                                         let _ = tx.commit().await;
                                     }
@@ -2247,7 +2311,10 @@ impl ActivityHandler for Like {
                 tracing::warn!("Failed to parse post ID from Like object: {}", post_id_str);
             }
         } else {
-            tracing::debug!("Like object URL doesn't match local post pattern: {}", object_url);
+            tracing::debug!(
+                "Like object URL doesn't match local post pattern: {}",
+                object_url
+            );
         }
 
         Ok(())
@@ -2257,7 +2324,10 @@ impl ActivityHandler for Like {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct EmojiReact {
-    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "actor_from_signature_deser")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "actor_from_signature_deser"
+    )]
     pub actor: Option<ObjectId<Actor>>,
     #[serde(rename = "object")]
     pub object: Url,
@@ -2415,7 +2485,11 @@ impl ActivityHandler for EmojiReact {
                                         tracing::info!("Created notification for {} reaction from federated actor", self.content);
                                         notification_info.push((notification.id, post_author_id));
                                     }
-                                    Err(e) => tracing::warn!("Failed to create notification for {} reaction: {:?}", self.content, e),
+                                    Err(e) => tracing::warn!(
+                                        "Failed to create notification for {} reaction: {:?}",
+                                        self.content,
+                                        e
+                                    ),
                                 }
                             }
 
@@ -2435,16 +2509,27 @@ impl ActivityHandler for EmojiReact {
                                             }
                                         };
 
-                                        if let Ok(Some(notification)) =
-                                            get_notification_by_id(&mut tx, notification_id, recipient_id).await
+                                        if let Ok(Some(notification)) = get_notification_by_id(
+                                            &mut tx,
+                                            notification_id,
+                                            recipient_id,
+                                        )
+                                        .await
                                         {
                                             // Get unread count for badge
-                                            let badge_count = get_unread_count(&mut tx, recipient_id)
-                                                .await
-                                                .ok()
-                                                .and_then(|count| u32::try_from(count).ok());
+                                            let badge_count =
+                                                get_unread_count(&mut tx, recipient_id)
+                                                    .await
+                                                    .ok()
+                                                    .and_then(|count| u32::try_from(count).ok());
 
-                                            send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
+                                            send_push_for_notification(
+                                                &push_service,
+                                                &db_pool,
+                                                &notification,
+                                                badge_count,
+                                            )
+                                            .await;
                                         }
                                         let _ = tx.commit().await;
                                     }
@@ -2460,10 +2545,16 @@ impl ActivityHandler for EmojiReact {
                     tracing::debug!("Post {} not found for EmojiReact activity", post_id);
                 }
             } else {
-                tracing::warn!("Failed to parse post ID from EmojiReact object: {}", post_id_str);
+                tracing::warn!(
+                    "Failed to parse post ID from EmojiReact object: {}",
+                    post_id_str
+                );
             }
         } else {
-            tracing::debug!("EmojiReact object URL doesn't match local post pattern: {}", object_url);
+            tracing::debug!(
+                "EmojiReact object URL doesn't match local post pattern: {}",
+                object_url
+            );
         }
 
         Ok(())

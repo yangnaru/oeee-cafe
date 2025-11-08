@@ -49,7 +49,9 @@ pub async fn password_reset_request(
 
     // Always show success message to prevent email enumeration
     let template = state.env.get_template("password_reset_sent.jinja")?;
-    let ftl_lang = bundle.locales.first()
+    let ftl_lang = bundle
+        .locales
+        .first()
         .map(|l| l.to_string())
         .unwrap_or_else(|| "en".to_string());
 
@@ -72,7 +74,8 @@ pub async fn password_reset_request(
     if let Some(user) = user {
         if user.email_verified_at.is_some() && user.deleted_at.is_none() {
             // Create challenge and send email
-            let _ = create_and_send_password_reset_email(&state, user.id, &form.email, &bundle).await;
+            let _ =
+                create_and_send_password_reset_email(&state, user.id, &form.email, &bundle).await;
         }
     }
 
@@ -101,7 +104,9 @@ pub async fn password_reset_verify(
     Form(form): Form<PasswordResetVerifyForm>,
 ) -> Result<impl IntoResponse, AppError> {
     let bundle = get_bundle(&accept_language, None);
-    let ftl_lang = bundle.locales.first()
+    let ftl_lang = bundle
+        .locales
+        .first()
         .map(|l| l.to_string())
         .unwrap_or_else(|| "en".to_string());
 
@@ -118,7 +123,10 @@ pub async fn password_reset_verify(
 
     // Validate password length
     if form.new_password.len() < 8 {
-        messages.error(safe_get_message(&bundle, "account-change-password-error-too-short"));
+        messages.error(safe_get_message(
+            &bundle,
+            "account-change-password-error-too-short",
+        ));
         let template = state.env.get_template("password_reset_verify.jinja")?;
         let rendered = template.render(context! {
             token => form.token,
@@ -146,7 +154,10 @@ pub async fn password_reset_verify(
 
         Ok(Redirect::to("/login").into_response())
     } else {
-        messages.error(safe_get_message(&bundle, "password-reset-error-invalid-token"));
+        messages.error(safe_get_message(
+            &bundle,
+            "password-reset-error-invalid-token",
+        ));
         let template = state.env.get_template("password_reset_verify.jinja")?;
         let rendered = template.render(context! {
             token => form.token,
@@ -188,25 +199,26 @@ async fn create_and_send_password_reset_email(
     // Generate UUID token for magic link
     let token = Uuid::new_v4();
 
-    let expires_at = Utc::now() + TimeDelta::try_seconds(60 * 15)
-        .expect("15 minutes is a valid duration"); // 15 minutes
+    let expires_at =
+        Utc::now() + TimeDelta::try_seconds(60 * 15).expect("15 minutes is a valid duration"); // 15 minutes
 
-    let password_reset_challenge = create_password_reset_challenge(
-        &mut tx,
-        user_id,
-        email,
-        token,
-        expires_at,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let password_reset_challenge =
+        create_password_reset_challenge(&mut tx, user_id, email, token, expires_at)
+            .await
+            .map_err(|e| e.to_string())?;
     tx.commit().await.map_err(|e| e.to_string())?;
 
     // Send email
     let from_address = safe_get_message(&bundle, "email-from-address");
     let email_message = Message::builder()
-        .from(from_address.parse().map_err(|e: lettre::address::AddressError| e.to_string())?)
-        .to(email.parse().map_err(|e: lettre::address::AddressError| e.to_string())?)
+        .from(
+            from_address
+                .parse()
+                .map_err(|e: lettre::address::AddressError| e.to_string())?,
+        )
+        .to(email
+            .parse()
+            .map_err(|e: lettre::address::AddressError| e.to_string())?)
         .subject(safe_get_message(&bundle, "password-reset-email-subject"))
         .body(format!(
             "{}\n\nhttps://{}/password-reset/verify?token={}",

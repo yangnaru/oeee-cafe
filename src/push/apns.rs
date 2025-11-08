@@ -14,7 +14,13 @@ pub struct ApnsClient {
 }
 
 impl ApnsClient {
-    pub fn new(key_path: &str, key_id: &str, team_id: &str, environment: &str, topic: &str) -> Result<Self, anyhow::Error> {
+    pub fn new(
+        key_path: &str,
+        key_id: &str,
+        team_id: &str,
+        environment: &str,
+        topic: &str,
+    ) -> Result<Self, anyhow::Error> {
         let mut key_file = File::open(key_path)?;
 
         let endpoint = match environment {
@@ -59,30 +65,30 @@ impl ApnsClient {
         if let Some(ref custom_data) = data {
             if let Some(data_obj) = custom_data.as_object() {
                 for (key, value) in data_obj {
-                    payload.add_custom_data(key, value)
-                        .map_err(|e| PushError::Other(anyhow::anyhow!("Failed to add custom data: {:?}", e)))?;
+                    payload.add_custom_data(key, value).map_err(|e| {
+                        PushError::Other(anyhow::anyhow!("Failed to add custom data: {:?}", e))
+                    })?;
                 }
             }
         }
 
-        let response = self.client.send(payload).await
-            .map_err(|e| {
-                // Check if it's a response error with an invalid token reason
-                if let A2Error::ResponseError(ref resp) = e {
-                    if let Some(ref error_body) = resp.error {
-                        match error_body.reason {
-                            ErrorReason::Unregistered
-                            | ErrorReason::BadDeviceToken
-                            | ErrorReason::DeviceTokenNotForTopic => {
-                                return PushError::InvalidToken;
-                            }
-                            _ => {}
+        let response = self.client.send(payload).await.map_err(|e| {
+            // Check if it's a response error with an invalid token reason
+            if let A2Error::ResponseError(ref resp) = e {
+                if let Some(ref error_body) = resp.error {
+                    match error_body.reason {
+                        ErrorReason::Unregistered
+                        | ErrorReason::BadDeviceToken
+                        | ErrorReason::DeviceTokenNotForTopic => {
+                            return PushError::InvalidToken;
                         }
+                        _ => {}
                     }
                 }
-                // For all other errors, don't capture backtrace
-                PushError::Other(anyhow::Error::msg(format!("APNs send error: {:?}", e)))
-            })?;
+            }
+            // For all other errors, don't capture backtrace
+            PushError::Other(anyhow::Error::msg(format!("APNs send error: {:?}", e)))
+        })?;
 
         // Check for errors in the response indicating invalid token
         if let Some(error) = response.error {
@@ -93,7 +99,9 @@ impl ApnsClient {
                     return Err(PushError::InvalidToken);
                 }
                 _ => {
-                    return Err(PushError::Other(anyhow::anyhow!("APNs error: {:?}", error).context("APNs returned error")));
+                    return Err(PushError::Other(
+                        anyhow::anyhow!("APNs error: {:?}", error).context("APNs returned error"),
+                    ));
                 }
             }
         }

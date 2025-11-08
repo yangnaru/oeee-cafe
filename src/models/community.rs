@@ -134,7 +134,10 @@ pub async fn get_own_communities(
 }
 
 pub async fn get_communities(tx: &mut Transaction<'_, Postgres>) -> Result<Vec<Community>> {
-    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE deleted_at IS NULL"#);
+    let q = query_as!(
+        Community,
+        r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE deleted_at IS NULL"#
+    );
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
@@ -185,9 +188,7 @@ pub async fn get_public_communities_paginated(
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
-pub async fn count_public_communities(
-    tx: &mut Transaction<'_, Postgres>,
-) -> Result<i64> {
+pub async fn count_public_communities(tx: &mut Transaction<'_, Postgres>) -> Result<i64> {
     // Count public communities with at least one post
     let result = query!(
         r#"
@@ -501,7 +502,11 @@ pub async fn find_community_by_id(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
 ) -> Result<Option<Community>> {
-    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE id = $1 AND deleted_at IS NULL"#, id);
+    let q = query_as!(
+        Community,
+        r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE id = $1 AND deleted_at IS NULL"#,
+        id
+    );
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
@@ -509,7 +514,11 @@ pub async fn find_community_by_slug(
     tx: &mut Transaction<'_, Postgres>,
     slug: String,
 ) -> Result<Option<Community>> {
-    let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE slug = $1 AND deleted_at IS NULL"#, slug);
+    let q = query_as!(
+        Community,
+        r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE slug = $1 AND deleted_at IS NULL"#,
+        slug
+    );
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
@@ -588,8 +597,12 @@ pub async fn update_community(
     let current = find_community_by_id(tx, id).await?;
     if let Some(current_community) = current {
         let is_member_only = |v: CommunityVisibility| v == CommunityVisibility::Private;
-        if is_member_only(current_community.visibility) != is_member_only(community_draft.visibility) {
-            return Err(anyhow::anyhow!("Cannot change visibility between member_only and public/unlisted"));
+        if is_member_only(current_community.visibility)
+            != is_member_only(community_draft.visibility)
+        {
+            return Err(anyhow::anyhow!(
+                "Cannot change visibility between member_only and public/unlisted"
+            ));
         }
     }
 

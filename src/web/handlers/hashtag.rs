@@ -44,7 +44,14 @@ pub async fn hashtag_view(
     };
 
     // Get posts for this hashtag
-    let posts = find_posts_by_hashtag(&mut tx, &normalized_name, 50, viewer_user_id, viewer_show_sensitive).await?;
+    let posts = find_posts_by_hashtag(
+        &mut tx,
+        &normalized_name,
+        50,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
 
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;

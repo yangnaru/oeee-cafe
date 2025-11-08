@@ -624,10 +624,12 @@ pub async fn delete_user_with_activity(
     // If state is provided and actor exists, send ActivityPub Delete activity
     if let (Some(state), Some(actor)) = (state, actor) {
         // Construct the actor URL
-        if let Ok(actor_url) = format!("https://{}/users/{}", config.domain, actor.username).parse() {
+        if let Ok(actor_url) = format!("https://{}/users/{}", config.domain, actor.username).parse()
+        {
             // Send Delete activity - don't fail if this fails
             if let Err(e) =
-                crate::web::handlers::activitypub::send_delete_activity(&actor, actor_url, state).await
+                crate::web::handlers::activitypub::send_delete_activity(&actor, actor_url, state)
+                    .await
             {
                 tracing::warn!("Failed to send Delete activity for user {}: {:?}", id, e);
             }
@@ -693,7 +695,9 @@ impl AuthnBackend for Backend {
         );
         let user = q.fetch_optional(&self.db).await?;
 
-        Ok(user.filter(|user| user.deleted_at.is_none() && user.verify_password(&creds.password).is_ok()))
+        Ok(user.filter(|user| {
+            user.deleted_at.is_none() && user.verify_password(&creds.password).is_ok()
+        }))
     }
 
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {

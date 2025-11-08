@@ -124,7 +124,9 @@ where
 
         // Get the bundle and extract locale
         let bundle = get_bundle(&accept_language, user_preferred_language);
-        let ftl_lang = bundle.locales.first()
+        let ftl_lang = bundle
+            .locales
+            .first()
             .map(|l| l.to_string())
             .unwrap_or_else(|| "en".to_string());
 
@@ -149,7 +151,9 @@ fn get_bundle(
                 .or_else(|| LOCALES.get("en"))
                 .expect("English locale must exist");
 
-            let lang_id = language.parse().expect("Hardcoded language string should parse");
+            let lang_id = language
+                .parse()
+                .expect("Hardcoded language string should parse");
             let mut bundle = FluentBundle::new_concurrent(vec![lang_id]);
             bundle.add_resource(ftl).expect("Failed to add a resource.");
 
@@ -169,7 +173,8 @@ fn get_bundle(
                 NegotiationStrategy::Filtering,
             );
 
-            let lang_code = supported.first()
+            let lang_code = supported
+                .first()
                 .map(|l| l.language.as_str())
                 .unwrap_or("en");
 

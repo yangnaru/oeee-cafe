@@ -47,11 +47,15 @@ impl PushService {
                 }
             }
         } else {
-            tracing::warn!("APNs configuration not provided, push notifications for iOS will not work");
+            tracing::warn!(
+                "APNs configuration not provided, push notifications for iOS will not work"
+            );
             None
         };
 
-        let fcm_client = if !config.fcm_service_account_path.is_empty() && !config.fcm_project_id.is_empty() {
+        let fcm_client = if !config.fcm_service_account_path.is_empty()
+            && !config.fcm_project_id.is_empty()
+        {
             match FcmClient::new(&config.fcm_service_account_path, &config.fcm_project_id).await {
                 Ok(client) => {
                     tracing::info!("FCM client initialized successfully");
@@ -63,7 +67,9 @@ impl PushService {
                 }
             }
         } else {
-            tracing::warn!("FCM configuration not provided, push notifications for Android will not work");
+            tracing::warn!(
+                "FCM configuration not provided, push notifications for Android will not work"
+            );
             None
         };
 
@@ -87,7 +93,8 @@ impl PushService {
 
         // Send to iOS devices
         if self.apns_client.is_some() {
-            let ios_tokens = get_user_tokens_by_platform(&mut tx, user_id, PlatformType::Ios).await?;
+            let ios_tokens =
+                get_user_tokens_by_platform(&mut tx, user_id, PlatformType::Ios).await?;
             for token in ios_tokens {
                 match self
                     .send_to_apns(&token.device_token, title, body, badge, data.clone())
@@ -95,11 +102,13 @@ impl PushService {
                 {
                     Ok(_) => {}
                     Err(PushError::InvalidToken) => {
-                        tracing::info!(
-                            "Removing invalid APNs token: {}",
-                            token.device_token
-                        );
-                        let _ = delete_invalid_token(&mut tx, token.device_token.clone(), PlatformType::Ios).await;
+                        tracing::info!("Removing invalid APNs token: {}", token.device_token);
+                        let _ = delete_invalid_token(
+                            &mut tx,
+                            token.device_token.clone(),
+                            PlatformType::Ios,
+                        )
+                        .await;
                     }
                     Err(PushError::Other(e)) => {
                         tracing::warn!(
@@ -123,11 +132,13 @@ impl PushService {
                 {
                     Ok(_) => {}
                     Err(PushError::InvalidToken) => {
-                        tracing::info!(
-                            "Removing invalid FCM token: {}",
-                            token.device_token
-                        );
-                        let _ = delete_invalid_token(&mut tx, token.device_token.clone(), PlatformType::Android).await;
+                        tracing::info!("Removing invalid FCM token: {}", token.device_token);
+                        let _ = delete_invalid_token(
+                            &mut tx,
+                            token.device_token.clone(),
+                            PlatformType::Android,
+                        )
+                        .await;
                     }
                     Err(PushError::Other(e)) => {
                         tracing::warn!(
