@@ -83,7 +83,7 @@ pub struct CommunityComment {
     pub id: Uuid,
     pub post_id: Uuid,
     pub actor_id: Uuid,
-    pub content: String,
+    pub content: Option<String>,
     pub content_html: Option<String>,
     pub actor_name: String,
     pub actor_handle: String,
