@@ -14,7 +14,7 @@ use super::community::CommunityVisibility;
 #[sqlx(type_name = "post_deletion_reason", rename_all = "snake_case")]
 pub enum PostDeletionReason {
     UserDeleted,
-    CommunityCascade,
+    Cascade,
     Moderation,
 }
 
@@ -1439,7 +1439,7 @@ pub async fn soft_delete_community_posts(
         UPDATE posts
         SET
             deleted_at = now(),
-            deletion_reason = 'community_cascade',
+            deletion_reason = 'cascade',
             title = NULL,
             content = NULL,
             is_sensitive = NULL
