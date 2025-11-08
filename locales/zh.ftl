@@ -72,6 +72,7 @@ sign-up = 注册
 sign-out = 退出
 
 message-incorrect-credentials = 用户名或密码错误。
+login-name-conflict-error = 此用户名已被社区使用。请选择其他用户名。
 
 forgot-password = 忘记密码？
 

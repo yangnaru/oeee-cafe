@@ -70,6 +70,7 @@ sign-up = Sign up
 sign-out = Sign out
 
 message-incorrect-credentials = Incorrect credentials.
+login-name-conflict-error = This username is already taken by a community. Please choose a different username.
 
 forgot-password = Forgot password?
 

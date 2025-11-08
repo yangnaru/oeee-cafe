@@ -72,6 +72,7 @@ sign-up = 회원가입
 sign-out = 로그아웃
 
 message-incorrect-credentials = 아이디 또는 비밀번호가 틀렸습니다.
+login-name-conflict-error = 이미 커뮤니티가 사용 중인 아이디입니다. 다른 아이디를 선택해 주세요.
 
 forgot-password = 비밀번호를 잊으셨나요?
 

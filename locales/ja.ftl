@@ -72,6 +72,7 @@ sign-up = 会員登録
 sign-out = ログアウト
 
 message-incorrect-credentials = IDまたはパスワードが間違っています。
+login-name-conflict-error = このIDはすでにコミュニティで使用されています。別のIDを選択してください。
 
 forgot-password = パスワードをお忘れですか？
 
