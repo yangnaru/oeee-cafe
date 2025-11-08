@@ -49,7 +49,7 @@
   {% endif %}
 {% endblock title %}
 {% block head %}
-  {% if post_community and post_community.visibility != "private" %}
+  {% if not post_community or post_community.visibility != "private" %}
     <link rel="alternate"
           type="application/activity+json"
           href="https://{{ domain }}/ap/posts/{{ post.id }}" />
