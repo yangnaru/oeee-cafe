@@ -46,6 +46,24 @@ notification-mark-read = 읽음으로 표시
 notification-delete = 삭제
 notification-delete-confirm = 정말 이 알림을 삭제하시겠습니까?
 
+# Push notification messages with variables
+push-notification-comment-title = { $name }님의 새 댓글
+push-notification-comment-body = { $name }님이 댓글을 남겼습니다
+push-notification-reaction-title = { $name }님이 반응했습니다
+push-notification-reaction-body = { $name }님이 { $emoji }(으)로 반응했습니다
+push-notification-follow-title = 새 동맹
+push-notification-follow-body = { $name }님이 동맹을 맺었습니다
+push-notification-guestbook-entry-title = { $name }님이 방명록을 남겼습니다
+push-notification-guestbook-reply-title = { $name }님이 방명록에 답글을 남겼습니다
+push-notification-mention-title = { $name }님이 언급했습니다
+push-notification-mention-body = { $name }님이 댓글에서 언급했습니다
+push-notification-post-reply-title = { $name }님이 그림에 답글을 그렸습니다
+push-notification-comment-reply-title = { $name }님이 댓글에 답글을 남겼습니다
+push-notification-comment-reply-body = { $name }님이 댓글에 답글을 남겼습니다
+push-notification-community-post-title = 새 커뮤니티 게시물
+push-notification-community-post-body = { $name }님이 커뮤니티에 그림을 그렸습니다
+push-notification-community-post-body-with-title = { $name }님이 커뮤니티에 그림을 그렸습니다: { $title }
+
 sign-in = 로그인
 sign-up = 회원가입
 sign-out = 로그아웃

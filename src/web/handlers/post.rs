@@ -1069,7 +1069,7 @@ pub async fn post_publish(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
                 }
                 let _ = tx.commit().await;
             }
@@ -1440,7 +1440,7 @@ pub async fn do_create_comment(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
                 }
                 let _ = tx.commit().await;
             }
@@ -2769,7 +2769,7 @@ pub async fn add_reaction(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
                 }
                 let _ = tx.commit().await;
             }
