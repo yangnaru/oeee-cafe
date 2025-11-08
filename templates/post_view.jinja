@@ -199,7 +199,9 @@
                 <legend>{{ ftl_get_message("post-reply-select-tool") }}</legend>
                 <form action="/draw" method="post">
                   <input type="hidden" name="parent_post_id" value="{{ post_id }}" />
+                  {% if post.community_id %}
                   <input type="hidden" name="community_id" value="{{ post.community_id }}" />
+                  {% endif %}
                   <select name="tool">
                     <option value="neo" selected>PaintBBS NEO</option>
                     <option value="tegaki">Tegaki</option>

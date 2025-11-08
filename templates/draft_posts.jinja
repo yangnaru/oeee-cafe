@@ -16,9 +16,13 @@
           <div class="draft-card" data-post-id="{{ post.id }}">
             <div class="draft-card-header">
               <div class="draft-metadata">
+                {% if post.community_id %}
                 <a href="/communities/{{ post.community_id }}" class="draft-community">
                   {{ post.community_name }}
                 </a>
+                {% else %}
+                <span class="draft-community">{{ ftl_get_message("personal-post") }}</span>
+                {% endif %}
                 <span class="draft-date">
                   {{ post.updated_at|dateformat(format="short", tz="Asia/Seoul") }}
                 </span>

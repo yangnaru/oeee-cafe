@@ -34,10 +34,12 @@
       <div class="post-preview-meta">
         <p>{{ ftl_get_message("post-created-at") }}: {{ post.created_at }}</p>
         <p>{{ ftl_get_message("post-duration") }}: {{ post.paint_duration }}</p>
+        {% if link %}
         <p>
           {{ ftl_get_message("community") }}:
           <a href="{{ link }}">{{ post.community_name }}</a>
         </p>
+        {% endif %}
       </div>
       <div class="post-preview-image">
         <img width="{{ post.image_width }}"
