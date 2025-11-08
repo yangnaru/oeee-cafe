@@ -1,7 +1,7 @@
 use crate::app_error::AppError;
 use crate::models::push_token::delete_push_token;
 use crate::models::user::{create_user, AuthSession, Credentials, Language, UserDraft};
-use crate::web::handlers::{get_bundle, ExtractFtlLang};
+use crate::web::handlers::{get_bundle, safe_format_message, safe_get_message, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::extract::Query;
 use axum::response::{IntoResponse, Redirect};
@@ -61,17 +61,7 @@ pub async fn do_signup(
     let bundle = get_bundle(&accept_language, user_preferred_language);
 
     if form.password != form.password_confirm {
-        messages.error(
-            bundle.format_pattern(
-                bundle
-                    .get_message("account-change-password-error-mismatch")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            ),
-        );
+        messages.error(safe_get_message(&bundle, "account-change-password-error-mismatch"));
         return Ok(Redirect::to("/signup").into_response());
     }
 
@@ -81,17 +71,7 @@ pub async fn do_signup(
 
     // Check if login_name conflicts with any community slug
     if crate::models::user::login_name_conflicts_with_community(&mut tx, &form.login_name).await? {
-        messages.error(
-            bundle.format_pattern(
-                bundle
-                    .get_message("login-name-conflict-error")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            ),
-        );
+        messages.error(safe_get_message(&bundle, "login-name-conflict-error"));
         return Ok(Redirect::to("/signup").into_response());
     }
 
@@ -102,11 +82,9 @@ pub async fn do_signup(
         return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response());
     }
 
-    let pattern = bundle.get_message("welcome").unwrap().value().unwrap();
     let mut args = FluentArgs::new();
-    args.set("name", FluentValue::from(user.display_name));
-    let message = bundle.format_pattern(pattern, Some(&args), &mut vec![]);
-    messages.success(message);
+    args.set("name", FluentValue::from(user.display_name.clone()));
+    messages.success(safe_format_message(&bundle, "welcome", Some(&args)));
 
     if let Some(ref next) = form.next {
         Ok(Redirect::to(next).into_response())
@@ -150,17 +128,7 @@ pub async fn do_login(
     let user = match auth_session.authenticate(creds.clone()).await {
         Ok(Some(user)) => user,
         Ok(None) => {
-            messages.error(
-                bundle.format_pattern(
-                    bundle
-                        .get_message("message-incorrect-credentials")
-                        .unwrap()
-                        .value()
-                        .unwrap(),
-                    None,
-                    &mut vec![],
-                ),
-            );
+            messages.error(safe_get_message(&bundle, "message-incorrect-credentials"));
 
             let mut login_url = "/login".to_string();
             if let Some(next) = creds.next {
@@ -176,11 +144,9 @@ pub async fn do_login(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    let pattern = bundle.get_message("welcome").unwrap().value().unwrap();
     let mut args = FluentArgs::new();
-    args.set("name", FluentValue::from(user.display_name));
-    let message = bundle.format_pattern(pattern, Some(&args), &mut vec![]);
-    messages.success(message);
+    args.set("name", FluentValue::from(user.display_name.clone()));
+    messages.success(safe_format_message(&bundle, "welcome", Some(&args)));
 
     if let Some(ref next) = creds.next {
         Redirect::to(next)

@@ -35,7 +35,7 @@ pub async fn hashtag_view(
         )
             .into_response());
     }
-    let hashtag = hashtag.unwrap();
+    let hashtag = hashtag.ok_or_else(|| AppError::NotFound("Hashtag".to_string()))?;
 
     let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
         (Some(user.id), user.show_sensitive_content)

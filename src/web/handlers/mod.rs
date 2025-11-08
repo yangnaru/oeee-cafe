@@ -124,7 +124,9 @@ where
 
         // Get the bundle and extract locale
         let bundle = get_bundle(&accept_language, user_preferred_language);
-        let ftl_lang = bundle.locales.first().unwrap().to_string();
+        let ftl_lang = bundle.locales.first()
+            .map(|l| l.to_string())
+            .unwrap_or_else(|| "en".to_string());
 
         Ok(ExtractFtlLang(ftl_lang))
     }
@@ -144,15 +146,19 @@ fn get_bundle(
             };
             let ftl = LOCALES
                 .get(language)
-                .unwrap_or_else(|| LOCALES.get("en").unwrap());
+                .or_else(|| LOCALES.get("en"))
+                .expect("English locale must exist");
 
-            let mut bundle = FluentBundle::new_concurrent(vec![language.parse().unwrap()]);
+            let lang_id = language.parse().expect("Hardcoded language string should parse");
+            let mut bundle = FluentBundle::new_concurrent(vec![lang_id]);
             bundle.add_resource(ftl).expect("Failed to add a resource.");
 
             bundle
         }
         None => {
-            let requested = parse_accepted_languages(accept_language.to_str().unwrap());
+            // Fallback to "en" if header is not valid UTF-8
+            let header_str = accept_language.to_str().unwrap_or("en");
+            let requested = parse_accepted_languages(header_str);
             let available = convert_vec_str_to_langids_lossy(["ko", "ja", "en"]);
             let default = "en".parse().expect("Failed to parse a langid.");
 
@@ -163,17 +169,17 @@ fn get_bundle(
                 NegotiationStrategy::Filtering,
             );
 
-            let ftl = LOCALES
-                .get(supported.first().unwrap().language.as_str())
-                .unwrap_or_else(|| LOCALES.get("en").unwrap());
+            let lang_code = supported.first()
+                .map(|l| l.language.as_str())
+                .unwrap_or("en");
 
-            let mut bundle = FluentBundle::new_concurrent(vec![supported
-                .first()
-                .unwrap()
-                .language
-                .as_str()
-                .parse()
-                .unwrap()]);
+            let ftl = LOCALES
+                .get(lang_code)
+                .or_else(|| LOCALES.get("en"))
+                .expect("English locale must exist");
+
+            let lang_id = lang_code.parse().expect("Negotiated language should parse");
+            let mut bundle = FluentBundle::new_concurrent(vec![lang_id]);
             bundle.add_resource(ftl).expect("Failed to add a resource.");
 
             bundle
@@ -238,4 +244,113 @@ pub fn parse_id_with_legacy_support(
 
     // Fallback to generic error if template rendering fails
     Err(AppError::from(anyhow::anyhow!("Invalid ID format")))
+}
+
+/// Helper function to safely get a Fluent message without panicking
+/// Returns the translation key itself if the message is not found
+pub fn safe_get_message(
+    bundle: &FluentBundle<&FluentResource, IntlLangMemoizer>,
+    key: &str,
+) -> String {
+    let message = match bundle.get_message(key) {
+        Some(msg) => msg,
+        None => {
+            // Log missing translation key to Sentry
+            sentry::capture_message(
+                &format!("Missing translation key: {}", key),
+                sentry::Level::Warning,
+            );
+            return key.to_string();
+        }
+    };
+
+    let pattern = match message.value() {
+        Some(p) => p,
+        None => {
+            // Log translation key with no value to Sentry
+            sentry::capture_message(
+                &format!("Translation key {} has no value", key),
+                sentry::Level::Warning,
+            );
+            return key.to_string();
+        }
+    };
+
+    let mut errors = vec![];
+    let formatted = bundle.format_pattern(pattern, None, &mut errors);
+
+    if !errors.is_empty() {
+        // Log formatting errors to Sentry
+        sentry::capture_message(
+            &format!("Error formatting {}: {:?}", key, errors),
+            sentry::Level::Warning,
+        );
+        return key.to_string();
+    }
+
+    formatted.to_string()
+}
+
+/// Helper function to safely format a Fluent message with arguments
+/// Returns the translation key itself if the message is not found
+pub fn safe_format_message(
+    bundle: &FluentBundle<&FluentResource, IntlLangMemoizer>,
+    key: &str,
+    args: Option<&fluent::FluentArgs>,
+) -> String {
+    let message = match bundle.get_message(key) {
+        Some(msg) => msg,
+        None => {
+            // Log missing translation key to Sentry
+            sentry::capture_message(
+                &format!("Missing translation key: {}", key),
+                sentry::Level::Warning,
+            );
+            return key.to_string();
+        }
+    };
+
+    let pattern = match message.value() {
+        Some(p) => p,
+        None => {
+            // Log translation key with no value to Sentry
+            sentry::capture_message(
+                &format!("Translation key {} has no value", key),
+                sentry::Level::Warning,
+            );
+            return key.to_string();
+        }
+    };
+
+    let mut errors = vec![];
+    let formatted = bundle.format_pattern(pattern, args, &mut errors);
+
+    if !errors.is_empty() {
+        // Log formatting errors to Sentry
+        sentry::capture_message(
+            &format!("Error formatting {}: {:?}", key, errors),
+            sentry::Level::Warning,
+        );
+        return key.to_string();
+    }
+
+    formatted.to_string()
+}
+
+/// Helper function to safely parse a UUID string
+pub fn safe_parse_uuid(s: &str) -> Result<Uuid, AppError> {
+    Uuid::parse_str(s).map_err(|e| AppError::InvalidUuid(format!("{}: {}", s, e)))
+}
+
+/// Helper function to safely decode a hex hash string
+pub fn safe_decode_hash(s: &str) -> Result<Vec<u8>, AppError> {
+    data_encoding::HEXLOWER
+        .decode(s.as_bytes())
+        .map_err(|e| AppError::InvalidHash(format!("{}: {}", s, e)))
+}
+
+/// Helper function to safely parse an email address
+pub fn safe_parse_email(s: &str) -> Result<lettre::Address, AppError> {
+    s.parse()
+        .map_err(|e| AppError::InvalidEmail(format!("{}: {}", s, e)))
 }

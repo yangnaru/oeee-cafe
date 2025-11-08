@@ -39,7 +39,7 @@ pub async fn list_notifications(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.clone().unwrap();
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
 
     // Fetch notifications using the new notification system
     let notifications = fetch_notifications(&mut tx, user.id, 50, 0).await?;
@@ -90,7 +90,7 @@ pub async fn mark_notification_read(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.clone().unwrap();
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
 
     let success = mark_notification_as_read(&mut tx, notification_id, user.id).await?;
 
@@ -126,7 +126,7 @@ pub async fn mark_all_notifications_read(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.clone().unwrap();
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
 
     let count = mark_all_notifications_as_read(&mut tx, user.id).await?;
 
@@ -146,7 +146,7 @@ pub async fn get_unread_notification_count(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.clone().unwrap();
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
 
     let count = get_unread_count(&mut tx, user.id).await?;
 
@@ -164,7 +164,7 @@ pub async fn delete_notification_handler(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.clone().unwrap();
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
 
     let success = delete_notification(&mut tx, notification_id, user.id).await?;
 
@@ -203,7 +203,7 @@ pub async fn api_list_notifications(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.clone().unwrap();
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
 
     // Fetch notifications with pagination
     let notifications = fetch_notifications(&mut tx, user.id, params.limit, params.offset).await?;
@@ -267,7 +267,7 @@ pub async fn api_mark_notification_read(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.clone().unwrap();
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
 
     let success = mark_notification_as_read(&mut tx, notification_id, user.id).await?;
 
@@ -349,7 +349,7 @@ pub async fn api_delete_notification(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.clone().unwrap();
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
 
     let success = delete_notification(&mut tx, notification_id, user.id).await?;
 

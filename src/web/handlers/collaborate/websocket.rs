@@ -244,11 +244,11 @@ async fn setup_connection_atomically(
         server_instance: state.redis_state.get_server_instance_id().to_string(),
         connected_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX_EPOCH")
             .as_secs(),
         last_heartbeat: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX_EPOCH")
             .as_secs(),
     };
 

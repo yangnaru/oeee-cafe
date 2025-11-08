@@ -40,18 +40,17 @@ pub async fn do_follow_profile(
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
-
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     follow_user(
         &mut tx,
-        auth_session.user.clone().unwrap().id,
-        user.clone().unwrap().id,
+        current_user.id,
+        user.id,
     )
     .await?;
 
@@ -59,9 +58,9 @@ pub async fn do_follow_profile(
     let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
 
     // Create notification for the user being followed
-    let follower_actor = Actor::find_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let follower_actor = Actor::find_by_user_id(&mut tx, current_user.id).await?;
     if let Some(follower_actor) = follower_actor {
-        let recipient_id = user.clone().unwrap().id;
+        let recipient_id = user.id;
         match create_notification(
             &mut tx,
             CreateNotificationParams {
@@ -132,18 +131,17 @@ pub async fn do_unfollow_profile(
     State(state): State<AppState>,
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
-
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     let _ = unfollow_user(
         &mut tx,
-        auth_session.user.clone().unwrap().id,
-        user.clone().unwrap().id,
+        current_user.id,
+        user.id,
     )
     .await;
     let _ = tx.commit().await;
@@ -151,7 +149,7 @@ pub async fn do_unfollow_profile(
     let template: minijinja::Template<'_, '_> = state.env.get_template("follow_button.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        user,
+        user => Some(user),
         ftl_lang,
     })?;
 
@@ -166,14 +164,11 @@ pub async fn profile(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
-
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     let published_posts =
-        find_published_posts_by_author_id(&mut tx, user.clone().unwrap().id).await?;
+        find_published_posts_by_author_id(&mut tx, user.id).await?;
     use crate::models::community::CommunityVisibility;
     let public_community_posts = published_posts
         .iter()
@@ -189,17 +184,17 @@ pub async fn profile(
     let mut is_current_user_following = false;
     if let Some(current_user) = auth_session.user.clone() {
         is_current_user_following =
-            is_following(&mut tx, current_user.id, user.clone().unwrap().id).await?;
+            is_following(&mut tx, current_user.id, user.id).await?;
     }
 
-    let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id, 9999, 0, false).await?;
+    let followings = find_followings_by_user_id(&mut tx, user.id, 9999, 0, false).await?;
 
-    let banner = match user.clone().unwrap().banner_id {
+    let banner = match user.banner_id {
         Some(banner_id) => Some(find_banner_by_id(&mut tx, banner_id).await?),
         None => None,
     };
 
-    let links = find_links_by_user_id(&mut tx, user.clone().unwrap().id).await?;
+    let links = find_links_by_user_id(&mut tx, user.id).await?;
     let links = links
         .iter()
         .map(|link| {
@@ -219,7 +214,7 @@ pub async fn profile(
         banner,
         is_following => is_current_user_following,
         followings,
-        user,
+        user => Some(user),
         domain => state.config.domain.clone(),
         public_community_posts,
         private_community_posts,
@@ -239,18 +234,15 @@ pub async fn profile_iframe(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-
-    let posts = find_published_public_posts_by_author_id(&mut tx, user.clone().unwrap().id, 1000, 0).await?;
+    let posts = find_published_public_posts_by_author_id(&mut tx, user.id, 1000, 0).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_iframe.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        user,
+        user => Some(user),
         posts,
         ftl_lang,
     })?;
@@ -266,20 +258,17 @@ pub async fn profile_banners_iframe(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-
-    let followings = find_followings_by_user_id(&mut tx, user.clone().unwrap().id, 9999, 0, false).await?;
+    let followings = find_followings_by_user_id(&mut tx, user.id, 9999, 0, false).await?;
 
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("profile_banners_iframe.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         followings,
-        user,
+        user => Some(user),
         ftl_lang,
     })?;
 
@@ -292,30 +281,26 @@ pub async fn do_move_link_down(
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    if user.clone().unwrap().id != auth_session.user.clone().unwrap().id {
+    if user.id != current_user.id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
-    let link = links.iter().find(|link| link.id == link_id);
+    let links = find_links_by_user_id(&mut tx, current_user.id).await?;
+    let link = links.iter().find(|link| link.id == link_id)
+        .ok_or_else(|| AppError::NotFound("Link".to_string()))?;
 
-    if link.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-
-    let link = link.unwrap();
     let index = link.index;
 
     update_link_order(&mut tx, link_id, index + 1).await?;
-    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let links = find_links_by_user_id(&mut tx, current_user.id).await?;
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
@@ -335,30 +320,28 @@ pub async fn do_move_link_up(
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    if user.clone().unwrap().id != auth_session.user.clone().unwrap().id {
+    if user.id != current_user.id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
-    let link = links.iter().find(|link| link.id == link_id);
+    let links = find_links_by_user_id(&mut tx, current_user.id).await?;
+    let link = links.iter().find(|link| link.id == link_id)
+        .ok_or_else(|| AppError::NotFound("Link".to_string()))?;
 
-    if link.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
 
-    let link = link.unwrap();
+    // link already unwrapped above
     let index = link.index;
 
     update_link_order(&mut tx, link_id, index - 1).await?;
-    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let links = find_links_by_user_id(&mut tx, current_user.id).await?;
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
@@ -384,28 +367,25 @@ pub async fn do_delete_link(
     State(state): State<AppState>,
     Path((login_name, link_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    if user.clone().unwrap().id != auth_session.user.clone().unwrap().id {
+    if user.id != current_user.id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
-    let link = links.iter().find(|link| link.id == link_id);
-
-    if link.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
+    let links = find_links_by_user_id(&mut tx, current_user.id).await?;
+    let _link = links.iter().find(|link| link.id == link_id)
+        .ok_or_else(|| AppError::NotFound("Link".to_string()))?;
 
     delete_link(&mut tx, link_id).await?;
 
-    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let links = find_links_by_user_id(&mut tx, current_user.id).await?;
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
@@ -426,32 +406,32 @@ pub async fn do_add_link(
     Path(login_name): Path<String>,
     Form(form): Form<AddLinkForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    if user.clone().unwrap().id != auth_session.user.clone().unwrap().id {
+    if user.id != current_user.id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    if user.unwrap().email_verified_at.is_none() {
+    if user.email_verified_at.is_none() {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
     let _ = create_link(
         &mut tx,
         LinkDraft {
-            user_id: auth_session.user.clone().unwrap().id,
+            user_id: current_user.id,
             url: form.url,
             description: form.description,
         },
     )
     .await;
-    let links = find_links_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let links = find_links_by_user_id(&mut tx, current_user.id).await?;
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
@@ -470,21 +450,18 @@ pub async fn profile_settings(
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let user = find_user_by_id(&mut tx, current_user.id).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
-    if user.clone().is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-
-    if user.clone().unwrap().id != auth_session.user.clone().unwrap().id {
-        return Ok(StatusCode::FORBIDDEN.into_response());
-    }
+    // User is already the current user from auth, no need for ownership check
 
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let links = find_links_by_user_id(&mut tx, user.clone().unwrap().id).await?;
+    let links = find_links_by_user_id(&mut tx, user.id).await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
     let rendered = template.render(context! {
@@ -492,7 +469,7 @@ pub async fn profile_settings(
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         links,
-        user,
+        user => Some(user),
         ftl_lang,
     })?;
 
@@ -511,31 +488,26 @@ pub async fn do_reply_guestbook_entry(
     Path((login_name, entry_id)): Path<(String, Uuid)>,
     Form(form): Form<AddGuestbookEntryReplyForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?;
-    if entry.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-    let entry = entry.unwrap();
-    if entry.recipient_id != auth_session.user.clone().unwrap().id {
+    let entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?
+        .ok_or_else(|| AppError::NotFound("Guestbook entry".to_string()))?;
+
+    if entry.recipient_id != current_user.id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let author = find_user_by_login_name(&mut tx, &login_name).await?;
-    if author.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-    let author = author.unwrap();
+    let author = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
+
     if author.id != entry.recipient_id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let guestbook_entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?;
-    if guestbook_entry.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-    let mut guestbook_entry = guestbook_entry.unwrap();
+    let mut guestbook_entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?
+        .ok_or_else(|| AppError::NotFound("Guestbook entry".to_string()))?;
 
     let replied_at = add_guestbook_entry_reply(&mut tx, entry_id, form.content.clone()).await?;
     guestbook_entry.reply = Some(form.content);
@@ -545,7 +517,7 @@ pub async fn do_reply_guestbook_entry(
     let mut notification_info: Vec<(Uuid, Uuid)> = Vec::new();
 
     // Create notification for the guestbook entry author (person who originally wrote the entry)
-    let replier_actor = Actor::find_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let replier_actor = Actor::find_by_user_id(&mut tx, current_user.id).await?;
     if let Some(replier_actor) = replier_actor {
         let recipient_id = guestbook_entry.author_id;
         match create_notification(
@@ -624,25 +596,22 @@ pub async fn do_delete_guestbook_entry(
     State(state): State<AppState>,
     Path((login_name, entry_id)): Path<(String, Uuid)>,
 ) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?;
-    if entry.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-    let entry = entry.unwrap();
-    if entry.author_id != auth_session.user.clone().unwrap().id
-        && entry.recipient_id != auth_session.user.clone().unwrap().id
+    let entry = find_guestbook_entry_by_id(&mut tx, entry_id).await?
+        .ok_or_else(|| AppError::NotFound("Guestbook entry".to_string()))?;
+
+    if entry.author_id != current_user.id
+        && entry.recipient_id != current_user.id
     {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
     // Check if login_name matches recipient_id
-    let recipient = find_user_by_login_name(&mut tx, &login_name).await?;
-    if recipient.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-    let recipient = recipient.unwrap();
+    let recipient = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
     if recipient.id != entry.recipient_id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
@@ -660,11 +629,14 @@ pub async fn do_write_guestbook_entry(
     Path(login_name): Path<String>,
     Form(form): Form<CreateGuestbookEntryForm>,
 ) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let current_user_id = auth_session.user.clone().unwrap().id;
-    let recipient_user = find_user_by_login_name(&mut tx, &login_name).await?;
-    let recipient_id = recipient_user.clone().unwrap().id;
+    let current_user_id = current_user.id;
+    let recipient_user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
+    let recipient_id = recipient_user.id;
 
     if current_user_id == recipient_id {
         return Ok(StatusCode::FORBIDDEN.into_response());
@@ -745,8 +717,8 @@ pub async fn do_write_guestbook_entry(
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook_entry.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        user => recipient_user.unwrap(),
-        entry => guestbook_entry.unwrap(),
+        user => Some(recipient_user),
+        entry => guestbook_entry?,
         ftl_lang,
     })?;
     Ok(Html(rendered).into_response())
@@ -760,20 +732,16 @@ pub async fn guestbook(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
-
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     let guestbook_entries =
-        find_guestbook_entries_by_recipient_id(&mut tx, user.clone().unwrap().id)
-            .await
-            .unwrap();
+        find_guestbook_entries_by_recipient_id(&mut tx, user.id)
+            .await?;
 
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let banner = match user.clone().unwrap().banner_id {
+    let banner = match user.banner_id {
         Some(banner_id) => Some(find_banner_by_id(&mut tx, banner_id).await?),
         None => None,
     };
@@ -781,14 +749,14 @@ pub async fn guestbook(
     let mut is_current_user_following = false;
     if let Some(current_user) = auth_session.user.clone() {
         is_current_user_following =
-            is_following(&mut tx, current_user.id, user.clone().unwrap().id).await?;
+            is_following(&mut tx, current_user.id, user.id).await?;
     }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         banner,
-        user,
+        user => Some(user),
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         is_following => is_current_user_following,
@@ -936,13 +904,8 @@ pub async fn profile_followings_json(
     let mut tx = db.begin().await?;
 
     // Find user by login name
-    let user = find_user_by_login_name(&mut tx, &login_name).await?;
-
-    if user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-
-    let user = user.unwrap();
+    let user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     // Get followings with pagination
     let followings = find_followings_by_user_id(&mut tx, user.id, query.limit, query.offset, false).await?;
@@ -992,21 +955,13 @@ pub async fn follow_profile_api(
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     // Require authentication
-    let user = match auth_session.user {
-        Some(u) => u,
-        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
-    };
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let target_user = find_user_by_login_name(&mut tx, &login_name).await?;
-
-    if target_user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-
-    let target_user = target_user.unwrap();
+    let target_user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     // Don't allow following yourself
     if user.id == target_user.id {
@@ -1086,21 +1041,13 @@ pub async fn unfollow_profile_api(
     Path(login_name): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     // Require authentication
-    let user = match auth_session.user {
-        Some(u) => u,
-        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
-    };
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let target_user = find_user_by_login_name(&mut tx, &login_name).await?;
-
-    if target_user.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-
-    let target_user = target_user.unwrap();
+    let target_user = find_user_by_login_name(&mut tx, &login_name).await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     unfollow_user(&mut tx, user.id, target_user.id).await?;
 

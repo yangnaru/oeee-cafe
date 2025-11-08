@@ -194,7 +194,7 @@ async fn cleanup_ended_sessions(
                 payload: session_expired_msg,
                 timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .expect("System time is before UNIX_EPOCH")
                     .as_secs(),
             };
 
@@ -265,7 +265,7 @@ async fn cleanup_inactive_sessions(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Find sessions that have been inactive for more than the threshold
     let inactive_cutoff =
-        chrono::Utc::now().naive_utc() - chrono::Duration::from_std(inactive_threshold).unwrap();
+        chrono::Utc::now().naive_utc() - chrono::Duration::from_std(inactive_threshold).expect("Valid duration");
 
     let inactive_sessions = sqlx::query!(
         r#"
@@ -318,7 +318,7 @@ async fn cleanup_inactive_sessions(
                 payload: session_expired_msg,
                 timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .expect("System time is before UNIX_EPOCH")
                     .as_secs(),
             };
 
@@ -508,7 +508,7 @@ async fn cleanup_stale_redis_connections(state: &AppState) {
                 Ok(Some(conn_info)) => {
                     let now = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
+                        .expect("System time is before UNIX_EPOCH")
                         .as_secs();
                     // If connection hasn't sent a heartbeat in the last 60 seconds, consider it stale
                     if now - conn_info.last_heartbeat > 60 {

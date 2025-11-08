@@ -493,9 +493,9 @@ fn get_fluent_bundle(language: Option<Language>) -> FluentBundle<&'static Fluent
 
     let ftl = LOCALES
         .get(lang_code)
-        .unwrap_or_else(|| LOCALES.get("en").unwrap());
+        .unwrap_or_else(|| LOCALES.get("en").expect("English locale must exist"));
 
-    let mut bundle = FluentBundle::new_concurrent(vec![lang_code.parse().unwrap()]);
+    let mut bundle = FluentBundle::new_concurrent(vec![lang_code.parse().expect("Language code should be valid")]);
     bundle.add_resource(ftl).expect("Failed to add a resource.");
     bundle
 }

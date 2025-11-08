@@ -31,7 +31,7 @@ fn main() {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .unwrap()
+        .expect("Failed to build tokio runtime")
         .block_on(async {
             let args: Vec<String> = args().collect();
             if args.len() < 2 {
@@ -60,7 +60,7 @@ fn main() {
             fn cachebuster(value: String) -> String {
                 let timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .expect("System time is before UNIX_EPOCH")
                     .as_secs();
                 format!("{}?{}", value, timestamp)
             }
@@ -81,10 +81,10 @@ fn main() {
                 // Get the appropriate Fluent resource
                 let ftl = LOCALES
                     .get(&lang)
-                    .unwrap_or_else(|| LOCALES.get("ko").unwrap());
+                    .unwrap_or_else(|| LOCALES.get("ko").expect("Korean locale must exist"));
 
                 // Create bundle
-                let mut bundle = FluentBundle::new_concurrent(vec![lang.parse().unwrap()]);
+                let mut bundle = FluentBundle::new_concurrent(vec![lang.parse().expect("Language string should be valid")]);
                 bundle.add_resource(ftl).expect("Failed to add a resource.");
 
                 // Get and format the message
@@ -114,10 +114,10 @@ fn main() {
                 // Get the appropriate Fluent resource
                 let ftl = LOCALES
                     .get(&lang)
-                    .unwrap_or_else(|| LOCALES.get("ko").unwrap());
+                    .unwrap_or_else(|| LOCALES.get("ko").expect("Korean locale must exist"));
 
                 // Create bundle
-                let mut bundle = FluentBundle::new_concurrent(vec![lang.parse().unwrap()]);
+                let mut bundle = FluentBundle::new_concurrent(vec![lang.parse().expect("Language string should be valid")]);
                 bundle.add_resource(ftl).expect("Failed to add a resource.");
 
                 // Convert minijinja values to FluentArgs by deserializing to HashMap
@@ -195,6 +195,6 @@ fn main() {
                 push_service: Arc::new(push_service),
             };
 
-            App::new(state).await.unwrap().serve().await.unwrap()
+            App::new(state).await.expect("Failed to create app").serve().await.expect("Failed to serve app")
         });
 }

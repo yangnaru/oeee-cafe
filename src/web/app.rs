@@ -101,9 +101,9 @@ impl App {
 
         let session_store = PostgresStore::new(self.state.db_pool.clone())
             .with_table_name("sessions")
-            .unwrap()
+            .map_err(|e| anyhow::anyhow!("Failed to set table name: {}", e))?
             .with_schema_name("public")
-            .unwrap();
+            .map_err(|e| anyhow::anyhow!("Failed to set schema name: {}", e))?;
         session_store.migrate().await?;
 
         let deletion_task = tokio::task::spawn(
@@ -374,7 +374,7 @@ impl App {
 
         // run our app with hyper, listening globally
         let addr = SocketAddr::from(([0, 0, 0, 0], self.state.config.port));
-        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(addr).await.expect("Failed to bind TCP listener");
         tracing::info!("listening on {}", addr);
 
         // Ensure we use a shutdown signal to abort the background tasks.

@@ -147,7 +147,7 @@ pub async fn my_timeline(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let user = auth_session.user.clone().unwrap();
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.clone();
     let posts =
         find_following_posts_by_user_id(&mut tx, user.id, user.show_sensitive_content).await?;
 
@@ -970,7 +970,7 @@ pub async fn delete_post_api(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let post = post.unwrap();
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     // Check if the user is the author
     let author_id = match post.get("author_id").and_then(|v| v.as_ref()) {

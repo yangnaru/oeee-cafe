@@ -291,7 +291,7 @@ async fn broadcast_layers(_db: &Pool<Postgres>, room_uuid: Uuid, state: &AppStat
                 payload: layers_message.serialize(),
                 timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .expect("System time is before UNIX_EPOCH")
                     .as_secs(),
             };
 
@@ -458,7 +458,7 @@ pub async fn handle_end_session_message(
                             payload: msg.clone().into_data(),
                             timestamp: std::time::SystemTime::now()
                                 .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
+                                .expect("System time is before UNIX_EPOCH")
                                 .as_secs(),
                         };
 
@@ -558,7 +558,7 @@ async fn send_snapshot_request(
         payload: snapshot_request.serialize(),
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX_EPOCH")
             .as_secs(),
     };
 
@@ -680,7 +680,7 @@ pub async fn send_leave_message(
         payload: leave_message.serialize(),
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time is before UNIX_EPOCH")
             .as_secs(),
     };
 

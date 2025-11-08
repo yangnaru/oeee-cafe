@@ -55,7 +55,7 @@ pub async fn add_guestbook_entry_reply(
     .fetch_one(&mut **tx)
     .await?
     .replied_at
-    .unwrap();
+    .expect("Valid guestbook entry ID must be parseable as i32");
 
     Ok(replied_at)
 }

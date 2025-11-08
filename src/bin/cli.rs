@@ -54,12 +54,20 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    let cfg = AppConfig::new_from_file_and_env(&cli.config.unwrap()).unwrap_or_else(|e| {
+    let config_path = cli.config.ok_or_else(|| anyhow::anyhow!("Config file path required"))?;
+    let cfg = AppConfig::new_from_file_and_env(&config_path).unwrap_or_else(|e| {
         eprintln!("error: {}", e);
         exit(1);
     });
 
-    let mut tx = cfg.connect_database().await.unwrap().begin().await.unwrap();
+    let db = match cfg.connect_database().await {
+        Ok(db) => db,
+        Err(e) => {
+            eprintln!("error connecting to database: {}", e);
+            exit(1);
+        }
+    };
+    let mut tx = db.begin().await?;
 
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
@@ -95,16 +103,18 @@ async fn main() -> Result<()> {
                 Ok(Some(user)) => {
                     print_user_info(user);
                     println!();
-                    let password = rpassword::prompt_password("New password: ").unwrap();
-                    let password2 = rpassword::prompt_password("New password (again): ").unwrap();
+                    let password = rpassword::prompt_password("New password: ")
+                        .map_err(|e| anyhow::anyhow!("Failed to read password: {}", e))?;
+                    let password2 = rpassword::prompt_password("New password (again): ")
+                        .map_err(|e| anyhow::anyhow!("Failed to read password: {}", e))?;
 
                     if password != password2 {
                         eprintln!("Passwords do not match");
                         exit(1);
                     }
 
-                    update_password(&mut tx, *user_id, password).await.unwrap();
-                    tx.commit().await.unwrap();
+                    update_password(&mut tx, *user_id, password).await?;
+                    tx.commit().await?;
 
                     println!("Password updated");
                 }

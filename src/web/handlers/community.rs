@@ -36,7 +36,7 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::web::context::CommonContext;
-use crate::web::handlers::{get_bundle, ExtractAcceptLanguage, ExtractFtlLang};
+use crate::web::handlers::{get_bundle, safe_get_message, ExtractAcceptLanguage, ExtractFtlLang};
 
 pub async fn community(
     auth_session: AuthSession,
@@ -50,7 +50,9 @@ pub async fn community(
 
     let (community, community_id) = if id.starts_with('@') {
         // Handle @slug format
-        let slug = id.strip_prefix('@').unwrap().to_string();
+        let slug = id.strip_prefix('@')
+            .ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?
+            .to_string();
         let community = find_community_by_slug(&mut tx, slug).await?;
         if let Some(community) = community {
             (Some(community.clone()), community.id.to_string())
@@ -73,15 +75,11 @@ pub async fn community(
         }
     };
 
-    if community.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
-    }
-
-    let community_ref = community.as_ref().unwrap();
-    let community_uuid = community_ref.id;
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
+    let community_uuid = community.id;
 
     // Access control: For member_only communities, verify membership
-    if community_ref.visibility == CommunityVisibility::Private {
+    if community.visibility == CommunityVisibility::Private {
         // Non-authenticated users cannot access member_only communities
         let user_id = match &auth_session.user {
             Some(user) => user.id,
@@ -106,26 +104,23 @@ pub async fn community(
     let stats = get_community_stats(&mut tx, community_uuid).await?;
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("community.jinja").unwrap();
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community.jinja")?;
 
     if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
         let rendered = template
             .eval_to_state(context! {
                 current_user => auth_session.user,
-                community => {
-                    community.as_ref()
-                },
-                community_id => community.as_ref().map(|c| c.id.to_string()).unwrap_or_default(),
+                community => Some(&community),
+                community_id => community.id.to_string(),
                 domain => state.config.domain.clone(),
                 ftl_lang
             })?
-            .render_block("community_edit_block")
-            .unwrap();
+            .render_block("community_edit_block")?;
         Ok(Html(rendered).into_response())
     } else {
         let rendered = template.render(context! {
         current_user => auth_session.user,
-        community => community,
+        community => Some(community),
         community_id => community_id,
         domain => state.config.domain.clone(),
         unread_notification_count => common_ctx.unread_notification_count,
@@ -163,7 +158,7 @@ pub async fn community_iframe(
 
     let community = if id.starts_with('@') {
         // Handle @slug format
-        let slug = id.strip_prefix('@').unwrap().to_string();
+        let slug = id.strip_prefix('@').ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?.to_string();
         find_community_by_slug(&mut tx, slug).await?
     } else {
         // Handle UUID format - redirect to @slug
@@ -187,11 +182,11 @@ pub async fn community_iframe(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let community_ref = community.as_ref().unwrap();
-    let community_uuid = community_ref.id;
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
+    let community_uuid = community.id;
 
     // Access control: For member_only communities, verify membership
-    if community_ref.visibility == CommunityVisibility::Private {
+    if community.visibility == CommunityVisibility::Private {
         let user_id = match &auth_session.user {
             Some(user) => user.id,
             None => return Ok(StatusCode::NOT_FOUND.into_response()),
@@ -491,22 +486,14 @@ pub async fn do_create_community(
             .map(|u| u.preferred_language)
             .unwrap_or_else(|| None);
         let bundle = get_bundle(&accept_language, user_preferred_language);
-        let error_message = bundle.format_pattern(
-            bundle
-                .get_message("community-slug-conflict-error")
-                .unwrap()
-                .value()
-                .unwrap(),
-            None,
-            &mut vec![],
-        );
-        messages.error(error_message.to_string());
+        let error_message = safe_get_message(&bundle, "community-slug-conflict-error");
+        messages.error(error_message);
         return Ok(Redirect::to("/communities/new").into_response());
     }
 
     let community = create_community(
         &mut tx,
-        auth_session.user.clone().unwrap().id,
+        auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id,
         CommunityDraft {
             name: form.name,
             slug: form.slug,
@@ -535,16 +522,8 @@ pub async fn do_create_community(
                                 .map(|u| u.preferred_language)
                                 .unwrap_or_else(|| None);
                             let bundle = get_bundle(&accept_language, user_preferred_language);
-                            let error_message = bundle.format_pattern(
-                                bundle
-                                    .get_message("community-slug-conflict-error")
-                                    .unwrap()
-                                    .value()
-                                    .unwrap(),
-                                None,
-                                &mut vec![],
-                            );
-                            messages.error(error_message.to_string());
+                            let error_message = safe_get_message(&bundle, "community-slug-conflict-error");
+                            messages.error(error_message);
                             return Ok(Redirect::to("/communities/new").into_response());
                         }
                     }
@@ -593,7 +572,7 @@ pub async fn hx_edit_community(
 
     let community = if id.starts_with('@') {
         // Handle @slug format
-        let slug = id.strip_prefix('@').unwrap().to_string();
+        let slug = id.strip_prefix('@').ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?.to_string();
         find_community_by_slug(&mut tx, slug).await?
     } else {
         // Handle UUID format - redirect to @slug
@@ -613,7 +592,7 @@ pub async fn hx_edit_community(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    if community.clone().unwrap().owner_id != auth_session.user.clone().unwrap().id {
+    if community.as_ref().ok_or_else(|| AppError::NotFound("Community".to_string()))?.owner_id != auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
@@ -648,7 +627,7 @@ pub async fn hx_do_edit_community(
 
     let (community_uuid, original_slug) = if id.starts_with('@') {
         // Handle @slug format
-        let slug = id.strip_prefix('@').unwrap().to_string();
+        let slug = id.strip_prefix('@').ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?.to_string();
         let community = find_community_by_slug(&mut tx, slug.clone()).await?;
         if let Some(community) = community {
             (community.id, community.slug)
@@ -713,7 +692,7 @@ pub async fn hx_do_edit_community(
                     .map(|u| u.preferred_language)
                     .unwrap_or_else(|| None);
                 let bundle = get_bundle(&accept_language, user_preferred_language);
-                let ftl_lang = bundle.locales.first().unwrap().to_string();
+                let ftl_lang = bundle.locales.first().map(|l| l.to_string()).unwrap_or_else(|| "en".to_string()).to_string();
                 let rendered = template
                     .eval_to_state(context! {
                         current_user => auth_session.user,
@@ -742,17 +721,7 @@ pub async fn hx_do_edit_community(
                             .unwrap_or_else(|| None);
                         let bundle = get_bundle(&accept_language, user_preferred_language);
                         Some(
-                            bundle
-                                .format_pattern(
-                                    bundle
-                                        .get_message("community-slug-conflict-error")
-                                        .unwrap()
-                                        .value()
-                                        .unwrap(),
-                                    None,
-                                    &mut vec![],
-                                )
-                                .to_string(),
+                            safe_get_message(&bundle, "community-slug-conflict-error"),
                         )
                     } else {
                         None
@@ -775,7 +744,7 @@ pub async fn hx_do_edit_community(
                 .map(|u| u.preferred_language)
                 .unwrap_or_else(|| None);
             let bundle = get_bundle(&accept_language, user_preferred_language);
-            let ftl_lang = bundle.locales.first().unwrap().to_string();
+            let ftl_lang = bundle.locales.first().map(|l| l.to_string()).unwrap_or_else(|| "en".to_string()).to_string();
             let rendered = template.render(context! {
                 current_user => auth_session.user,
                 community => current_community,
@@ -801,7 +770,7 @@ pub async fn community_comments(
 
     let community = if id.starts_with('@') {
         // Handle @slug format
-        let slug = id.strip_prefix('@').unwrap().to_string();
+        let slug = id.strip_prefix('@').ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?.to_string();
         find_community_by_slug(&mut tx, slug).await?
     } else {
         // Handle UUID format - redirect to @slug
@@ -825,11 +794,11 @@ pub async fn community_comments(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let community_ref = community.as_ref().unwrap();
-    let community_uuid = community_ref.id;
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
+    let community_uuid = community.id;
 
     // Access control: For member_only communities, verify membership
-    if community_ref.visibility == CommunityVisibility::Private {
+    if community.visibility == CommunityVisibility::Private {
         let user_id = match &auth_session.user {
             Some(user) => user.id,
             None => return Ok(StatusCode::NOT_FOUND.into_response()),
@@ -876,7 +845,7 @@ pub async fn get_members(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Only members can view member list
     let user = match auth_session.user {
@@ -940,7 +909,7 @@ pub async fn invite_user(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Must be logged in
     let inviter = match auth_session.user {
@@ -958,27 +927,15 @@ pub async fn invite_user(
     // Find the invitee by login_name
     let invitee = find_user_by_login_name(&mut tx, &form.login_name).await?;
     if invitee.is_none() {
-        messages.error(
-            bundle.format_pattern(
-                bundle.get_message("community-invite-user-not-found").unwrap().value().unwrap(),
-                None,
-                &mut vec![],
-            ),
-        );
+        messages.error(safe_get_message(&bundle, "community-invite-user-not-found"));
         return Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response());
     }
-    let invitee = invitee.unwrap();
+    let invitee = invitee.ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     // Check if user is already a member
     let already_member = is_user_member(&mut tx, invitee.id, community.id).await?;
     if already_member {
-        messages.error(
-            bundle.format_pattern(
-                bundle.get_message("community-invite-already-member").unwrap().value().unwrap(),
-                None,
-                &mut vec![],
-            ),
-        );
+        messages.error(safe_get_message(&bundle, "community-invite-already-member"));
         return Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response());
     }
 
@@ -1034,13 +991,7 @@ pub async fn invite_user(
                 }
             }
 
-            messages.success(
-                bundle.format_pattern(
-                    bundle.get_message("community-invite-success").unwrap().value().unwrap(),
-                    None,
-                    &mut vec![],
-                ),
-            );
+            messages.success(safe_get_message(&bundle, "community-invite-success"));
 
             Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response())
         }
@@ -1049,13 +1000,7 @@ pub async fn invite_user(
             if let Some(db_err) = e.downcast_ref::<sqlx::Error>() {
                 if let sqlx::Error::Database(ref err) = db_err {
                     if err.is_unique_violation() {
-                        messages.error(
-                            bundle.format_pattern(
-                                bundle.get_message("community-invite-already-invited").unwrap().value().unwrap(),
-                                None,
-                                &mut vec![],
-                            ),
-                        );
+                        messages.error(safe_get_message(&bundle, "community-invite-already-invited"));
                         return Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response());
                     }
                 }
@@ -1081,7 +1026,7 @@ pub async fn remove_member(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Must be logged in
     let current_user = match auth_session.user {
@@ -1137,7 +1082,7 @@ pub async fn do_accept_invitation(
     if invitation.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
-    let invitation = invitation.unwrap();
+    let invitation = invitation.ok_or_else(|| AppError::NotFound("Invitation".to_string()))?;
 
     // Verify the invitation is for the current user
     if invitation.invitee_id != user.id {
@@ -1212,13 +1157,7 @@ pub async fn do_accept_invitation(
         }
     }
 
-    messages.success(
-        bundle.format_pattern(
-            bundle.get_message("invitation-accepted").unwrap().value().unwrap(),
-            None,
-            &mut vec![],
-        ),
-    );
+    messages.success(safe_get_message(&bundle, "invitation-accepted"));
 
     Ok(Redirect::to("/notifications").into_response())
 }
@@ -1247,7 +1186,7 @@ pub async fn do_reject_invitation(
     if invitation.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
-    let invitation = invitation.unwrap();
+    let invitation = invitation.ok_or_else(|| AppError::NotFound("Invitation".to_string()))?;
 
     // Verify the invitation is for the current user
     if invitation.invitee_id != user.id {
@@ -1313,13 +1252,7 @@ pub async fn do_reject_invitation(
         }
     }
 
-    messages.success(
-        bundle.format_pattern(
-            bundle.get_message("invitation-rejected").unwrap().value().unwrap(),
-            None,
-            &mut vec![],
-        ),
-    );
+    messages.success(safe_get_message(&bundle, "invitation-rejected"));
 
     Ok(Redirect::to("/notifications").into_response())
 }
@@ -1339,7 +1272,7 @@ pub async fn retract_invitation(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Must be logged in
     let user = match &auth_session.user {
@@ -1386,7 +1319,7 @@ pub async fn members_page(
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
 
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // For private/unlisted communities, only members can view member list
     // For public communities, anyone can view
@@ -1957,7 +1890,7 @@ pub async fn get_community_members_json(
         return Ok(Json(CommunityMembersListResponse { members: vec![] }));
     }
 
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Access control: verify user is a member for private communities
     if community.visibility == CommunityVisibility::Private {
@@ -2029,7 +1962,7 @@ pub async fn invite_user_json(
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND);
     }
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Check if user has permission to invite (owner or moderator)
     let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
@@ -2043,7 +1976,7 @@ pub async fn invite_user_json(
     if invitee.is_none() {
         return Ok(StatusCode::BAD_REQUEST);
     }
-    let invitee = invitee.unwrap();
+    let invitee = invitee.ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     // Check if user is already a member
     if is_user_member(&mut tx, invitee.id, community.id).await? {
@@ -2124,7 +2057,7 @@ pub async fn remove_member_json(
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND);
     }
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Check if user has permission (owner or moderator)
     let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
@@ -2171,7 +2104,7 @@ pub async fn get_community_invitations_json(
     if community.is_none() {
         return Ok(Json(CommunityInvitationsListResponse { invitations: vec![] }));
     }
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Check if user has permission (owner or moderator)
     let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
@@ -2284,7 +2217,7 @@ pub async fn retract_invitation_json(
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND);
     }
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Check if user has permission (owner or moderator)
     let role = get_user_role_in_community(&mut tx, user.id, community.id).await?;
@@ -2298,7 +2231,7 @@ pub async fn retract_invitation_json(
     if invitation.is_none() {
         return Ok(StatusCode::NOT_FOUND);
     }
-    let invitation = invitation.unwrap();
+    let invitation = invitation.ok_or_else(|| AppError::NotFound("Invitation".to_string()))?;
 
     if invitation.community_id != community.id {
         return Ok(StatusCode::NOT_FOUND);
@@ -2432,7 +2365,7 @@ pub async fn update_community_json(
     if community.is_none() {
         return Ok(StatusCode::NOT_FOUND);
     }
-    let community = community.unwrap();
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Check if user is the owner
     if user.id != community.owner_id {

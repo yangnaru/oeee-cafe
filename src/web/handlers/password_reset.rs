@@ -4,7 +4,7 @@ use crate::models::password_reset_challenge::{
     find_password_reset_challenge_by_token, PasswordResetChallenge,
 };
 use crate::models::user::{find_user_by_email, update_password};
-use crate::web::handlers::{get_bundle, ExtractAcceptLanguage, ExtractFtlLang};
+use crate::web::handlers::{get_bundle, safe_get_message, ExtractAcceptLanguage, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse, Redirect};
@@ -49,7 +49,9 @@ pub async fn password_reset_request(
 
     // Always show success message to prevent email enumeration
     let template = state.env.get_template("password_reset_sent.jinja")?;
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
+    let ftl_lang = bundle.locales.first()
+        .map(|l| l.to_string())
+        .unwrap_or_else(|| "en".to_string());
 
     // Validate email format
     if !form.email.contains('@') || form.email.parse::<lettre::Address>().is_err() {
@@ -99,21 +101,13 @@ pub async fn password_reset_verify(
     Form(form): Form<PasswordResetVerifyForm>,
 ) -> Result<impl IntoResponse, AppError> {
     let bundle = get_bundle(&accept_language, None);
-    let ftl_lang = bundle.locales.first().unwrap().to_string();
+    let ftl_lang = bundle.locales.first()
+        .map(|l| l.to_string())
+        .unwrap_or_else(|| "en".to_string());
 
     // Validate passwords match
     if form.new_password != form.new_password_confirm {
-        messages.error(
-            bundle.format_pattern(
-                bundle
-                    .get_message("password-reset-error-mismatch")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            ),
-        );
+        messages.error(safe_get_message(&bundle, "password-reset-error-mismatch"));
         let template = state.env.get_template("password_reset_verify.jinja")?;
         let rendered = template.render(context! {
             token => form.token,
@@ -124,17 +118,7 @@ pub async fn password_reset_verify(
 
     // Validate password length
     if form.new_password.len() < 8 {
-        messages.error(
-            bundle.format_pattern(
-                bundle
-                    .get_message("account-change-password-error-too-short")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            ),
-        );
+        messages.error(safe_get_message(&bundle, "account-change-password-error-too-short"));
         let template = state.env.get_template("password_reset_verify.jinja")?;
         let rendered = template.render(context! {
             token => form.token,
@@ -158,31 +142,11 @@ pub async fn password_reset_verify(
 
         tx.commit().await?;
 
-        messages.success(
-            bundle.format_pattern(
-                bundle
-                    .get_message("password-reset-success")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            ),
-        );
+        messages.success(safe_get_message(&bundle, "password-reset-success"));
 
         Ok(Redirect::to("/login").into_response())
     } else {
-        messages.error(
-            bundle.format_pattern(
-                bundle
-                    .get_message("password-reset-error-invalid-token")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            ),
-        );
+        messages.error(safe_get_message(&bundle, "password-reset-error-invalid-token"));
         let template = state.env.get_template("password_reset_verify.jinja")?;
         let rendered = template.render(context! {
             token => form.token,
@@ -224,7 +188,8 @@ async fn create_and_send_password_reset_email(
     // Generate UUID token for magic link
     let token = Uuid::new_v4();
 
-    let expires_at = Utc::now() + TimeDelta::try_seconds(60 * 15).unwrap(); // 15 minutes
+    let expires_at = Utc::now() + TimeDelta::try_seconds(60 * 15)
+        .expect("15 minutes is a valid duration"); // 15 minutes
 
     let password_reset_challenge = create_password_reset_challenge(
         &mut tx,
@@ -238,51 +203,21 @@ async fn create_and_send_password_reset_email(
     tx.commit().await.map_err(|e| e.to_string())?;
 
     // Send email
+    let from_address = safe_get_message(&bundle, "email-from-address");
     let email_message = Message::builder()
-        .from(
-            bundle
-                .format_pattern(
-                    bundle
-                        .get_message("email-from-address")
-                        .unwrap()
-                        .value()
-                        .unwrap(),
-                    None,
-                    &mut vec![],
-                )
-                .parse()
-                .unwrap(),
-        )
-        .to(email.parse().unwrap())
-        .subject(
-            bundle.format_pattern(
-                bundle
-                    .get_message("password-reset-email-subject")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            ),
-        )
+        .from(from_address.parse().map_err(|e: lettre::address::AddressError| e.to_string())?)
+        .to(email.parse().map_err(|e: lettre::address::AddressError| e.to_string())?)
+        .subject(safe_get_message(&bundle, "password-reset-email-subject"))
         .body(format!(
             "{}\n\nhttps://{}/password-reset/verify?token={}",
-            bundle.format_pattern(
-                bundle
-                    .get_message("password-reset-email-body")
-                    .unwrap()
-                    .value()
-                    .unwrap(),
-                None,
-                &mut vec![],
-            ),
+            safe_get_message(&bundle, "password-reset-email-body"),
             state.config.domain,
             token
         ))
-        .unwrap();
+        .map_err(|e| format!("Failed to build email message: {}", e))?;
 
     let mailer = SmtpTransport::relay(&state.config.smtp_host)
-        .unwrap()
+        .map_err(|e| format!("Failed to create SMTP transport: {}", e))?
         .credentials(SmtpCredentials::new(
             state.config.smtp_user.clone(),
             state.config.smtp_password.clone(),

@@ -717,9 +717,9 @@ pub async fn find_post_by_id(
         );
 
         let paint_duration = Duration::try_seconds(row.paint_duration.microseconds / 1000000)
-            .unwrap()
+            .expect("Duration should be valid")
             .to_std()
-            .unwrap();
+            .expect("Duration should be convertible to std::time::Duration");
         let paint_duration_human_readable = format_duration(paint_duration);
         map.insert(
             "paint_duration".to_string(),
@@ -727,7 +727,7 @@ pub async fn find_post_by_id(
         );
 
         map.insert("image_id".to_string(), Some(row.image_id.to_string()));
-        map.insert("image_tool".to_string(), Some(row.image_tool.unwrap()));
+        map.insert("image_tool".to_string(), Some(row.image_tool.unwrap_or_default()));
         map.insert("image_width".to_string(), Some(row.width.to_string()));
         map.insert("image_height".to_string(), Some(row.height.to_string()));
         map.insert("image_filename".to_string(), Some(row.image_filename));
@@ -825,9 +825,9 @@ pub async fn find_post_detail_for_json(
 
     Ok(result.map(|row| {
         let paint_duration = Duration::try_seconds(row.paint_duration.microseconds / 1000000)
-            .unwrap()
+            .expect("Duration should be valid")
             .to_std()
-            .unwrap();
+            .expect("Duration should be convertible to std::time::Duration");
         let paint_duration_human_readable = format_duration(paint_duration);
 
         PostDetailForJson {

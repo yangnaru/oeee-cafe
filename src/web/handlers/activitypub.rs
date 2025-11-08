@@ -244,8 +244,8 @@ impl Object for Actor {
 
     async fn into_json(self, _data: &Data<Self::DataType>) -> Result<Self::Kind, Self::Error> {
         let public_key = PublicKey {
-            id: format!("{}#main-key", self.iri).parse().unwrap(),
-            owner: self.iri.parse().unwrap(),
+            id: format!("{}#main-key", self.iri).parse().map_err(|e| anyhow::anyhow!("Invalid IRI URL: {}", e))?,
+            owner: self.iri.parse().map_err(|e| anyhow::anyhow!("Invalid IRI URL: {}", e))?,
             public_key_pem: self.public_key_pem,
         };
 
@@ -390,7 +390,7 @@ impl Object for Actor {
 
 impl ActivityPubFederationActor for Actor {
     fn id(&self) -> url::Url {
-        self.iri.parse().unwrap()
+        self.iri.parse().expect("IRI should be a valid URL")
     }
 
     fn public_key_pem(&self) -> &str {
@@ -402,7 +402,7 @@ impl ActivityPubFederationActor for Actor {
     }
 
     fn inbox(&self) -> Url {
-        self.inbox_url.parse().unwrap()
+        self.inbox_url.parse().expect("Inbox URL should be valid")
     }
 }
 
@@ -426,7 +426,7 @@ pub async fn activitypub_webfinger(
         if let Some(actor) = actor {
             return Ok(Json(build_webfinger_response(
                 query.resource,
-                actor.iri.parse().unwrap(),
+                actor.iri.parse().map_err(|e| anyhow::anyhow!("Invalid actor IRI: {}", e))?,
             ))
             .into_response());
         }
@@ -445,7 +445,7 @@ pub async fn activitypub_webfinger(
         if let Some(actor) = actor {
             return Ok(Json(build_webfinger_response(
                 query.resource,
-                actor.iri.parse().unwrap(),
+                actor.iri.parse().map_err(|e| anyhow::anyhow!("Invalid actor IRI: {}", e))?,
             ))
             .into_response());
         }
@@ -464,7 +464,7 @@ pub async fn activitypub_get_user(
     let mut tx = db.begin().await?;
 
     if let Some(actor) =
-        Actor::find_by_user_id(&mut tx, Uuid::parse_str(&actor_id).unwrap()).await?
+        Actor::find_by_user_id(&mut tx, Uuid::parse_str(&actor_id).map_err(|e| anyhow::anyhow!("Invalid actor UUID: {}: {}", actor_id, e))?).await?
     {
         let json_actor = actor.into_json(&data).await?;
         let context = [
@@ -496,7 +496,7 @@ pub async fn activitypub_get_community(
     let mut tx = db.begin().await?;
 
     if let Some(actor) =
-        Actor::find_by_community_id(&mut tx, Uuid::parse_str(&community_id).unwrap()).await?
+        Actor::find_by_community_id(&mut tx, Uuid::parse_str(&community_id).map_err(|e| anyhow::anyhow!("Invalid community UUID: {}: {}", community_id, e))?).await?
     {
         let json_actor = actor.into_json(&data).await?;
         let context = [
@@ -546,7 +546,11 @@ pub async fn activitypub_get_post(
             }
         }
 
-        let author_id = Uuid::parse_str(post.get("author_id").unwrap().as_ref().unwrap())?;
+        let author_id = Uuid::parse_str(
+        post.get("author_id")
+            .and_then(|v| v.as_ref())
+            .ok_or_else(|| anyhow::anyhow!("Missing author_id in post"))?
+    )?;
 
         // Find the author's actor, create if it doesn't exist
         let author_actor = Actor::find_by_user_id(&mut tx, author_id).await?;
@@ -1655,7 +1659,7 @@ pub async fn create_note_from_post(
     let cc = vec![format!("{}/followers", author_actor.iri)];
 
     // Get published date
-    let published = post.get("published_at_utc").unwrap();
+    let published = post.get("published_at_utc").ok_or_else(|| anyhow::anyhow!("Missing published_at_utc"))?;
 
     let note = Note::new(
         note_id,
@@ -1734,7 +1738,7 @@ pub async fn create_updated_note_from_post(
     let cc = vec![format!("{}/followers", author_actor.iri)];
 
     // Get published date
-    let published = post.get("published_at_utc").unwrap();
+    let published = post.get("published_at_utc").ok_or_else(|| anyhow::anyhow!("Missing published_at_utc"))?;
 
     // Use current time for ActivityPub update timestamp
     let updated = chrono::Utc::now().to_rfc3339();
@@ -2327,7 +2331,7 @@ impl ActivityHandler for EmojiReact {
             tracing::error!("Cannot process EmojiReact without actor");
             return Ok(());
         }
-        let actor_url = actor_url.unwrap();
+        let actor_url = actor_url.ok_or_else(|| anyhow::anyhow!("Missing actor URL"))?;
 
         tracing::info!("Object: {}", self.object);
         tracing::info!("Emoji: {}", self.content);

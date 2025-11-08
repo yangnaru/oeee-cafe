@@ -4,7 +4,7 @@ use crate::models::community::find_community_by_id;
 use crate::models::post::{create_post, find_post_by_id, PostDraft, Tool};
 use crate::models::user::AuthSession;
 use crate::web::context::CommonContext;
-use crate::web::handlers::ExtractFtlLang;
+use crate::web::handlers::{safe_decode_hash, safe_parse_uuid, ExtractFtlLang};
 use crate::web::state::AppState;
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::error::SdkError;
@@ -22,7 +22,6 @@ use axum::{
 use chrono::Duration;
 use data_encoding::BASE64;
 use data_url::DataUrl;
-use hex::decode;
 use minijinja::context;
 use serde::{Deserialize, Serialize};
 use sha256::digest;
@@ -225,13 +224,17 @@ pub async fn draw_finish(
     let mut tool = String::new();
     let mut parent_post_id = None;
 
-    while let Some(field) = multipart.next_field().await.unwrap() {
-        let name = field.name().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
+    while let Some(field) = multipart.next_field().await? {
+        let name = field.name().ok_or_else(|| AppError::InvalidFormData("Field has no name".to_string()))?.to_string();
+        let data = field.bytes().await?;
 
         if name == "image" {
-            let url = DataUrl::process(std::str::from_utf8(data.as_ref()).unwrap()).unwrap();
-            let (body, _fragment) = url.decode_to_vec().unwrap();
+            let data_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in image data: {}", e)))?;
+            let url = DataUrl::process(data_str)
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid data URL: {}", e)))?;
+            let (body, _fragment) = url.decode_to_vec()
+                .map_err(|e| AppError::InvalidFormData(format!("Failed to decode image: {}", e)))?;
             image_sha256 = digest(&body);
 
             assert_eq!(url.mime_type().type_, "image");
@@ -243,46 +246,50 @@ pub async fn draw_finish(
                 body,
                 &format!(
                     "image/{}{}/{}.png",
-                    image_sha256.chars().next().unwrap(),
-                    image_sha256.chars().nth(1).unwrap(),
+                    image_sha256.chars().next().ok_or_else(|| AppError::InvalidHash("Hash is empty".to_string()))?,
+                    image_sha256.chars().nth(1).ok_or_else(|| AppError::InvalidHash("Hash too short".to_string()))?,
                     image_sha256
                 ),
-                &BASE64.encode(&decode(image_sha256.clone()).unwrap()),
+                &BASE64.encode(&safe_decode_hash(&image_sha256)?),
             )
             .await?;
         } else if name == "animation" {
             replay_sha256 = digest(&*data);
             replay_data = data.to_vec();
         } else if name == "community_id" {
-            let id_str = std::str::from_utf8(data.as_ref()).unwrap();
+            let id_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in community_id: {}", e)))?;
             if !id_str.is_empty() {
                 community_id = Uuid::parse_str(id_str).ok();
             }
         } else if name == "security_timer" {
-            security_timer = std::str::from_utf8(data.as_ref())
-                .unwrap()
-                .parse::<u128>()
-                .unwrap();
+            let timer_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in security_timer: {}", e)))?;
+            security_timer = timer_str.parse::<u128>()
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid security_timer: {}", e)))?;
         } else if name == "security_count" {
-            security_count = std::str::from_utf8(data.as_ref())
-                .unwrap()
-                .parse::<i32>()
-                .unwrap();
+            let count_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in security_count: {}", e)))?;
+            security_count = count_str.parse::<i32>()
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid security_count: {}", e)))?;
         } else if name == "width" {
-            width = std::str::from_utf8(data.as_ref())
-                .unwrap()
-                .parse::<i32>()
-                .unwrap();
+            let width_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in width: {}", e)))?;
+            width = width_str.parse::<i32>()
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid width: {}", e)))?;
         } else if name == "height" {
-            height = std::str::from_utf8(data.as_ref())
-                .unwrap()
-                .parse::<i32>()
-                .unwrap();
+            let height_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in height: {}", e)))?;
+            height = height_str.parse::<i32>()
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid height: {}", e)))?;
         } else if name == "tool" {
-            tool = std::str::from_utf8(data.as_ref()).unwrap().to_string();
+            tool = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in tool: {}", e)))?
+                .to_string();
         } else if name == "parent_post_id" && !data.is_empty() {
-            parent_post_id =
-                Some(Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap()).unwrap());
+            let parent_id_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in parent_post_id: {}", e)))?;
+            parent_post_id = Some(safe_parse_uuid(parent_id_str)?);
         }
     }
     let start = SystemTime::now();
@@ -292,31 +299,39 @@ pub async fn draw_finish(
     let duration_ms = since_the_epoch.as_millis() - security_timer;
 
     if tool == "neo" || tool == "cucumber" || tool == "neo-cucumber-offline" {
+        // Get first 2 characters for directory prefix
+        let replay_prefix = replay_sha256.chars().take(2).collect::<String>();
+        if replay_prefix.len() < 2 {
+            return Err(AppError::InvalidHash("Replay hash too short".to_string()));
+        }
         upload_object(
             &client,
             &state.config.aws_s3_bucket,
             replay_data,
             &format!(
-                "replay/{}{}/{}.pch",
-                replay_sha256.chars().next().unwrap(),
-                replay_sha256.chars().nth(1).unwrap(),
+                "replay/{}/{}.pch",
+                replay_prefix,
                 replay_sha256
             ),
-            &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
+            &BASE64.encode(&safe_decode_hash(&replay_sha256)?),
         )
         .await?;
     } else if tool == "tegaki" {
+        // Get first 2 characters for directory prefix
+        let replay_prefix = replay_sha256.chars().take(2).collect::<String>();
+        if replay_prefix.len() < 2 {
+            return Err(AppError::InvalidHash("Replay hash too short".to_string()));
+        }
         upload_object(
             &client,
             &state.config.aws_s3_bucket,
             replay_data,
             &format!(
-                "replay/{}{}/{}.tgkr",
-                replay_sha256.chars().next().unwrap(),
-                replay_sha256.chars().nth(1).unwrap(),
+                "replay/{}/{}.tgkr",
+                replay_prefix,
                 replay_sha256
             ),
-            &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
+            &BASE64.encode(&safe_decode_hash(&replay_sha256)?),
         )
         .await?;
     } else {
@@ -331,6 +346,8 @@ pub async fn draw_finish(
         return Ok(StatusCode::BAD_REQUEST.into_response());
     };
 
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let tool_enum: Tool = match tool.as_str() {
         "neo" => Tool::Neo,
         "tegaki" => Tool::Tegaki,
@@ -339,7 +356,7 @@ pub async fn draw_finish(
         _ => return Ok(StatusCode::BAD_REQUEST.into_response()),
     };
     let post_draft = PostDraft {
-        author_id: auth_session.user.unwrap().id,
+        author_id: current_user.id,
         community_id,
         paint_duration: PgInterval::try_from(
             Duration::try_milliseconds(duration_ms as i64).unwrap_or_default(),
@@ -404,13 +421,17 @@ pub async fn banner_draw_finish(
     let mut security_timer = 0;
     let mut security_count = 0;
 
-    while let Some(field) = multipart.next_field().await.unwrap() {
-        let name = field.name().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
+    while let Some(field) = multipart.next_field().await? {
+        let name = field.name().ok_or_else(|| AppError::InvalidFormData("Field has no name".to_string()))?.to_string();
+        let data = field.bytes().await?;
 
         if name == "image" {
-            let url = DataUrl::process(std::str::from_utf8(data.as_ref()).unwrap()).unwrap();
-            let (body, _fragment) = url.decode_to_vec().unwrap();
+            let data_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in image data: {}", e)))?;
+            let url = DataUrl::process(data_str)
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid data URL: {}", e)))?;
+            let (body, _fragment) = url.decode_to_vec()
+                .map_err(|e| AppError::InvalidFormData(format!("Failed to decode image: {}", e)))?;
             image_sha256 = digest(&body);
 
             assert_eq!(url.mime_type().type_, "image");
@@ -422,51 +443,57 @@ pub async fn banner_draw_finish(
                 body,
                 &format!(
                     "image/{}{}/{}.png",
-                    image_sha256.chars().next().unwrap(),
-                    image_sha256.chars().nth(1).unwrap(),
+                    image_sha256.chars().next().ok_or_else(|| AppError::InvalidHash("Hash is empty".to_string()))?,
+                    image_sha256.chars().nth(1).ok_or_else(|| AppError::InvalidHash("Hash too short".to_string()))?,
                     image_sha256
                 ),
-                &BASE64.encode(&decode(image_sha256.clone()).unwrap()),
+                &BASE64.encode(&safe_decode_hash(&image_sha256)?),
             )
             .await?;
         } else if name == "animation" {
             replay_sha256 = digest(&*data);
 
+            // Get first 2 characters for directory prefix
+            let replay_prefix = replay_sha256.chars().take(2).collect::<String>();
+            if replay_prefix.len() < 2 {
+                return Err(AppError::InvalidHash("Replay hash too short".to_string()));
+            }
             upload_object(
                 &client,
                 &state.config.aws_s3_bucket,
                 data.to_vec(),
                 &format!(
-                    "replay/{}{}/{}.pch",
-                    replay_sha256.chars().next().unwrap(),
-                    replay_sha256.chars().nth(1).unwrap(),
+                    "replay/{}/{}.pch",
+                    replay_prefix,
                     replay_sha256
                 ),
-                &BASE64.encode(&decode(replay_sha256.clone()).unwrap()),
+                &BASE64.encode(&safe_decode_hash(&replay_sha256)?),
             )
             .await?;
         } else if name == "security_timer" {
-            security_timer = std::str::from_utf8(data.as_ref())
-                .unwrap()
-                .parse::<u128>()
-                .unwrap();
+            let data_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in security_timer: {}", e)))?;
+            security_timer = data_str.parse::<u128>()
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid security_timer: {}", e)))?;
         } else if name == "security_count" {
-            security_count = std::str::from_utf8(data.as_ref())
-                .unwrap()
-                .parse::<i32>()
-                .unwrap();
+            let data_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in security_count: {}", e)))?;
+            security_count = data_str.parse::<i32>()
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid security_count: {}", e)))?;
         } else if name == "width" {
-            width = std::str::from_utf8(data.as_ref())
-                .unwrap()
-                .parse::<i32>()
-                .unwrap();
+            let data_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in width: {}", e)))?;
+            width = data_str.parse::<i32>()
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid width: {}", e)))?;
         } else if name == "height" {
-            height = std::str::from_utf8(data.as_ref())
-                .unwrap()
-                .parse::<i32>()
-                .unwrap();
+            let data_str = std::str::from_utf8(data.as_ref())
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid UTF-8 in height: {}", e)))?;
+            height = data_str.parse::<i32>()
+                .map_err(|e| AppError::InvalidFormData(format!("Invalid height: {}", e)))?;
         }
     }
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
     let start = SystemTime::now();
     let since_the_epoch = start
         .duration_since(UNIX_EPOCH)
@@ -474,7 +501,7 @@ pub async fn banner_draw_finish(
     let duration_ms = since_the_epoch.as_millis() - security_timer;
 
     let banner_draft = BannerDraft {
-        author_id: auth_session.user.unwrap().id,
+        author_id: current_user.id,
         paint_duration: PgInterval::try_from(
             Duration::try_milliseconds(duration_ms as i64).unwrap_or_default(),
         )

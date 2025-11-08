@@ -268,8 +268,8 @@ pub async fn post_relay_view(
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
     let db = &state.db_pool;
-    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
-    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await?;
+    let post = find_post_by_id(&mut tx, uuid).await?;
 
     if post.is_none() {
         return Ok((
@@ -278,10 +278,10 @@ pub async fn post_relay_view(
         )
             .into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     // Check if post is in a private community and if user has access
-    let community_id = post.as_ref()
-        .and_then(|p| p.get("community_id"))
+    let community_id = post.get("community_id")
         .and_then(|v| v.as_ref())
         .and_then(|s| Uuid::parse_str(s).ok());
 
@@ -309,7 +309,7 @@ pub async fn post_relay_view(
     // Personal posts (community_id is None) are always accessible
 
     let template: minijinja::Template<'_, '_> =
-        state.env.get_template("draw_post_neo.jinja").unwrap();
+        state.env.get_template("draw_post_neo.jinja")?;
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -319,8 +319,7 @@ pub async fn post_relay_view(
     // Relay only works for community posts, not personal posts
     let post_data = post.clone();
     let community_id = post_data
-        .as_ref()
-        .and_then(|p| p.get("community_id"))
+        .get("community_id")
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
 
@@ -336,13 +335,19 @@ pub async fn post_relay_view(
         }
     };
 
-    let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
+    let community = find_community_by_id(&mut tx, community_id).await?.ok_or_else(|| AppError::NotFound("Resource".to_string()))?;
     let rendered = template.render(context! {
-        parent_post => post.clone().unwrap(),
+        parent_post => post.clone(),
         current_user => auth_session.user,
         community_name => community.name,
-        width => post.clone().unwrap().get("image_width").unwrap().as_ref().unwrap().parse::<u32>()?,
-        height => post.unwrap().get("image_height").unwrap().as_ref().unwrap().parse::<u32>()?,
+        width => post.get("image_width")
+            .and_then(|v| v.as_ref())
+            .ok_or_else(|| AppError::InvalidFormData("Missing image_width".to_string()))?
+            .parse::<u32>()?,
+        height => post.get("image_height")
+            .and_then(|v| v.as_ref())
+            .ok_or_else(|| AppError::InvalidFormData("Missing image_height".to_string()))?
+            .parse::<u32>()?,
         background_color => community.background_color,
         foreground_color => community.foreground_color,
         community_id => community_id.to_string(),
@@ -368,8 +373,8 @@ pub async fn post_view(
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
     let db = &state.db_pool;
-    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
-    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await?;
+    let post = find_post_by_id(&mut tx, uuid).await?;
 
     // Store community for later use in template
     let post_community: Option<crate::models::community::Community>;
@@ -410,7 +415,7 @@ pub async fn post_view(
                 post_community = None;
             }
 
-            increment_post_viewer_count(&mut tx, uuid).await.unwrap();
+            increment_post_viewer_count(&mut tx, uuid).await?;
         }
         None => {
             return Ok((
@@ -421,12 +426,13 @@ pub async fn post_view(
         }
     }
 
-    let comments = build_comment_thread_tree(&mut tx, uuid).await.unwrap();
+    // At this point post is guaranteed to be Some (would have returned 404 otherwise)
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
+
+    let comments = build_comment_thread_tree(&mut tx, uuid).await?;
 
     // Get parent post data if it exists
     let (parent_post_author_login_name, parent_post_data) = if let Some(parent_post_id_str) = post
-        .clone()
-        .unwrap()
         .get("parent_post_id")
         .and_then(|id| id.as_ref())
     {
@@ -501,9 +507,8 @@ pub async fn post_view(
         (String::new(), None)
     };
 
-    let community_id = post.clone()
-        .as_ref()
-        .and_then(|p| p.get("community_id"))
+    let community_id = post
+        .get("community_id")
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
 
@@ -558,38 +563,37 @@ pub async fn post_view(
 
     let community_id = community_id.map(|id| id.to_string());
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja").unwrap();
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja")?;
 
     if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
         let rendered = template
             .eval_to_state(context! {
                 current_user => auth_session.user,
-                post => {
-                    post.as_ref()
-                },
+                post => Some(&post),
                 post_id => id,
                 hashtags,
                 post_community,
                 ftl_lang
             })?
             .render_block("post_edit_block")
-            .unwrap();
+            .map_err(|e| AppError::from(anyhow::anyhow!("Template render error: {}", e)))?;
         Ok(Html(rendered).into_response())
     } else {
         let rendered = template
             .render(context! {
                 current_user => auth_session.user,
-                        post => {
-                    post.as_ref()
-                },
-                parent_post_id => post.clone().unwrap().get("parent_post_id")
+                        post => Some(&post),
+                parent_post_id => post.get("parent_post_id")
                     .and_then(|id| id.as_ref())
                     .and_then(|id| Uuid::parse_str(id).ok())
                     .map(|uuid| uuid.to_string())
                     .unwrap_or_default(),
                 parent_post_author_login_name => parent_post_author_login_name.clone(),
                 parent_post_data,
-                post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
+                post_id => post.get("id")
+                    .and_then(|v| v.as_ref())
+                    .ok_or_else(|| AppError::InvalidFormData("Missing post id".to_string()))?
+                    .clone(),
                 community_id,
                 draft_post_count => common_ctx.draft_post_count,
                 unread_notification_count => common_ctx.unread_notification_count,
@@ -602,8 +606,7 @@ pub async fn post_view(
                 child_posts,
                 post_community,
                 ftl_lang
-            })
-            .unwrap();
+            }).map_err(|e| AppError::from(anyhow::anyhow!("Template render error: {}", e)))?;
         Ok(Html(rendered).into_response())
     }
 }
@@ -620,15 +623,15 @@ pub async fn post_replay_view(
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
     let db = &state.db_pool;
-    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
-    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await?;
+    let post = find_post_by_id(&mut tx, uuid).await?;
     if post.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     // Check if post is in a private community and if user has access
-    let community_id = post.as_ref()
-        .and_then(|p| p.get("community_id"))
+    let community_id = post.get("community_id")
         .and_then(|v| v.as_ref())
         .and_then(|s| Uuid::parse_str(s).ok());
 
@@ -660,9 +663,9 @@ pub async fn post_replay_view(
 
     let community_id = community_id.map(|id| id.to_string());
 
-    let template_filename = match post.clone().unwrap().get("replay_filename") {
+    let template_filename = match post.get("replay_filename") {
         Some(replay_filename) => {
-            let replay_filename = replay_filename.as_ref().unwrap();
+            let replay_filename = replay_filename.as_ref().ok_or_else(|| AppError::InvalidFormData("Missing replay_filename".to_string()))?;
             if replay_filename.ends_with(".pch") {
                 "post_replay_view_pch.jinja"
             } else if replay_filename.ends_with(".tgkr") {
@@ -674,20 +677,20 @@ pub async fn post_replay_view(
         None => "post_replay_view_pch.jinja",
     };
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename).unwrap();
+    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
-                post => {
-                post.as_ref()
-            },
-            post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
+                post => Some(&post),
+            post_id => post.get("id")
+                    .and_then(|v| v.as_ref())
+                    .ok_or_else(|| AppError::InvalidFormData("Missing post id".to_string()))?
+                    .clone(),
             community_id,
             draft_post_count => common_ctx.draft_post_count,
             unread_notification_count => common_ctx.unread_notification_count,
             ftl_lang,
-        })
-        .unwrap();
+        }).map_err(|e| AppError::from(anyhow::anyhow!("Template render error: {}", e)))?;
     Ok(Html(rendered).into_response())
 }
 
@@ -702,15 +705,15 @@ pub async fn post_replay_view_mobile(
         ParsedId::InvalidId(error_response) => return Ok(error_response),
     };
     let db = &state.db_pool;
-    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
-    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await?;
+    let post = find_post_by_id(&mut tx, uuid).await?;
     if post.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     // Check if post is in a private community and if user has access
-    let community_id = post.as_ref()
-        .and_then(|p| p.get("community_id"))
+    let community_id = post.get("community_id")
         .and_then(|v| v.as_ref())
         .and_then(|s| Uuid::parse_str(s).ok());
 
@@ -737,9 +740,9 @@ pub async fn post_replay_view_mobile(
     }
     // Personal posts (community_id is None) are always accessible
 
-    let template_filename = match post.clone().unwrap().get("replay_filename") {
+    let template_filename = match post.get("replay_filename") {
         Some(replay_filename) => {
-            let replay_filename = replay_filename.as_ref().unwrap();
+            let replay_filename = replay_filename.as_ref().ok_or_else(|| AppError::InvalidFormData("Missing replay_filename".to_string()))?;
             if replay_filename.ends_with(".pch") {
                 "post_replay_view_pch_mobile.jinja"
             } else if replay_filename.ends_with(".tgkr") {
@@ -751,15 +754,12 @@ pub async fn post_replay_view_mobile(
         None => "post_replay_view_pch_mobile.jinja",
     };
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename).unwrap();
+    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
     let rendered = template
         .render(context! {
-            post => {
-                post.as_ref()
-            },
+            post => Some(&post),
             r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        })
-        .unwrap();
+        }).map_err(|e| AppError::from(anyhow::anyhow!("Template render error: {}", e)))?;
     Ok(Html(rendered).into_response())
 }
 
@@ -782,20 +782,20 @@ pub async fn post_publish_form(
         )
             .into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     if *post
-        .clone()
-        .unwrap()
         .get("author_id")
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        != auth_session.user.clone().unwrap().id.to_string()
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing author_id".to_string()))?
+        != auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id.to_string()
     {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let published_at = post.clone().unwrap().get("published_at").unwrap().clone();
+    let published_at = post.get("published_at")
+        .ok_or_else(|| AppError::InvalidFormData("Missing published_at".to_string()))?
+        .clone();
     if published_at.is_some() {
         return Ok(Redirect::to(&format!("/posts/{}", id)).into_response());
     }
@@ -803,8 +803,7 @@ pub async fn post_publish_form(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let community_id = post.clone()
-        .unwrap()
+    let community_id = post
         .get("community_id")
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
@@ -854,17 +853,14 @@ pub async fn post_publish(
     if post.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     let author_id = Uuid::parse_str(
-        post.clone()
-            .unwrap()
-            .clone()
-            .get("author_id")
-            .unwrap()
-            .as_ref()
-            .unwrap(),
+        post.get("author_id")
+            .and_then(|v| v.as_ref())
+            .ok_or_else(|| AppError::InvalidFormData("Missing author_id".to_string()))?,
     )?;
-    let user_id = auth_session.user.unwrap().id;
+    let user_id = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id;
     if author_id != user_id {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
@@ -874,8 +870,6 @@ pub async fn post_publish(
 
     // Parse community_id if present, otherwise None for personal posts
     let community_id = post
-        .clone()
-        .unwrap()
         .get("community_id")
         .and_then(|v| v.as_ref())
         .and_then(|s| Uuid::parse_str(s).ok());
@@ -917,9 +911,8 @@ pub async fn post_publish(
 
     // Check if this is a reply post and notify the parent post author
     if let Some(parent_post_id_str) = post
-        .clone()
-        .and_then(|p| p.get("parent_post_id").cloned())
-        .and_then(|id| id)
+        .get("parent_post_id")
+        .and_then(|id| id.as_ref())
     {
         if let Ok(parent_post_id) = Uuid::parse_str(&parent_post_id_str) {
             let parent_post = find_post_by_id(&mut tx, parent_post_id).await?;
@@ -983,9 +976,8 @@ pub async fn post_publish(
     // Notify community participants for new posts in unlisted or private communities
     // Only notify for top-level posts (not replies) and only if post has a community
     let is_reply = post
-        .clone()
-        .and_then(|p| p.get("parent_post_id").cloned())
-        .and_then(|id| id)
+        .get("parent_post_id")
+        .and_then(|id| id.as_ref())
         .is_some();
 
     if let Some(cid) = community_id {
@@ -1171,7 +1163,7 @@ pub async fn draft_posts(
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let posts =
-        find_draft_posts_by_author_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+        find_draft_posts_by_author_id(&mut tx, auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id).await?;
 
     tx.commit().await?;
 
@@ -1211,7 +1203,7 @@ pub async fn draft_posts_api(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let user = auth_session.user.clone().unwrap();
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
 
     let posts = find_draft_posts_by_author_id(&mut tx, user.id).await?;
 
@@ -1260,8 +1252,8 @@ pub async fn do_create_comment(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user_id = auth_session.user.as_ref().unwrap().id;
-    let post_id = Uuid::parse_str(&form.post_id).unwrap();
+    let user_id = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id;
+    let post_id = Uuid::parse_str(&form.post_id).map_err(|e| AppError::InvalidUuid(format!("{}", e)))?;
 
     // Get the actor for this user
     let actor = Actor::find_by_user_id(&mut tx, user_id)
@@ -1449,6 +1441,9 @@ pub async fn do_create_comment(
         }
     }
 
+    // At this point post is guaranteed to be Some (would have returned 404 otherwise)
+    // post is not used after this point, no need to unwrap
+
     let comments = build_comment_thread_tree(&mut tx, post_id).await?;
     let _ = tx.commit().await;
 
@@ -1508,23 +1503,19 @@ pub async fn post_edit_community(
     if post.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     if *post
-        .clone()
-        .unwrap()
         .get("author_id")
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        != auth_session.user.clone().unwrap().id.to_string()
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing author_id".to_string()))?
+        != auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id.to_string()
     {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
     // Don't allow moving reply posts (posts with a parent)
     if post
-        .as_ref()
-        .unwrap()
         .get("parent_post_id")
         .and_then(|v| v.as_ref())
         .is_some()
@@ -1535,8 +1526,7 @@ pub async fn post_edit_community(
     // Personal posts don't have a community to edit
     let post_data = post.clone();
     let current_community_id = post_data
-        .as_ref()
-        .and_then(|p| p.get("community_id"))
+        .get("community_id")
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
 
@@ -1623,7 +1613,7 @@ pub async fn post_edit_community(
     // Fetch both public and known communities
     let public_communities = crate::models::community::get_public_communities(&mut tx).await?;
     let known_communities =
-        get_known_communities(&mut tx, auth_session.user.clone().unwrap().id).await?;
+        get_known_communities(&mut tx, auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id).await?;
 
     // Separate known and public-only communities, filtering out current community
     use std::collections::HashSet;
@@ -1797,23 +1787,19 @@ pub async fn do_post_edit_community(
     if post.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     if *post
-        .clone()
-        .unwrap()
         .get("author_id")
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        != auth_session.user.clone().unwrap().id.to_string()
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing author_id".to_string()))?
+        != auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id.to_string()
     {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
     // Don't allow moving reply posts (posts with a parent)
     if post
-        .as_ref()
-        .unwrap()
         .get("parent_post_id")
         .and_then(|v| v.as_ref())
         .is_some()
@@ -1823,8 +1809,7 @@ pub async fn do_post_edit_community(
 
     // Get current community and check if it's private
     // Personal posts cannot have their community changed (they don't have one)
-    let current_community_id = post.as_ref()
-        .and_then(|p| p.get("community_id"))
+    let current_community_id = post.get("community_id")
         .and_then(|v| v.as_ref())
         .and_then(|s| Uuid::parse_str(s).ok());
 
@@ -1865,15 +1850,13 @@ pub async fn hx_edit_post(
     if post.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     if *post
-        .clone()
-        .unwrap()
         .get("author_id")
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        != auth_session.user.clone().unwrap().id.to_string()
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing author_id".to_string()))?
+        != auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id.to_string()
     {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
@@ -1926,15 +1909,13 @@ pub async fn hx_do_edit_post(
     if post.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     if *post
-        .clone()
-        .unwrap()
         .get("author_id")
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        != auth_session.user.clone().unwrap().id.to_string()
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing author_id".to_string()))?
+        != auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id.to_string()
     {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
@@ -1966,7 +1947,7 @@ pub async fn hx_do_edit_post(
         .unwrap_or_default();
 
     // Find the actor for this user to send ActivityPub activities
-    let actor = Actor::find_by_user_id(&mut tx, auth_session.user.clone().unwrap().id).await?;
+    let actor = Actor::find_by_user_id(&mut tx, auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id).await?;
 
     // Check community visibility before federating updates
     let should_federate = if let Some(ref post_data) = post {
@@ -2044,35 +2025,28 @@ pub async fn hx_delete_post(
     if post.is_none() {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     if *post
-        .clone()
-        .unwrap()
         .get("author_id")
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        != auth_session.user.clone().unwrap().id.to_string()
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing author_id".to_string()))?
+        != auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id.to_string()
     {
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let image_id = Uuid::parse_str(
-        &post
-            .clone()
-            .unwrap()
-            .get("image_id")
-            .unwrap()
-            .clone()
-            .unwrap(),
-    )
-    .unwrap();
+    let image_id = post
+        .get("image_id")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing image_id".to_string()))
+        .and_then(|id_str| Uuid::parse_str(id_str).map_err(|e| AppError::InvalidUuid(format!("{}: {}", id_str, e))))?;
     let image = find_image_by_id(&mut tx, image_id).await?;
 
     let mut keys = vec![format!(
         "image/{}{}/{}",
-        image.image_filename.chars().next().unwrap(),
-        image.image_filename.chars().nth(1).unwrap(),
+        image.image_filename.chars().next().ok_or_else(|| AppError::InvalidFormData("Image filename too short".to_string()))?,
+        image.image_filename.chars().nth(1).ok_or_else(|| AppError::InvalidFormData("Image filename too short".to_string()))?,
         image.image_filename
     )];
 
@@ -2080,8 +2054,8 @@ pub async fn hx_delete_post(
     if let Some(ref replay_filename) = image.replay_filename {
         keys.push(format!(
             "replay/{}{}/{}",
-            replay_filename.chars().next().unwrap(),
-            replay_filename.chars().nth(1).unwrap(),
+            replay_filename.chars().next().ok_or_else(|| AppError::InvalidFormData("Replay filename too short".to_string()))?,
+            replay_filename.chars().nth(1).ok_or_else(|| AppError::InvalidFormData("Replay filename too short".to_string()))?,
             replay_filename
         ));
     }
@@ -2101,30 +2075,33 @@ pub async fn hx_delete_post(
         .behavior_version_latest()
         .build();
     let client = Client::from_conf(config);
+    let objects: Vec<ObjectIdentifier> = keys.iter()
+        .map(|key| ObjectIdentifier::builder().key(key).build())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| AppError::from(anyhow::anyhow!("Failed to build object identifiers: {}", e)))?;
+
     client
         .delete_objects()
         .bucket(state.config.aws_s3_bucket.clone())
         .delete(
             Delete::builder()
-                .set_objects(Some(
-                    keys.iter()
-                        .map(|key| ObjectIdentifier::builder().key(key).build().unwrap())
-                        .collect::<Vec<_>>(),
-                ))
+                .set_objects(Some(objects))
                 .build()
                 .map_err(Error::from)?,
         )
         .send()
         .await?;
-    let post_data = post.clone().unwrap();
+    let post_data = post.clone();
     let redirect_url = if let Some(community_id_str) = post_data.get("community_id").and_then(|id| id.clone()) {
         let community_id = Uuid::parse_str(&community_id_str)?;
         get_community_slug_url(&mut tx, community_id).await?
     } else {
         // For personal posts, redirect to user's profile
-        let author_id = post_data.get("author_id").unwrap().as_ref().unwrap();
+        let author_id = post_data.get("author_id")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing author_id".to_string()))?;
         let author = find_user_by_id(&mut tx, Uuid::parse_str(author_id)?).await?;
-        format!("/@{}", author.unwrap().login_name)
+        format!("/@{}", author.ok_or_else(|| AppError::NotFound("Author".to_string()))?.login_name)
     };
 
     // Unlink hashtags before deleting post to properly decrement post_count
@@ -2150,15 +2127,17 @@ pub async fn post_view_by_login_name(
     };
 
     let db = &state.db_pool;
-    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
-    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await?;
+    let post = find_post_by_id(&mut tx, uuid).await?;
 
     // Store community for later use in template
     let post_community: Option<crate::models::community::Community>;
 
     match post {
         Some(ref post_data) => {
-            let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
+            let post_login_name = post_data.get("login_name")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing login_name".to_string()))?;
 
             // Check if post is in a private community and if user has access
             let community_id = post_data
@@ -2211,7 +2190,7 @@ pub async fn post_view_by_login_name(
                 post_community = None;
             }
 
-            increment_post_viewer_count(&mut tx, uuid).await.unwrap();
+            increment_post_viewer_count(&mut tx, uuid).await?;
         }
         None => {
             return Ok((
@@ -2222,13 +2201,13 @@ pub async fn post_view_by_login_name(
         }
     }
 
-    let comments = build_comment_thread_tree(&mut tx, uuid).await.unwrap();
-    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    // At this point post is guaranteed to be Some (would have returned 404 otherwise)
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
+
+    let comments = build_comment_thread_tree(&mut tx, uuid).await?;
 
     // Get parent post data if it exists
     let (parent_post_author_login_name, parent_post_data) = if let Some(parent_post_id_str) = post
-        .clone()
-        .unwrap()
         .get("parent_post_id")
         .and_then(|id| id.as_ref())
     {
@@ -2306,9 +2285,8 @@ pub async fn post_view_by_login_name(
         (String::new(), None)
     };
 
-    let community_id = post.clone()
-        .as_ref()
-        .and_then(|p| p.get("community_id"))
+    let community_id = post
+        .get("community_id")
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
 
@@ -2363,38 +2341,37 @@ pub async fn post_view_by_login_name(
 
     let community_id = community_id.map(|id| id.to_string());
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja").unwrap();
+    let template: minijinja::Template<'_, '_> = state.env.get_template("post_view.jinja")?;
 
     if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
         let rendered = template
             .eval_to_state(context! {
                 current_user => auth_session.user,
-                post => {
-                    post.as_ref()
-                },
+                post => Some(&post),
                 post_id => post_id,
                 hashtags,
                 post_community,
                 ftl_lang
             })?
             .render_block("post_edit_block")
-            .unwrap();
+            .map_err(|e| AppError::from(anyhow::anyhow!("Template render error: {}", e)))?;
         Ok(Html(rendered).into_response())
     } else {
         let rendered = template
             .render(context! {
                 current_user => auth_session.user,
-                        post => {
-                    post.as_ref()
-                },
-                parent_post_id => post.clone().unwrap().get("parent_post_id")
+                        post => Some(&post),
+                parent_post_id => post.get("parent_post_id")
                     .and_then(|id| id.as_ref())
                     .and_then(|id| Uuid::parse_str(id).ok())
                     .map(|uuid| uuid.to_string())
                     .unwrap_or_default(),
                 parent_post_author_login_name => parent_post_author_login_name.clone(),
                 parent_post_data,
-                post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
+                post_id => post.get("id")
+                    .and_then(|v| v.as_ref())
+                    .ok_or_else(|| AppError::InvalidFormData("Missing post id".to_string()))?
+                    .clone(),
                 community_id,
                 draft_post_count => common_ctx.draft_post_count,
                 unread_notification_count => common_ctx.unread_notification_count,
@@ -2407,8 +2384,7 @@ pub async fn post_view_by_login_name(
                 child_posts,
                 post_community,
                 ftl_lang
-            })
-            .unwrap();
+            }).map_err(|e| AppError::from(anyhow::anyhow!("Template render error: {}", e)))?;
         Ok(Html(rendered).into_response())
     }
 }
@@ -2424,14 +2400,18 @@ pub async fn redirect_post_to_login_name(
     };
 
     let db = &state.db_pool;
-    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
-    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await?;
+    let post = find_post_by_id(&mut tx, uuid).await?;
     tx.commit().await?;
 
     match post {
         Some(post_data) => {
-            let login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
-            let post_uuid_str = post_data.get("id").unwrap().as_ref().unwrap();
+            let login_name = post_data.get("login_name")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing login_name".to_string()))?;
+            let post_uuid_str = post_data.get("id")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing id".to_string()))?;
             Ok(Redirect::permanent(&format!("/@{}/{}", login_name, post_uuid_str)).into_response())
         }
         None => Ok(StatusCode::NOT_FOUND.into_response()),
@@ -2521,12 +2501,14 @@ pub async fn post_relay_view_by_login_name(
     };
 
     let db = &state.db_pool;
-    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
-    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await?;
+    let post = find_post_by_id(&mut tx, uuid).await?;
 
     match post {
         Some(ref post_data) => {
-            let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
+            let post_login_name = post_data.get("login_name")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing login_name".to_string()))?;
 
             // Check if post is in a private community and if user has access
             let community_id = post_data
@@ -2581,15 +2563,15 @@ pub async fn post_relay_view_by_login_name(
                 .into_response());
         }
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
     let template: minijinja::Template<'_, '_> =
-        state.env.get_template("draw_post_neo.jinja").unwrap();
+        state.env.get_template("draw_post_neo.jinja")?;
 
     // Relay only works for community posts, not personal posts
     let post_data = post.clone();
     let community_id = post_data
-        .as_ref()
-        .and_then(|p| p.get("community_id"))
+        .get("community_id")
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
 
@@ -2605,18 +2587,24 @@ pub async fn post_relay_view_by_login_name(
         }
     };
 
-    let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
+    let community = find_community_by_id(&mut tx, community_id).await?.ok_or_else(|| AppError::NotFound("Resource".to_string()))?;
 
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     let rendered = template
         .render(context! {
-            parent_post => post.clone().unwrap(),
+            parent_post => post.clone(),
             current_user => auth_session.user,
                 community_name => community.name,
-            width => post.clone().unwrap().get("image_width").unwrap().as_ref().unwrap().parse::<u32>()?,
-            height => post.unwrap().get("image_height").unwrap().as_ref().unwrap().parse::<u32>()?,
+            width => post.get("image_width")
+            .and_then(|v| v.as_ref())
+            .ok_or_else(|| AppError::InvalidFormData("Missing image_width".to_string()))?
+            .parse::<u32>()?,
+            height => post.get("image_height")
+            .and_then(|v| v.as_ref())
+            .ok_or_else(|| AppError::InvalidFormData("Missing image_height".to_string()))?
+            .parse::<u32>()?,
             background_color => community.background_color,
             foreground_color => community.foreground_color,
             community_id => community_id.to_string(),
@@ -2625,7 +2613,7 @@ pub async fn post_relay_view_by_login_name(
             unread_notification_count => common_ctx.unread_notification_count,
             ftl_lang
         })
-        .unwrap();
+        .map_err(|e| AppError::from(anyhow::anyhow!("Template render error: {}", e)))?;
     Ok(Html(rendered).into_response())
 }
 
@@ -2642,12 +2630,14 @@ pub async fn post_replay_view_by_login_name(
     };
 
     let db = &state.db_pool;
-    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await.unwrap();
-    let post = find_post_by_id(&mut tx, uuid).await.unwrap();
+    let mut tx: sqlx::Transaction<'_, sqlx::Postgres> = db.begin().await?;
+    let post = find_post_by_id(&mut tx, uuid).await?;
 
     match post {
         Some(ref post_data) => {
-            let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
+            let post_login_name = post_data.get("login_name")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing login_name".to_string()))?;
 
             // Check if post is in a private community and if user has access
             let community_id = post_data
@@ -2698,10 +2688,10 @@ pub async fn post_replay_view_by_login_name(
             return Ok(StatusCode::NOT_FOUND.into_response());
         }
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
-    let community_id = post.clone()
-        .as_ref()
-        .and_then(|p| p.get("community_id"))
+    let community_id = post
+        .get("community_id")
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
 
@@ -2710,9 +2700,9 @@ pub async fn post_replay_view_by_login_name(
 
     let community_id = community_id.map(|id| id.to_string());
 
-    let template_filename = match post.clone().unwrap().get("replay_filename") {
+    let template_filename = match post.get("replay_filename") {
         Some(replay_filename) => {
-            let replay_filename = replay_filename.as_ref().unwrap();
+            let replay_filename = replay_filename.as_ref().ok_or_else(|| AppError::InvalidFormData("Missing replay_filename".to_string()))?;
             if replay_filename.ends_with(".pch") {
                 "post_replay_view_pch.jinja"
             } else if replay_filename.ends_with(".tgkr") {
@@ -2724,20 +2714,17 @@ pub async fn post_replay_view_by_login_name(
         None => "post_replay_view_pch.jinja",
     };
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename).unwrap();
+    let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
-            post => {
-                post.as_ref()
-            },
+            post => Some(&post),
             post_id => post_id,
             community_id,
             draft_post_count => common_ctx.draft_post_count,
             unread_notification_count => common_ctx.unread_notification_count,
             ftl_lang
-        })
-        .unwrap();
+        }).map_err(|e| AppError::from(anyhow::anyhow!("Template render error: {}", e)))?;
     Ok(Html(rendered).into_response())
 }
 
@@ -2754,7 +2741,7 @@ pub async fn add_reaction(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user_id = auth_session.user.clone().unwrap().id;
+    let user_id = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id;
     let post_id = Uuid::parse_str(&post_id)?;
 
     // Get the actor for this user
@@ -2954,7 +2941,7 @@ pub async fn remove_reaction(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user_id = auth_session.user.clone().unwrap().id;
+    let user_id = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id;
     let post_id = Uuid::parse_str(&post_id)?;
 
     // Get the actor for this user
@@ -3117,9 +3104,12 @@ pub async fn post_reactions_detail(
         )
             .into_response());
     }
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
-    let post_data = post.unwrap();
-    let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
+    let post_data = post.clone();
+    let post_login_name = post_data.get("login_name")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing login_name".to_string()))?;
 
     // Check if post has community and verify correct slug
     let community_id = post_data
