@@ -67,8 +67,7 @@
       {% if notification.notification_type == "Comment" %}
         {% if notification.post_title %}
           <p class="notification-action">
-            {{ ftl_get_message("notification-commented-on") }}
-            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+            {{ ftl_format_pattern("notification-action-commented-on", {"postTitle": notification.post_title}) }}
           </p>
         {% endif %}
         {% if notification.comment_content_html %}
@@ -78,22 +77,20 @@
         {% endif %}
 
       {% elif notification.notification_type == "Reaction" %}
-        <p class="notification-action">
-          {{ ftl_get_message("notification-reacted-with") }} <span class="notification-emoji">{{ notification.reaction_emoji }}</span>
-          {% if notification.post_title %}
-            {{ ftl_get_message("notification-to-post") }}
-            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
-          {% endif %}
-        </p>
+        {% if notification.post_title %}
+          <p class="notification-action">
+            {{ ftl_format_pattern("notification-action-reacted-to-post", {"emoji": notification.reaction_emoji, "postTitle": notification.post_title}) }}
+          </p>
+        {% endif %}
 
       {% elif notification.notification_type == "Follow" %}
         <p class="notification-action">
-          {{ ftl_get_message("notification-followed-you") }}
+          {{ ftl_get_message("notification-action-followed-you") }}
         </p>
 
       {% elif notification.notification_type == "GuestbookEntry" %}
         <p class="notification-action">
-          {{ ftl_get_message("notification-wrote-guestbook") }}
+          {{ ftl_get_message("notification-action-wrote-guestbook") }}
         </p>
         {% if notification.guestbook_content %}
           <pre class="notification-preview">{{ notification.guestbook_content }}</pre>
@@ -101,7 +98,7 @@
 
       {% elif notification.notification_type == "GuestbookReply" %}
         <p class="notification-action">
-          {{ ftl_get_message("notification-replied-guestbook") }}
+          {{ ftl_get_message("notification-action-replied-guestbook") }}
         </p>
         {% if notification.guestbook_content %}
           <pre class="notification-preview">{{ notification.guestbook_content }}</pre>
@@ -110,8 +107,7 @@
       {% elif notification.notification_type == "Mention" %}
         {% if notification.post_title %}
           <p class="notification-action">
-            {{ ftl_get_message("notification-mentioned-in-comment") }}
-            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+            {{ ftl_format_pattern("notification-action-mentioned-in-comment", {"postTitle": notification.post_title}) }}
           </p>
         {% endif %}
         {% if notification.comment_content_html %}
@@ -122,18 +118,17 @@
 
       {% elif notification.notification_type == "PostReply" %}
         <p class="notification-action">
-          {{ ftl_get_message("notification-replied-to-post") }}
           {% if notification.post_title %}
-            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+            {{ ftl_format_pattern("notification-action-replied-to-post-with-title", {"postTitle": notification.post_title}) }}
+          {% else %}
+            {{ ftl_get_message("notification-action-replied-to-post") }}
           {% endif %}
         </p>
 
       {% elif notification.notification_type == "CommentReply" %}
         {% if notification.post_title %}
           <p class="notification-action">
-            {{ ftl_get_message("notification-replied-to-comment") }}
-            {{ ftl_get_message("notification-on-post") }}
-            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+            {{ ftl_format_pattern("notification-action-replied-to-comment", {"postTitle": notification.post_title}) }}
           </p>
         {% endif %}
         {% if notification.comment_content_html %}
@@ -144,9 +139,10 @@
 
       {% elif notification.notification_type == "CommunityPost" %}
         <p class="notification-action">
-          {{ ftl_get_message("notification-posted-in-community") }}
           {% if notification.post_title %}
-            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+            {{ ftl_format_pattern("notification-action-posted-in-community-with-title", {"postTitle": notification.post_title}) }}
+          {% else %}
+            {{ ftl_get_message("notification-action-posted-in-community") }}
           {% endif %}
         </p>
       {% endif %}

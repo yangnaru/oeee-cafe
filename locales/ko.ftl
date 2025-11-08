@@ -22,25 +22,28 @@ notifications = 알림
 
 no-notifications = 아직 알림이 없습니다.
 notification-comment = 새 댓글
-notification-commented-on = 님이 댓글을 남겼습니다
 notification-reaction = 새 반응
-notification-reacted-with = 님이 반응했습니다
-notification-to-post = 게시물에
 notification-follow = 새 동맹
-notification-followed-you = 님이 동맹을 맺었습니다
 notification-guestbook-entry = 새 방명록
-notification-wrote-guestbook = 님이 방명록을 남겼습니다
 notification-guestbook-reply = 방명록 답글
-notification-replied-guestbook = 님이 방명록에 답글을 남겼습니다
 notification-mention = 멘션
-notification-mentioned-in-comment = 님이 댓글에서 언급했습니다
 notification-post-reply = 그림 답글
-notification-replied-to-post = 님이 그림에 답글을 그렸습니다
 notification-comment-reply = 댓글 답글
-notification-replied-to-comment = 님이 댓글에 답글을 남겼습니다
-notification-on-post = 게시물
 notification-community-post = 새 커뮤니티 게시물
-notification-posted-in-community = 님이 커뮤니티에 그림을 그렸습니다
+
+# Notification action messages with FluentArgs for proper word order in different languages
+notification-action-commented-on = { $postTitle }에 댓글을 남겼습니다
+notification-action-reacted-to-post = { $postTitle }에 { $emoji }(으)로 반응했습니다
+notification-action-followed-you = 님이 동맹을 맺었습니다
+notification-action-wrote-guestbook = 님이 방명록을 남겼습니다
+notification-action-replied-guestbook = 님이 방명록에 답글을 남겼습니다
+notification-action-mentioned-in-comment = { $postTitle }의 댓글에서 언급했습니다
+notification-action-replied-to-post = 님이 그림에 답글을 그렸습니다
+notification-action-replied-to-post-with-title = { $postTitle }에 답글을 그렸습니다
+notification-action-replied-to-comment = { $postTitle }의 댓글에 답글을 남겼습니다
+notification-action-posted-in-community = 님이 커뮤니티에 그림을 그렸습니다
+notification-action-posted-in-community-with-title = 님이 커뮤니티에 그림을 그렸습니다: { $postTitle }
+
 notification-mark-all-read = 모두 읽음으로 표시
 notification-mark-read = 읽음으로 표시
 notification-delete = 삭제
