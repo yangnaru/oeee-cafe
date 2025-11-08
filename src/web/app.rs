@@ -1,6 +1,7 @@
 use super::state::AppState;
 use crate::models::user::Backend;
 use crate::web::handlers::about::about;
+use crate::web::handlers::admin::admin_reports_page;
 use crate::web::handlers::privacy::privacy;
 use crate::web::handlers::account::{
     account, delete_account, delete_account_htmx, edit_account, edit_password,
@@ -56,6 +57,10 @@ use crate::web::handlers::post::{
     post_publish_form, post_reactions_detail, post_relay_view, post_relay_view_by_login_name,
     post_replay_view, post_replay_view_by_login_name, post_view_by_login_name,
     redirect_post_to_login_name, remove_reaction, post_replay_view_mobile,
+};
+use crate::web::handlers::post_report::{
+    create_post_report, get_all_reports_handler, get_community_reports,
+    update_report_status_handler,
 };
 use crate::web::handlers::profile::{
     do_add_link, do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
@@ -306,6 +311,11 @@ impl App {
             .route("/api/v1/notifications/mark-all-read", post(mark_all_notifications_read))
             .route("/api/v1/notifications/:notification_id/mark-read", post(api_mark_notification_read))
             .route("/api/v1/notifications/:notification_id", delete(api_delete_notification))
+            .route("/api/v1/posts/:post_id/reports", post(create_post_report))
+            .route("/api/v1/reports", get(get_all_reports_handler))
+            .route("/api/v1/communities/:community_id/reports", get(get_community_reports))
+            .route("/api/v1/reports/:report_id", put(update_report_status_handler))
+            .route("/admin/reports", get(admin_reports_page))
             .route("/communities", get(communities))
             .route("/communities", post(do_create_community))
             .route("/communities/:id", get(community))

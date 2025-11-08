@@ -13,6 +13,7 @@ pub mod nodeinfo;
 pub mod notification;
 pub mod password_reset_challenge;
 pub mod post;
+pub mod post_report;
 pub mod push_token;
 pub mod reaction;
 pub mod user;

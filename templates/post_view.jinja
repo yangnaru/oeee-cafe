@@ -183,6 +183,9 @@
                     navigator.clipboard.writeText(url).then(() => alert('{{ ftl_get_message("post-share-copied") }}'));
                   }
                 ">{{ ftl_get_message("post-share") }}</button>
+                {% if current_user.id != post.author_id %}
+                  <button type="button" onclick="document.getElementById('report-modal-{{ post_id }}').style.display = 'block'">{{ ftl_get_message("post-report") }}</button>
+                {% endif %}
                 {% if current_user.id == post.author_id %}
                   <button hx-get="/posts/{{ post_id }}/edit" hx-target="#post-edit-container" hx-swap="outerHTML">{{ ftl_get_message("edit") }}</button>
                   <form hx-delete="/posts/{{ post_id }}"
@@ -285,4 +288,79 @@
       {% endif %}
     </div>
   </div>
+
+  {# Report Modal #}
+  {% if current_user %}
+    <div id="report-modal-{{ post_id }}" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+      <div style="background-color: var(--primary-bg-color); margin: 15% auto; padding: 20px; border: 1px solid var(--main-border-color); width: 80%; max-width: 500px; border-radius: 5px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h2>{{ ftl_get_message("post-report-title") }}</h2>
+          <button type="button" onclick="document.getElementById('report-modal-{{ post_id }}').style.display = 'none'" style="font-size: 28px; font-weight: bold; border: none; background: none; cursor: pointer;">&times;</button>
+        </div>
+        <form id="report-form-{{ post_id }}" onsubmit="submitReport(event, '{{ post_id }}')">
+          <div style="margin-bottom: 15px;">
+            <label for="report-reason-{{ post_id }}" style="display: block; margin-bottom: 5px; font-weight: bold;">{{ ftl_get_message("post-report-reason") }}</label>
+            <select id="report-reason-{{ post_id }}" name="reason" required style="width: 100%; padding: 8px; border: 1px solid var(--main-border-color); border-radius: 3px; background: var(--secondary-bg-color); color: var(--primary-text-color);">
+              <option value="">{{ ftl_get_message("post-report-select-reason") }}</option>
+              <option value="spam">{{ ftl_get_message("post-report-reason-spam") }}</option>
+              <option value="harassment">{{ ftl_get_message("post-report-reason-harassment") }}</option>
+              <option value="inappropriate_content">{{ ftl_get_message("post-report-reason-inappropriate") }}</option>
+              <option value="copyright_violation">{{ ftl_get_message("post-report-reason-copyright") }}</option>
+              <option value="other">{{ ftl_get_message("post-report-reason-other") }}</option>
+            </select>
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label for="report-details-{{ post_id }}" style="display: block; margin-bottom: 5px; font-weight: bold;">{{ ftl_get_message("post-report-details") }}</label>
+            <textarea id="report-details-{{ post_id }}" name="details" rows="4" style="width: 100%; padding: 8px; border: 1px solid var(--main-border-color); border-radius: 3px; background: var(--secondary-bg-color); color: var(--primary-text-color);" placeholder="{{ ftl_get_message('post-report-details-placeholder') }}"></textarea>
+          </div>
+          <div id="report-status-{{ post_id }}" style="margin-bottom: 15px; display: none;"></div>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button type="button" onclick="document.getElementById('report-modal-{{ post_id }}').style.display = 'none'">{{ ftl_get_message("cancel") }}</button>
+            <button type="submit">{{ ftl_get_message("post-report-submit") }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  <script>
+    async function submitReport(event, postId) {
+      event.preventDefault();
+      const form = event.target;
+      const statusDiv = document.getElementById('report-status-' + postId);
+      const reason = document.getElementById('report-reason-' + postId).value;
+      const details = document.getElementById('report-details-' + postId).value;
+
+      try {
+        const response = await fetch('/api/v1/posts/' + postId + '/reports', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ reason, details: details || null })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          statusDiv.style.display = 'block';
+          statusDiv.style.color = 'green';
+          statusDiv.textContent = data.message || 'Report submitted successfully';
+          form.reset();
+          setTimeout(() => {
+            document.getElementById('report-modal-' + postId).style.display = 'none';
+            statusDiv.style.display = 'none';
+          }, 2000);
+        } else {
+          statusDiv.style.display = 'block';
+          statusDiv.style.color = 'red';
+          statusDiv.textContent = data.error || 'Failed to submit report';
+        }
+      } catch (error) {
+        statusDiv.style.display = 'block';
+        statusDiv.style.color = 'red';
+        statusDiv.textContent = 'An error occurred while submitting the report';
+      }
+    }
+  </script>
 {% endblock content %}
