@@ -52,8 +52,27 @@ sign-out = 로그아웃
 
 message-incorrect-credentials = 아이디 또는 비밀번호가 틀렸습니다.
 
+forgot-password = 비밀번호를 잊으셨나요?
+
+password-reset-title = 비밀번호 재설정
+password-reset-description = 이메일 주소를 입력하시면 비밀번호 재설정을 위한 인증 코드를 보내드립니다.
+password-reset-send-email = 인증 코드 보내기
+password-reset-sent-title = 인증 코드 전송 완료
+password-reset-sent-message = 해당 이메일 주소로 등록된 계정이 있다면 인증 코드를 보내드렸습니다.
+password-reset-sent-email = 이메일
+password-reset-verify-title = 새 비밀번호 설정
+password-reset-token = 인증 코드
+password-reset-submit = 비밀번호 재설정
+password-reset-success = 비밀번호가 성공적으로 재설정되었습니다. 이제 새 비밀번호로 로그인할 수 있습니다.
+password-reset-error-mismatch = 비밀번호가 일치하지 않습니다.
+password-reset-error-invalid-token = 인증 코드가 유효하지 않거나 만료되었습니다. 새 코드를 요청해 주세요.
+password-reset-email-subject = 오이카페 비밀번호 재설정 코드
+password-reset-email-body = 비밀번호 재설정 인증 코드입니다:
+back-to-login = 로그인으로 돌아가기
+
 account = 계정
 email-not-verified = 이메일 미인증
+email = 이메일
 login-name = 아이디
 password = 비밀번호
 password-repeat = 비밀번호 (한 번 더)

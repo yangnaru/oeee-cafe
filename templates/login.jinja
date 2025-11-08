@@ -16,5 +16,6 @@
       <input type="submit" value="{{ ftl_get_message("sign-in") }}" />
       {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
     </form>
+    <p><a href="/password-reset">{{ ftl_get_message("forgot-password") }}</a></p>
   </div>
 {% endblock content %}

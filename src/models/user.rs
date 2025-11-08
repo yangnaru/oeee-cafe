@@ -440,6 +440,33 @@ pub async fn find_user_by_login_name(
     Ok(q.fetch_optional(&mut **tx).await?)
 }
 
+pub async fn find_user_by_email(
+    tx: &mut Transaction<'_, Postgres>,
+    email: &str,
+) -> Result<Option<User>> {
+    let q = query_as!(
+        User,
+        r#"
+        SELECT
+            id,
+            login_name,
+            password_hash,
+            display_name,
+            email,
+            email_verified_at,
+            created_at,
+            updated_at,
+            banner_id,
+            preferred_language AS "preferred_language: _",
+            deleted_at,
+            show_sensitive_content
+        FROM users
+        WHERE email = $1"#,
+        email
+    );
+    Ok(q.fetch_optional(&mut **tx).await?)
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UserWithPublicPostAndBanner {
     pub login_name: String,
