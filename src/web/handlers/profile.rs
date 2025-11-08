@@ -109,7 +109,7 @@ pub async fn do_follow_profile(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
                 }
                 let _ = tx.commit().await;
             }
@@ -600,7 +600,7 @@ pub async fn do_reply_guestbook_entry(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
                 }
                 let _ = tx.commit().await;
             }
@@ -741,7 +741,7 @@ pub async fn do_write_guestbook_entry(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
                 }
                 let _ = tx.commit().await;
             }
@@ -1077,7 +1077,7 @@ pub async fn follow_profile_api(
                         .ok()
                         .and_then(|count| u32::try_from(count).ok());
 
-                    send_push_for_notification(&push_service, &notification, badge_count).await;
+                    send_push_for_notification(&push_service, &db_pool, &notification, badge_count).await;
                 }
                 let _ = tx.commit().await;
             }

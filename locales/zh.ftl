@@ -46,6 +46,24 @@ notification-mark-read = 标记为已读
 notification-delete = 删除
 notification-delete-confirm = 确定要删除此通知吗？
 
+# Push notification messages with variables
+push-notification-comment-title = { $name }的新评论
+push-notification-comment-body = { $name }评论了您的作品
+push-notification-reaction-title = { $name }对您的作品做出了反应
+push-notification-reaction-body = { $name }用{ $emoji }做出了反应
+push-notification-follow-title = 新关注者
+push-notification-follow-body = { $name }关注了您
+push-notification-guestbook-entry-title = { $name }在您的留言板留言
+push-notification-guestbook-reply-title = { $name }回复了您的留言板
+push-notification-mention-title = { $name }提到了您
+push-notification-mention-body = { $name }在评论中提到了您
+push-notification-post-reply-title = { $name }回复了您的作品
+push-notification-comment-reply-title = { $name }回复了您的评论
+push-notification-comment-reply-body = { $name }回复了您的评论
+push-notification-community-post-title = 新社区作品
+push-notification-community-post-body = { $name }在您的社区发布了作品
+push-notification-community-post-body-with-title = { $name }在您的社区发布了作品：{ $title }
+
 sign-in = 登录
 sign-up = 注册
 sign-out = 退出

@@ -46,6 +46,24 @@ notification-mark-read = 既読にする
 notification-delete = 削除
 notification-delete-confirm = 本当にこの通知を削除しますか？
 
+# Push notification messages with variables
+push-notification-comment-title = { $name }さんからの新しいコメント
+push-notification-comment-body = { $name }さんがコメントしました
+push-notification-reaction-title = { $name }さんがリアクションしました
+push-notification-reaction-body = { $name }さんが{ $emoji }でリアクションしました
+push-notification-follow-title = 新しいフォロワー
+push-notification-follow-body = { $name }さんがフォローしました
+push-notification-guestbook-entry-title = { $name }さんがゲストブックに書き込みました
+push-notification-guestbook-reply-title = { $name }さんがゲストブックに返信しました
+push-notification-mention-title = { $name }さんがメンションしました
+push-notification-mention-body = { $name }さんがコメントでメンションしました
+push-notification-post-reply-title = { $name }さんが投稿に返信しました
+push-notification-comment-reply-title = { $name }さんがコメントに返信しました
+push-notification-comment-reply-body = { $name }さんがコメントに返信しました
+push-notification-community-post-title = 新しいコミュニティ投稿
+push-notification-community-post-body = { $name }さんがコミュニティに絵を描きました
+push-notification-community-post-body-with-title = { $name }さんがコミュニティに絵を描きました: { $title }
+
 sign-in = ログイン
 sign-up = 会員登録
 sign-out = ログアウト

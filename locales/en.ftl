@@ -44,6 +44,24 @@ notification-mark-read = Mark as read
 notification-delete = Delete
 notification-delete-confirm = Are you sure you want to delete this notification?
 
+# Push notification messages with variables
+push-notification-comment-title = New comment from { $name }
+push-notification-comment-body = { $name } commented on your post
+push-notification-reaction-title = { $name } reacted to your post
+push-notification-reaction-body = { $name } reacted with { $emoji }
+push-notification-follow-title = New follower
+push-notification-follow-body = { $name } started following you
+push-notification-guestbook-entry-title = { $name } signed your guestbook
+push-notification-guestbook-reply-title = { $name } replied to your guestbook entry
+push-notification-mention-title = { $name } mentioned you
+push-notification-mention-body = { $name } mentioned you in a comment
+push-notification-post-reply-title = { $name } replied to your post
+push-notification-comment-reply-title = { $name } replied to your comment
+push-notification-comment-reply-body = { $name } replied to your comment
+push-notification-community-post-title = New community post
+push-notification-community-post-body = { $name } posted in your community
+push-notification-community-post-body-with-title = { $name } posted in your community: { $title }
+
 sign-in = Sign in
 sign-up = Sign up
 sign-out = Sign out

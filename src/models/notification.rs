@@ -1,8 +1,14 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use fluent::{FluentArgs, FluentResource};
+use fluent::bundle::FluentBundle;
+use intl_memoizer::concurrent::IntlLangMemoizer;
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction, Type};
 use uuid::Uuid;
+
+use crate::locale::LOCALES;
+use crate::models::user::Language;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type, PartialEq)]
 #[sqlx(type_name = "notification_type", rename_all = "lowercase")]
@@ -403,11 +409,25 @@ pub async fn notification_exists(
 /// This should be called after create_notification() succeeds and the transaction is committed
 pub async fn send_push_for_notification(
     push_service: &crate::push::PushService,
+    pool: &sqlx::PgPool,
     notification: &NotificationWithActor,
     badge_count: Option<u32>,
 ) {
-    // Format notification message based on type
-    let (title, body) = format_notification_message(notification);
+    // Get recipient's preferred language
+    let preferred_language = match get_user_language_preference(pool, notification.recipient_id).await {
+        Ok(lang) => lang,
+        Err(e) => {
+            tracing::warn!(
+                "Failed to get language preference for user {}: {:?}. Using English as fallback.",
+                notification.recipient_id,
+                e
+            );
+            None
+        }
+    };
+
+    // Format notification message based on type and user's language
+    let (title, body) = format_notification_message(notification, preferred_language);
 
     let badge = badge_count;
 
@@ -442,70 +462,134 @@ pub async fn send_push_for_notification(
     }
 }
 
+/// Get user's language preference from database
+async fn get_user_language_preference(
+    pool: &sqlx::PgPool,
+    user_id: Uuid,
+) -> Result<Option<Language>> {
+    let result = sqlx::query!(
+        r#"
+        SELECT preferred_language as "preferred_language: Language"
+        FROM users
+        WHERE id = $1
+        "#,
+        user_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(result.preferred_language)
+}
+
+/// Helper function to get a Fluent bundle for the given language
+fn get_fluent_bundle(language: Option<Language>) -> FluentBundle<&'static FluentResource, IntlLangMemoizer> {
+    let lang_code = match language {
+        Some(Language::Ko) => "ko",
+        Some(Language::Ja) => "ja",
+        Some(Language::En) => "en",
+        Some(Language::Zh) => "zh",
+        None => "en", // Default to English
+    };
+
+    let ftl = LOCALES
+        .get(lang_code)
+        .unwrap_or_else(|| LOCALES.get("en").unwrap());
+
+    let mut bundle = FluentBundle::new_concurrent(vec![lang_code.parse().unwrap()]);
+    bundle.add_resource(ftl).expect("Failed to add a resource.");
+    bundle
+}
+
+/// Helper function to get a localized message from the bundle with optional arguments
+fn get_localized_message(
+    bundle: &FluentBundle<&FluentResource, IntlLangMemoizer>,
+    key: &str,
+    args: Option<&FluentArgs>,
+) -> String {
+    let message = bundle.get_message(key).expect(&format!("Message {} not found", key));
+    let pattern = message.value().expect(&format!("Message {} has no value", key));
+    let mut errors = vec![];
+    bundle.format_pattern(pattern, args, &mut errors).to_string()
+}
+
 /// Format a notification into a user-friendly push notification message
-fn format_notification_message(notification: &NotificationWithActor) -> (String, String) {
+fn format_notification_message(
+    notification: &NotificationWithActor,
+    language: Option<Language>,
+) -> (String, String) {
     let actor_name = &notification.actor_name;
+    let bundle = get_fluent_bundle(language);
+
+    let mut args = FluentArgs::new();
+    args.set("name", actor_name.clone());
 
     match notification.notification_type {
         NotificationType::Comment => {
-            let title = format!("New comment from {}", actor_name);
+            let title = get_localized_message(&bundle, "push-notification-comment-title", Some(&args));
+
             let body = if let Some(content) = &notification.comment_content {
                 content.clone()
             } else {
-                format!("{} commented on your post", actor_name)
+                get_localized_message(&bundle, "push-notification-comment-body", Some(&args))
             };
             (title, body)
         }
         NotificationType::Reaction => {
             let emoji = notification.reaction_emoji.as_deref().unwrap_or("❤️");
-            let title = format!("{} reacted to your post", actor_name);
-            let body = format!("{} {}", emoji, notification.post_title.as_deref().unwrap_or("your post"));
+            args.set("emoji", emoji.to_string());
+
+            let title = get_localized_message(&bundle, "push-notification-reaction-title", Some(&args));
+            let body = get_localized_message(&bundle, "push-notification-reaction-body", Some(&args));
             (title, body)
         }
         NotificationType::Follow => {
-            let title = "New follower".to_string();
-            let body = format!("{} started following you", actor_name);
+            let title = get_localized_message(&bundle, "push-notification-follow-title", None);
+            let body = get_localized_message(&bundle, "push-notification-follow-body", Some(&args));
             (title, body)
         }
         NotificationType::GuestbookEntry => {
-            let title = format!("{} signed your guestbook", actor_name);
+            let title = get_localized_message(&bundle, "push-notification-guestbook-entry-title", Some(&args));
             let body = notification.guestbook_content.clone().unwrap_or_default();
             (title, body)
         }
         NotificationType::GuestbookReply => {
-            let title = format!("{} replied to your guestbook entry", actor_name);
+            let title = get_localized_message(&bundle, "push-notification-guestbook-reply-title", Some(&args));
             let body = notification.guestbook_content.clone().unwrap_or_default();
             (title, body)
         }
         NotificationType::Mention => {
-            let title = format!("{} mentioned you", actor_name);
+            let title = get_localized_message(&bundle, "push-notification-mention-title", Some(&args));
+
             let body = if let Some(content) = &notification.comment_content {
                 content.clone()
             } else {
-                format!("{} mentioned you in a comment", actor_name)
+                get_localized_message(&bundle, "push-notification-mention-body", Some(&args))
             };
             (title, body)
         }
         NotificationType::PostReply => {
-            let title = format!("{} replied to your post", actor_name);
+            let title = get_localized_message(&bundle, "push-notification-post-reply-title", Some(&args));
             let body = notification.post_title.clone().unwrap_or_default();
             (title, body)
         }
         NotificationType::CommentReply => {
-            let title = format!("{} replied to your comment", actor_name);
+            let title = get_localized_message(&bundle, "push-notification-comment-reply-title", Some(&args));
+
             let body = if let Some(content) = &notification.comment_content {
                 content.clone()
             } else {
-                format!("{} replied to your comment", actor_name)
+                get_localized_message(&bundle, "push-notification-comment-reply-body", Some(&args))
             };
             (title, body)
         }
         NotificationType::CommunityPost => {
-            let title = "New community post".to_string();
+            let title = get_localized_message(&bundle, "push-notification-community-post-title", None);
+
             let body = if let Some(post_title) = &notification.post_title {
-                format!("{} posted in your community: {}", actor_name, post_title)
+                args.set("title", post_title.clone());
+                get_localized_message(&bundle, "push-notification-community-post-body-with-title", Some(&args))
             } else {
-                format!("{} posted in your community", actor_name)
+                get_localized_message(&bundle, "push-notification-community-post-body", Some(&args))
             };
             (title, body)
         }
