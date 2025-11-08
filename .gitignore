@@ -3,3 +3,4 @@
 .env
 .sqlx/
 *.cer
+CODEBASE_OVERVIEW.md
