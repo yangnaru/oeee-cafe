@@ -316,15 +316,24 @@ pub async fn post_relay_view(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let community_id = Uuid::parse_str(
-        post.clone()
-            .unwrap()
-            .get("community_id")
-            .unwrap()
-            .as_ref()
-            .unwrap(),
-    )
-    .unwrap();
+    // Relay only works for community posts, not personal posts
+    let community_id = post.clone()
+        .and_then(|p| p.get("community_id"))
+        .and_then(|id| id.as_ref())
+        .and_then(|id_str| Uuid::parse_str(id_str).ok());
+
+    let community_id = match community_id {
+        Some(id) => id,
+        None => {
+            // Personal posts cannot be relayed
+            return Ok((
+                StatusCode::BAD_REQUEST,
+                "Personal posts cannot be relayed to communities".to_string(),
+            )
+                .into_response());
+        }
+    };
+
     let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
     let rendered = template.render(context! {
         parent_post => post.clone().unwrap(),
@@ -1521,14 +1530,19 @@ pub async fn post_edit_community(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let current_community_id = Uuid::parse_str(
-        post.clone()
-            .unwrap()
-            .get("community_id")
-            .unwrap()
-            .as_ref()
-            .unwrap(),
-    )?;
+    // Personal posts don't have a community to edit
+    let current_community_id = post.clone()
+        .and_then(|p| p.get("community_id"))
+        .and_then(|id| id.as_ref())
+        .and_then(|id_str| Uuid::parse_str(id_str).ok());
+
+    let current_community_id = match current_community_id {
+        Some(id) => id,
+        None => {
+            // Personal posts cannot have their community edited
+            return Ok(StatusCode::FORBIDDEN.into_response());
+        }
+    };
 
     // Get current community details with owner info
     let current_community_result = sqlx::query!(
@@ -1804,13 +1818,19 @@ pub async fn do_post_edit_community(
     }
 
     // Get current community and check if it's private
-    let current_community_id = Uuid::parse_str(
-        post.as_ref()
-            .unwrap()
-            .get("community_id")
-            .and_then(|v| v.as_ref())
-            .ok_or_else(|| anyhow::anyhow!("community_id not found"))?,
-    )?;
+    // Personal posts cannot have their community changed (they don't have one)
+    let current_community_id = post.as_ref()
+        .and_then(|p| p.get("community_id"))
+        .and_then(|v| v.as_ref())
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    let current_community_id = match current_community_id {
+        Some(id) => id,
+        None => {
+            // This is a personal post - cannot change community
+            return Ok(StatusCode::FORBIDDEN.into_response());
+        }
+    };
 
     let current_community = find_community_by_id(&mut tx, current_community_id).await?;
     if let Some(community) = current_community {
@@ -2561,15 +2581,24 @@ pub async fn post_relay_view_by_login_name(
     let template: minijinja::Template<'_, '_> =
         state.env.get_template("draw_post_neo.jinja").unwrap();
 
-    let community_id = Uuid::parse_str(
-        post.clone()
-            .unwrap()
-            .get("community_id")
-            .unwrap()
-            .as_ref()
-            .unwrap(),
-    )
-    .unwrap();
+    // Relay only works for community posts, not personal posts
+    let community_id = post.clone()
+        .and_then(|p| p.get("community_id"))
+        .and_then(|id| id.as_ref())
+        .and_then(|id_str| Uuid::parse_str(id_str).ok());
+
+    let community_id = match community_id {
+        Some(id) => id,
+        None => {
+            // Personal posts cannot be relayed
+            return Ok((
+                StatusCode::BAD_REQUEST,
+                "Personal posts cannot be relayed to communities".to_string(),
+            )
+                .into_response());
+        }
+    };
+
     let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
 
     let common_ctx =

@@ -532,16 +532,17 @@ pub async fn activitypub_get_post(
     if let Some(post) = find_post_by_id(&mut tx, post_uuid).await? {
         // Check community visibility - only expose posts from public and unlisted communities via ActivityPub
         // Private community posts should not be accessible
-        let community_id = Uuid::parse_str(
-            post.get("community_id")
-                .and_then(|v| v.as_ref())
-                .ok_or_else(|| anyhow::anyhow!("community_id not found"))?,
-        )?;
+        // Personal posts (no community) are always accessible
+        let community_id = post.get("community_id")
+            .and_then(|v| v.as_ref())
+            .and_then(|s| Uuid::parse_str(s).ok());
 
-        let community = find_community_by_id(&mut tx, community_id).await?;
-        if let Some(community) = community {
-            if community.visibility == CommunityVisibility::Private {
-                return Ok((StatusCode::NOT_FOUND, "Post not found").into_response());
+        if let Some(cid) = community_id {
+            let community = find_community_by_id(&mut tx, cid).await?;
+            if let Some(community) = community {
+                if community.visibility == CommunityVisibility::Private {
+                    return Ok((StatusCode::NOT_FOUND, "Post not found").into_response());
+                }
             }
         }
 
