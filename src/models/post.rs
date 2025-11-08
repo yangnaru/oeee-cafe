@@ -10,6 +10,20 @@ use uuid::Uuid;
 
 use super::community::CommunityVisibility;
 
+type PostData = (
+    Option<String>,                // title
+    Option<String>,                // content
+    Uuid,                          // author_id
+    String,                        // login_name
+    String,                        // display_name
+    String,                        // profile_image_url
+    String,                        // image_url
+    i32,                           // comment_count
+    i32,                           // like_count
+    Option<DateTime<Utc>>,         // published_at
+    i64,                           // paint_duration_ms
+);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Type, Serialize, Deserialize)]
 #[sqlx(type_name = "post_deletion_reason", rename_all = "snake_case")]
 pub enum PostDeletionReason {
@@ -1000,22 +1014,7 @@ pub async fn build_thread_tree(
 
     // Build a map to track children for each parent
     let mut children_map: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
-    let mut post_data: HashMap<
-        Uuid,
-        (
-            Option<String>,
-            Option<String>,
-            Uuid,
-            String,
-            String,
-            String,
-            String,
-            i32,
-            i32,
-            Option<chrono::DateTime<chrono::Utc>>,
-            i64,
-        ),
-    > = HashMap::new();
+    let mut post_data: HashMap<Uuid, PostData> = HashMap::new();
 
     for row in &rows {
         // Skip posts with missing required data
@@ -1069,22 +1068,7 @@ pub async fn build_thread_tree(
     // Recursive function to build tree for a given post ID
     fn build_subtree(
         post_id: Uuid,
-        post_data: &HashMap<
-            Uuid,
-            (
-                Option<String>,
-                Option<String>,
-                Uuid,
-                String,
-                String,
-                String,
-                String,
-                i32,
-                i32,
-                Option<chrono::DateTime<chrono::Utc>>,
-                i64,
-            ),
-        >,
+        post_data: &HashMap<Uuid, PostData>,
         children_map: &HashMap<Uuid, Vec<Uuid>>,
     ) -> Option<SerializableThreadedPost> {
         let (

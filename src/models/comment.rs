@@ -4,6 +4,23 @@ use serde::Serialize;
 use sqlx::{Postgres, Transaction, Type};
 use uuid::Uuid;
 
+type CommentData = (
+    Uuid,                  // post_id
+    Uuid,                  // actor_id
+    Option<Uuid>,          // parent_comment_id
+    Option<String>,        // content
+    Option<String>,        // content_html
+    Option<String>,        // iri
+    String,                // actor_name
+    String,                // actor_handle
+    String,                // actor_url
+    Option<String>,        // actor_login_name
+    bool,                  // is_local
+    DateTime<Utc>,         // updated_at
+    DateTime<Utc>,         // created_at
+    Option<DateTime<Utc>>, // deleted_at
+);
+
 #[derive(Clone, Debug, Serialize, Type)]
 #[sqlx(type_name = "comment_deletion_reason", rename_all = "snake_case")]
 pub enum CommentDeletionReason {
@@ -202,25 +219,7 @@ pub async fn build_comment_thread_tree(
     .await?;
 
     // Build maps for efficient tree construction
-    let mut comment_data: HashMap<
-        Uuid,
-        (
-            Uuid,                  // post_id
-            Uuid,                  // actor_id
-            Option<Uuid>,          // parent_comment_id
-            Option<String>,        // content
-            Option<String>,        // content_html
-            Option<String>,        // iri
-            String,                // actor_name
-            String,                // actor_handle
-            String,                // actor_url
-            Option<String>,        // actor_login_name
-            bool,                  // is_local
-            DateTime<Utc>,         // updated_at
-            DateTime<Utc>,         // created_at
-            Option<DateTime<Utc>>, // deleted_at
-        ),
-    > = HashMap::new();
+    let mut comment_data: HashMap<Uuid, CommentData> = HashMap::new();
 
     let mut children_map: HashMap<Option<Uuid>, Vec<Uuid>> = HashMap::new();
 
@@ -259,25 +258,7 @@ pub async fn build_comment_thread_tree(
     // Recursive function to build subtree
     fn build_subtree(
         comment_id: Uuid,
-        comment_data: &HashMap<
-            Uuid,
-            (
-                Uuid,
-                Uuid,
-                Option<Uuid>,
-                Option<String>,
-                Option<String>,
-                Option<String>,
-                String,
-                String,
-                String,
-                Option<String>,
-                bool,
-                DateTime<Utc>,
-                DateTime<Utc>,
-                Option<DateTime<Utc>>,
-            ),
-        >,
+        comment_data: &HashMap<Uuid, CommentData>,
         children_map: &HashMap<Option<Uuid>, Vec<Uuid>>,
     ) -> Option<SerializableThreadedComment> {
         let (

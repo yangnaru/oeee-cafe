@@ -580,20 +580,18 @@ pub async fn do_create_community(
             Err(e) => {
                 let _ = tx.rollback().await;
                 // Check if it's a unique constraint violation (handle conflict)
-                if let Some(db_error) = e.downcast_ref::<sqlx::Error>() {
-                    if let sqlx::Error::Database(db_err) = db_error {
-                        if db_err.constraint().is_some() {
-                            let user_preferred_language = auth_session
-                                .user
-                                .clone()
-                                .map(|u| u.preferred_language)
-                                .unwrap_or_else(|| None);
-                            let bundle = get_bundle(&accept_language, user_preferred_language);
-                            let error_message =
-                                safe_get_message(&bundle, "community-slug-conflict-error");
-                            messages.error(error_message);
-                            return Ok(Redirect::to("/communities/new").into_response());
-                        }
+                if let Some(sqlx::Error::Database(db_err)) = e.downcast_ref::<sqlx::Error>() {
+                    if db_err.constraint().is_some() {
+                        let user_preferred_language = auth_session
+                            .user
+                            .clone()
+                            .map(|u| u.preferred_language)
+                            .unwrap_or_else(|| None);
+                        let bundle = get_bundle(&accept_language, user_preferred_language);
+                        let error_message =
+                            safe_get_message(&bundle, "community-slug-conflict-error");
+                        messages.error(error_message);
+                        return Ok(Redirect::to("/communities/new").into_response());
                     }
                 }
                 // For other errors, re-throw
@@ -797,19 +795,15 @@ pub async fn hx_do_edit_community(
             let _ = tx.rollback().await;
 
             // Check if it's a constraint violation (slug conflict)
-            let error_message = if let Some(db_error) = e.downcast_ref::<sqlx::Error>() {
-                if let sqlx::Error::Database(db_err) = db_error {
-                    if db_err.constraint().is_some() {
-                        let user_preferred_language = auth_session
-                            .user
-                            .clone()
-                            .map(|u| u.preferred_language)
-                            .unwrap_or_else(|| None);
-                        let bundle = get_bundle(&accept_language, user_preferred_language);
-                        Some(safe_get_message(&bundle, "community-slug-conflict-error"))
-                    } else {
-                        None
-                    }
+            let error_message = if let Some(sqlx::Error::Database(db_err)) = e.downcast_ref::<sqlx::Error>() {
+                if db_err.constraint().is_some() {
+                    let user_preferred_language = auth_session
+                        .user
+                        .clone()
+                        .map(|u| u.preferred_language)
+                        .unwrap_or_else(|| None);
+                    let bundle = get_bundle(&accept_language, user_preferred_language);
+                    Some(safe_get_message(&bundle, "community-slug-conflict-error"))
                 } else {
                     None
                 }
@@ -1115,19 +1109,17 @@ pub async fn invite_user(
         }
         Err(e) => {
             // Check if this is a duplicate key constraint error
-            if let Some(db_err) = e.downcast_ref::<sqlx::Error>() {
-                if let sqlx::Error::Database(ref err) = db_err {
-                    if err.is_unique_violation() {
-                        messages.error(safe_get_message(
-                            &bundle,
-                            "community-invite-already-invited",
-                        ));
-                        return Ok(Redirect::to(&format!(
-                            "/communities/@{}/members",
-                            community.slug
-                        ))
-                        .into_response());
-                    }
+            if let Some(sqlx::Error::Database(ref err)) = e.downcast_ref::<sqlx::Error>() {
+                if err.is_unique_violation() {
+                    messages.error(safe_get_message(
+                        &bundle,
+                        "community-invite-already-invited",
+                    ));
+                    return Ok(Redirect::to(&format!(
+                        "/communities/@{}/members",
+                        community.slug
+                    ))
+                    .into_response());
                 }
             }
             // For other errors, propagate them

@@ -824,8 +824,8 @@ impl ActivityHandler for UnknownActivity {
 pub enum GroupAcceptedActivities {
     Follow(Follow),
     Undo(Undo),
-    Update(Update),
-    Delete(Delete),
+    Update(Box<Update>),
+    Delete(Box<Delete>),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

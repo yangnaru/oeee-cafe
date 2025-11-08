@@ -637,7 +637,7 @@ pub async fn get_post_comments_api(
     let mut tx = db.begin().await?;
 
     // Validate and cap the limit
-    let limit = query.limit.min(200).max(1);
+    let limit = query.limit.clamp(1, 200);
     let offset = query.offset.max(0);
 
     // Get post's community_id to check visibility
