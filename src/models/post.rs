@@ -66,7 +66,7 @@ pub struct SerializableProfilePost {
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
-    pub community_visibility: CommunityVisibility,
+    pub community_visibility: Option<CommunityVisibility>,
 }
 
 #[derive(Serialize)]
@@ -280,12 +280,12 @@ pub async fn find_published_public_posts_by_author_id(
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at,
-                communities.visibility as "visibility: CommunityVisibility"
+                communities.visibility as "visibility?: CommunityVisibility"
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
             WHERE author_id = $1
-            AND communities.visibility = 'public'
+            AND (communities.visibility = 'public' OR posts.community_id IS NULL)
             AND published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             ORDER BY published_at DESC
@@ -337,7 +337,7 @@ pub async fn find_published_posts_by_author_id(
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at,
-                communities.visibility as "visibility: CommunityVisibility"
+                communities.visibility as "visibility?: CommunityVisibility"
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id

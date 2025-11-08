@@ -177,11 +177,11 @@ pub async fn profile(
     use crate::models::community::CommunityVisibility;
     let public_community_posts = published_posts
         .iter()
-        .filter(|post| post.community_visibility == CommunityVisibility::Public)
+        .filter(|post| post.community_visibility == Some(CommunityVisibility::Public) || post.community_visibility.is_none())
         .collect::<Vec<_>>();
     let private_community_posts = published_posts
         .iter()
-        .filter(|post| post.community_visibility != CommunityVisibility::Public)
+        .filter(|post| post.community_visibility != Some(CommunityVisibility::Public) && post.community_visibility.is_some())
         .collect::<Vec<_>>();
 
     let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
