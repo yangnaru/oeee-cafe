@@ -8,7 +8,7 @@ use crate::web::handlers::{get_bundle, ExtractAcceptLanguage, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::extract::State;
 use axum::response::{Html, IntoResponse, Redirect};
-use axum::{http::StatusCode, Form, Json};
+use axum::Form;
 use axum_messages::Messages;
 use chrono::{TimeDelta, Utc};
 use fluent::FluentResource;
@@ -16,8 +16,8 @@ use intl_memoizer::concurrent::IntlLangMemoizer;
 use lettre::transport::smtp::authentication::Credentials as SmtpCredentials;
 use lettre::{Message, SmtpTransport, Transport};
 use minijinja::context;
-use rand::{thread_rng, Rng};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use uuid::Uuid;
 
 // Web form handlers
 
@@ -87,7 +87,7 @@ pub async fn password_reset_request(
 
 #[derive(Deserialize)]
 pub struct PasswordResetVerifyForm {
-    pub token: String,
+    pub token: Uuid,
     pub new_password: String,
     pub new_password_confirm: String,
 }
@@ -147,7 +147,7 @@ pub async fn password_reset_verify(
     let mut tx = db.begin().await?;
 
     // Find challenge by token
-    let challenge = find_password_reset_challenge_by_token(&mut tx, &form.token).await?;
+    let challenge = find_password_reset_challenge_by_token(&mut tx, form.token).await?;
 
     if let Some(challenge) = challenge {
         // Update password
@@ -199,7 +199,7 @@ pub async fn password_reset_verify_page(
 ) -> Result<Html<String>, AppError> {
     let template = state.env.get_template("password_reset_verify.jinja")?;
     let rendered = template.render(context! {
-        token => query.token.unwrap_or_default(),
+        token => query.token.map(|t| t.to_string()),
         ftl_lang
     })?;
 
@@ -208,7 +208,7 @@ pub async fn password_reset_verify_page(
 
 #[derive(Deserialize)]
 pub struct TokenQuery {
-    pub token: Option<String>,
+    pub token: Option<Uuid>,
 }
 
 // Helper function to create password reset challenge and send email
@@ -221,14 +221,8 @@ async fn create_and_send_password_reset_email(
     let db = &state.db_pool;
     let mut tx = db.begin().await.map_err(|e| e.to_string())?;
 
-    // Generate 6-digit token
-    let token = {
-        let mut rng = thread_rng();
-        (0..6)
-            .map(|_| rng.gen_range(0..10).to_string())
-            .collect::<Vec<String>>()
-            .join("")
-    };
+    // Generate UUID token for magic link
+    let token = Uuid::new_v4();
 
     let expires_at = Utc::now() + TimeDelta::try_seconds(60 * 15).unwrap(); // 15 minutes
 
@@ -236,7 +230,7 @@ async fn create_and_send_password_reset_email(
         &mut tx,
         user_id,
         email,
-        &token,
+        token,
         expires_at,
     )
     .await
@@ -272,7 +266,7 @@ async fn create_and_send_password_reset_email(
             ),
         )
         .body(format!(
-            "{}\n\n{}",
+            "{}\n\nhttps://{}/password-reset/verify?token={}",
             bundle.format_pattern(
                 bundle
                     .get_message("password-reset-email-body")
@@ -282,6 +276,7 @@ async fn create_and_send_password_reset_email(
                 None,
                 &mut vec![],
             ),
+            state.config.domain,
             token
         ))
         .unwrap();
@@ -297,202 +292,4 @@ async fn create_and_send_password_reset_email(
     mailer.send(&email_message).map_err(|e| e.to_string())?;
 
     Ok(password_reset_challenge)
-}
-
-// JSON API endpoints for mobile apps
-
-#[derive(Deserialize)]
-pub struct PasswordResetRequestJson {
-    pub email: String,
-}
-
-#[derive(Serialize)]
-pub struct PasswordResetRequestResponseJson {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-pub async fn password_reset_request_json(
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
-    State(state): State<AppState>,
-    Json(payload): Json<PasswordResetRequestJson>,
-) -> impl IntoResponse {
-    let bundle = get_bundle(&accept_language, None);
-
-    // Validate email format
-    if !payload.email.contains('@') || payload.email.parse::<lettre::Address>().is_err() {
-        return (
-            StatusCode::OK,
-            Json(PasswordResetRequestResponseJson {
-                success: true, // Always return success to prevent enumeration
-                error: None,
-            }),
-        )
-            .into_response();
-    }
-
-    let db = &state.db_pool;
-    let mut tx = match db.begin().await {
-        Ok(tx) => tx,
-        Err(_) => {
-            return (
-                StatusCode::OK,
-                Json(PasswordResetRequestResponseJson {
-                    success: true,
-                    error: None,
-                }),
-            )
-                .into_response();
-        }
-    };
-
-    // Find user by email
-    let user = match find_user_by_email(&mut tx, &payload.email).await {
-        Ok(user) => user,
-        Err(_) => {
-            let _ = tx.commit().await;
-            return (
-                StatusCode::OK,
-                Json(PasswordResetRequestResponseJson {
-                    success: true,
-                    error: None,
-                }),
-            )
-                .into_response();
-        }
-    };
-
-    // If user exists and email is verified, send reset email
-    if let Some(user) = user {
-        if user.email_verified_at.is_some() && user.deleted_at.is_none() {
-            let _ = create_and_send_password_reset_email(&state, user.id, &payload.email, &bundle)
-                .await;
-        }
-    }
-
-    let _ = tx.commit().await;
-
-    // Always return success to prevent email enumeration
-    (
-        StatusCode::OK,
-        Json(PasswordResetRequestResponseJson {
-            success: true,
-            error: None,
-        }),
-    )
-        .into_response()
-}
-
-#[derive(Deserialize)]
-pub struct PasswordResetVerifyJson {
-    pub token: String,
-    pub new_password: String,
-}
-
-#[derive(Serialize)]
-pub struct PasswordResetVerifyResponseJson {
-    pub success: bool,
-    pub error: Option<String>,
-}
-
-pub async fn password_reset_verify_json(
-    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
-    State(state): State<AppState>,
-    Json(payload): Json<PasswordResetVerifyJson>,
-) -> impl IntoResponse {
-    let bundle = get_bundle(&accept_language, None);
-
-    // Validate password length
-    if payload.new_password.len() < 8 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(PasswordResetVerifyResponseJson {
-                success: false,
-                error: Some("PASSWORD_TOO_SHORT".to_string()),
-            }),
-        )
-            .into_response();
-    }
-
-    let db = &state.db_pool;
-    let mut tx = match db.begin().await {
-        Ok(tx) => tx,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(PasswordResetVerifyResponseJson {
-                    success: false,
-                    error: Some(format!("Database error: {}", e)),
-                }),
-            )
-                .into_response();
-        }
-    };
-
-    // Find challenge by token
-    let challenge = match find_password_reset_challenge_by_token(&mut tx, &payload.token).await {
-        Ok(challenge) => challenge,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(PasswordResetVerifyResponseJson {
-                    success: false,
-                    error: Some(format!("Database error: {}", e)),
-                }),
-            )
-                .into_response();
-        }
-    };
-
-    if let Some(challenge) = challenge {
-        // Update password
-        match update_password(&mut tx, challenge.user_id, payload.new_password.clone()).await {
-            Ok(_) => {}
-            Err(e) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(PasswordResetVerifyResponseJson {
-                        success: false,
-                        error: Some(format!("Failed to update password: {}", e)),
-                    }),
-                )
-                    .into_response();
-            }
-        }
-
-        // Delete all password reset challenges for this user
-        let _ = delete_password_reset_challenges_for_user(&mut tx, challenge.user_id).await;
-
-        match tx.commit().await {
-            Ok(_) => {
-                return (
-                    StatusCode::OK,
-                    Json(PasswordResetVerifyResponseJson {
-                        success: true,
-                        error: None,
-                    }),
-                )
-                    .into_response();
-            }
-            Err(e) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(PasswordResetVerifyResponseJson {
-                        success: false,
-                        error: Some(format!("Database error: {}", e)),
-                    }),
-                )
-                    .into_response();
-            }
-        }
-    } else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(PasswordResetVerifyResponseJson {
-                success: false,
-                error: Some("INVALID_OR_EXPIRED_TOKEN".to_string()),
-            }),
-        )
-            .into_response();
-    }
 }

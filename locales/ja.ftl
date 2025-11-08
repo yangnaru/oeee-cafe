@@ -76,19 +76,20 @@ message-incorrect-credentials = IDまたはパスワードが間違っていま�
 forgot-password = パスワードをお忘れですか？
 
 password-reset-title = パスワード再設定
-password-reset-description = メールアドレスを入力すると、パスワード再設定用の認証コードをお送りします。
-password-reset-send-email = 認証コードを送る
-password-reset-sent-title = 認証コード送信完了
-password-reset-sent-message = そのメールアドレスで登録されたアカウントがある場合、認証コードをお送りしました。
+password-reset-description = メールアドレスを入力すると、パスワード再設定用のリンクをお送りします。
+password-reset-send-email = パスワード再設定リンクを送信
+password-reset-sent-title = パスワード再設定リンク送信完了
+password-reset-sent-message = そのメールアドレスで登録されたアカウントがある場合、パスワード再設定リンクをお送りしました。
 password-reset-sent-email = メール
+password-reset-check-email = メールを確認して、リンクをクリックしてパスワードを再設定してください。
 password-reset-verify-title = 新しいパスワード設定
 password-reset-token = 認証コード
 password-reset-submit = パスワード再設定
 password-reset-success = パスワードが正常に再設定されました。新しいパスワードでログインできます。
 password-reset-error-mismatch = パスワードが一致しません。
-password-reset-error-invalid-token = 認証コードが無効または期限切れです。新しいコードをリクエストしてください。
-password-reset-email-subject = OEEEカフェパスワード再設定コード
-password-reset-email-body = パスワード再設定認証コード:
+password-reset-error-invalid-token = パスワード再設定リンクが無効または期限切れです。新しいリンクをリクエストしてください。
+password-reset-email-subject = OEEEカフェパスワード再設定リンク
+password-reset-email-body = 以下のリンクをクリックしてパスワードを再設定してください:
 back-to-login = ログインに戻る
 
 account = アカウント

@@ -76,19 +76,20 @@ message-incorrect-credentials = 用户名或密码错误。
 forgot-password = 忘记密码？
 
 password-reset-title = 重置密码
-password-reset-description = 输入您的邮箱地址，我们将发送验证码以重置密码。
-password-reset-send-email = 发送验证码
-password-reset-sent-title = 验证码已发送
-password-reset-sent-message = 如果该邮箱地址存在对应账户，我们已发送验证码。
+password-reset-description = 输入您的邮箱地址，我们将发送密码重置链接。
+password-reset-send-email = 发送密码重置链接
+password-reset-sent-title = 密码重置链接已发送
+password-reset-sent-message = 如果该邮箱地址存在对应账户，我们已发送密码重置链接。
 password-reset-sent-email = 邮箱
+password-reset-check-email = 请检查您的邮箱并点击链接重置密码。
 password-reset-verify-title = 设置新密码
 password-reset-token = 验证码
 password-reset-submit = 重置密码
 password-reset-success = 密码已成功重置。现在可以使用新密码登录了。
 password-reset-error-mismatch = 密码不匹配。
-password-reset-error-invalid-token = 验证码无效或已过期。请重新申请。
-password-reset-email-subject = 黄瓜咖啡馆密码重置验证码
-password-reset-email-body = 这是您的密码重置验证码：
+password-reset-error-invalid-token = 密码重置链接无效或已过期。请重新申请。
+password-reset-email-subject = 黄瓜咖啡馆密码重置链接
+password-reset-email-body = 点击以下链接重置密码：
 back-to-login = 返回登录
 
 account = 账户

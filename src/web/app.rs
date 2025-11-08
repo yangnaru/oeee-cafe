@@ -14,8 +14,8 @@ use crate::web::handlers::activitypub::{
 };
 use crate::web::handlers::auth::{api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::password_reset::{
-    password_reset_request, password_reset_request_json, password_reset_request_page,
-    password_reset_verify, password_reset_verify_json, password_reset_verify_page,
+    password_reset_request, password_reset_request_page,
+    password_reset_verify, password_reset_verify_page,
 };
 use crate::web::handlers::collaborate::{
     collaborate_lobby, create_collaborative_session, get_active_sessions_json, get_auth_info,
@@ -295,8 +295,6 @@ impl App {
             .route("/api/v1/auth/logout", post(api_logout))
             .route("/api/v1/auth/signup", post(api_signup))
             .route("/api/v1/auth/me", get(api_me))
-            .route("/api/v1/auth/password-reset", post(password_reset_request_json))
-            .route("/api/v1/auth/password-reset/verify", post(password_reset_verify_json))
             .route("/api/v1/account", get(get_account_json))
             .route("/api/v1/account", delete(delete_account))
             .route("/api/v1/account/request-verify-email", post(request_email_verification_json))

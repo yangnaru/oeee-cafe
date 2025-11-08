@@ -9,7 +9,7 @@ pub struct PasswordResetChallenge {
     pub id: Uuid,
     pub user_id: Uuid,
     pub email: String,
-    pub token: String,
+    pub token: Uuid,
     pub expires_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
 }
@@ -18,7 +18,7 @@ pub async fn create_password_reset_challenge(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
     email: &str,
-    token: &str,
+    token: Uuid,
     expires_at: DateTime<Utc>,
 ) -> Result<PasswordResetChallenge> {
     let challenge = query_as!(
@@ -41,7 +41,7 @@ pub async fn create_password_reset_challenge(
 
 pub async fn find_password_reset_challenge_by_token(
     tx: &mut Transaction<'_, Postgres>,
-    token: &str,
+    token: Uuid,
 ) -> Result<Option<PasswordResetChallenge>> {
     let challenge = query_as!(
         PasswordResetChallenge,
