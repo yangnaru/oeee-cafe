@@ -50,8 +50,27 @@ sign-out = Sign out
 
 message-incorrect-credentials = Incorrect credentials.
 
+forgot-password = Forgot password?
+
+password-reset-title = Reset Password
+password-reset-description = Enter your email address and we'll send you a verification code to reset your password.
+password-reset-send-email = Send verification code
+password-reset-sent-title = Verification Code Sent
+password-reset-sent-message = If an account exists with that email address, we've sent a verification code.
+password-reset-sent-email = Email
+password-reset-verify-title = Set New Password
+password-reset-token = Verification code
+password-reset-submit = Reset password
+password-reset-success = Your password has been successfully reset. You can now log in with your new password.
+password-reset-error-mismatch = Passwords do not match.
+password-reset-error-invalid-token = The verification code is invalid or has expired. Please request a new code.
+password-reset-email-subject = Oeee Cafe password reset code
+password-reset-email-body = Here is your password reset verification code:
+back-to-login = Back to login
+
 account = Account
 email-not-verified = Email not verified
+email = Email
 login-name = Username
 password = Password
 password-repeat = Password (again)

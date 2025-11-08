@@ -52,8 +52,27 @@ sign-out = 退出
 
 message-incorrect-credentials = 用户名或密码错误。
 
+forgot-password = 忘记密码？
+
+password-reset-title = 重置密码
+password-reset-description = 输入您的邮箱地址，我们将发送验证码以重置密码。
+password-reset-send-email = 发送验证码
+password-reset-sent-title = 验证码已发送
+password-reset-sent-message = 如果该邮箱地址存在对应账户，我们已发送验证码。
+password-reset-sent-email = 邮箱
+password-reset-verify-title = 设置新密码
+password-reset-token = 验证码
+password-reset-submit = 重置密码
+password-reset-success = 密码已成功重置。现在可以使用新密码登录了。
+password-reset-error-mismatch = 密码不匹配。
+password-reset-error-invalid-token = 验证码无效或已过期。请重新申请。
+password-reset-email-subject = 黄瓜咖啡馆密码重置验证码
+password-reset-email-body = 这是您的密码重置验证码：
+back-to-login = 返回登录
+
 account = 账户
 email-not-verified = 邮箱未验证
+email = 邮箱
 login-name = 用户名
 password = 密码
 password-repeat = 确认密码

@@ -40,6 +40,7 @@ pub mod draw;
 pub mod hashtag;
 pub mod home;
 pub mod notifications;
+pub mod password_reset;
 pub mod post;
 pub mod privacy;
 pub mod profile;
