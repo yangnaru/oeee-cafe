@@ -199,7 +199,7 @@ pub async fn password_reset_verify_page(
 ) -> Result<Html<String>, AppError> {
     let template = state.env.get_template("password_reset_verify.jinja")?;
     let rendered = template.render(context! {
-        token => query.token,
+        token => query.token.unwrap_or_default(),
         ftl_lang
     })?;
 
@@ -208,7 +208,7 @@ pub async fn password_reset_verify_page(
 
 #[derive(Deserialize)]
 pub struct TokenQuery {
-    pub token: String,
+    pub token: Option<String>,
 }
 
 // Helper function to create password reset challenge and send email
