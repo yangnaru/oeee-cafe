@@ -24,7 +24,6 @@ pub struct AppConfig {
     pub redis_acquire_timeout: Duration,
 
     pub official_account_login_name: String,
-    pub default_community_id: String,
 
     pub aws_access_key_id: String,
     pub aws_secret_access_key: String,

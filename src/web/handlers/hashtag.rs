@@ -54,7 +54,6 @@ pub async fn hashtag_view(
     let template = state.env.get_template("hashtag_view.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         hashtag => hashtag,
         posts => posts,
         draft_post_count => common_ctx.draft_post_count,
@@ -139,7 +138,6 @@ pub async fn hashtag_discovery(
     let template = state.env.get_template("hashtag_discovery.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         hashtags => hashtags,
         search_query => params.q,
         sort_by => sort_by,

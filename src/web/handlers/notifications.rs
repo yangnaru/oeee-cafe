@@ -69,7 +69,6 @@ pub async fn list_notifications(
     let template: minijinja::Template<'_, '_> = state.env.get_template("notifications.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         notifications => notifications,
         invitations => invitations_with_details,

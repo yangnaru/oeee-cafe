@@ -123,7 +123,6 @@ pub async fn home(
     let template: minijinja::Template<'_, '_> = state.env.get_template("home.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         active_public_communities,
         non_official_public_community_posts,
@@ -155,7 +154,6 @@ pub async fn my_timeline(
     let template: minijinja::Template<'_, '_> = state.env.get_template("timeline.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         posts,
         draft_post_count => common_ctx.draft_post_count,

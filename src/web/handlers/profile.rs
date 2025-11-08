@@ -119,7 +119,6 @@ pub async fn do_follow_profile(
     let template: minijinja::Template<'_, '_> = state.env.get_template("unfollow_button.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         user,
         ftl_lang,
     })?;
@@ -152,7 +151,6 @@ pub async fn do_unfollow_profile(
     let template: minijinja::Template<'_, '_> = state.env.get_template("follow_button.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         user,
         ftl_lang,
     })?;
@@ -217,7 +215,6 @@ pub async fn profile(
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         links,
         banner,
         is_following => is_current_user_following,
@@ -281,7 +278,6 @@ pub async fn profile_banners_iframe(
         state.env.get_template("profile_banners_iframe.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         followings,
         user,
         ftl_lang,
@@ -493,7 +489,6 @@ pub async fn profile_settings(
     let template: minijinja::Template<'_, '_> = state.env.get_template("profile_settings.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         links,
@@ -611,7 +606,6 @@ pub async fn do_reply_guestbook_entry(
         state.env.get_template("guestbook_entry_reply.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         user => author,
         entry => guestbook_entry,
         ftl_lang,
@@ -751,7 +745,6 @@ pub async fn do_write_guestbook_entry(
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook_entry.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         user => recipient_user.unwrap(),
         entry => guestbook_entry.unwrap(),
         ftl_lang,
@@ -794,7 +787,6 @@ pub async fn guestbook(
     let template: minijinja::Template<'_, '_> = state.env.get_template("guestbook.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         banner,
         user,
         draft_post_count => common_ctx.draft_post_count,

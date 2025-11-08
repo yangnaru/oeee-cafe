@@ -329,7 +329,6 @@ pub async fn post_relay_view(
     let rendered = template.render(context! {
         parent_post => post.clone().unwrap(),
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         community_name => community.name,
         width => post.clone().unwrap().get("image_width").unwrap().as_ref().unwrap().parse::<u32>()?,
         height => post.unwrap().get("image_height").unwrap().as_ref().unwrap().parse::<u32>()?,
@@ -574,8 +573,7 @@ pub async fn post_view(
         let rendered = template
             .render(context! {
                 current_user => auth_session.user,
-                default_community_id => state.config.default_community_id.clone(),
-                post => {
+                        post => {
                     post.as_ref()
                 },
                 parent_post_id => post.clone().unwrap().get("parent_post_id")
@@ -674,8 +672,7 @@ pub async fn post_replay_view(
     let rendered = template
         .render(context! {
             current_user => auth_session.user,
-            default_community_id => state.config.default_community_id.clone(),
-            post => {
+                post => {
                 post.as_ref()
             },
             post_id => post.unwrap().get("id").unwrap().as_ref().unwrap().clone(),
@@ -813,7 +810,6 @@ pub async fn post_publish_form(
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         post_id => id,
         link,
         post => {
@@ -1174,7 +1170,6 @@ pub async fn draft_posts(
     let template: minijinja::Template<'_, '_> = state.env.get_template("draft_posts.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         posts => posts,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
@@ -1751,7 +1746,6 @@ pub async fn post_edit_community(
         state.env.get_template("post_edit_community.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         post,
         post_id => id,
         current_community,
@@ -1875,7 +1869,6 @@ pub async fn hx_edit_post(
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_edit.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         post,
         post_id => id,
         hashtags => hashtags_string,
@@ -2004,8 +1997,7 @@ pub async fn hx_do_edit_post(
     let rendered = template
         .eval_to_state(context! {
             current_user => auth_session.user,
-            default_community_id => state.config.default_community_id.clone(),
-            post,
+                post,
             post_id => id,
             hashtags,
             ftl_lang
@@ -2366,8 +2358,7 @@ pub async fn post_view_by_login_name(
         let rendered = template
             .render(context! {
                 current_user => auth_session.user,
-                default_community_id => state.config.default_community_id.clone(),
-                post => {
+                        post => {
                     post.as_ref()
                 },
                 parent_post_id => post.clone().unwrap().get("parent_post_id")
@@ -2586,8 +2577,7 @@ pub async fn post_relay_view_by_login_name(
         .render(context! {
             parent_post => post.clone().unwrap(),
             current_user => auth_session.user,
-            default_community_id => state.config.default_community_id.clone(),
-            community_name => community.name,
+                community_name => community.name,
             width => post.clone().unwrap().get("image_width").unwrap().as_ref().unwrap().parse::<u32>()?,
             height => post.unwrap().get("image_height").unwrap().as_ref().unwrap().parse::<u32>()?,
             background_color => community.background_color,
@@ -3179,7 +3169,6 @@ pub async fn post_reactions_detail(
     let template = state.env.get_template("post_reactions_detail.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         post_title => post_data.get("title").and_then(|t| t.as_ref()).unwrap_or(&"Untitled".to_string()),
         post_id => post_id,
         login_name => login_name,

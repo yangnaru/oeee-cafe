@@ -139,7 +139,6 @@ pub async fn collaborate_lobby(
     let rendered = template.render(context! {
         current_user => user,
         active_sessions => active_sessions,
-        default_community_id => state.config.default_community_id,
         canvas_sizes => vec![
             ("300x300", "300×300"),
             ("1024x768", "1024×768"),
@@ -164,11 +163,11 @@ pub async fn create_collaborative_session(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    // Use provided community_id or fall back to default
-    let community_id = match request.community_id {
-        Some(id) => id.parse::<Uuid>()?,
-        None => state.config.default_community_id.parse::<Uuid>()?,
-    };
+    // Parse community_id if provided, otherwise None for personal collaborative sessions
+    let community_id = request
+        .community_id
+        .as_ref()
+        .and_then(|id| id.parse::<Uuid>().ok());
 
     let session_id = Uuid::new_v4();
     sqlx::query!(

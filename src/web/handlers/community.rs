@@ -125,7 +125,6 @@ pub async fn community(
     } else {
         let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         community => community,
         community_id => community_id,
         domain => state.config.domain.clone(),
@@ -440,7 +439,6 @@ pub async fn communities(
     let template: minijinja::Template<'_, '_> = state.env.get_template("communities.jinja")?;
     let rendered = template.clone().render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
@@ -575,7 +573,6 @@ pub async fn create_community_form(
     let template: minijinja::Template<'_, '_> = state.env.get_template("create_community.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
@@ -851,7 +848,6 @@ pub async fn community_comments(
     let template: minijinja::Template<'_, '_> = state.env.get_template("community_comments.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         community => community,
         comments => comments,
         domain => state.config.domain.clone(),

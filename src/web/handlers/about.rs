@@ -26,7 +26,6 @@ pub async fn about(
     let template: minijinja::Template<'_, '_> = state.env.get_template("about.jinja")?;
     let rendered: String = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         users_with_public_posts_and_banner,

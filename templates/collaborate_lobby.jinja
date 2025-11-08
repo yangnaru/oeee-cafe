@@ -8,7 +8,6 @@
     <div class="create-session-section">
       <h3>{{ ftl_get_message("collaborate-create-session") }}</h3>
       <form id="create-session-form" method="post" action="/collaborate">
-        <input type="hidden" name="community_id" value="{{ default_community_id }}">
         <p>
           <label for="canvas-size">{{ ftl_get_message("collaborate-canvas-size-label") }}:</label>
           <select id="canvas-size" name="canvas-size" required>

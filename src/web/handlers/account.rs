@@ -49,7 +49,6 @@ pub async fn account(
     let template: minijinja::Template<'_, '_> = state.env.get_template("account.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
         languages,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
@@ -298,8 +297,7 @@ pub async fn request_email_verification_code(
         let ftl_lang = bundle.locales.first().unwrap().to_string();
         return Ok(Html(edit_email_template.render(context! {
             current_user => auth_session.user,
-            default_community_id => state.config.default_community_id.clone(),
-            message => bundle.format_pattern(
+                message => bundle.format_pattern(
                 bundle
                     .get_message("account-change-email-error-already-verified")
                     .unwrap()
