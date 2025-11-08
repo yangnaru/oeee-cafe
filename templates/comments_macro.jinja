@@ -1,4 +1,6 @@
 {% macro comment_item(comment, current_user) %}
+  {# Only show comment if it's not deleted, or if it's deleted but has children #}
+  {% if not comment.deleted_at or (comment.children and comment.children|length > 0) %}
   <div class="comment-wrapper">
     <div class="comment" id="comment-{{ comment.id }}">
       <div class="comment-body">
@@ -53,6 +55,7 @@
       </div>
     {% endif %}
   </div>
+  {% endif %}
 {% endmacro %}
 
 {% macro comments(comments, current_user) %}
