@@ -317,7 +317,9 @@ pub async fn post_relay_view(
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
     // Relay only works for community posts, not personal posts
-    let community_id = post.clone()
+    let post_data = post.clone();
+    let community_id = post_data
+        .as_ref()
         .and_then(|p| p.get("community_id"))
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
@@ -1531,7 +1533,9 @@ pub async fn post_edit_community(
     }
 
     // Personal posts don't have a community to edit
-    let current_community_id = post.clone()
+    let post_data = post.clone();
+    let current_community_id = post_data
+        .as_ref()
         .and_then(|p| p.get("community_id"))
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
@@ -2582,7 +2586,9 @@ pub async fn post_relay_view_by_login_name(
         state.env.get_template("draw_post_neo.jinja").unwrap();
 
     // Relay only works for community posts, not personal posts
-    let community_id = post.clone()
+    let post_data = post.clone();
+    let community_id = post_data
+        .as_ref()
         .and_then(|p| p.get("community_id"))
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
