@@ -9,6 +9,17 @@ use uuid::Uuid;
 use super::db;
 use super::utils::{bytes_to_uuid, read_u64_le};
 
+pub struct EndSessionContext<'a> {
+    pub user_id: Uuid,
+    pub user_login_name: &'a str,
+    pub room_uuid: Uuid,
+    pub is_owner: bool,
+    pub db: &'a Pool<Postgres>,
+    pub state: &'a AppState,
+    pub msg: &'a Message,
+    pub connection_id: &'a str,
+}
+
 // Safe timestamp helper to avoid panics from system clock issues
 fn get_current_timestamp_ms() -> u64 {
     std::time::SystemTime::now()
@@ -406,77 +417,68 @@ pub fn handle_chat_message(data: &[u8], user_id: Uuid, user_login_name: &str) ->
     Some(Message::Binary(chat_message.serialize()))
 }
 
-pub async fn handle_end_session_message(
-    data: &[u8],
-    user_id: Uuid,
-    user_login_name: &str,
-    room_uuid: Uuid,
-    is_owner: bool,
-    db: &Pool<Postgres>,
-    state: &AppState,
-    msg: &Message,
-    connection_id: &str,
-) {
-    if is_owner && data.len() >= 19 {
+pub async fn handle_end_session_message(data: &[u8], ctx: EndSessionContext<'_>) {
+    if ctx.is_owner && data.len() >= 19 {
         if let Ok(sender_uuid) = bytes_to_uuid(&data[1..17]) {
-            if sender_uuid == user_id {
+            if sender_uuid == ctx.user_id {
                 let url_length = u16::from_le_bytes([data[17], data[18]]) as usize;
 
                 if data.len() >= 19 + url_length {
                     if let Ok(post_url) = std::str::from_utf8(&data[19..19 + url_length]) {
                         info!(
                             "END_SESSION from owner {} in session {}, redirecting to: {}",
-                            user_login_name, room_uuid, post_url
+                            ctx.user_login_name, ctx.room_uuid, post_url
                         );
 
                         // Set collaborative_sessions.ended_at
-                        if let Err(e) = db::end_session(db, room_uuid).await {
+                        if let Err(e) = db::end_session(ctx.db, ctx.room_uuid).await {
                             error!("Failed to update session ended_at: {}", e);
                         }
 
                         // Clean up Redis message history when session is explicitly ended
                         let redis_store =
-                            redis_messages::RedisMessageStore::new(state.redis_pool.clone());
-                        if let Err(e) = redis_store.cleanup_room(room_uuid).await {
+                            redis_messages::RedisMessageStore::new(ctx.state.redis_pool.clone());
+                        if let Err(e) = redis_store.cleanup_room(ctx.room_uuid).await {
                             error!(
                                 "Failed to cleanup Redis for ended session {}: {}",
-                                room_uuid, e
+                                ctx.room_uuid, e
                             );
                         } else {
                             info!(
                                 "Cleaned up Redis message history for ended session {}",
-                                room_uuid
+                                ctx.room_uuid
                             );
                         }
 
                         // Broadcast END_SESSION to all participants in the room (including sender) via Redis pub/sub
                         let room_message = super::redis_state::RoomMessage {
-                            from_connection: connection_id.to_string(),
-                            user_id,
-                            user_login_name: user_login_name.to_string(),
+                            from_connection: ctx.connection_id.to_string(),
+                            user_id: ctx.user_id,
+                            user_login_name: ctx.user_login_name.to_string(),
                             message_type: "websocket".to_string(),
-                            payload: msg.clone().into_data(),
+                            payload: ctx.msg.clone().into_data(),
                             timestamp: std::time::SystemTime::now()
                                 .duration_since(std::time::UNIX_EPOCH)
                                 .expect("System time is before UNIX_EPOCH")
                                 .as_secs(),
                         };
 
-                        match state
+                        match ctx
+                            .state
                             .redis_state
-                            .publish_message(room_uuid, &room_message)
+                            .publish_message(ctx.room_uuid, &room_message)
                             .await
                         {
                             Ok(subscriber_count) => {
                                 info!(
                                     "Broadcasted END_SESSION to {} subscribers in room {}",
-                                    subscriber_count, room_uuid
+                                    subscriber_count, ctx.room_uuid
                                 );
                             }
                             Err(e) => {
                                 error!(
                                     "Failed to publish END_SESSION message for room {}: {}",
-                                    room_uuid, e
+                                    ctx.room_uuid, e
                                 );
                             }
                         }
@@ -484,10 +486,10 @@ pub async fn handle_end_session_message(
                 }
             }
         }
-    } else if !is_owner {
+    } else if !ctx.is_owner {
         warn!(
             "Non-owner {} attempted to end session {}",
-            user_login_name, room_uuid
+            ctx.user_login_name, ctx.room_uuid
         );
     }
 }

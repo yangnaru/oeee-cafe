@@ -367,44 +367,6 @@ pub async fn delete_notification(
     Ok(result.rows_affected() > 0)
 }
 
-/// Check if a notification already exists (to prevent duplicates)
-pub async fn notification_exists(
-    tx: &mut Transaction<'_, Postgres>,
-    recipient_id: Uuid,
-    actor_id: Uuid,
-    notification_type: NotificationType,
-    post_id: Option<Uuid>,
-    comment_id: Option<Uuid>,
-    reaction_iri: Option<&str>,
-    guestbook_entry_id: Option<Uuid>,
-) -> Result<bool> {
-    let result = sqlx::query!(
-        r#"
-        SELECT EXISTS(
-            SELECT 1 FROM notifications
-            WHERE recipient_id = $1
-            AND actor_id = $2
-            AND notification_type = $3
-            AND ($4::uuid IS NULL OR post_id = $4)
-            AND ($5::uuid IS NULL OR comment_id = $5)
-            AND ($6::text IS NULL OR reaction_iri = $6)
-            AND ($7::uuid IS NULL OR guestbook_entry_id = $7)
-        ) as "exists!"
-        "#,
-        recipient_id,
-        actor_id,
-        notification_type as NotificationType,
-        post_id,
-        comment_id,
-        reaction_iri,
-        guestbook_entry_id
-    )
-    .fetch_one(&mut **tx)
-    .await?;
-
-    Ok(result.exists)
-}
-
 /// Send push notification for a newly created notification
 /// This should be called after create_notification() succeeds and the transaction is committed
 pub async fn send_push_for_notification(

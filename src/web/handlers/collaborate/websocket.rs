@@ -11,6 +11,16 @@ use uuid::Uuid;
 
 use super::{db, messages, redis_messages, utils};
 
+struct SessionContext<'a> {
+    connection_id: &'a str,
+    user_login_name: &'a str,
+    user_id: Uuid,
+    room_uuid: Uuid,
+    is_owner: bool,
+    db: &'a sqlx::Pool<sqlx::Postgres>,
+    state: &'a AppState,
+}
+
 pub async fn websocket_collaborate_handler(
     Path(room_uuid): Path<Uuid>,
     auth_session: AuthSession,
@@ -144,13 +154,15 @@ pub async fn handle_socket(
 
     handle_incoming_messages(
         &mut receiver,
-        &connection_id,
-        &user_login_name,
-        user_id,
-        room_uuid,
-        is_owner,
-        db,
-        &state,
+        SessionContext {
+            connection_id: &connection_id,
+            user_login_name: &user_login_name,
+            user_id,
+            room_uuid,
+            is_owner,
+            db,
+            state: &state,
+        },
     )
     .await;
 
@@ -305,19 +317,13 @@ async fn send_history_to_new_connection(
 
 async fn handle_incoming_messages(
     receiver: &mut futures_util::stream::SplitStream<WebSocket>,
-    connection_id: &str,
-    user_login_name: &str,
-    user_id: Uuid,
-    room_uuid: Uuid,
-    is_owner: bool,
-    db: &sqlx::Pool<sqlx::Postgres>,
-    state: &AppState,
+    ctx: SessionContext<'_>,
 ) {
     while let Some(msg) = receiver.next().await {
         let mut msg = match msg {
             Ok(msg) => msg,
             Err(e) => {
-                error!("Websocket error for connection {}: {}", connection_id, e);
+                error!("Websocket error for connection {}: {}", ctx.connection_id, e);
                 break;
             }
         };
@@ -334,14 +340,8 @@ async fn handle_incoming_messages(
                     msg = match process_server_message(
                         msg_type,
                         data,
-                        user_id,
-                        user_login_name,
-                        room_uuid,
-                        is_owner,
-                        db,
-                        state,
                         &msg,
-                        connection_id,
+                        &ctx,
                     )
                     .await
                     {
@@ -352,24 +352,18 @@ async fn handle_incoming_messages(
             }
         }
 
-        process_message_for_history_and_snapshots(&msg, room_uuid, user_id, connection_id, state)
+        process_message_for_history_and_snapshots(&msg, ctx.room_uuid, ctx.user_id, ctx.connection_id, ctx.state)
             .await;
 
-        messages::broadcast_message(&msg, room_uuid, connection_id, state).await;
+        messages::broadcast_message(&msg, ctx.room_uuid, ctx.connection_id, ctx.state).await;
     }
 }
 
 async fn process_server_message(
     msg_type: u8,
     data: &[u8],
-    user_id: Uuid,
-    user_login_name: &str,
-    room_uuid: Uuid,
-    is_owner: bool,
-    db: &sqlx::Pool<sqlx::Postgres>,
-    state: &AppState,
     msg: &Message,
-    connection_id: &str,
+    ctx: &SessionContext<'_>,
 ) -> Option<Message> {
     match msg_type {
         0x01 => {
@@ -378,30 +372,32 @@ async fn process_server_message(
             // 2. Return the original message to be broadcast (but not stored - JOIN messages are ephemeral)
             // 3. Current participants are communicated via JOIN_RESPONSE, not history replay
 
-            messages::handle_join_message(data, user_id, user_login_name, room_uuid, db, state)
+            messages::handle_join_message(data, ctx.user_id, ctx.user_login_name, ctx.room_uuid, ctx.db, ctx.state)
                 .await;
 
             // Return the JOIN message to be stored and broadcast via Redis
             Some(msg.clone())
         }
         0x02 => {
-            if let Err(e) = messages::handle_snapshot_message(data, room_uuid, state).await {
+            if let Err(e) = messages::handle_snapshot_message(data, ctx.room_uuid, ctx.state).await {
                 error!("Error handling snapshot message: {}", e);
             }
             Some(msg.clone())
         }
-        0x03 => messages::handle_chat_message(data, user_id, user_login_name),
+        0x03 => messages::handle_chat_message(data, ctx.user_id, ctx.user_login_name),
         0x07 => {
             messages::handle_end_session_message(
                 data,
-                user_id,
-                user_login_name,
-                room_uuid,
-                is_owner,
-                db,
-                state,
-                msg,
-                connection_id,
+                messages::EndSessionContext {
+                    user_id: ctx.user_id,
+                    user_login_name: ctx.user_login_name,
+                    room_uuid: ctx.room_uuid,
+                    is_owner: ctx.is_owner,
+                    db: ctx.db,
+                    state: ctx.state,
+                    msg,
+                    connection_id: ctx.connection_id,
+                },
             )
             .await;
 
@@ -411,7 +407,7 @@ async fn process_server_message(
         _ => {
             debug!(
                 "Unknown server message type: 0x{:02x} in room {}",
-                msg_type, room_uuid
+                msg_type, ctx.room_uuid
             );
             Some(msg.clone())
         }

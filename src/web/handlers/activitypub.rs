@@ -1147,58 +1147,31 @@ pub struct Tag {
     name: Option<String>,
 }
 
-impl Note {
-    pub fn new(
-        id: Url,
-        attributed_to: ObjectId<Actor>,
-        content: String,
-        to: Vec<String>,
-        cc: Vec<String>,
-        published: String,
-        url: Url,
-        attachment: Vec<Attachment>,
-    ) -> Note {
-        Note {
-            id,
-            r#type: Some(Default::default()),
-            attributed_to: Some(attributed_to),
-            content: Some(content),
-            to,
-            cc,
-            published: Some(published),
-            updated: None,
-            url: Some(url),
-            attachment,
-            in_reply_to: None,
-            reply_target: None,
-            tag: Vec::new(),
-            source: None,
-            extra: std::collections::HashMap::new(),
-        }
-    }
+pub struct NoteParams {
+    pub id: Url,
+    pub attributed_to: ObjectId<Actor>,
+    pub content: String,
+    pub to: Vec<String>,
+    pub cc: Vec<String>,
+    pub published: String,
+    pub updated: Option<String>,
+    pub url: Url,
+    pub attachment: Vec<Attachment>,
+}
 
-    pub fn new_with_updated(
-        id: Url,
-        attributed_to: ObjectId<Actor>,
-        content: String,
-        to: Vec<String>,
-        cc: Vec<String>,
-        published: String,
-        updated: String,
-        url: Url,
-        attachment: Vec<Attachment>,
-    ) -> Note {
+impl Note {
+    pub fn from_params(params: NoteParams) -> Note {
         Note {
-            id,
+            id: params.id,
             r#type: Some(Default::default()),
-            attributed_to: Some(attributed_to),
-            content: Some(content),
-            to,
-            cc,
-            published: Some(published),
-            updated: Some(updated),
-            url: Some(url),
-            attachment,
+            attributed_to: Some(params.attributed_to),
+            content: Some(params.content),
+            to: params.to,
+            cc: params.cc,
+            published: Some(params.published),
+            updated: params.updated,
+            url: Some(params.url),
+            attachment: params.attachment,
             in_reply_to: None,
             reply_target: None,
             tag: Vec::new(),
@@ -1701,16 +1674,17 @@ pub async fn create_note_from_post(
         .get("published_at_utc")
         .ok_or_else(|| anyhow::anyhow!("Missing published_at_utc"))?;
 
-    let note = Note::new(
-        note_id,
-        ObjectId::<Actor>::parse(&author_actor.iri)?,
-        formatted_content,
+    let note = Note::from_params(NoteParams {
+        id: note_id,
+        attributed_to: ObjectId::<Actor>::parse(&author_actor.iri)?,
+        content: formatted_content,
         to,
         cc,
-        published.clone().unwrap_or_default(),
-        post_url,
-        attachments,
-    );
+        published: published.clone().unwrap_or_default(),
+        updated: None,
+        url: post_url,
+        attachment: attachments,
+    });
 
     Ok(note)
 }
@@ -1786,17 +1760,17 @@ pub async fn create_updated_note_from_post(
     let updated = chrono::Utc::now().to_rfc3339();
 
     // Create the Note object with updated timestamp
-    let note = Note::new_with_updated(
-        note_id,
-        ObjectId::<Actor>::parse(&author_actor.iri)?,
-        formatted_content,
+    let note = Note::from_params(NoteParams {
+        id: note_id,
+        attributed_to: ObjectId::<Actor>::parse(&author_actor.iri)?,
+        content: formatted_content,
         to,
         cc,
-        published.clone().unwrap_or_default(),
-        updated,
-        post_url,
-        attachments,
-    );
+        published: published.clone().unwrap_or_default(),
+        updated: Some(updated),
+        url: post_url,
+        attachment: attachments,
+    });
 
     Ok(note)
 }
