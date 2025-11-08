@@ -145,7 +145,7 @@ pub struct ThreadedCommentResponse {
     pub post_id: Uuid,
     pub parent_comment_id: Option<Uuid>,
     pub actor_id: Uuid,
-    pub content: String,
+    pub content: Option<String>,
     pub content_html: Option<String>,
     pub actor_name: String,
     pub actor_handle: String,

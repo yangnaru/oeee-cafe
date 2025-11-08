@@ -884,6 +884,62 @@ pub async fn create_comment_api(
     }))
 }
 
+pub async fn delete_comment_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(comment_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = match auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let comment_uuid = Uuid::parse_str(&comment_id)?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Get the actor for this user
+    let actor = Actor::find_by_user_id(&mut tx, user.id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("No actor found for user"))?;
+
+    // Find the comment
+    let comment = sqlx::query!(
+        r#"
+        SELECT id, actor_id, deleted_at
+        FROM comments
+        WHERE id = $1
+        "#,
+        comment_uuid
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let comment = match comment {
+        Some(c) => c,
+        None => return Ok(StatusCode::NOT_FOUND.into_response()),
+    };
+
+    // Check if comment is already deleted
+    if comment.deleted_at.is_some() {
+        return Ok(StatusCode::GONE.into_response());
+    }
+
+    // Check if the user is the comment author
+    if comment.actor_id != actor.id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    // Delete the comment
+    crate::models::comment::delete_comment(&mut tx, comment_uuid, crate::models::comment::CommentDeletionReason::UserDeleted).await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
 #[derive(Serialize)]
 pub struct DeletePostResponse {
     pub success: bool,

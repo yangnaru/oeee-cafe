@@ -251,7 +251,7 @@
         <h2>{{ ftl_get_message("post-comments") }}</h2>
         <div id="comments">
           {% if comments %}
-            {{ comments_macro.comments(comments) }}
+            {{ comments_macro.comments(comments, current_user) }}
           {% else %}
             <p>
               {{ ftl_get_message("post-no-comments") }}

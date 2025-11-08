@@ -1,8 +1,16 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::{Postgres, Transaction};
+use sqlx::{Postgres, Transaction, Type};
 use uuid::Uuid;
+
+#[derive(Clone, Debug, Serialize, Type)]
+#[sqlx(type_name = "comment_deletion_reason", rename_all = "snake_case")]
+pub enum CommentDeletionReason {
+    UserDeleted,
+    Moderation,
+    Cascade,
+}
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Comment {
@@ -10,11 +18,12 @@ pub struct Comment {
     pub post_id: Uuid,
     pub actor_id: Uuid,
     pub parent_comment_id: Option<Uuid>,
-    pub content: String,
+    pub content: Option<String>,
     pub content_html: Option<String>,
     pub iri: Option<String>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 pub struct CommentDraft {
@@ -48,7 +57,7 @@ pub struct SerializableThreadedComment {
     pub post_id: Uuid,
     pub actor_id: Uuid,
     pub parent_comment_id: Option<Uuid>,
-    pub content: String,
+    pub content: Option<String>,
     pub content_html: Option<String>,
     pub iri: Option<String>,
     pub actor_name: String,
@@ -58,6 +67,7 @@ pub struct SerializableThreadedComment {
     pub is_local: bool,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
     pub children: Vec<SerializableThreadedComment>,
 }
 
@@ -106,6 +116,7 @@ pub async fn find_comments_by_post_id(
         LEFT JOIN actors ON comments.actor_id = actors.id
         LEFT JOIN users ON actors.user_id = users.id
         WHERE post_id = $1
+        AND comments.deleted_at IS NULL
         ORDER BY created_at ASC
         "#,
         post_id
@@ -157,6 +168,7 @@ pub async fn build_comment_thread_tree(
                 comments.iri,
                 comments.updated_at,
                 comments.created_at,
+                comments.deleted_at,
                 actors.name AS actor_name,
                 actors.handle AS actor_handle,
                 actors.url AS actor_url,
@@ -171,11 +183,12 @@ pub async fn build_comment_thread_tree(
             post_id,
             actor_id,
             parent_comment_id,
-            content,
+            content AS "content?",
             content_html,
             iri,
             updated_at,
             created_at,
+            deleted_at,
             actor_name,
             actor_handle,
             actor_url,
@@ -193,7 +206,7 @@ pub async fn build_comment_thread_tree(
         Uuid, // post_id
         Uuid, // actor_id
         Option<Uuid>, // parent_comment_id
-        String, // content
+        Option<String>, // content
         Option<String>, // content_html
         Option<String>, // iri
         String, // actor_name
@@ -203,6 +216,7 @@ pub async fn build_comment_thread_tree(
         bool, // is_local
         DateTime<Utc>, // updated_at
         DateTime<Utc>, // created_at
+        Option<DateTime<Utc>>, // deleted_at
     )> = HashMap::new();
 
     let mut children_map: HashMap<Option<Uuid>, Vec<Uuid>> = HashMap::new();
@@ -230,6 +244,7 @@ pub async fn build_comment_thread_tree(
                 is_local,
                 row.updated_at,
                 row.created_at,
+                row.deleted_at,
             ),
         );
 
@@ -243,14 +258,15 @@ pub async fn build_comment_thread_tree(
     fn build_subtree(
         comment_id: Uuid,
         comment_data: &HashMap<Uuid, (
-            Uuid, Uuid, Option<Uuid>, String, Option<String>, Option<String>,
-            String, String, String, Option<String>, bool, DateTime<Utc>, DateTime<Utc>
+            Uuid, Uuid, Option<Uuid>, Option<String>, Option<String>, Option<String>,
+            String, String, String, Option<String>, bool, DateTime<Utc>, DateTime<Utc>,
+            Option<DateTime<Utc>>
         )>,
         children_map: &HashMap<Option<Uuid>, Vec<Uuid>>,
     ) -> Option<SerializableThreadedComment> {
         let (post_id, actor_id, parent_comment_id, content, content_html, iri,
              actor_name, actor_handle, actor_url, actor_login_name, is_local,
-             updated_at, created_at) = comment_data.get(&comment_id)?;
+             updated_at, created_at, deleted_at) = comment_data.get(&comment_id)?;
 
         let children = children_map
             .get(&Some(comment_id))
@@ -277,6 +293,7 @@ pub async fn build_comment_thread_tree(
             is_local: *is_local,
             updated_at: *updated_at,
             created_at: *created_at,
+            deleted_at: *deleted_at,
             children,
         })
     }
@@ -352,6 +369,7 @@ pub async fn build_comment_thread_tree_paginated(
                 c.iri,
                 c.created_at,
                 c.updated_at,
+                c.deleted_at,
                 a.name AS actor_name,
                 a.handle AS actor_handle,
                 a.url AS actor_url,
@@ -375,6 +393,7 @@ pub async fn build_comment_thread_tree_paginated(
                 c.iri,
                 c.created_at,
                 c.updated_at,
+                c.deleted_at,
                 a.name AS actor_name,
                 a.handle AS actor_handle,
                 a.url AS actor_url,
@@ -390,11 +409,12 @@ pub async fn build_comment_thread_tree_paginated(
             post_id,
             actor_id,
             parent_comment_id,
-            content,
+            content AS "content?",
             content_html,
             iri,
             created_at,
             updated_at,
+            deleted_at,
             actor_name,
             actor_handle,
             actor_url,
@@ -417,7 +437,6 @@ pub async fn build_comment_thread_tree_paginated(
         let Some(id) = row.id else { continue };
         let Some(post_id) = row.post_id else { continue };
         let Some(actor_id) = row.actor_id else { continue };
-        let Some(content) = row.content else { continue };
         let Some(created_at) = row.created_at else { continue };
         let Some(updated_at) = row.updated_at else { continue };
         let Some(actor_name) = row.actor_name else { continue };
@@ -439,7 +458,7 @@ pub async fn build_comment_thread_tree_paginated(
                 post_id,
                 actor_id,
                 parent_comment_id: row.parent_comment_id,
-                content,
+                content: row.content,
                 content_html: row.content_html,
                 iri: row.iri,
                 actor_name,
@@ -449,6 +468,7 @@ pub async fn build_comment_thread_tree_paginated(
                 is_local,
                 created_at,
                 updated_at,
+                deleted_at: row.deleted_at,
                 children: Vec::new(),
             },
         );
@@ -489,6 +509,7 @@ pub async fn build_comment_thread_tree_paginated(
                 is_local: comment.is_local,
                 created_at: comment.created_at,
                 updated_at: comment.updated_at,
+                deleted_at: comment.deleted_at,
                 children,
             }
         })
@@ -543,6 +564,7 @@ pub async fn find_comments_to_posts_by_author(
         WHERE posts.author_id = $1
         AND actors.user_id != $1
         AND posts.deleted_at IS NULL
+        AND comments.deleted_at IS NULL
         ORDER BY created_at DESC
         "#,
         author_id
@@ -590,6 +612,7 @@ pub async fn find_latest_comments_in_community(
         AND posts.published_at IS NOT NULL
         AND (actors.user_id IS NULL OR actors.user_id != posts.author_id)
         AND posts.deleted_at IS NULL
+        AND comments.deleted_at IS NULL
         ORDER BY comments.created_at DESC
         LIMIT $2
         "#,
@@ -641,6 +664,7 @@ pub async fn find_latest_comments_from_public_communities(
             AND posts.published_at IS NOT NULL
             AND (actors.user_id IS NULL OR actors.user_id != posts.author_id)
             AND posts.deleted_at IS NULL
+            AND comments.deleted_at IS NULL
         )
         SELECT
             id,
@@ -683,7 +707,7 @@ pub async fn create_comment(
         r#"
         INSERT INTO comments (post_id, actor_id, parent_comment_id, content, content_html)
         VALUES ($1, $2, $3, $4, $5)
-        RETURNING *
+        RETURNING id, post_id, actor_id, parent_comment_id, content, content_html, iri, created_at, updated_at, deleted_at
         "#,
         draft.post_id,
         draft.actor_id,
@@ -704,8 +728,10 @@ pub async fn find_comment_by_iri(
     let comment = sqlx::query_as!(
         Comment,
         r#"
-        SELECT * FROM comments
+        SELECT id, post_id, actor_id, parent_comment_id, content, content_html, iri, created_at, updated_at, deleted_at
+        FROM comments
         WHERE iri = $1
+        AND deleted_at IS NULL
         "#,
         iri
     )
@@ -719,17 +745,25 @@ pub async fn delete_comment_by_iri(
     tx: &mut Transaction<'_, Postgres>,
     iri: &str,
 ) -> Result<bool> {
-    let result = sqlx::query!(
+    // First find the comment to get its ID
+    let comment = sqlx::query!(
         r#"
-        DELETE FROM comments
+        SELECT id FROM comments
         WHERE iri = $1
         "#,
         iri
     )
-    .execute(&mut **tx)
+    .fetch_optional(&mut **tx)
     .await?;
 
-    Ok(result.rows_affected() > 0)
+    match comment {
+        Some(c) => {
+            // Soft delete using the delete_comment function
+            delete_comment(tx, c.id, CommentDeletionReason::Moderation).await?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
 }
 
 pub async fn create_comment_from_activitypub(
@@ -745,7 +779,7 @@ pub async fn create_comment_from_activitypub(
         r#"
         INSERT INTO comments (post_id, actor_id, parent_comment_id, content, content_html, iri)
         VALUES ($1, $2, NULL, $3, $4, $5)
-        RETURNING *
+        RETURNING id, post_id, actor_id, parent_comment_id, content, content_html, iri, created_at, updated_at, deleted_at
         "#,
         post_id,
         actor_id,
@@ -812,4 +846,41 @@ pub async fn find_users_by_login_names(
         .into_iter()
         .map(|u| (u.id, u.login_name))
         .collect())
+}
+
+/// Soft-delete a comment by setting deleted_at and nulling out content
+pub async fn delete_comment(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    reason: CommentDeletionReason,
+) -> Result<()> {
+    // Soft delete the comment
+    sqlx::query!(
+        r#"
+        UPDATE comments
+        SET
+            deleted_at = now(),
+            deletion_reason = $2,
+            content = NULL,
+            content_html = NULL
+        WHERE id = $1
+        "#,
+        id,
+        reason as CommentDeletionReason
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Delete notifications referencing this comment
+    sqlx::query!(
+        r#"
+        DELETE FROM notifications
+        WHERE comment_id = $1
+        "#,
+        id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
 }

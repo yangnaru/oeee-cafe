@@ -1365,7 +1365,7 @@ pub async fn do_create_comment(
     }
 
     // Extract @mentions from comment content and create notifications
-    let mentioned_login_names = extract_mentions(&comment.content);
+    let mentioned_login_names = extract_mentions(comment.content.as_deref().unwrap_or(""));
     if !mentioned_login_names.is_empty() {
         let mentioned_users = find_users_by_login_names(&mut tx, &mentioned_login_names).await?;
         for (mentioned_user_id, _login_name) in mentioned_users {
@@ -1450,6 +1450,7 @@ pub async fn do_create_comment(
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_comments.jinja")?;
     let rendered = template.render(context! {
         comments => comments,
+        current_user => auth_session.user,
         ftl_lang
     })?;
     Ok(Html(rendered).into_response())
