@@ -1262,25 +1262,28 @@ pub async fn do_create_comment(
 
     let post_community = if let Some(ref post_data) = post {
         // Check if post is in a private/unlisted community and if user has access
-        let community_id = Uuid::parse_str(
-            post_data
-                .get("community_id")
-                .and_then(|v| v.as_ref())
-                .ok_or_else(|| anyhow::anyhow!("community_id not found"))?,
-        )?;
+        let community_id = post_data
+            .get("community_id")
+            .and_then(|v| v.as_ref())
+            .and_then(|s| Uuid::parse_str(s).ok());
 
-        let community = find_community_by_id(&mut tx, community_id).await?;
-        if let Some(ref comm) = community {
-            // If community is private, check if user is a member
-            if comm.visibility == crate::models::community::CommunityVisibility::Private {
-                let user_role = get_user_role_in_community(&mut tx, user_id, comm.id).await?;
-                if user_role.is_none() {
-                    // User is not a member of this private community
-                    return Ok(StatusCode::FORBIDDEN.into_response());
+        if let Some(cid) = community_id {
+            let community = find_community_by_id(&mut tx, cid).await?;
+            if let Some(ref comm) = community {
+                // If community is private, check if user is a member
+                if comm.visibility == crate::models::community::CommunityVisibility::Private {
+                    let user_role = get_user_role_in_community(&mut tx, user_id, comm.id).await?;
+                    if user_role.is_none() {
+                        // User is not a member of this private community
+                        return Ok(StatusCode::FORBIDDEN.into_response());
+                    }
                 }
             }
+            community
+        } else {
+            // Personal post - no community
+            None
         }
-        community
     } else {
         return Ok(StatusCode::NOT_FOUND.into_response());
     };
