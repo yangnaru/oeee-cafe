@@ -1,0 +1,14 @@
+{% extends "base.jinja" %}
+{% block content %}
+  <div class="center">
+    <div style="background: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem;">
+      <h2 style="margin-top: 0;">Admin Panel</h2>
+      <nav style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="/admin" style="padding: 0.5rem 1rem; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Communities</a>
+        <!-- Future admin sections can be added here -->
+      </nav>
+    </div>
+    {% block admin_content %}
+    {% endblock admin_content %}
+  </div>
+{% endblock content %}

@@ -12,6 +12,7 @@ use crate::web::handlers::activitypub::{
     activitypub_post_community_inbox, activitypub_post_shared_inbox,
     activitypub_post_user_followers, activitypub_post_user_inbox, activitypub_webfinger,
 };
+use crate::web::handlers::admin::admin_page;
 use crate::web::handlers::auth::{api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup};
 use crate::web::handlers::password_reset::{
     password_reset_request, password_reset_request_json, password_reset_request_page,
@@ -165,6 +166,7 @@ impl App {
                 post(verify_email_verification_code),
             )
             .route("/account/delete", delete(delete_account_htmx))
+            .route("/admin", get(admin_page))
             .route("/comments", post(do_create_comment))
             .route("/posts/:post_id/reactions/add", post(add_reaction))
             .route("/posts/:post_id/reactions/remove", post(remove_reaction))

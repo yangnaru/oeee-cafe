@@ -65,6 +65,7 @@ pub struct User {
     pub preferred_language: Option<Language>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub show_sensitive_content: bool,
+    pub is_admin: bool,
 }
 
 impl User {
@@ -99,7 +100,8 @@ pub async fn update_user_preferred_language(
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                is_admin
         "#,
         preferred_language as _,
         id,
@@ -119,6 +121,7 @@ pub async fn update_user_preferred_language(
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
         show_sensitive_content: result.show_sensitive_content,
+        is_admin: result.is_admin,
     })
 }
 
@@ -145,7 +148,8 @@ pub async fn update_user_show_sensitive_content(
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                is_admin
         "#,
         show_sensitive_content,
         id,
@@ -165,6 +169,7 @@ pub async fn update_user_show_sensitive_content(
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
         show_sensitive_content: result.show_sensitive_content,
+        is_admin: result.is_admin,
     })
 }
 
@@ -192,7 +197,8 @@ pub async fn update_user_email_verified_at(
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                is_admin
         "#,
         email,
         email_verified_at,
@@ -213,6 +219,7 @@ pub async fn update_user_email_verified_at(
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
         show_sensitive_content: result.show_sensitive_content,
+        is_admin: result.is_admin,
     })
 }
 
@@ -246,7 +253,8 @@ pub async fn update_password(
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                is_admin
         "#,
         password_hash,
         id,
@@ -266,6 +274,7 @@ pub async fn update_password(
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
         show_sensitive_content: result.show_sensitive_content,
+        is_admin: result.is_admin,
     })
 }
 
@@ -293,7 +302,8 @@ pub async fn update_user(
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                is_admin
         "#,
         login_name,
         display_name,
@@ -314,6 +324,7 @@ pub async fn update_user(
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
         show_sensitive_content: result.show_sensitive_content,
+        is_admin: result.is_admin,
     })
 }
 
@@ -381,6 +392,7 @@ pub async fn create_user(
         preferred_language: None,
         deleted_at: None,
         show_sensitive_content: false,
+        is_admin: false,
     };
 
     // Create actor for the user
@@ -405,7 +417,8 @@ pub async fn find_user_by_id(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Re
             banner_id,
             preferred_language AS "preferred_language: _",
             deleted_at,
-            show_sensitive_content
+            show_sensitive_content,
+            is_admin
         FROM users
         WHERE id = $1"#,
         id
@@ -432,7 +445,8 @@ pub async fn find_user_by_login_name(
             banner_id,
             preferred_language AS "preferred_language: _",
             deleted_at,
-            show_sensitive_content
+            show_sensitive_content,
+            is_admin
         FROM users
         WHERE login_name = $1"#,
         login_name
@@ -459,7 +473,8 @@ pub async fn find_user_by_email(
             banner_id,
             preferred_language AS "preferred_language: _",
             deleted_at,
-            show_sensitive_content
+            show_sensitive_content,
+            is_admin
         FROM users
         WHERE email = $1"#,
         email
@@ -672,7 +687,8 @@ impl AuthnBackend for Backend {
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                is_admin
             FROM users
             WHERE login_name = $1"#,
             creds.login_name
@@ -697,7 +713,8 @@ impl AuthnBackend for Backend {
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                is_admin
             FROM users
             WHERE id = $1"#,
             user_id

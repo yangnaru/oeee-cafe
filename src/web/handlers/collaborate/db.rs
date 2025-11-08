@@ -241,6 +241,7 @@ pub async fn get_active_participants(
             preferred_language: None,
             deleted_at: None,
             show_sensitive_content: false,
+            is_admin: false,
         })
         .collect())
 }

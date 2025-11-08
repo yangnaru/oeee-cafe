@@ -1,0 +1,78 @@
+{% extends "admin/base.jinja" %}
+{% block title %}
+  {{ super() }} | Admin Panel - Communities
+{% endblock title %}
+{% block admin_content %}
+  <section>
+    <h3>Community Management</h3>
+      <form method="get" action="/admin">
+        <fieldset>
+          <legend>Search Communities</legend>
+          <p>
+            <label for="search">Search:</label>
+            <input type="text"
+                   id="search"
+                   name="q"
+                   value="{{ search_query }}"
+                   placeholder="Search by name, slug, or description" />
+          </p>
+          <p>
+            <label for="visibility">Visibility:</label>
+            <select id="visibility" name="visibility">
+              <option value="" {% if not visibility_filter %}selected{% endif %}>All</option>
+              <option value="public"
+                      {% if visibility_filter == "public" %}selected{% endif %}>Public</option>
+              <option value="unlisted"
+                      {% if visibility_filter == "unlisted" %}selected{% endif %}>Unlisted</option>
+              <option value="private"
+                      {% if visibility_filter == "private" %}selected{% endif %}>Private</option>
+            </select>
+          </p>
+          <input type="submit" value="Search" />
+        </fieldset>
+      </form>
+      <div>
+        <h4>Communities ({{ communities|length }} results)</h4>
+        {% if communities %}
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Name</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Slug</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Owner</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Visibility</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Members</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Posts</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Created</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for community in communities %}
+                <tr>
+                  <td style="border: 1px solid #ddd; padding: 8px;">{{ community.name }}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px;">
+                    <a href="/communities/{{ community.id }}">@{{ community.slug }}</a>
+                  </td>
+                  <td style="border: 1px solid #ddd; padding: 8px;">
+                    <a href="/@{{ community.owner_login_name }}">{{ community.owner_login_name }}</a>
+                  </td>
+                  <td style="border: 1px solid #ddd; padding: 8px;">
+                    <span style="padding: 2px 6px; background: {% if community.visibility == 'public' %}#28a745{% elif community.visibility == 'unlisted' %}#ffc107{% else %}#dc3545{% endif %}; color: white; border-radius: 3px; font-size: 0.85em;">{{ community.visibility }}</span>
+                  </td>
+                  <td style="border: 1px solid #ddd; padding: 8px;">{{ community.member_count | default(0) }}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px;">{{ community.post_count | default(0) }}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px;">{{ community.created_at | dateformat(format="short", tz="Asia/Seoul") }}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px;">
+                    <a href="/communities/{{ community.id }}">View</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p>No communities found.</p>
+        {% endif %}
+      </div>
+    </section>
+{% endblock admin_content %}

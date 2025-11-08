@@ -1,6 +1,6 @@
 use crate::app_error::AppError;
 use crate::locale::LOCALES;
-use crate::models::user::{AuthSession, Language};
+use crate::models::user::{AuthSession, Language, User};
 use crate::web::context::CommonContext;
 use anyhow;
 use anyhow::Result;
@@ -32,6 +32,7 @@ use super::state::AppState;
 pub mod about;
 pub mod account;
 pub mod activitypub;
+pub mod admin;
 pub mod auth;
 pub mod collaborate;
 pub mod collaborate_cleanup;
@@ -128,6 +129,35 @@ where
         let ftl_lang = bundle.locales.first().unwrap().to_string();
 
         Ok(ExtractFtlLang(ftl_lang))
+    }
+}
+
+/// Extractor that ensures the user is authenticated and is an admin
+/// Returns the admin user or rejects with 403 Forbidden
+pub struct AdminUser(pub User);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for AdminUser
+where
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        // Extract AuthSession to get the current user
+        let auth_session = AuthSession::from_request_parts(parts, state)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        // Check if user is logged in
+        let user = auth_session.user.ok_or(StatusCode::FORBIDDEN)?;
+
+        // Check if user is admin
+        if !user.is_admin {
+            return Err(StatusCode::FORBIDDEN);
+        }
+
+        Ok(AdminUser(user))
     }
 }
 
