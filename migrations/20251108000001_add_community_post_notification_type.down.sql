@@ -1,0 +1,7 @@
+-- Note: PostgreSQL does not support removing values from an enum type
+-- This migration cannot be reversed without recreating the enum
+-- To rollback, you would need to:
+-- 1. Drop all tables using the notification_type enum
+-- 2. Drop the notification_type enum
+-- 3. Recreate the enum without 'community_post'
+-- 4. Recreate all tables

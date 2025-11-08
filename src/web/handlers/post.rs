@@ -959,6 +959,80 @@ pub async fn post_publish(
         }
     }
 
+    // Notify community participants for new posts in unlisted or private communities
+    // Only notify for top-level posts (not replies)
+    let is_reply = post
+        .clone()
+        .and_then(|p| p.get("parent_post_id").cloned())
+        .and_then(|id| id)
+        .is_some();
+
+    if !is_reply {
+        if let Some(ref actor) = actor {
+            let community = find_community_by_id(&mut tx, community_id).await?;
+
+            if let Some(ref community) = community {
+                // Only notify for unlisted or private communities
+                let should_notify_community = matches!(
+                    community.visibility,
+                    crate::models::community::CommunityVisibility::Unlisted
+                        | crate::models::community::CommunityVisibility::Private
+                );
+
+                if should_notify_community {
+                    // Get community participants based on visibility
+                    let participant_ids: Vec<Uuid> = if community.visibility
+                        == crate::models::community::CommunityVisibility::Private
+                    {
+                        // For private communities, get all members
+                        use crate::models::community::get_community_members;
+                        let members = get_community_members(&mut tx, community_id).await?;
+                        members.into_iter().map(|m| m.user_id).collect()
+                    } else {
+                        // For unlisted communities, get all users who have posted
+                        let participants = sqlx::query!(
+                            r#"
+                            SELECT DISTINCT author_id
+                            FROM posts
+                            WHERE community_id = $1
+                                AND published_at IS NOT NULL
+                                AND deleted_at IS NULL
+                                AND author_id != $2
+                            "#,
+                            community_id,
+                            user_id
+                        )
+                        .fetch_all(&mut *tx)
+                        .await?;
+                        participants.into_iter().map(|p| p.author_id).collect()
+                    };
+
+                    // Create notifications for each participant (excluding the post author)
+                    for participant_id in participant_ids {
+                        if participant_id != user_id {
+                            if let Ok(notification) = create_notification(
+                                &mut tx,
+                                CreateNotificationParams {
+                                    recipient_id: participant_id,
+                                    actor_id: actor.id,
+                                    notification_type: NotificationType::CommunityPost,
+                                    post_id: Some(post_id),
+                                    comment_id: None,
+                                    reaction_iri: None,
+                                    guestbook_entry_id: None,
+                                },
+                            )
+                            .await
+                            {
+                                notification_info.push((notification.id, participant_id));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Get community to check visibility before federating
     let community = find_community_by_id(&mut tx, community_id).await?;
     let should_federate = community

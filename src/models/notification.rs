@@ -19,6 +19,8 @@ pub enum NotificationType {
     PostReply,
     #[sqlx(rename = "comment_reply")]
     CommentReply,
+    #[sqlx(rename = "community_post")]
+    CommunityPost,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -495,6 +497,15 @@ fn format_notification_message(notification: &NotificationWithActor) -> (String,
                 content.clone()
             } else {
                 format!("{} replied to your comment", actor_name)
+            };
+            (title, body)
+        }
+        NotificationType::CommunityPost => {
+            let title = "New community post".to_string();
+            let body = if let Some(post_title) = &notification.post_title {
+                format!("{} posted in your community: {}", actor_name, post_title)
+            } else {
+                format!("{} posted in your community", actor_name)
             };
             (title, body)
         }
