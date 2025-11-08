@@ -15,7 +15,11 @@
           <ul class="reaction-list">
             {% for reaction in group.reactions %}
               <li>
-                <a href="/@{{ reaction.actor_login_name }}">{{ reaction.actor_name }}</a>
+                {% if reaction.is_local %}
+                  <a href="{{ reaction.actor_url }}">{{ reaction.actor_name }}</a>
+                {% else %}
+                  <a href="{{ reaction.actor_url }}" target="_blank" rel="noopener noreferrer">{{ reaction.actor_name }}</a>
+                {% endif %}
                 <span class="muted">{{ reaction.actor_handle }}</span>
                 <span class="muted">- {{ reaction.created_at }}</span>
               </li>

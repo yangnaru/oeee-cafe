@@ -31,6 +31,8 @@ pub struct SerializableReaction {
     pub created_at: DateTime<Utc>,
     pub actor_name: String,
     pub actor_handle: String,
+    pub actor_url: String,
+    pub actor_login_name: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -110,9 +112,12 @@ pub async fn find_reactions_by_post_id(
             reactions.emoji,
             reactions.created_at,
             actors.name AS actor_name,
-            actors.handle AS actor_handle
+            actors.handle AS actor_handle,
+            actors.url AS actor_url,
+            users.login_name AS "actor_login_name?"
         FROM reactions
         LEFT JOIN actors ON reactions.actor_id = actors.id
+        LEFT JOIN users ON actors.user_id = users.id
         WHERE post_id = $1
         ORDER BY created_at DESC
         "#,
@@ -131,6 +136,8 @@ pub async fn find_reactions_by_post_id(
             created_at: reaction.created_at,
             actor_name: reaction.actor_name,
             actor_handle: reaction.actor_handle,
+            actor_url: reaction.actor_url,
+            actor_login_name: reaction.actor_login_name,
         })
         .collect())
 }
@@ -149,9 +156,12 @@ pub async fn find_reactions_by_post_id_and_emoji(
             reactions.emoji,
             reactions.created_at,
             actors.name AS actor_name,
-            actors.handle AS actor_handle
+            actors.handle AS actor_handle,
+            actors.url AS actor_url,
+            users.login_name AS "actor_login_name?"
         FROM reactions
         LEFT JOIN actors ON reactions.actor_id = actors.id
+        LEFT JOIN users ON actors.user_id = users.id
         WHERE post_id = $1 AND emoji = $2
         ORDER BY created_at DESC
         "#,
@@ -171,6 +181,8 @@ pub async fn find_reactions_by_post_id_and_emoji(
             created_at: reaction.created_at,
             actor_name: reaction.actor_name,
             actor_handle: reaction.actor_handle,
+            actor_url: reaction.actor_url,
+            actor_login_name: reaction.actor_login_name,
         })
         .collect())
 }

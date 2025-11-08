@@ -3047,7 +3047,8 @@ pub async fn post_reactions_detail(
     struct ReactionForTemplate {
         actor_name: String,
         actor_handle: String,
-        actor_login_name: String,
+        actor_url: String,
+        is_local: bool,
         created_at: String,
     }
 
@@ -3063,17 +3064,12 @@ pub async fn post_reactions_detail(
             let reactions_for_template = reactions
                 .into_iter()
                 .map(|r| {
-                    // Extract login name (part before @)
-                    let actor_login_name = r
-                        .actor_handle
-                        .split('@')
-                        .next()
-                        .unwrap_or(&r.actor_handle)
-                        .to_string();
+                    let is_local = r.actor_login_name.is_some();
                     ReactionForTemplate {
                         actor_name: r.actor_name,
                         actor_handle: r.actor_handle,
-                        actor_login_name,
+                        actor_url: r.actor_url,
+                        is_local,
                         created_at: r.created_at.to_rfc3339(),
                     }
                 })
