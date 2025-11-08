@@ -2,17 +2,33 @@
 {% block title %}
   {{ super() }} |
   {% if parent_post %}
-    Re: {{ parent_post.title }} @ {{ community_name }}
+    {% if community_name %}
+      Re: {{ parent_post.title }} @ {{ community_name }}
+    {% else %}
+      Re: {{ parent_post.title }}
+    {% endif %}
   {% else %}
-    {{ ftl_get_message("community-drawing-new") }} @ {{ community_name }}
+    {% if community_name %}
+      {{ ftl_get_message("community-drawing-new") }} @ {{ community_name }}
+    {% else %}
+      {{ ftl_get_message("community-drawing-new") }}
+    {% endif %}
   {% endif %}
 {% endblock title %}
 {% block content %}
 <h2 class="center">
   {% if parent_post %}
-    Re: {{ parent_post.title }} @ {{ community_name }}
+    {% if community_name %}
+      Re: {{ parent_post.title }} @ {{ community_name }}
+    {% else %}
+      Re: {{ parent_post.title }}
+    {% endif %}
   {% else %}
-    {{ ftl_get_message("community-drawing-new") }} @ {{ community_name }}
+    {% if community_name %}
+      {{ ftl_get_message("community-drawing-new") }} @ {{ community_name }}
+    {% else %}
+      {{ ftl_get_message("community-drawing-new") }}
+    {% endif %}
   {% endif %}
 </h2>
 <link rel="stylesheet"
