@@ -408,12 +408,34 @@ pub async fn api_signup(
     let user = match create_user(&mut tx, user_draft, &state.config).await {
         Ok(user) => user,
         Err(e) => {
+            // Check if this is a unique constraint violation for login_name
+            let error_message = if let Some(db_err) = e.downcast_ref::<sqlx::Error>() {
+                match db_err {
+                    sqlx::Error::Database(db_error) => {
+                        // PostgreSQL error code 23505 is unique_violation
+                        if db_error.code().as_deref() == Some("23505") {
+                            // Check if the error message mentions login_name
+                            if db_error.message().contains("login_name") {
+                                "This login name is already taken. Please choose a different one.".to_string()
+                            } else {
+                                "A user with this information already exists.".to_string()
+                            }
+                        } else {
+                            "Failed to create user.".to_string()
+                        }
+                    }
+                    _ => "Failed to create user.".to_string()
+                }
+            } else {
+                e.to_string()
+            };
+
             return (
                 StatusCode::BAD_REQUEST,
                 Json(SignupResponse {
                     success: false,
                     user: None,
-                    error: Some(e.to_string()),
+                    error: Some(error_message),
                 }),
             )
                 .into_response();
