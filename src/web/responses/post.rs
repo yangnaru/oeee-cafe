@@ -153,6 +153,7 @@ pub struct ThreadedCommentResponse {
     pub is_local: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
     pub children: Vec<ThreadedCommentResponse>,
 }
 

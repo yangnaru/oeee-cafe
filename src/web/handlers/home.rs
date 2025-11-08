@@ -661,6 +661,7 @@ pub async fn get_post_comments_api(
             is_local: comment.is_local,
             created_at: comment.created_at,
             updated_at: comment.updated_at,
+            deleted_at: comment.deleted_at,
             children: comment.children.into_iter().map(convert_to_response).collect(),
         }
     }
@@ -880,6 +881,7 @@ pub async fn create_comment_api(
         is_local: true,
         created_at: comment.created_at,
         updated_at: comment.updated_at,
+        deleted_at: None,
         children: Vec::new(),
     }))
 }
