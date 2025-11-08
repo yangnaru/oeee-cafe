@@ -37,6 +37,8 @@
         {{ ftl_get_message("notification-post-reply") }}
       {% elif notification.notification_type == "CommentReply" %}
         {{ ftl_get_message("notification-comment-reply") }}
+      {% elif notification.notification_type == "CommunityPost" %}
+        {{ ftl_get_message("notification-community-post") }}
       {% endif %}
     </strong>
     <span class="notification-time muted">{{ notification.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}</span>
@@ -44,7 +46,7 @@
 
   <div class="notification-body">
     {# Post thumbnail for post-related notifications #}
-    {% if notification.post_image_filename and (notification.notification_type == "Comment" or notification.notification_type == "Reaction" or notification.notification_type == "Mention" or notification.notification_type == "PostReply" or notification.notification_type == "CommentReply") %}
+    {% if notification.post_image_filename and (notification.notification_type == "Comment" or notification.notification_type == "Reaction" or notification.notification_type == "Mention" or notification.notification_type == "PostReply" or notification.notification_type == "CommentReply" or notification.notification_type == "CommunityPost") %}
       <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}" class="notification-thumbnail">
         <img class="post-image notification-post-image"
              width="{{ notification.post_image_width }}"
@@ -139,6 +141,14 @@
         {% elif notification.comment_content %}
           <pre class="notification-preview">{{ notification.comment_content }}</pre>
         {% endif %}
+
+      {% elif notification.notification_type == "CommunityPost" %}
+        <p class="notification-action">
+          {{ ftl_get_message("notification-posted-in-community") }}
+          {% if notification.post_title %}
+            <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}">{{ notification.post_title }}</a>
+          {% endif %}
+        </p>
       {% endif %}
     </div>
   </div>
