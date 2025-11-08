@@ -254,7 +254,10 @@ pub async fn draw_finish(
             replay_sha256 = digest(&*data);
             replay_data = data.to_vec();
         } else if name == "community_id" {
-            community_id = Some(Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap()).unwrap());
+            let id_str = std::str::from_utf8(data.as_ref()).unwrap();
+            if !id_str.is_empty() {
+                community_id = Uuid::parse_str(id_str).ok();
+            }
         } else if name == "security_timer" {
             security_timer = std::str::from_utf8(data.as_ref())
                 .unwrap()
