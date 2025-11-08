@@ -797,15 +797,17 @@ pub async fn post_publish_form(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let community_id = Uuid::parse_str(
-        post.clone()
-            .unwrap()
-            .get("community_id")
-            .unwrap()
-            .as_ref()
-            .unwrap(),
-    )?;
-    let link = get_community_slug_url(&mut tx, community_id).await?;
+    let community_id = post.clone()
+        .unwrap()
+        .get("community_id")
+        .and_then(|id| id.as_ref())
+        .and_then(|id_str| Uuid::parse_str(id_str).ok());
+
+    let link = if let Some(cid) = community_id {
+        Some(get_community_slug_url(&mut tx, cid).await?)
+    } else {
+        None
+    };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("post_form.jinja")?;
     let rendered = template.render(context! {
