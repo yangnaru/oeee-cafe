@@ -1225,7 +1225,7 @@ pub async fn do_create_comment(
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
-    let user_id = auth_session.user.unwrap().id;
+    let user_id = auth_session.user.as_ref().unwrap().id;
     let post_id = Uuid::parse_str(&form.post_id).unwrap();
 
     // Get the actor for this user
