@@ -323,7 +323,10 @@ async fn handle_incoming_messages(
         let mut msg = match msg {
             Ok(msg) => msg,
             Err(e) => {
-                error!("Websocket error for connection {}: {}", ctx.connection_id, e);
+                error!(
+                    "Websocket error for connection {}: {}",
+                    ctx.connection_id, e
+                );
                 break;
             }
         };
@@ -337,14 +340,7 @@ async fn handle_incoming_messages(
                 let msg_type = data[0];
 
                 if msg_type < 0x10 {
-                    msg = match process_server_message(
-                        msg_type,
-                        data,
-                        &msg,
-                        &ctx,
-                    )
-                    .await
-                    {
+                    msg = match process_server_message(msg_type, data, &msg, &ctx).await {
                         Some(processed_msg) => processed_msg,
                         None => continue,
                     };
@@ -352,8 +348,14 @@ async fn handle_incoming_messages(
             }
         }
 
-        process_message_for_history_and_snapshots(&msg, ctx.room_uuid, ctx.user_id, ctx.connection_id, ctx.state)
-            .await;
+        process_message_for_history_and_snapshots(
+            &msg,
+            ctx.room_uuid,
+            ctx.user_id,
+            ctx.connection_id,
+            ctx.state,
+        )
+        .await;
 
         messages::broadcast_message(&msg, ctx.room_uuid, ctx.connection_id, ctx.state).await;
     }
@@ -372,14 +374,22 @@ async fn process_server_message(
             // 2. Return the original message to be broadcast (but not stored - JOIN messages are ephemeral)
             // 3. Current participants are communicated via JOIN_RESPONSE, not history replay
 
-            messages::handle_join_message(data, ctx.user_id, ctx.user_login_name, ctx.room_uuid, ctx.db, ctx.state)
-                .await;
+            messages::handle_join_message(
+                data,
+                ctx.user_id,
+                ctx.user_login_name,
+                ctx.room_uuid,
+                ctx.db,
+                ctx.state,
+            )
+            .await;
 
             // Return the JOIN message to be stored and broadcast via Redis
             Some(msg.clone())
         }
         0x02 => {
-            if let Err(e) = messages::handle_snapshot_message(data, ctx.room_uuid, ctx.state).await {
+            if let Err(e) = messages::handle_snapshot_message(data, ctx.room_uuid, ctx.state).await
+            {
                 error!("Error handling snapshot message: {}", e);
             }
             Some(msg.clone())

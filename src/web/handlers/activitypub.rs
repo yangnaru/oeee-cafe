@@ -1281,7 +1281,9 @@ impl ActivityHandler for Create {
             let post_id = if reply_url_str.starts_with(&user_post_prefix) {
                 // Extract from URLs like https://domain/@username/post-id
                 let path_part = &reply_url_str[user_post_prefix.len()..];
-                path_part.find('/').map(|slash_pos| &path_part[slash_pos + 1..])
+                path_part
+                    .find('/')
+                    .map(|slash_pos| &path_part[slash_pos + 1..])
             } else if reply_url_str.starts_with(&ap_post_prefix) {
                 // Extract from URLs like https://domain/ap/posts/post-id
                 Some(&reply_url_str[ap_post_prefix.len()..])
@@ -2088,7 +2090,9 @@ impl ActivityHandler for Delete {
                         actor_url
                     );
                 } else {
-                    tracing::warn!("Delete activity missing actor field and could not extract from signature");
+                    tracing::warn!(
+                        "Delete activity missing actor field and could not extract from signature"
+                    );
                 }
             } else {
                 tracing::debug!(

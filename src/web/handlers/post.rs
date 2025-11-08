@@ -1704,9 +1704,7 @@ pub async fn post_edit_community(
     let mut posts_by_community: HashMap<Uuid, Vec<serde_json::Value>> = HashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community
-                .entry(community_id)
-                .or_default();
+            let posts = posts_by_community.entry(community_id).or_default();
             posts.push(serde_json::json!({
                 "id": post.id.to_string(),
                 "image_filename": post.image_filename,

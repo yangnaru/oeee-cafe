@@ -352,9 +352,7 @@ pub async fn communities(
     let mut posts_by_community: StdHashMap<Uuid, Vec<serde_json::Value>> = StdHashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community
-                .entry(community_id)
-                .or_default();
+            let posts = posts_by_community.entry(community_id).or_default();
             posts.push(serde_json::json!({
                 "id": post.id.to_string(),
                 "image_filename": post.image_filename,
@@ -795,21 +793,22 @@ pub async fn hx_do_edit_community(
             let _ = tx.rollback().await;
 
             // Check if it's a constraint violation (slug conflict)
-            let error_message = if let Some(sqlx::Error::Database(db_err)) = e.downcast_ref::<sqlx::Error>() {
-                if db_err.constraint().is_some() {
-                    let user_preferred_language = auth_session
-                        .user
-                        .clone()
-                        .map(|u| u.preferred_language)
-                        .unwrap_or_else(|| None);
-                    let bundle = get_bundle(&accept_language, user_preferred_language);
-                    Some(safe_get_message(&bundle, "community-slug-conflict-error"))
+            let error_message =
+                if let Some(sqlx::Error::Database(db_err)) = e.downcast_ref::<sqlx::Error>() {
+                    if db_err.constraint().is_some() {
+                        let user_preferred_language = auth_session
+                            .user
+                            .clone()
+                            .map(|u| u.preferred_language)
+                            .unwrap_or_else(|| None);
+                        let bundle = get_bundle(&accept_language, user_preferred_language);
+                        Some(safe_get_message(&bundle, "community-slug-conflict-error"))
+                    } else {
+                        None
+                    }
                 } else {
                     None
-                }
-            } else {
-                None
-            };
+                };
 
             // Get current community data to show in the form
             let mut tx = db.begin().await?;
@@ -1115,11 +1114,10 @@ pub async fn invite_user(
                         &bundle,
                         "community-invite-already-invited",
                     ));
-                    return Ok(Redirect::to(&format!(
-                        "/communities/@{}/members",
-                        community.slug
-                    ))
-                    .into_response());
+                    return Ok(
+                        Redirect::to(&format!("/communities/@{}/members", community.slug))
+                            .into_response(),
+                    );
                 }
             }
             // For other errors, propagate them
@@ -1756,9 +1754,7 @@ pub async fn get_communities_list_json(
     let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community
-                .entry(community_id)
-                .or_default();
+            let posts = posts_by_community.entry(community_id).or_default();
             let image_prefix = &post.image_filename[..2];
             posts.push(CommunityPostThumbnail {
                 id: post.id,
@@ -1875,9 +1871,7 @@ pub async fn get_public_communities_json(
     let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community
-                .entry(community_id)
-                .or_default();
+            let posts = posts_by_community.entry(community_id).or_default();
             let image_prefix = &post.image_filename[..2];
             posts.push(CommunityPostThumbnail {
                 id: post.id,
@@ -2022,9 +2016,7 @@ pub async fn search_public_communities_json(
     let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community
-                .entry(community_id)
-                .or_default();
+            let posts = posts_by_community.entry(community_id).or_default();
             let image_prefix = &post.image_filename[..2];
             posts.push(CommunityPostThumbnail {
                 id: post.id,

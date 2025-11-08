@@ -11,17 +11,17 @@ use uuid::Uuid;
 use super::community::CommunityVisibility;
 
 type PostData = (
-    Option<String>,                // title
-    Option<String>,                // content
-    Uuid,                          // author_id
-    String,                        // login_name
-    String,                        // display_name
-    String,                        // profile_image_url
-    String,                        // image_url
-    i32,                           // comment_count
-    i32,                           // like_count
-    Option<DateTime<Utc>>,         // published_at
-    i64,                           // paint_duration_ms
+    Option<String>,        // title
+    Option<String>,        // content
+    Uuid,                  // author_id
+    String,                // login_name
+    String,                // display_name
+    String,                // profile_image_url
+    String,                // image_url
+    i32,                   // comment_count
+    i32,                   // like_count
+    Option<DateTime<Utc>>, // published_at
+    i64,                   // paint_duration_ms
 );
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Type, Serialize, Deserialize)]
@@ -1058,10 +1058,7 @@ pub async fn build_thread_tree(
         );
 
         if let Some(parent_id) = row.parent_post_id {
-            children_map
-                .entry(parent_id)
-                .or_default()
-                .push(id);
+            children_map.entry(parent_id).or_default().push(id);
         }
     }
 

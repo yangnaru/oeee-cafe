@@ -89,9 +89,7 @@ pub async fn home(
     let mut posts_by_community: HashMap<uuid::Uuid, Vec<serde_json::Value>> = HashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community
-                .entry(community_id)
-                .or_default();
+            let posts = posts_by_community.entry(community_id).or_default();
             posts.push(serde_json::json!({
                 "id": post.id.to_string(),
                 "image_filename": post.image_filename,
@@ -347,9 +345,7 @@ pub async fn get_active_communities_json(
     let mut posts_by_community: HashMap<uuid::Uuid, Vec<CommunityPostThumbnail>> = HashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
-            let posts = posts_by_community
-                .entry(community_id)
-                .or_default();
+            let posts = posts_by_community.entry(community_id).or_default();
             let image_prefix = &post.image_filename[..2];
             posts.push(CommunityPostThumbnail {
                 id: post.id,
