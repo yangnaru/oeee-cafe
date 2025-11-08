@@ -24,7 +24,7 @@ use crate::models::post::{
 use crate::models::reaction::{
     create_reaction, delete_reaction, find_reactions_by_post_id, get_reaction_counts, ReactionDraft,
 };
-use crate::models::user::AuthSession;
+use crate::models::user::{find_user_by_id, AuthSession};
 use crate::web::context::CommonContext;
 use crate::web::handlers::activitypub::{
     create_note_from_post, create_updated_note_from_post, generate_object_id, Announce, Create,
@@ -2094,9 +2094,16 @@ pub async fn hx_delete_post(
         )
         .send()
         .await?;
-    let community_id = post.unwrap().get("community_id").unwrap().clone().unwrap();
-    let community_id = Uuid::parse_str(&community_id)?;
-    let community_url = get_community_slug_url(&mut tx, community_id).await?;
+    let post_data = post.clone().unwrap();
+    let redirect_url = if let Some(community_id_str) = post_data.get("community_id").and_then(|id| id.clone()) {
+        let community_id = Uuid::parse_str(&community_id_str)?;
+        get_community_slug_url(&mut tx, community_id).await?
+    } else {
+        // For personal posts, redirect to user's profile
+        let author_id = post_data.get("author_id").unwrap().as_ref().unwrap();
+        let author = find_user_by_id(&mut tx, Uuid::parse_str(author_id)?).await?;
+        format!("/@{}", author.unwrap().login_name)
+    };
 
     // Unlink hashtags before deleting post to properly decrement post_count
     let _ = unlink_post_hashtags(&mut tx, post_uuid).await;
@@ -2104,7 +2111,7 @@ pub async fn hx_delete_post(
     delete_post_with_activity(&mut tx, post_uuid, Some(&state)).await?;
     tx.commit().await?;
 
-    Ok(([("HX-Redirect", &community_url)],).into_response())
+    Ok(([("HX-Redirect", &redirect_url)],).into_response())
 }
 
 pub async fn post_view_by_login_name(
