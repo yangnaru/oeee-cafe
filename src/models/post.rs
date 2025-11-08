@@ -1061,7 +1061,7 @@ pub async fn build_thread_tree(
         if let Some(parent_id) = row.parent_post_id {
             children_map
                 .entry(parent_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(id);
         }
     }

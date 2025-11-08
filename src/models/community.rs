@@ -400,7 +400,7 @@ pub async fn get_user_communities_with_latest_9_posts(
 
             posts_by_community
                 .entry(community_id)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(post);
         }
     }

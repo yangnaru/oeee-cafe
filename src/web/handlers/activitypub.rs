@@ -1308,11 +1308,7 @@ impl ActivityHandler for Create {
             let post_id = if reply_url_str.starts_with(&user_post_prefix) {
                 // Extract from URLs like https://domain/@username/post-id
                 let path_part = &reply_url_str[user_post_prefix.len()..];
-                if let Some(slash_pos) = path_part.find('/') {
-                    Some(&path_part[slash_pos + 1..])
-                } else {
-                    None
-                }
+                path_part.find('/').map(|slash_pos| &path_part[slash_pos + 1..])
             } else if reply_url_str.starts_with(&ap_post_prefix) {
                 // Extract from URLs like https://domain/ap/posts/post-id
                 Some(&reply_url_str[ap_post_prefix.len()..])
@@ -2001,7 +1997,7 @@ impl ActivityHandler for Delete {
     fn id(&self) -> &Url {
         // For Delete activities without explicit ID, we could generate one or use the object ID
         // For now, return a placeholder URL that will need to be handled properly
-        self.id.as_ref().unwrap_or_else(|| {
+        self.id.as_ref().unwrap_or({
             // This is a fallback - we'll need to handle this case properly
             &self.object.id
         })
@@ -2112,15 +2108,13 @@ impl ActivityHandler for Delete {
                             comment.actor_id
                         );
                     }
+                } else if let Some(actor_url) = &actor_url {
+                    tracing::warn!(
+                        "Could not find deleting actor for Delete activity: {}",
+                        actor_url
+                    );
                 } else {
-                    if let Some(actor_url) = &actor_url {
-                        tracing::warn!(
-                            "Could not find deleting actor for Delete activity: {}",
-                            actor_url
-                        );
-                    } else {
-                        tracing::warn!("Delete activity missing actor field and could not extract from signature");
-                    }
+                    tracing::warn!("Delete activity missing actor field and could not extract from signature");
                 }
             } else {
                 tracing::debug!(
@@ -2411,7 +2405,7 @@ impl ActivityHandler for EmojiReact {
         let mut tx = db.begin().await?;
 
         // Dereference the actor using the URL we extracted
-        let actor_obj_id = ObjectId::<Actor>::parse(&actor_url.to_string())?;
+        let actor_obj_id = ObjectId::<Actor>::parse(actor_url.as_ref())?;
         let actor = actor_obj_id.dereference(data).await?;
         let persisted_actor = Actor::create_or_update_actor(&mut tx, &actor).await?;
 

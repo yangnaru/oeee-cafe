@@ -146,7 +146,7 @@ pub async fn password_reset_verify(
         let _ = update_password(&mut tx, challenge.user_id, form.new_password.clone()).await?;
 
         // Delete all password reset challenges for this user
-        let _ = delete_password_reset_challenges_for_user(&mut tx, challenge.user_id).await?;
+        delete_password_reset_challenges_for_user(&mut tx, challenge.user_id).await?;
 
         tx.commit().await?;
 
@@ -209,7 +209,7 @@ async fn create_and_send_password_reset_email(
     tx.commit().await.map_err(|e| e.to_string())?;
 
     // Send email
-    let from_address = safe_get_message(&bundle, "email-from-address");
+    let from_address = safe_get_message(bundle, "email-from-address");
     let email_message = Message::builder()
         .from(
             from_address
@@ -219,10 +219,10 @@ async fn create_and_send_password_reset_email(
         .to(email
             .parse()
             .map_err(|e: lettre::address::AddressError| e.to_string())?)
-        .subject(safe_get_message(&bundle, "password-reset-email-subject"))
+        .subject(safe_get_message(bundle, "password-reset-email-subject"))
         .body(format!(
             "{}\n\nhttps://{}/password-reset/verify?token={}",
-            safe_get_message(&bundle, "password-reset-email-body"),
+            safe_get_message(bundle, "password-reset-email-body"),
             state.config.domain,
             token
         ))

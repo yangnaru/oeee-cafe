@@ -252,7 +252,7 @@ pub async fn build_comment_thread_tree(
 
         children_map
             .entry(row.parent_comment_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(comment_id);
     }
 
@@ -508,7 +508,7 @@ pub async fn build_comment_thread_tree_paginated(
 
         children_map
             .entry(row.parent_comment_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(id);
     }
 

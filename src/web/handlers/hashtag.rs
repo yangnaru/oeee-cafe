@@ -133,9 +133,9 @@ pub async fn hashtag_discovery(
         // Browse mode - get all hashtags sorted by chosen method
         match sort_by {
             "trending" => get_trending_hashtags(&mut tx, 100).await?,
-            "popular" => get_all_hashtags_by_popularity(&db, 100).await?,
-            "recent" => get_all_hashtags_by_recency(&db, 100).await?,
-            "alphabetical" => get_all_hashtags_alphabetically(&db, 100).await?,
+            "popular" => get_all_hashtags_by_popularity(db, 100).await?,
+            "recent" => get_all_hashtags_by_recency(db, 100).await?,
+            "alphabetical" => get_all_hashtags_alphabetically(db, 100).await?,
             _ => get_trending_hashtags(&mut tx, 100).await?,
         }
     };

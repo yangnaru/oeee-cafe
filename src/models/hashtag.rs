@@ -18,7 +18,7 @@ pub struct Hashtag {
 /// Returns normalized (lowercase, trimmed, hyphens converted to underscores) hashtag names with original display names
 pub fn parse_hashtag_input(input: &str) -> Vec<(String, String)> {
     input
-        .split(|c| c == ',' || c == ' ')
+        .split([',', ' '])
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .map(|s| {

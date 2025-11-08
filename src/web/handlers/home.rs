@@ -91,7 +91,7 @@ pub async fn home(
         if let Some(community_id) = post.community_id {
             let posts = posts_by_community
                 .entry(community_id)
-                .or_insert_with(Vec::new);
+                .or_default();
             posts.push(serde_json::json!({
                 "id": post.id.to_string(),
                 "image_filename": post.image_filename,
@@ -349,7 +349,7 @@ pub async fn get_active_communities_json(
         if let Some(community_id) = post.community_id {
             let posts = posts_by_community
                 .entry(community_id)
-                .or_insert_with(Vec::new);
+                .or_default();
             let image_prefix = &post.image_filename[..2];
             posts.push(CommunityPostThumbnail {
                 id: post.id,

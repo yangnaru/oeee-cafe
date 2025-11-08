@@ -526,14 +526,14 @@ async fn create_and_send_verification_email(
     // Send email
     let email_message = Message::builder()
         .from(
-            safe_get_message(&bundle, "email-from-address")
+            safe_get_message(bundle, "email-from-address")
                 .parse()
                 .map_err(|e: lettre::address::AddressError| e.to_string())?,
         )
         .to(email
             .parse()
             .map_err(|e: lettre::address::AddressError| e.to_string())?)
-        .subject(safe_get_message(&bundle, "account-change-email-subject"))
+        .subject(safe_get_message(bundle, "account-change-email-subject"))
         .body(token.clone())
         .map_err(|e| format!("Failed to build email message: {}", e))?;
 

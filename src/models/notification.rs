@@ -525,10 +525,10 @@ fn get_localized_message(
 ) -> String {
     let message = bundle
         .get_message(key)
-        .expect(&format!("Message {} not found", key));
+        .unwrap_or_else(|| panic!("Message {} not found", key));
     let pattern = message
         .value()
-        .expect(&format!("Message {} has no value", key));
+        .unwrap_or_else(|| panic!("Message {} has no value", key));
     let mut errors = vec![];
     bundle
         .format_pattern(pattern, args, &mut errors)

@@ -7,7 +7,6 @@ use oeee_cafe::web::app::App;
 use oeee_cafe::web::handlers::collaborate::redis_state::RedisStateManager;
 use oeee_cafe::web::state::AppState;
 use oeee_cafe::AppConfig;
-use serde_json;
 use std::collections::HashMap;
 use std::env::args;
 use std::path::PathBuf;

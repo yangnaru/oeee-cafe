@@ -929,7 +929,7 @@ pub async fn post_publish(
 
     // Check if this is a reply post and notify the parent post author
     if let Some(parent_post_id_str) = post.get("parent_post_id").and_then(|id| id.as_ref()) {
-        if let Ok(parent_post_id) = Uuid::parse_str(&parent_post_id_str) {
+        if let Ok(parent_post_id) = Uuid::parse_str(parent_post_id_str) {
             let parent_post = find_post_by_id(&mut tx, parent_post_id).await?;
             let parent_author_id = parent_post
                 .as_ref()
@@ -1706,7 +1706,7 @@ pub async fn post_edit_community(
         if let Some(community_id) = post.community_id {
             let posts = posts_by_community
                 .entry(community_id)
-                .or_insert_with(Vec::new);
+                .or_default();
             posts.push(serde_json::json!({
                 "id": post.id.to_string(),
                 "image_filename": post.image_filename,
@@ -2239,7 +2239,7 @@ pub async fn post_view_by_login_name(
             // Determine the correct slug for this post
             if let Some(ref comm) = community {
                 // Post has community - slug should be community slug
-                if &login_name != &comm.slug {
+                if login_name != comm.slug {
                     // Wrong slug - redirect to correct one
                     let correct_url = format!("/@{}/{}", comm.slug, post_id);
                     return Ok(Redirect::to(&correct_url).into_response());
@@ -2611,15 +2611,13 @@ pub async fn post_relay_view_by_login_name(
 
             // Verify correct slug and redirect if needed
             if let Some(ref comm) = community {
-                if &login_name != &comm.slug {
+                if login_name != comm.slug {
                     let correct_url = format!("/@{}/{}/relay", comm.slug, post_id);
                     return Ok(Redirect::to(&correct_url).into_response());
                 }
-            } else {
-                if &login_name != post_login_name {
-                    let correct_url = format!("/@{}/{}/relay", post_login_name, post_id);
-                    return Ok(Redirect::to(&correct_url).into_response());
-                }
+            } else if &login_name != post_login_name {
+                let correct_url = format!("/@{}/{}/relay", post_login_name, post_id);
+                return Ok(Redirect::to(&correct_url).into_response());
             }
 
             if let Some(ref comm) = community {
@@ -2742,15 +2740,13 @@ pub async fn post_replay_view_by_login_name(
 
             // Verify correct slug and redirect if needed
             if let Some(ref comm) = community {
-                if &login_name != &comm.slug {
+                if login_name != comm.slug {
                     let correct_url = format!("/@{}/{}/replay", comm.slug, post_id);
                     return Ok(Redirect::to(&correct_url).into_response());
                 }
-            } else {
-                if &login_name != post_login_name {
-                    let correct_url = format!("/@{}/{}/replay", post_login_name, post_id);
-                    return Ok(Redirect::to(&correct_url).into_response());
-                }
+            } else if &login_name != post_login_name {
+                let correct_url = format!("/@{}/{}/replay", post_login_name, post_id);
+                return Ok(Redirect::to(&correct_url).into_response());
             }
 
             if let Some(ref comm) = community {
@@ -3216,7 +3212,7 @@ pub async fn post_reactions_detail(
     if let Some(cid) = community_id {
         let community = find_community_by_id(&mut tx, cid).await?;
         if let Some(comm) = community {
-            if &login_name != &comm.slug {
+            if login_name != comm.slug {
                 let correct_url = format!("/@{}/{}/reactions", comm.slug, post_id);
                 return Ok(Redirect::to(&correct_url).into_response());
             }
