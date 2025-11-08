@@ -184,15 +184,15 @@ pub async fn build_comment_thread_tree(
             actor_id,
             parent_comment_id,
             content AS "content?",
-            content_html,
-            iri,
+            content_html AS "content_html?",
+            iri AS "iri?",
             updated_at,
             created_at,
             deleted_at,
-            actor_name,
-            actor_handle,
-            actor_url,
-            user_login_name
+            actor_name AS "actor_name?",
+            actor_handle AS "actor_handle?",
+            actor_url AS "actor_url?",
+            user_login_name AS "user_login_name?"
         FROM comment_tree
         ORDER BY created_at ASC
         "#,
@@ -223,10 +223,9 @@ pub async fn build_comment_thread_tree(
 
     for row in rows {
         let comment_id = row.id;
-        // user_login_name can be NULL from LEFT JOIN, but SQLx might infer it as String
-        // We need to handle it as Option<String>
+        // user_login_name can be NULL from LEFT JOIN
         let user_login_name = row.user_login_name;
-        let is_local = !user_login_name.is_empty();
+        let is_local = user_login_name.is_some();
 
         comment_data.insert(
             comment_id,
@@ -237,10 +236,10 @@ pub async fn build_comment_thread_tree(
                 row.content,
                 row.content_html,
                 row.iri,
-                row.actor_name,
-                row.actor_handle,
-                row.actor_url,
-                if user_login_name.is_empty() { None } else { Some(user_login_name) },
+                row.actor_name.unwrap_or_default(),
+                row.actor_handle.unwrap_or_default(),
+                row.actor_url.unwrap_or_default(),
+                user_login_name,
                 is_local,
                 row.updated_at,
                 row.created_at,
@@ -410,15 +409,15 @@ pub async fn build_comment_thread_tree_paginated(
             actor_id,
             parent_comment_id,
             content AS "content?",
-            content_html,
-            iri,
+            content_html AS "content_html?",
+            iri AS "iri?",
             created_at,
             updated_at,
             deleted_at,
-            actor_name,
-            actor_handle,
-            actor_url,
-            user_login_name
+            actor_name AS "actor_name?",
+            actor_handle AS "actor_handle?",
+            actor_url AS "actor_url?",
+            user_login_name AS "user_login_name?"
         FROM comment_tree
         ORDER BY created_at ASC
         "#,
@@ -439,17 +438,15 @@ pub async fn build_comment_thread_tree_paginated(
         let Some(actor_id) = row.actor_id else { continue };
         let Some(created_at) = row.created_at else { continue };
         let Some(updated_at) = row.updated_at else { continue };
-        let Some(actor_name) = row.actor_name else { continue };
-        let Some(actor_handle) = row.actor_handle else { continue };
-        let Some(actor_url) = row.actor_url else { continue };
 
-        let user_login_name = row.user_login_name.unwrap_or_default();
-        let is_local = !user_login_name.is_empty();
-        let actor_login_name = if user_login_name.is_empty() {
-            None
-        } else {
-            Some(user_login_name)
-        };
+        // Actor fields can be NULL from LEFT JOIN
+        let actor_name = row.actor_name.unwrap_or_default();
+        let actor_handle = row.actor_handle.unwrap_or_default();
+        let actor_url = row.actor_url.unwrap_or_default();
+
+        // user_login_name is already Option<String> from the query
+        let user_login_name = row.user_login_name;
+        let is_local = user_login_name.is_some();
 
         comment_data.insert(
             id,
@@ -464,7 +461,7 @@ pub async fn build_comment_thread_tree_paginated(
                 actor_name,
                 actor_handle,
                 actor_url,
-                actor_login_name,
+                actor_login_name: user_login_name,
                 is_local,
                 created_at,
                 updated_at,
