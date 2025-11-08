@@ -22,25 +22,28 @@ notifications = 通知
 
 no-notifications = 暂无通知
 notification-comment = 新评论
-notification-commented-on = 评论了
 notification-reaction = 新反应
-notification-reacted-with = 的反应
-notification-to-post = 对作品
 notification-follow = 新关注
-notification-followed-you = 关注了您
 notification-guestbook-entry = 新留言
-notification-wrote-guestbook = 写了留言
 notification-guestbook-reply = 留言回复
-notification-replied-guestbook = 回复了留言
 notification-mention = 提及
-notification-mentioned-in-comment = 在评论中提及了您
 notification-post-reply = 作品回复
-notification-replied-to-post = 回复了您的作品
 notification-comment-reply = 评论回复
-notification-replied-to-comment = 回复了您的评论
-notification-on-post = 作品
 notification-community-post = 新社区作品
-notification-posted-in-community = 在您的社区发布了作品
+
+# Notification action messages with FluentArgs for proper word order in different languages
+notification-action-commented-on = 评论了{ $postTitle }
+notification-action-reacted-to-post = 对{ $postTitle }用{ $emoji }做出了反应
+notification-action-followed-you = 关注了您
+notification-action-wrote-guestbook = 写了留言
+notification-action-replied-guestbook = 回复了留言
+notification-action-mentioned-in-comment = 在{ $postTitle }的评论中提及了您
+notification-action-replied-to-post = 回复了您的作品
+notification-action-replied-to-post-with-title = 回复了您的作品{ $postTitle }
+notification-action-replied-to-comment = 回复了{ $postTitle }的评论
+notification-action-posted-in-community = 在您的社区发布了作品
+notification-action-posted-in-community-with-title = 在您的社区发布了作品：{ $postTitle }
+
 notification-mark-all-read = 全部标记为已读
 notification-mark-read = 标记为已读
 notification-delete = 删除

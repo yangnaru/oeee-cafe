@@ -22,25 +22,28 @@ notifications = お知らせ
 
 no-notifications = まだ通知がありません。
 notification-comment = 新しいコメント
-notification-commented-on = さんがコメントを残しました
 notification-reaction = 新しいリアクション
-notification-reacted-with = さんがリアクションしました
-notification-to-post = 投稿に
 notification-follow = 新しい同盟
-notification-followed-you = さんが同盟を結びました
 notification-guestbook-entry = 新しいゲストブック
-notification-wrote-guestbook = さんがゲストブックを残しました
 notification-guestbook-reply = ゲストブックの返信
-notification-replied-guestbook = さんがゲストブックに返信を残しました
 notification-mention = メンション
-notification-mentioned-in-comment = さんがコメントであなたを言及しました
 notification-post-reply = 絵の返信
-notification-replied-to-post = さんが絵に返信を描きました
 notification-comment-reply = コメントの返信
-notification-replied-to-comment = さんがコメントに返信しました
-notification-on-post = 投稿
 notification-community-post = 新しいコミュニティ投稿
-notification-posted-in-community = さんがコミュニティに絵を描きました
+
+# Notification action messages with FluentArgs for proper word order in different languages
+notification-action-commented-on = { $postTitle }にコメントを残しました
+notification-action-reacted-to-post = { $postTitle }に{ $emoji }でリアクションしました
+notification-action-followed-you = さんが同盟を結びました
+notification-action-wrote-guestbook = さんがゲストブックを残しました
+notification-action-replied-guestbook = さんがゲストブックに返信を残しました
+notification-action-mentioned-in-comment = { $postTitle }のコメントであなたを言及しました
+notification-action-replied-to-post = さんが絵に返信を描きました
+notification-action-replied-to-post-with-title = { $postTitle }に返信を描きました
+notification-action-replied-to-comment = { $postTitle }のコメントに返信しました
+notification-action-posted-in-community = さんがコミュニティに絵を描きました
+notification-action-posted-in-community-with-title = さんがコミュニティに絵を描きました: { $postTitle }
+
 notification-mark-all-read = すべて既読にする
 notification-mark-read = 既読にする
 notification-delete = 削除

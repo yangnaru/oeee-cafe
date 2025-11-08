@@ -20,25 +20,28 @@ notifications = Notifications
 
 no-notifications = No notifications, yet.
 notification-comment = New comment
-notification-commented-on = commented on
 notification-reaction = New reaction
-notification-reacted-with = reacted with
-notification-to-post = to
 notification-follow = New follower
-notification-followed-you = started following you
 notification-guestbook-entry = New guestbook entry
-notification-wrote-guestbook = wrote on your guestbook
 notification-guestbook-reply = New guestbook reply
-notification-replied-guestbook = replied to your guestbook entry
 notification-mention = Mention
-notification-mentioned-in-comment = mentioned you in a comment on
 notification-post-reply = Post reply
-notification-replied-to-post = replied to your post
 notification-comment-reply = Comment reply
-notification-replied-to-comment = replied to your comment
-notification-on-post = on
 notification-community-post = New community post
-notification-posted-in-community = posted in your community
+
+# Notification action messages with FluentArgs for proper word order in different languages
+notification-action-commented-on = commented on { $postTitle }
+notification-action-reacted-to-post = reacted with { $emoji } to { $postTitle }
+notification-action-followed-you = started following you
+notification-action-wrote-guestbook = wrote on your guestbook
+notification-action-replied-guestbook = replied to your guestbook entry
+notification-action-mentioned-in-comment = mentioned you in a comment on { $postTitle }
+notification-action-replied-to-post = replied to your post
+notification-action-replied-to-post-with-title = replied to your post { $postTitle }
+notification-action-replied-to-comment = replied to your comment on { $postTitle }
+notification-action-posted-in-community = posted in your community
+notification-action-posted-in-community-with-title = posted in your community: { $postTitle }
+
 notification-mark-all-read = Mark all as read
 notification-mark-read = Mark as read
 notification-delete = Delete
