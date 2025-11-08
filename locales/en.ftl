@@ -359,3 +359,5 @@ privacy-content = We respect your privacy. By default, we do not collect any per
   Your Rights: You have the right to access, modify, or delete your account and associated data at any time through your account settings.
 
   If you have any questions about this privacy policy, please contact us.
+
+personal-post = Personal post
