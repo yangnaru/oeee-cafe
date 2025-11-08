@@ -666,7 +666,7 @@ pub async fn find_post_by_id(
     id: Uuid,
 ) -> Result<Option<HashMap<String, Option<String>>>> {
     let q = query!(
-        "
+        r#"
             SELECT
                 posts.id,
                 posts.title,
@@ -688,16 +688,16 @@ pub async fn find_post_by_id(
                 posts.parent_post_id,
                 users.display_name AS display_name,
                 users.login_name AS login_name,
-                communities.id AS community_id,
-                communities.name AS community_name,
-                communities.slug AS community_slug
+                communities.id AS "community_id?",
+                communities.name AS "community_name?",
+                communities.slug AS "community_slug?"
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
             LEFT JOIN users ON posts.author_id = users.id
             WHERE posts.id = $1
             AND posts.deleted_at IS NULL
-        ",
+        "#,
         id
     );
     let result = q.fetch_optional(&mut **tx).await?;
@@ -774,16 +774,10 @@ pub async fn find_post_by_id(
         );
         map.insert(
             "community_id".to_string(),
-            Some(row.community_id.to_string()),
+            row.community_id.map(|id| id.to_string()),
         );
-        map.insert(
-            "community_name".to_string(),
-            Some(row.community_name.to_string()),
-        );
-        map.insert(
-            "community_slug".to_string(),
-            Some(row.community_slug.to_string()),
-        );
+        map.insert("community_name".to_string(), row.community_name.clone());
+        map.insert("community_slug".to_string(), row.community_slug.clone());
         map.insert(
             "parent_post_id".to_string(),
             row.parent_post_id.map(|id| id.to_string()),
