@@ -1123,9 +1123,12 @@ pub async fn do_accept_invitation(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    // Get community info for validation
-    let _community = find_community_by_id(&mut tx, invitation.community_id).await?;
-    let _community = _community.ok_or_else(|| anyhow::anyhow!("Community not found"))?;
+    // Get community info for validation and push notification
+    let community = find_community_by_id(&mut tx, invitation.community_id).await?;
+    let community = community.ok_or_else(|| anyhow::anyhow!("Community not found"))?;
+
+    // Store inviter_id before consuming invitation
+    let inviter_id = invitation.inviter_id;
 
     // Accept the invitation
     accept_invitation(&mut tx, invitation_id).await?;
@@ -1136,10 +1139,57 @@ pub async fn do_accept_invitation(
         invitation.community_id,
         user.id,
         CommunityMemberRole::Member,
-        Some(invitation.inviter_id),
+        Some(inviter_id),
     ).await?;
 
     tx.commit().await?;
+
+    // Send push notification to inviter
+    let title = "Invitation Accepted".to_string();
+    let body = format!("{} accepted your invitation to join @{}", user.display_name, community.slug);
+
+    let mut data = serde_json::Map::new();
+    data.insert("community_id".to_string(), serde_json::json!(community.id.to_string()));
+    data.insert("community_slug".to_string(), serde_json::json!(community.slug));
+    data.insert("notification_type".to_string(), serde_json::json!("invitation_accepted"));
+
+    tracing::info!(
+        "Sending invitation accepted push notification to user {}: title={}, body={}",
+        inviter_id,
+        title,
+        body
+    );
+
+    // Get unread notification count for badge
+    let mut badge_tx = db.begin().await?;
+    let unread_count = crate::models::notification::get_unread_count(&mut badge_tx, inviter_id).await.ok();
+    let _ = badge_tx.commit().await;
+
+    // Send push notification (don't fail if this errors)
+    match state.push_service
+        .send_notification_to_user(
+            inviter_id,
+            &title,
+            &body,
+            unread_count.map(|c| c as u32), // badge count
+            Some(serde_json::Value::Object(data)),
+        )
+        .await
+    {
+        Ok(_) => {
+            tracing::info!(
+                "Successfully sent invitation accepted push notification to user {}",
+                inviter_id
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to send invitation accepted push notification to user {}: {:?}",
+                inviter_id,
+                e
+            );
+        }
+    }
 
     messages.success(
         bundle.format_pattern(
@@ -1183,10 +1233,64 @@ pub async fn do_reject_invitation(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
+    // Get community info for push notification
+    let community = find_community_by_id(&mut tx, invitation.community_id).await?;
+    let community = community.ok_or_else(|| anyhow::anyhow!("Community not found"))?;
+
+    // Store inviter_id before consuming invitation
+    let inviter_id = invitation.inviter_id;
+
     // Reject the invitation
     reject_invitation(&mut tx, invitation_id).await?;
 
     tx.commit().await?;
+
+    // Send push notification to inviter
+    let title = "Invitation Declined".to_string();
+    let body = format!("{} declined your invitation to join @{}", user.display_name, community.slug);
+
+    let mut data = serde_json::Map::new();
+    data.insert("community_id".to_string(), serde_json::json!(community.id.to_string()));
+    data.insert("community_slug".to_string(), serde_json::json!(community.slug));
+    data.insert("notification_type".to_string(), serde_json::json!("invitation_rejected"));
+
+    tracing::info!(
+        "Sending invitation rejected push notification to user {}: title={}, body={}",
+        inviter_id,
+        title,
+        body
+    );
+
+    // Get unread notification count for badge
+    let mut badge_tx = db.begin().await?;
+    let unread_count = crate::models::notification::get_unread_count(&mut badge_tx, inviter_id).await.ok();
+    let _ = badge_tx.commit().await;
+
+    // Send push notification (don't fail if this errors)
+    match state.push_service
+        .send_notification_to_user(
+            inviter_id,
+            &title,
+            &body,
+            unread_count.map(|c| c as u32), // badge count
+            Some(serde_json::Value::Object(data)),
+        )
+        .await
+    {
+        Ok(_) => {
+            tracing::info!(
+                "Successfully sent invitation rejected push notification to user {}",
+                inviter_id
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to send invitation rejected push notification to user {}: {:?}",
+                inviter_id,
+                e
+            );
+        }
+    }
 
     messages.success(
         bundle.format_pattern(
