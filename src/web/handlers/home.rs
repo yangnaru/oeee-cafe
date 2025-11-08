@@ -76,14 +76,16 @@ pub async fn home(
     use std::collections::HashMap;
     let mut posts_by_community: HashMap<uuid::Uuid, Vec<serde_json::Value>> = HashMap::new();
     for post in recent_posts {
-        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
-        posts.push(serde_json::json!({
-            "id": post.id.to_string(),
-            "image_filename": post.image_filename,
-            "image_width": post.image_width,
-            "image_height": post.image_height,
-            "author_login_name": post.author_login_name,
-        }));
+        if let Some(community_id) = post.community_id {
+            let posts = posts_by_community.entry(community_id).or_insert_with(Vec::new);
+            posts.push(serde_json::json!({
+                "id": post.id.to_string(),
+                "image_filename": post.image_filename,
+                "image_width": post.image_width,
+                "image_height": post.image_height,
+                "author_login_name": post.author_login_name,
+            }));
+        }
     }
 
     // Create stats lookup map
@@ -302,20 +304,22 @@ pub async fn get_active_communities_json(
     use std::collections::HashMap;
     let mut posts_by_community: HashMap<uuid::Uuid, Vec<CommunityPostThumbnail>> = HashMap::new();
     for post in recent_posts {
-        let posts = posts_by_community
-            .entry(post.community_id)
-            .or_insert_with(Vec::new);
-        let image_prefix = &post.image_filename[..2];
-        posts.push(CommunityPostThumbnail {
-            id: post.id,
-            image_url: format!(
-                "{}/image/{}/{}",
-                state.config.r2_public_endpoint_url, image_prefix, post.image_filename
-            ),
-            image_width: post.image_width,
-            image_height: post.image_height,
-            is_sensitive: post.is_sensitive,
-        });
+        if let Some(community_id) = post.community_id {
+            let posts = posts_by_community
+                .entry(community_id)
+                .or_insert_with(Vec::new);
+            let image_prefix = &post.image_filename[..2];
+            posts.push(CommunityPostThumbnail {
+                id: post.id,
+                image_url: format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+                ),
+                image_width: post.image_width,
+                image_height: post.image_height,
+                is_sensitive: post.is_sensitive,
+            });
+        }
     }
 
     // Create stats lookup map
@@ -521,10 +525,9 @@ pub async fn get_post_details_json(
         },
         is_sensitive: post_data.is_sensitive,
         published_at_utc: post_data.published_at_utc,
-        community: PostCommunityInfo {
-            id: post_data.community_id,
-            name: post_data.community_name,
-            slug: post_data.community_slug,
+        community: match (post_data.community_id, post_data.community_name, post_data.community_slug) {
+            (Some(id), Some(name), Some(slug)) => Some(PostCommunityInfo { id, name, slug }),
+            _ => None,
         },
         hashtags,
     };

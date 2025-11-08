@@ -1,0 +1,8 @@
+{# Macro to generate correct post permalink based on whether post has community #}
+{% macro post_url(post, post_id="") %}
+{%- if post.community_slug -%}
+/@{{ post.community_slug }}/{{ post_id or post.id }}
+{%- else -%}
+/@{{ post.login_name or post.user_login_name or post.author_login_name }}/{{ post_id or post.id }}
+{%- endif -%}
+{% endmacro %}

@@ -15,14 +15,16 @@
   <div class="center">
     <p>{{ ftl_get_message("post-published-at") }}: {{ post.published_at }}</p>
     <p>{{ ftl_get_message("post-duration") }}: {{ post.paint_duration }}</p>
-    <p>
-      {{ ftl_get_message("community") }}:
-      <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
-    </p>
+    {% if post.community_slug %}
+      <p>
+        {{ ftl_get_message("community") }}:
+        <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
+      </p>
+    {% endif %}
     <input type="hidden" id="viewer" />
     <p>
       {{ ftl_get_message("post-title") }}:
-      <a href="/@{{ post.login_name }}/{{ post_id }}">
+      <a href="/@{{ post.community_slug if post.community_slug else post.login_name }}/{{ post_id }}">
         {% if post.title %}
           {{ post.title }}
         {% else %}

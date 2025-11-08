@@ -74,11 +74,11 @@ pub async fn search_json(
         FROM posts
         LEFT JOIN users ON posts.author_id = users.id
         LEFT JOIN images ON posts.image_id = images.id
-        INNER JOIN communities ON posts.community_id = communities.id
+        LEFT JOIN communities ON posts.community_id = communities.id
         WHERE (posts.title ILIKE $1 OR posts.content ILIKE $1)
           AND posts.published_at IS NOT NULL
           AND posts.deleted_at IS NULL
-          AND communities.visibility = 'public'
+          AND (communities.visibility = 'public' OR posts.community_id IS NULL)
           AND (posts.is_sensitive = false OR $3 = true OR posts.author_id = $4)
         ORDER BY posts.published_at DESC
         LIMIT $2

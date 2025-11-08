@@ -378,28 +378,30 @@ pub async fn get_user_communities_with_latest_9_posts(
     let mut posts_by_community: HashMap<Uuid, Vec<SerializablePost>> = HashMap::new();
 
     for row in all_posts {
-        let post = SerializablePost {
-            id: row.id,
-            title: row.title,
-            author_id: row.author_id,
-            user_login_name: Some(row.login_name),
-            paint_duration: row.paint_duration.microseconds.to_string(),
-            stroke_count: row.stroke_count,
-            image_filename: row.image_filename,
-            image_width: row.width,
-            image_height: row.height,
-            replay_filename: row.replay_filename,
-            is_sensitive: row.is_sensitive,
-            viewer_count: row.viewer_count,
-            published_at: row.published_at,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-        };
+        if let Some(community_id) = row.community_id {
+            let post = SerializablePost {
+                id: row.id,
+                title: row.title,
+                author_id: row.author_id,
+                user_login_name: Some(row.login_name),
+                paint_duration: row.paint_duration.microseconds.to_string(),
+                stroke_count: row.stroke_count,
+                image_filename: row.image_filename,
+                image_width: row.width,
+                image_height: row.height,
+                replay_filename: row.replay_filename,
+                is_sensitive: row.is_sensitive,
+                viewer_count: row.viewer_count,
+                published_at: row.published_at,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            };
 
-        posts_by_community
-            .entry(row.community_id)
-            .or_insert_with(Vec::new)
-            .push(post);
+            posts_by_community
+                .entry(community_id)
+                .or_insert_with(Vec::new)
+                .push(post);
+        }
     }
 
     // Build result with posts attached to each community
@@ -509,6 +511,20 @@ pub async fn find_community_by_slug(
 ) -> Result<Option<Community>> {
     let q = query_as!(Community, r#"SELECT id, owner_id, name, slug, description, visibility as "visibility: _", updated_at, created_at, background_color, foreground_color FROM communities WHERE slug = $1 AND deleted_at IS NULL"#, slug);
     Ok(q.fetch_optional(&mut **tx).await?)
+}
+
+/// Check if a slug conflicts with any existing user login_name
+pub async fn slug_conflicts_with_user(
+    tx: &mut Transaction<'_, Postgres>,
+    slug: &str,
+) -> Result<bool> {
+    let result = query!(
+        "SELECT EXISTS(SELECT 1 FROM users WHERE login_name = $1) as \"exists!\"",
+        slug
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+    Ok(result.exists)
 }
 
 pub async fn create_community(
@@ -735,9 +751,11 @@ pub async fn get_communities_members_count(
 
     Ok(result
         .into_iter()
-        .map(|row| CommunityMembersCount {
-            community_id: row.community_id,
-            members_count: row.members_count,
+        .filter_map(|row| {
+            row.community_id.map(|community_id| CommunityMembersCount {
+                community_id,
+                members_count: row.members_count,
+            })
         })
         .collect())
 }

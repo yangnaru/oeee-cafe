@@ -10,7 +10,7 @@ use crate::models::community::{
     get_pending_invitations_with_invitee_details_for_community, get_public_communities,
     get_public_communities_paginated, get_user_role_in_community, is_user_member,
     reject_invitation, remove_community_member, search_public_communities,
-    soft_delete_community, update_community_with_activity, CommunityDraft,
+    slug_conflicts_with_user, soft_delete_community, update_community_with_activity, CommunityDraft,
     CommunityMemberRole, CommunityVisibility,
 };
 use crate::models::post::{find_published_posts_by_community_id, find_recent_posts_by_communities};
@@ -323,14 +323,16 @@ pub async fn communities(
     use std::collections::HashMap as StdHashMap;
     let mut posts_by_community: StdHashMap<Uuid, Vec<serde_json::Value>> = StdHashMap::new();
     for post in recent_posts {
-        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
-        posts.push(serde_json::json!({
-            "id": post.id.to_string(),
-            "image_filename": post.image_filename,
-            "image_width": post.image_width,
-            "image_height": post.image_height,
-            "author_login_name": post.author_login_name,
-        }));
+        if let Some(community_id) = post.community_id {
+            let posts = posts_by_community.entry(community_id).or_insert_with(Vec::new);
+            posts.push(serde_json::json!({
+                "id": post.id.to_string(),
+                "image_filename": post.image_filename,
+                "image_width": post.image_width,
+                "image_height": post.image_height,
+                "author_login_name": post.author_login_name,
+            }));
+        }
     }
 
     // Create stats lookup maps
@@ -341,7 +343,9 @@ pub async fn communities(
 
     let mut posts_count_by_community: StdHashMap<Uuid, Option<i64>> = StdHashMap::new();
     for stat in community_stats {
-        posts_count_by_community.insert(stat.community_id, stat.posts_count);
+        if let Some(community_id) = stat.community_id {
+            posts_count_by_community.insert(community_id, stat.posts_count);
+        }
     }
 
     // Create owner login lookup map
@@ -480,6 +484,27 @@ pub async fn do_create_community(
         "private" => CommunityVisibility::Private,
         _ => CommunityVisibility::Public, // Default to public
     };
+
+    // Check if slug conflicts with any user login_name
+    if slug_conflicts_with_user(&mut tx, &form.slug).await? {
+        let user_preferred_language = auth_session
+            .user
+            .clone()
+            .map(|u| u.preferred_language)
+            .unwrap_or_else(|| None);
+        let bundle = get_bundle(&accept_language, user_preferred_language);
+        let error_message = bundle.format_pattern(
+            bundle
+                .get_message("community-slug-conflict-error")
+                .unwrap()
+                .value()
+                .unwrap(),
+            None,
+            &mut vec![],
+        );
+        messages.error(error_message.to_string());
+        return Ok(Redirect::to("/communities/new").into_response());
+    }
 
     let community = create_community(
         &mut tx,
@@ -1626,18 +1651,20 @@ pub async fn get_communities_list_json(
     use std::collections::HashMap as StdHashMap;
     let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
     for post in recent_posts {
-        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
-        let image_prefix = &post.image_filename[..2];
-        posts.push(CommunityPostThumbnail {
-            id: post.id,
-            image_url: format!(
-                "{}/image/{}/{}",
-                state.config.r2_public_endpoint_url, image_prefix, post.image_filename
-            ),
-            image_width: post.image_width,
-            image_height: post.image_height,
-            is_sensitive: post.is_sensitive,
-        });
+        if let Some(community_id) = post.community_id {
+            let posts = posts_by_community.entry(community_id).or_insert_with(Vec::new);
+            let image_prefix = &post.image_filename[..2];
+            posts.push(CommunityPostThumbnail {
+                id: post.id,
+                image_url: format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+                ),
+                image_width: post.image_width,
+                image_height: post.image_height,
+                is_sensitive: post.is_sensitive,
+            });
+        }
     }
 
     // Create stats lookup map
@@ -1727,18 +1754,20 @@ pub async fn get_public_communities_json(
     use std::collections::HashMap as StdHashMap;
     let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
     for post in recent_posts {
-        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
-        let image_prefix = &post.image_filename[..2];
-        posts.push(CommunityPostThumbnail {
-            id: post.id,
-            image_url: format!(
-                "{}/image/{}/{}",
-                state.config.r2_public_endpoint_url, image_prefix, post.image_filename
-            ),
-            image_width: post.image_width,
-            image_height: post.image_height,
-            is_sensitive: post.is_sensitive,
-        });
+        if let Some(community_id) = post.community_id {
+            let posts = posts_by_community.entry(community_id).or_insert_with(Vec::new);
+            let image_prefix = &post.image_filename[..2];
+            posts.push(CommunityPostThumbnail {
+                id: post.id,
+                image_url: format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+                ),
+                image_width: post.image_width,
+                image_height: post.image_height,
+                is_sensitive: post.is_sensitive,
+            });
+        }
     }
 
     // Create stats lookup map
@@ -1856,18 +1885,20 @@ pub async fn search_public_communities_json(
     use std::collections::HashMap as StdHashMap;
     let mut posts_by_community: StdHashMap<Uuid, Vec<CommunityPostThumbnail>> = StdHashMap::new();
     for post in recent_posts {
-        let posts = posts_by_community.entry(post.community_id).or_insert_with(Vec::new);
-        let image_prefix = &post.image_filename[..2];
-        posts.push(CommunityPostThumbnail {
-            id: post.id,
-            image_url: format!(
-                "{}/image/{}/{}",
-                state.config.r2_public_endpoint_url, image_prefix, post.image_filename
-            ),
-            image_width: post.image_width,
-            image_height: post.image_height,
-            is_sensitive: post.is_sensitive,
-        });
+        if let Some(community_id) = post.community_id {
+            let posts = posts_by_community.entry(community_id).or_insert_with(Vec::new);
+            let image_prefix = &post.image_filename[..2];
+            posts.push(CommunityPostThumbnail {
+                id: post.id,
+                image_url: format!(
+                    "{}/image/{}/{}",
+                    state.config.r2_public_endpoint_url, image_prefix, post.image_filename
+                ),
+                image_width: post.image_width,
+                image_height: post.image_height,
+                is_sensitive: post.is_sensitive,
+            });
+        }
     }
 
     // Create stats lookup map

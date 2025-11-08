@@ -73,10 +73,12 @@ pub async fn start_draw(
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let community_id = Uuid::parse_str(
-        input.community_id.as_deref().unwrap_or(&state.config.default_community_id)
-    ).unwrap();
-    let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
+    let community_id = input.community_id.as_deref().and_then(|id| Uuid::parse_str(id).ok());
+    let community = if let Some(cid) = community_id {
+        find_community_by_id(&mut tx, cid).await?
+    } else {
+        None
+    };
 
     // Query parent post if parent_post_id is provided
     let parent_post = if let Some(ref parent_post_id) = input.parent_post_id {
@@ -93,15 +95,14 @@ pub async fn start_draw(
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
-        community_name => community.name,
+        community_name => community.as_ref().map(|c| c.name.clone()),
         tool => input.tool,
         width => input.width.parse::<u32>()?,
         height => input.height.parse::<u32>()?,
-        background_color => community.background_color,
-        foreground_color => community.foreground_color,
+        background_color => community.as_ref().and_then(|c| c.background_color.clone()),
+        foreground_color => community.as_ref().and_then(|c| c.foreground_color.clone()),
         community_id => input.community_id,
-        community_slug => community.slug,
+        community_slug => community.as_ref().map(|c| c.slug.clone()),
         parent_post => parent_post,
         parent_post_id => input.parent_post_id,
         draft_post_count => common_ctx.draft_post_count,
@@ -121,10 +122,12 @@ pub async fn start_draw_mobile(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let community_id = Uuid::parse_str(
-        input.community_id.as_deref().unwrap_or(&state.config.default_community_id)
-    ).unwrap();
-    let community = find_community_by_id(&mut tx, community_id).await?.unwrap();
+    let community_id = input.community_id.as_deref().and_then(|id| Uuid::parse_str(id).ok());
+    let community = if let Some(cid) = community_id {
+        find_community_by_id(&mut tx, cid).await?
+    } else {
+        None
+    };
 
     // Query parent post if parent_post_id is provided
     let parent_post = if let Some(ref parent_post_id) = input.parent_post_id {
@@ -148,15 +151,14 @@ pub async fn start_draw_mobile(
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
-        default_community_id => state.config.default_community_id.clone(),
-        community_name => community.name,
+        community_name => community.as_ref().map(|c| c.name.clone()),
         tool => tool,
         width => input.width.parse::<u32>()?,
         height => input.height.parse::<u32>()?,
-        background_color => community.background_color,
-        foreground_color => community.foreground_color,
-        community_id => community_id.to_string(),
-        community_slug => community.slug,
+        background_color => community.as_ref().and_then(|c| c.background_color.clone()),
+        foreground_color => community.as_ref().and_then(|c| c.foreground_color.clone()),
+        community_id => community_id.map(|id| id.to_string()),
+        community_slug => community.as_ref().map(|c| c.slug.clone()),
         parent_post => parent_post,
         parent_post_id => input.parent_post_id,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
@@ -186,7 +188,7 @@ pub async fn upload_object(
 
 #[derive(Serialize)]
 pub struct DrawFinishResponse {
-    pub community_id: String,
+    pub community_id: Option<String>,
     pub post_id: String,
     pub image_url: String,
 }
@@ -217,7 +219,7 @@ pub async fn draw_finish(
     let mut image_sha256 = String::new();
     let mut replay_sha256 = String::new();
     let mut replay_data = Vec::new();
-    let mut community_id = Uuid::nil();
+    let mut community_id = None;
     let mut security_timer = 0;
     let mut security_count = 0;
     let mut tool = String::new();
@@ -252,7 +254,7 @@ pub async fn draw_finish(
             replay_sha256 = digest(&*data);
             replay_data = data.to_vec();
         } else if name == "community_id" {
-            community_id = Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap()).unwrap();
+            community_id = Some(Uuid::parse_str(std::str::from_utf8(data.as_ref()).unwrap()).unwrap());
         } else if name == "security_timer" {
             security_timer = std::str::from_utf8(data.as_ref())
                 .unwrap()
@@ -364,7 +366,7 @@ pub async fn draw_finish(
     );
 
     Ok(Json(DrawFinishResponse {
-        community_id: community_id.to_string(),
+        community_id: community_id.map(|id| id.to_string()),
         post_id: post.id.to_string(),
         image_url,
     })

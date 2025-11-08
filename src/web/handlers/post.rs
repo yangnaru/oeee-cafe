@@ -367,14 +367,16 @@ pub async fn post_view(
     match post {
         Some(ref post_data) => {
             // Check if post is in a private community and if user has access
-            let community_id = Uuid::parse_str(
-                post_data
-                    .get("community_id")
-                    .and_then(|v| v.as_ref())
-                    .ok_or_else(|| anyhow::anyhow!("community_id not found"))?,
-            )?;
+            let community_id = post_data
+                .get("community_id")
+                .and_then(|v| v.as_ref())
+                .and_then(|s| Uuid::parse_str(s).ok());
 
-            let community = find_community_by_id(&mut tx, community_id).await?;
+            let community = if let Some(cid) = community_id {
+                find_community_by_id(&mut tx, cid).await?
+            } else {
+                None
+            };
             if let Some(community) = community {
                 // If community is private, check if user is a member
                 if community.visibility == crate::models::community::CommunityVisibility::Private {
@@ -865,16 +867,25 @@ pub async fn post_publish(
 
     let is_sensitive = form.is_sensitive == Some("on".to_string());
     let allow_relay = form.allow_relay == Some("on".to_string());
-    let community_id = Uuid::parse_str(
-        &post
-            .clone()
-            .unwrap()
-            .get("community_id")
-            .unwrap()
-            .clone()
-            .unwrap(),
-    )?;
-    let community_url = get_community_slug_url(&mut tx, community_id).await?;
+
+    // Parse community_id if present, otherwise None for personal posts
+    let community_id = post
+        .clone()
+        .unwrap()
+        .get("community_id")
+        .and_then(|v| v.as_ref())
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    // Determine redirect URL based on whether post has community
+    let redirect_url = if let Some(cid) = community_id {
+        get_community_slug_url(&mut tx, cid).await?
+    } else {
+        // Personal post - redirect to user's profile
+        let user = crate::models::user::find_user_by_id(&mut tx, user_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("User not found"))?;
+        format!("/@{}", user.login_name)
+    };
 
     let _ = publish_post(
         &mut tx,
@@ -918,21 +929,27 @@ pub async fn post_publish(
                 // Don't notify if replying to own post
                 if parent_author_id != user_id {
                     // For private communities, only notify if parent author is still a member
-                    let community = find_community_by_id(&mut tx, community_id).await?;
-                    let should_notify = if let Some(community) = community {
-                        if community.visibility
-                            == crate::models::community::CommunityVisibility::Private
-                        {
-                            // Check if parent author is still a member
-                            is_user_member(&mut tx, parent_author_id, community.id)
-                                .await
-                                .unwrap_or(false)
+                    // For personal posts (no community), always notify
+                    let should_notify = if let Some(cid) = community_id {
+                        let community = find_community_by_id(&mut tx, cid).await?;
+                        if let Some(community) = community {
+                            if community.visibility
+                                == crate::models::community::CommunityVisibility::Private
+                            {
+                                // Check if parent author is still a member
+                                is_user_member(&mut tx, parent_author_id, community.id)
+                                    .await
+                                    .unwrap_or(false)
+                            } else {
+                                // Public or unlisted community - always notify
+                                true
+                            }
                         } else {
-                            // Public or unlisted community - always notify
+                            // No community info - notify anyway
                             true
                         }
                     } else {
-                        // No community info - notify anyway
+                        // Personal post - always notify
                         true
                     };
 
@@ -960,52 +977,53 @@ pub async fn post_publish(
     }
 
     // Notify community participants for new posts in unlisted or private communities
-    // Only notify for top-level posts (not replies)
+    // Only notify for top-level posts (not replies) and only if post has a community
     let is_reply = post
         .clone()
         .and_then(|p| p.get("parent_post_id").cloned())
         .and_then(|id| id)
         .is_some();
 
-    if !is_reply {
-        if let Some(ref actor) = actor {
-            let community = find_community_by_id(&mut tx, community_id).await?;
+    if let Some(cid) = community_id {
+        if !is_reply {
+            if let Some(ref actor) = actor {
+                let community = find_community_by_id(&mut tx, cid).await?;
 
-            if let Some(ref community) = community {
-                // Only notify for unlisted or private communities
-                let should_notify_community = matches!(
-                    community.visibility,
-                    crate::models::community::CommunityVisibility::Unlisted
-                        | crate::models::community::CommunityVisibility::Private
-                );
+                if let Some(ref community) = community {
+                    // Only notify for unlisted or private communities
+                    let should_notify_community = matches!(
+                        community.visibility,
+                        crate::models::community::CommunityVisibility::Unlisted
+                            | crate::models::community::CommunityVisibility::Private
+                    );
 
-                if should_notify_community {
-                    // Get community participants based on visibility
-                    let participant_ids: Vec<Uuid> = if community.visibility
-                        == crate::models::community::CommunityVisibility::Private
-                    {
-                        // For private communities, get all members
-                        use crate::models::community::get_community_members;
-                        let members = get_community_members(&mut tx, community_id).await?;
-                        members.into_iter().map(|m| m.user_id).collect()
-                    } else {
-                        // For unlisted communities, get all users who have posted
-                        let participants = sqlx::query!(
-                            r#"
-                            SELECT DISTINCT author_id
-                            FROM posts
-                            WHERE community_id = $1
-                                AND published_at IS NOT NULL
-                                AND deleted_at IS NULL
-                                AND author_id != $2
-                            "#,
-                            community_id,
-                            user_id
-                        )
-                        .fetch_all(&mut *tx)
-                        .await?;
-                        participants.into_iter().map(|p| p.author_id).collect()
-                    };
+                    if should_notify_community {
+                        // Get community participants based on visibility
+                        let participant_ids: Vec<Uuid> = if community.visibility
+                            == crate::models::community::CommunityVisibility::Private
+                        {
+                            // For private communities, get all members
+                            use crate::models::community::get_community_members;
+                            let members = get_community_members(&mut tx, cid).await?;
+                            members.into_iter().map(|m| m.user_id).collect()
+                        } else {
+                            // For unlisted communities, get all users who have posted
+                            let participants = sqlx::query!(
+                                r#"
+                                SELECT DISTINCT author_id
+                                FROM posts
+                                WHERE community_id = $1
+                                    AND published_at IS NOT NULL
+                                    AND deleted_at IS NULL
+                                    AND author_id != $2
+                                "#,
+                                cid,
+                                user_id
+                            )
+                            .fetch_all(&mut *tx)
+                            .await?;
+                            participants.into_iter().map(|p| p.author_id).collect()
+                        };
 
                     // Create notifications for each participant (excluding the post author)
                     for participant_id in participant_ids {
@@ -1027,18 +1045,27 @@ pub async fn post_publish(
                                 notification_info.push((notification.id, participant_id));
                             }
                         }
+                        }
                     }
                 }
             }
         }
     }
 
-    // Get community to check visibility before federating
-    let community = find_community_by_id(&mut tx, community_id).await?;
-    let should_federate = community
-        .as_ref()
-        .map(|c| c.visibility != crate::models::community::CommunityVisibility::Private)
-        .unwrap_or(false);
+    // Determine if we should federate based on post type
+    // For personal posts (no community), always federate to user's followers
+    // For community posts, only federate if not private
+    let (should_federate, community) = if let Some(cid) = community_id {
+        let community = find_community_by_id(&mut tx, cid).await?;
+        let should_federate = community
+            .as_ref()
+            .map(|c| c.visibility != crate::models::community::CommunityVisibility::Private)
+            .unwrap_or(false);
+        (should_federate, community)
+    } else {
+        // Personal post - always federate to user's followers
+        (true, None)
+    };
 
     let _ = tx.commit().await;
 
@@ -1077,7 +1104,8 @@ pub async fn post_publish(
     }
 
     // Send ActivityPub Create activity to followers if actor exists
-    // For public and unlisted communities (not private)
+    // For personal posts: send to user's followers only
+    // For community posts: send to both user's and community's followers (if not private)
     if let Some(actor) = actor {
         if should_federate {
             // Send to user's followers first and get the Note object
@@ -1091,15 +1119,19 @@ pub async fn post_publish(
             .await
             {
                 Ok(note) => {
-                    // Send to community's followers using the Note from the first call
-                    if let Err(e) =
-                        send_post_to_community_followers(&actor, community_id, &note, &state).await
-                    {
-                        tracing::error!(
-                            "Failed to send post to community's ActivityPub followers: {:?}",
-                            e
-                        );
-                        // Don't fail the entire operation if ActivityPub sending fails
+                    // For community posts, also send to community's followers
+                    if let Some(cid) = community_id {
+                        if let Err(e) =
+                            send_post_to_community_followers(&actor, cid, &note, &state).await
+                        {
+                            tracing::error!(
+                                "Failed to send post to community's ActivityPub followers: {:?}",
+                                e
+                            );
+                            // Don't fail the entire operation if ActivityPub sending fails
+                        }
+                    } else {
+                        tracing::info!("Personal post - sent to user's followers only");
                     }
                 }
                 Err(e) => {
@@ -1120,7 +1152,7 @@ pub async fn post_publish(
         tracing::warn!("No actor found for user {}, skipping ActivityPub", user_id);
     }
 
-    Ok(Redirect::to(&community_url).into_response())
+    Ok(Redirect::to(&redirect_url).into_response())
 }
 
 pub async fn draft_posts(
@@ -1159,7 +1191,7 @@ pub struct DraftPostJson {
     pub title: Option<String>,
     pub image_url: String,
     pub created_at: String,
-    pub community_id: Uuid,
+    pub community_id: Option<Uuid>,
     pub width: i32,
     pub height: i32,
 }
@@ -1639,16 +1671,18 @@ pub async fn post_edit_community(
     use std::collections::HashMap;
     let mut posts_by_community: HashMap<Uuid, Vec<serde_json::Value>> = HashMap::new();
     for post in recent_posts {
-        let posts = posts_by_community
-            .entry(post.community_id)
-            .or_insert_with(Vec::new);
-        posts.push(serde_json::json!({
-            "id": post.id.to_string(),
-            "image_filename": post.image_filename,
-            "image_width": post.image_width,
-            "image_height": post.image_height,
-            "author_login_name": post.author_login_name,
-        }));
+        if let Some(community_id) = post.community_id {
+            let posts = posts_by_community
+                .entry(community_id)
+                .or_insert_with(Vec::new);
+            posts.push(serde_json::json!({
+                "id": post.id.to_string(),
+                "image_filename": post.image_filename,
+                "image_width": post.image_width,
+                "image_height": post.image_height,
+                "author_login_name": post.author_login_name,
+            }));
+        }
     }
 
     let mut known_list: Vec<_> = known_communities
@@ -2102,19 +2136,35 @@ pub async fn post_view_by_login_name(
     match post {
         Some(ref post_data) => {
             let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
-            if post_login_name != &login_name {
-                return Ok(StatusCode::NOT_FOUND.into_response());
-            }
 
             // Check if post is in a private community and if user has access
-            let community_id = Uuid::parse_str(
-                post_data
-                    .get("community_id")
-                    .and_then(|v| v.as_ref())
-                    .ok_or_else(|| anyhow::anyhow!("community_id not found"))?,
-            )?;
+            let community_id = post_data
+                .get("community_id")
+                .and_then(|v| v.as_ref())
+                .and_then(|s| Uuid::parse_str(s).ok());
 
-            let community = find_community_by_id(&mut tx, community_id).await?;
+            let community = if let Some(cid) = community_id {
+                find_community_by_id(&mut tx, cid).await?
+            } else {
+                None
+            };
+
+            // Determine the correct slug for this post
+            if let Some(ref comm) = community {
+                // Post has community - slug should be community slug
+                if &login_name != &comm.slug {
+                    // Wrong slug - redirect to correct one
+                    let correct_url = format!("/@{}/{}", comm.slug, post_id);
+                    return Ok(Redirect::to(&correct_url).into_response());
+                }
+            } else {
+                // Post has no community - slug should be author login_name
+                if &login_name != post_login_name {
+                    // Wrong slug - redirect to correct one
+                    let correct_url = format!("/@{}/{}", post_login_name, post_id);
+                    return Ok(Redirect::to(&correct_url).into_response());
+                }
+            }
             if let Some(community) = community {
                 // If community is private, check if user is a member
                 if community.visibility == crate::models::community::CommunityVisibility::Private {
@@ -2460,19 +2510,32 @@ pub async fn post_relay_view_by_login_name(
     match post {
         Some(ref post_data) => {
             let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
-            if post_login_name != &login_name {
-                return Ok(StatusCode::NOT_FOUND.into_response());
-            }
 
             // Check if post is in a private community and if user has access
-            let community_id = Uuid::parse_str(
-                post_data
-                    .get("community_id")
-                    .and_then(|v| v.as_ref())
-                    .ok_or_else(|| anyhow::anyhow!("community_id not found"))?,
-            )?;
+            let community_id = post_data
+                .get("community_id")
+                .and_then(|v| v.as_ref())
+                .and_then(|s| Uuid::parse_str(s).ok());
 
-            let community = find_community_by_id(&mut tx, community_id).await?;
+            let community = if let Some(cid) = community_id {
+                find_community_by_id(&mut tx, cid).await?
+            } else {
+                None
+            };
+
+            // Verify correct slug and redirect if needed
+            if let Some(ref comm) = community {
+                if &login_name != &comm.slug {
+                    let correct_url = format!("/@{}/{}/relay", comm.slug, post_id);
+                    return Ok(Redirect::to(&correct_url).into_response());
+                }
+            } else {
+                if &login_name != post_login_name {
+                    let correct_url = format!("/@{}/{}/relay", post_login_name, post_id);
+                    return Ok(Redirect::to(&correct_url).into_response());
+                }
+            }
+
             if let Some(ref comm) = community {
                 // If community is private, check if user is a member
                 if comm.visibility == crate::models::community::CommunityVisibility::Private {
@@ -2558,19 +2621,32 @@ pub async fn post_replay_view_by_login_name(
     match post {
         Some(ref post_data) => {
             let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
-            if post_login_name != &login_name {
-                return Ok(StatusCode::NOT_FOUND.into_response());
-            }
 
             // Check if post is in a private community and if user has access
-            let community_id = Uuid::parse_str(
-                post_data
-                    .get("community_id")
-                    .and_then(|v| v.as_ref())
-                    .ok_or_else(|| anyhow::anyhow!("community_id not found"))?,
-            )?;
+            let community_id = post_data
+                .get("community_id")
+                .and_then(|v| v.as_ref())
+                .and_then(|s| Uuid::parse_str(s).ok());
 
-            let community = find_community_by_id(&mut tx, community_id).await?;
+            let community = if let Some(cid) = community_id {
+                find_community_by_id(&mut tx, cid).await?
+            } else {
+                None
+            };
+
+            // Verify correct slug and redirect if needed
+            if let Some(ref comm) = community {
+                if &login_name != &comm.slug {
+                    let correct_url = format!("/@{}/{}/replay", comm.slug, post_id);
+                    return Ok(Redirect::to(&correct_url).into_response());
+                }
+            } else {
+                if &login_name != post_login_name {
+                    let correct_url = format!("/@{}/{}/replay", post_login_name, post_id);
+                    return Ok(Redirect::to(&correct_url).into_response());
+                }
+            }
+
             if let Some(ref comm) = community {
                 // If community is private, check if user is a member
                 if comm.visibility == crate::models::community::CommunityVisibility::Private {
@@ -3020,8 +3096,27 @@ pub async fn post_reactions_detail(
 
     let post_data = post.unwrap();
     let post_login_name = post_data.get("login_name").unwrap().as_ref().unwrap();
-    if post_login_name != &login_name {
-        return Ok(StatusCode::NOT_FOUND.into_response());
+
+    // Check if post has community and verify correct slug
+    let community_id = post_data
+        .get("community_id")
+        .and_then(|v| v.as_ref())
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    if let Some(cid) = community_id {
+        let community = find_community_by_id(&mut tx, cid).await?;
+        if let Some(comm) = community {
+            if &login_name != &comm.slug {
+                let correct_url = format!("/@{}/{}/reactions", comm.slug, post_id);
+                return Ok(Redirect::to(&correct_url).into_response());
+            }
+        }
+    } else {
+        // No community - verify slug is author login_name
+        if &login_name != post_login_name {
+            let correct_url = format!("/@{}/{}/reactions", post_login_name, post_id);
+            return Ok(Redirect::to(&correct_url).into_response());
+        }
     }
 
     // Get all reactions for this post

@@ -93,8 +93,8 @@ pub struct SerializableDraftPost {
     pub id: Uuid,
     pub title: Option<String>,
     pub content: Option<String>,
-    pub community_id: Uuid,
-    pub community_name: String,
+    pub community_id: Option<Uuid>,
+    pub community_name: Option<String>,
     pub image_filename: String,
     pub image_width: i32,
     pub image_height: i32,
@@ -118,9 +118,9 @@ pub struct PostDetailForJson {
     pub image_tool: String,
     pub is_sensitive: bool,
     pub published_at_utc: Option<String>,
-    pub community_id: Uuid,
-    pub community_name: String,
-    pub community_slug: String,
+    pub community_id: Option<Uuid>,
+    pub community_name: Option<String>,
+    pub community_slug: Option<String>,
     pub parent_post_id: Option<Uuid>,
 }
 
@@ -179,7 +179,7 @@ pub enum Tool {
 
 pub struct PostDraft {
     pub author_id: Uuid,
-    pub community_id: Uuid,
+    pub community_id: Option<Uuid>,
     pub paint_duration: PgInterval,
     pub stroke_count: i32,
     pub width: i32,
@@ -385,7 +385,7 @@ pub async fn find_draft_posts_by_author_id(
                 images.image_filename,
                 images.width,
                 images.height,
-                communities.name as community_name
+                communities.name as \"community_name?\"
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
@@ -483,7 +483,7 @@ pub async fn find_published_posts_by_community_id(
 /// Struct for recent post thumbnails in community cards
 pub struct CommunityRecentPost {
     pub id: Uuid,
-    pub community_id: Uuid,
+    pub community_id: Option<Uuid>,
     pub image_filename: String,
     pub image_width: i32,
     pub image_height: i32,
@@ -816,8 +816,8 @@ pub async fn find_post_detail_for_json(
                 posts.published_at,
                 users.display_name AS display_name,
                 users.login_name AS login_name,
-                communities.name AS community_name,
-                communities.slug AS community_slug
+                communities.name AS \"community_name?\",
+                communities.slug AS \"community_slug?\"
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN users ON posts.author_id = users.id

@@ -75,9 +75,26 @@ pub async fn do_signup(
         return Ok(Redirect::to("/signup").into_response());
     }
 
-    let user_draft = UserDraft::new(form.login_name, form.password, form.display_name)?;
+    let user_draft = UserDraft::new(form.login_name.clone(), form.password, form.display_name)?;
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
+
+    // Check if login_name conflicts with any community slug
+    if crate::models::user::login_name_conflicts_with_community(&mut tx, &form.login_name).await? {
+        messages.error(
+            bundle.format_pattern(
+                bundle
+                    .get_message("login-name-conflict-error")
+                    .unwrap()
+                    .value()
+                    .unwrap(),
+                None,
+                &mut vec![],
+            ),
+        );
+        return Ok(Redirect::to("/signup").into_response());
+    }
+
     let user = create_user(&mut tx, user_draft, &state.config).await?;
     tx.commit().await?;
 
@@ -373,6 +390,7 @@ pub async fn api_signup(
     Json(req): Json<SignupRequest>,
 ) -> impl IntoResponse {
     // Create user draft
+    let login_name = req.login_name.clone();
     let user_draft = match UserDraft::new(req.login_name, req.password, req.display_name) {
         Ok(draft) => draft,
         Err(e) => {
@@ -404,6 +422,33 @@ pub async fn api_signup(
                 .into_response();
         }
     };
+
+    // Check if login_name conflicts with any community slug
+    match crate::models::user::login_name_conflicts_with_community(&mut tx, &login_name).await {
+        Ok(true) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(SignupResponse {
+                    success: false,
+                    user: None,
+                    error: Some("Login name conflicts with an existing community".to_string()),
+                }),
+            )
+                .into_response();
+        }
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(SignupResponse {
+                    success: false,
+                    user: None,
+                    error: Some("Database error".to_string()),
+                }),
+            )
+                .into_response();
+        }
+        Ok(false) => {}
+    }
 
     let user = match create_user(&mut tx, user_draft, &state.config).await {
         Ok(user) => user,

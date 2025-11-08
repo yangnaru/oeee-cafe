@@ -347,6 +347,20 @@ pub async fn update_user_with_activity(
     Ok(updated_user)
 }
 
+/// Check if a login_name conflicts with any existing community slug
+pub async fn login_name_conflicts_with_community(
+    tx: &mut Transaction<'_, Postgres>,
+    login_name: &str,
+) -> Result<bool> {
+    let result = query!(
+        "SELECT EXISTS(SELECT 1 FROM communities WHERE slug = $1 AND deleted_at IS NULL) as \"exists!\"",
+        login_name
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+    Ok(result.exists)
+}
+
 pub async fn create_user(
     tx: &mut Transaction<'_, Postgres>,
     user_draft: UserDraft,

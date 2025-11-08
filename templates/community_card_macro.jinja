@@ -29,7 +29,7 @@
         {% if community.recent_posts %}
           <div class="community-thumbnails">
             {% for post in community.recent_posts %}
-              <a href="/@{{ post.author_login_name }}/{{ post.id }}" class="community-thumbnail-link">
+              <a href="/@{{ community.slug }}/{{ post.id }}" class="community-thumbnail-link">
                 <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
                      alt=""
                      class="community-thumbnail"

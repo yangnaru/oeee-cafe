@@ -31,12 +31,12 @@
     <div class="post-sidebar">
       <div class="post-move-header">
         <h2>{{ ftl_get_message("post-move-community-title") }}</h2>
-        <a href="/@{{ post.login_name }}/{{ post_id }}" class="btn">{{ ftl_get_message("cancel") }}</a>
+        <a href="/@{{ current_community.slug if current_community else post.login_name }}/{{ post_id }}" class="btn">{{ ftl_get_message("cancel") }}</a>
       </div>
 
       <div class="post-move-preview">
         <h3 class="section-heading">{{ ftl_get_message("post-move-post-to-move") }}</h3>
-        <a href="/@{{ post.login_name }}/{{ post_id }}" class="post-move-preview-link">
+        <a href="/@{{ current_community.slug if current_community else post.login_name }}/{{ post_id }}" class="post-move-preview-link">
           <div class="post-move-preview-content">
             <img class="post-move-preview-image"
                  width="{{ post.image_width }}"
@@ -77,7 +77,7 @@
                 {% if current_community.recent_posts %}
                   <div class="community-thumbnails">
                     {% for post in current_community.recent_posts %}
-                      <a href="/@{{ post.author_login_name }}/{{ post.id }}" class="community-thumbnail-link">
+                      <a href="/@{{ current_community.slug }}/{{ post.id }}" class="community-thumbnail-link">
                         <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
                              alt=""
                              class="community-thumbnail"
@@ -133,7 +133,7 @@
                       </p>
                     {% endif %}
                     <form method="post"
-                          action="/@{{ post.login_name }}/{{ post_id }}/edit/community"
+                          action="/@{{ current_community.slug if current_community else post.login_name }}/{{ post_id }}/edit/community"
                           onsubmit="return confirm('{{ ftl_format_pattern("post-move-confirm", {"communityName": community.name}) }}');"
                           class="community-move-form">
                       <input type="hidden" name="community_id" value="{{ community.id }}" />
@@ -144,7 +144,7 @@
                     {% if community.recent_posts %}
                       <div class="community-thumbnails">
                         {% for post in community.recent_posts %}
-                          <a href="/@{{ post.author_login_name }}/{{ post.id }}" class="community-thumbnail-link">
+                          <a href="/@{{ community.slug }}/{{ post.id }}" class="community-thumbnail-link">
                             <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
                                  alt=""
                                  class="community-thumbnail"
