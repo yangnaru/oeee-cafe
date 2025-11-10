@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::query;
@@ -936,6 +936,32 @@ pub async fn remove_community_member(
     .await?;
 
     Ok(())
+}
+
+/// Leave a community (user voluntarily leaves)
+/// Returns an error if the user is the owner (owners cannot leave)
+pub async fn leave_community(
+    tx: &mut Transaction<'_, Postgres>,
+    community_id: Uuid,
+    user_id: Uuid,
+) -> Result<()> {
+    // Check if user is the owner
+    let role = get_user_role_in_community(tx, user_id, community_id).await?;
+
+    match role {
+        Some(CommunityMemberRole::Owner) => {
+            bail!("Owners cannot leave their community. Delete the community instead.");
+        }
+        Some(_) => {
+            // User is a member or moderator, allow them to leave
+            remove_community_member(tx, community_id, user_id).await?;
+            Ok(())
+        }
+        None => {
+            // User is not a member
+            bail!("You are not a member of this community");
+        }
+    }
 }
 
 /// Update a member's role

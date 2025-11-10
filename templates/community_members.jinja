@@ -98,6 +98,15 @@
               </button>
               {% endif %}
             </td>
+            {% elif current_user and current_user.id == member.user_id and member.role != "Owner" %}
+            <td>
+              <button class="btn-danger"
+                      hx-post="/communities/@{{ community.slug }}/leave"
+                      hx-confirm="{{ ftl_get_message("community-leave-confirm") }}"
+                      hx-target="body">
+                {{ ftl_get_message("community-leave") }}
+              </button>
+            </td>
             {% endif %}
           </tr>
           {% endfor %}

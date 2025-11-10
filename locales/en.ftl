@@ -249,6 +249,10 @@ community-member-joined = Joined
 community-member-role-owner = Owner
 community-member-role-moderator = Moderator
 community-member-role-member = Member
+community-leave = Leave Community
+community-leave-confirm = Are you sure you want to leave this community?
+community-left-success = You have left the community
+community-owner-cannot-leave = Owners cannot leave. Delete the community instead.
 
 community-delete-danger-zone = Danger Zone
 community-delete-warning = Deleting a community is permanent and cannot be undone. All posts in this community will also be deleted.

@@ -251,6 +251,10 @@ community-member-joined = 参加日
 community-member-role-owner = オーナー
 community-member-role-moderator = モデレーター
 community-member-role-member = メンバー
+community-leave = コミュニティを退出
+community-leave-confirm = 本当にこのコミュニティを退出しますか？
+community-left-success = コミュニティを退出しました
+community-owner-cannot-leave = オーナーは退出できません。代わりにコミュニティを削除してください。
 
 community-delete-danger-zone = 危険ゾーン
 community-delete-warning = コミュニティを削除すると、元に戻すことができません。このコミュニティのすべての投稿も削除されます。

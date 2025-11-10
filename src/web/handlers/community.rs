@@ -9,7 +9,7 @@ use crate::models::community::{
     get_pending_invitations_with_details_for_user,
     get_pending_invitations_with_invitee_details_for_community, get_public_communities,
     get_public_communities_paginated, get_user_role_in_community, is_user_member,
-    reject_invitation, remove_community_member, search_public_communities,
+    leave_community, reject_invitation, remove_community_member, search_public_communities,
     slug_conflicts_with_user, soft_delete_community_with_activity,
     update_community_with_activity, CommunityDraft, CommunityMemberRole, CommunityVisibility,
 };
@@ -2314,6 +2314,97 @@ pub async fn remove_member_json(
     tx.commit().await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Leave a community (HTMX)
+pub async fn do_leave_community(
+    auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    messages: Messages,
+) -> Result<impl IntoResponse, AppError> {
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let user_preferred_language = user.preferred_language.clone();
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find community
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
+
+    // Leave the community (will check if user is owner/member inside)
+    match leave_community(&mut tx, community.id, user.id).await {
+        Ok(_) => {
+            tx.commit().await?;
+            messages.success(safe_get_message(&bundle, "community-left-success"));
+            Ok(Redirect::to("/communities").into_response())
+        }
+        Err(e) => {
+            let error_msg = e.to_string();
+            if error_msg.contains("Owners cannot leave") {
+                messages.error(safe_get_message(&bundle, "community-owner-cannot-leave"));
+            } else if error_msg.contains("not a member") {
+                return Ok(StatusCode::NOT_FOUND.into_response());
+            } else {
+                messages.error(format!("Error: {}", error_msg));
+            }
+            Ok(Redirect::to(&format!("/communities/@{}/members", community.slug)).into_response())
+        }
+    }
+}
+
+/// Leave a community (JSON API for mobile)
+pub async fn leave_community_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let user = match &auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED),
+    };
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find community
+    let community =
+        find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
+            .await?;
+    if community.is_none() {
+        return Ok(StatusCode::NOT_FOUND);
+    }
+    let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
+
+    // Leave the community (will check if user is owner/member inside)
+    match leave_community(&mut tx, community.id, user.id).await {
+        Ok(_) => {
+            tx.commit().await?;
+            Ok(StatusCode::NO_CONTENT)
+        }
+        Err(e) => {
+            let error_msg = e.to_string();
+            if error_msg.contains("Owners cannot leave") {
+                Ok(StatusCode::FORBIDDEN)
+            } else if error_msg.contains("not a member") {
+                Ok(StatusCode::NOT_FOUND)
+            } else {
+                Err(AppError::Anyhow(e))
+            }
+        }
+    }
 }
 
 /// Get community's pending invitations (JSON API for mobile)

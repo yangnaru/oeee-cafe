@@ -251,6 +251,10 @@ community-member-joined = 가입일
 community-member-role-owner = 소유자
 community-member-role-moderator = 운영자
 community-member-role-member = 멤버
+community-leave = 커뮤니티 나가기
+community-leave-confirm = 정말 이 커뮤니티를 나가시겠습니까?
+community-left-success = 커뮤니티에서 나왔습니다
+community-owner-cannot-leave = 소유자는 나갈 수 없습니다. 대신 커뮤니티를 삭제하세요.
 
 community-delete-danger-zone = 위험 구역
 community-delete-warning = 커뮤니티를 삭제하면 되돌릴 수 없습니다. 이 커뮤니티의 모든 게시물도 함께 삭제됩니다.

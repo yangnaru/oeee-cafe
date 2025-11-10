@@ -23,12 +23,12 @@ use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
     communities, community, community_comments, community_detail_json, community_iframe,
     create_community_form, create_community_json, delete_community_json, do_accept_invitation,
-    do_create_community, do_reject_invitation, get_communities_list_json,
+    do_create_community, do_leave_community, do_reject_invitation, get_communities_list_json,
     get_community_invitations_json, get_community_members_json, get_members,
     get_public_communities_json, get_user_invitations_json, hx_delete_community,
-    hx_do_edit_community, hx_edit_community, invite_user, invite_user_json, members_page,
-    remove_member, remove_member_json, retract_invitation, retract_invitation_json,
-    search_public_communities_json, update_community_json,
+    hx_do_edit_community, hx_edit_community, invite_user, invite_user_json,
+    leave_community_json, members_page, remove_member, remove_member_json, retract_invitation,
+    retract_invitation_json, search_public_communities_json, update_community_json,
 };
 use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
@@ -180,6 +180,7 @@ impl App {
                 "/communities/@:slug/members/:user_id",
                 delete(remove_member),
             )
+            .route("/communities/@:slug/leave", post(do_leave_community))
             .route(
                 "/communities/@:slug/invitations/:invitation_id",
                 delete(retract_invitation),
@@ -332,6 +333,7 @@ impl App {
                 "/api/v1/communities/:slug/members/:user_id",
                 delete(remove_member_json),
             )
+            .route("/api/v1/communities/:slug/leave", post(leave_community_json))
             .route(
                 "/api/v1/communities/:slug/invitations",
                 get(get_community_invitations_json),

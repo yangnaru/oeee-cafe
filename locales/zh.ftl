@@ -251,6 +251,10 @@ community-member-joined = 加入时间
 community-member-role-owner = 所有者
 community-member-role-moderator = 版主
 community-member-role-member = 成员
+community-leave = 退出社区
+community-leave-confirm = 您确定要退出此社区吗？
+community-left-success = 您已退出社区
+community-owner-cannot-leave = 所有者无法退出。请删除社区。
 
 community-delete-danger-zone = 危险区域
 community-delete-warning = 删除社区是永久性的，无法撤销。此社区中的所有作品也将被删除。
