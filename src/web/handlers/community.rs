@@ -10,8 +10,8 @@ use crate::models::community::{
     get_pending_invitations_with_invitee_details_for_community, get_public_communities,
     get_public_communities_paginated, get_user_role_in_community, is_user_member,
     reject_invitation, remove_community_member, search_public_communities,
-    slug_conflicts_with_user, soft_delete_community, update_community_with_activity,
-    CommunityDraft, CommunityMemberRole, CommunityVisibility,
+    slug_conflicts_with_user, soft_delete_community_with_activity,
+    update_community_with_activity, CommunityDraft, CommunityMemberRole, CommunityVisibility,
 };
 use crate::models::post::{find_published_posts_by_community_id, find_recent_posts_by_communities};
 use crate::models::user::{find_user_by_login_name, AuthSession};
@@ -2716,7 +2716,8 @@ pub async fn hx_delete_community(
     let mut tx = db.begin().await?;
 
     // Attempt to delete the community
-    soft_delete_community(&mut tx, &slug, user.id).await?;
+    soft_delete_community_with_activity(&mut tx, &slug, user.id, &state.config, Some(&state))
+        .await?;
 
     tx.commit().await?;
 
@@ -2740,7 +2741,8 @@ pub async fn delete_community_json(
     let mut tx = db.begin().await?;
 
     // Attempt to delete the community
-    soft_delete_community(&mut tx, &slug, user.id).await?;
+    soft_delete_community_with_activity(&mut tx, &slug, user.id, &state.config, Some(&state))
+        .await?;
 
     tx.commit().await?;
 

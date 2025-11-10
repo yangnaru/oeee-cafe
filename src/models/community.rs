@@ -1240,3 +1240,53 @@ pub async fn soft_delete_community(
 
     Ok(())
 }
+
+pub async fn soft_delete_community_with_activity(
+    tx: &mut Transaction<'_, Postgres>,
+    slug: &str,
+    user_id: Uuid,
+    _config: &crate::config::AppConfig,
+    state: Option<&crate::web::state::AppState>,
+) -> Result<()> {
+    // First, get the community to find its ID
+    let community = query!(
+        r#"
+        SELECT id
+        FROM communities
+        WHERE slug = $1
+        "#,
+        slug
+    )
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    let community_id = community
+        .ok_or_else(|| anyhow::anyhow!("Community not found"))?
+        .id;
+
+    // Get the community's actor before deletion
+    let actor = super::actor::Actor::find_by_community_id(tx, community_id).await?;
+
+    // Soft delete the community
+    soft_delete_community(tx, slug, user_id).await?;
+
+    // If state is provided and actor exists, send ActivityPub Delete activity
+    if let (Some(state), Some(actor)) = (state, actor) {
+        // Use the actor's IRI as the object URL
+        if let Ok(actor_url) = actor.iri.parse() {
+            // Send Delete activity - don't fail if this fails
+            if let Err(e) =
+                crate::web::handlers::activitypub::send_delete_activity(&actor, actor_url, state)
+                    .await
+            {
+                tracing::warn!(
+                    "Failed to send Delete activity for community {}: {:?}",
+                    slug,
+                    e
+                );
+            }
+        }
+    }
+
+    Ok(())
+}

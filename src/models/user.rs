@@ -612,7 +612,7 @@ pub async fn delete_user_with_activity(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
     password: &str,
-    config: &AppConfig,
+    _config: &AppConfig,
     state: Option<&crate::web::state::AppState>,
 ) -> Result<()> {
     // Get the user's actor before deletion
@@ -623,9 +623,8 @@ pub async fn delete_user_with_activity(
 
     // If state is provided and actor exists, send ActivityPub Delete activity
     if let (Some(state), Some(actor)) = (state, actor) {
-        // Construct the actor URL
-        if let Ok(actor_url) = format!("https://{}/users/{}", config.domain, actor.username).parse()
-        {
+        // Use the actor's IRI as the object URL
+        if let Ok(actor_url) = actor.iri.parse() {
             // Send Delete activity - don't fail if this fails
             if let Err(e) =
                 crate::web::handlers::activitypub::send_delete_activity(&actor, actor_url, state)
