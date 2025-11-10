@@ -120,7 +120,7 @@ pub async fn start_draw_mobile(
     State(state): State<AppState>,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Form(input): Form<InputMobile>,
-) -> Result<Html<String>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -133,6 +133,26 @@ pub async fn start_draw_mobile(
     } else {
         None
     };
+
+    // If community has defined colors, redirect to neo-cucumber offline mode
+    if let Some(ref comm) = community {
+        if let (Some(bg), Some(fg)) = (&comm.background_color, &comm.foreground_color) {
+            let mut redirect_url = format!(
+                "/collaborate/?offline=true&width={}&height={}&twoTone=true&backgroundColor={}&foregroundColor={}",
+                input.width, input.height, bg, fg
+            );
+
+            if let Some(cid) = community_id {
+                redirect_url.push_str(&format!("&community_id={}", cid));
+            }
+
+            if let Some(ref parent_id) = input.parent_post_id {
+                redirect_url.push_str(&format!("&parent_post_id={}", parent_id));
+            }
+
+            return Ok(Redirect::to(&redirect_url).into_response());
+        }
+    }
 
     // Query parent post if parent_post_id is provided
     let parent_post = if let Some(ref parent_post_id) = input.parent_post_id {

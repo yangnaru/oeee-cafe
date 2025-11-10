@@ -8,6 +8,7 @@ import { useDrawingState } from "./hooks/useDrawingState";
 import { useZoomControls } from "./hooks/useZoomControls";
 import { useOfflineCanvas } from "./hooks/useOfflineCanvas";
 import { compositeLayersToCanvas } from "./utils/canvasExport";
+import { NativeBridge } from "./utils/nativeBridge";
 
 // Validation constants
 const MIN_DIMENSION = 100;
@@ -231,7 +232,19 @@ function OfflineApp() {
       if (data?.error) {
         alert(data.error);
       } else {
-        window.location.href = `/posts/${data.post_id}/publish`;
+        // Check if running in native mobile app
+        if (NativeBridge.isNativeEnvironment()) {
+          // Notify native app of completion
+          NativeBridge.postMessage({
+            type: 'drawing_complete',
+            postId: data.post_id,
+            communityId: data.community_id,
+            imageUrl: data.image_url
+          });
+        } else {
+          // Web environment: redirect to publish page
+          window.location.href = `/posts/${data.post_id}/publish`;
+        }
       }
     } catch (error) {
       alert(t`Failed to save drawing. Please try again.`);
