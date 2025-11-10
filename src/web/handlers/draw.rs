@@ -203,7 +203,7 @@ pub async fn start_draw_mobile(
         ftl_lang
     })?;
 
-    Ok(Html(rendered))
+    Ok(Html(rendered).into_response())
 }
 
 pub async fn upload_object(
