@@ -2574,13 +2574,33 @@ pub async fn create_community_json(
     // Create community draft
     let draft = CommunityDraft {
         name: request.name,
-        slug: request.slug,
+        slug: request.slug.clone(),
         description: request.description,
         visibility,
     };
 
     // Create community (this already adds the owner as a member)
-    let community = create_community(&mut tx, user.id, draft).await?;
+    let community = match create_community(&mut tx, user.id, draft).await {
+        Ok(community) => community,
+        Err(e) => {
+            // Check if this is a duplicate slug error
+            if let Some(db_err) = e.downcast_ref::<sqlx::Error>() {
+                if let sqlx::Error::Database(ref db_error) = db_err {
+                    if db_error.constraint() == Some("communities_slug_key") {
+                        return Ok((
+                            StatusCode::CONFLICT,
+                            Json(ErrorResponse::new(
+                                "SLUG_ALREADY_EXISTS",
+                                "A community with this ID already exists",
+                            )),
+                        )
+                            .into_response());
+                    }
+                }
+            }
+            return Err(e.into());
+        }
+    };
 
     // Create ActivityPub actor only for non-private communities
     if visibility != CommunityVisibility::Private {
