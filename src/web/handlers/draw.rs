@@ -137,9 +137,13 @@ pub async fn start_draw_mobile(
     // If community has defined colors, redirect to neo-cucumber offline mode
     if let Some(ref comm) = community {
         if let (Some(bg), Some(fg)) = (&comm.background_color, &comm.foreground_color) {
+            // URL encode the color values (they contain # which needs to be %23)
+            let bg_encoded = bg.replace('#', "%23");
+            let fg_encoded = fg.replace('#', "%23");
+
             let mut redirect_url = format!(
                 "/collaborate/?offline=true&width={}&height={}&twoTone=true&backgroundColor={}&foregroundColor={}",
-                input.width, input.height, bg, fg
+                input.width, input.height, bg_encoded, fg_encoded
             );
 
             if let Some(cid) = community_id {
