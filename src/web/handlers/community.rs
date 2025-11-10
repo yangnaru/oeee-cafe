@@ -1617,7 +1617,7 @@ pub async fn community_detail_json(
                 ),
                 image_width: post.image_width,
                 image_height: post.image_height,
-                is_sensitive: post.is_sensitive.unwrap_or(false),
+                is_sensitive: post.is_sensitive,
             }
         })
         .collect();

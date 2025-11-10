@@ -59,7 +59,7 @@ pub struct SerializablePost {
     pub image_width: i32,
     pub image_height: i32,
     pub replay_filename: Option<String>,
-    pub is_sensitive: Option<bool>,
+    pub is_sensitive: bool,
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -220,6 +220,7 @@ pub async fn find_posts_by_community_id(
                 images.width AS width,
                 images.height AS height,
                 images.replay_filename AS replay_filename,
+                posts.is_sensitive,
                 posts.viewer_count,
                 posts.published_at,
                 posts.created_at,
@@ -245,7 +246,7 @@ pub async fn find_posts_by_community_id(
             image_width: row.width,
             image_height: row.height,
             replay_filename: row.replay_filename,
-            is_sensitive: None,
+            is_sensitive: row.is_sensitive,
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,
@@ -586,7 +587,7 @@ pub async fn find_recent_posts_by_communities(
             stroke_count: Some(row.stroke_count),
             viewer_count: Some(row.viewer_count),
             published_at: row.published_at,
-            is_sensitive: row.is_sensitive.unwrap_or(false),
+            is_sensitive: row.is_sensitive,
         })
         .collect())
 }
@@ -651,7 +652,7 @@ pub async fn create_post(
         image_width: post_draft.width,
         image_height: post_draft.height,
         replay_filename: post_draft.replay_filename,
-        is_sensitive: None,
+        is_sensitive: false,
         viewer_count: 0,
         published_at: None,
         created_at: post.created_at,
@@ -726,8 +727,7 @@ pub async fn find_post_by_id(
         map.insert("content".to_string(), row.content);
         map.insert(
             "is_sensitive".to_string(),
-            row.is_sensitive
-                .map(|is_sensitive| is_sensitive.to_string()),
+            Some(row.is_sensitive.to_string()),
         );
 
         let paint_duration = Duration::try_seconds(row.paint_duration.microseconds / 1000000)
@@ -860,7 +860,7 @@ pub async fn find_post_detail_for_json(
             image_width: row.width,
             image_height: row.height,
             image_tool: row.image_tool.unwrap_or_else(|| "neo".to_string()),
-            is_sensitive: row.is_sensitive.unwrap_or(false),
+            is_sensitive: row.is_sensitive,
             published_at_utc: row.published_at.map(|dt| dt.to_rfc3339()),
             community_id: row.community_id,
             community_name: row.community_name,
@@ -1279,7 +1279,7 @@ pub async fn find_public_community_posts(
             image_width: row.width,
             image_height: row.height,
             replay_filename: row.replay_filename,
-            is_sensitive: row.is_sensitive.unwrap_or(false),
+            is_sensitive: row.is_sensitive,
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,
@@ -1347,7 +1347,7 @@ pub async fn find_public_community_posts_excluding_from_community_owner(
             image_width: row.width,
             image_height: row.height,
             replay_filename: row.replay_filename,
-            is_sensitive: row.is_sensitive.unwrap_or(false),
+            is_sensitive: row.is_sensitive,
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,
