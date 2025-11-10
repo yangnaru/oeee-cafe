@@ -2637,10 +2637,10 @@ pub async fn update_community_json(
     State(state): State<AppState>,
     Path(slug): Path<String>,
     Json(request): Json<UpdateCommunityRequest>,
-) -> Result<StatusCode, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let user = match &auth_session.user {
         Some(u) => u,
-        None => return Ok(StatusCode::UNAUTHORIZED),
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
     };
 
     let db = &state.db_pool;
@@ -2651,13 +2651,13 @@ pub async fn update_community_json(
         find_community_by_slug(&mut tx, slug.strip_prefix('@').unwrap_or(&slug).to_string())
             .await?;
     if community.is_none() {
-        return Ok(StatusCode::NOT_FOUND);
+        return Ok(StatusCode::NOT_FOUND.into_response());
     }
     let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
     // Check if user is the owner
     if user.id != community.owner_id {
-        return Ok(StatusCode::FORBIDDEN);
+        return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
     // Parse new visibility
@@ -2674,7 +2674,14 @@ pub async fn update_community_json(
         || (community.visibility != CommunityVisibility::Private
             && new_visibility == CommunityVisibility::Private)
     {
-        return Ok(StatusCode::BAD_REQUEST);
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "INVALID_VISIBILITY_CHANGE",
+                "Cannot change visibility between private and public/unlisted",
+            )),
+        )
+            .into_response());
     }
 
     // Create updated draft
@@ -2690,7 +2697,7 @@ pub async fn update_community_json(
 
     tx.commit().await?;
 
-    Ok(StatusCode::OK)
+    Ok(StatusCode::OK.into_response())
 }
 
 /// DELETE handler for web interface (HTMX)
