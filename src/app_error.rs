@@ -3,6 +3,26 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use std::fmt;
 
+/// Check if an error should be filtered from Sentry reporting.
+/// These are expected federation errors that shouldn't be treated as application errors.
+fn should_filter_from_sentry(message: &str) -> bool {
+    // Filter out ActivityPub federation errors that are expected
+    let federation_error_patterns = [
+        // Remote actors that return 404 or invalid JSON
+        ("Failed to parse object", "data did not match any variant of untagged enum ActorObject"),
+        // Remote objects that have been deleted/tombstoned
+        ("Fetched remote object", "which was deleted"),
+    ];
+
+    for (pattern1, pattern2) in federation_error_patterns.iter() {
+        if message.contains(pattern1) && message.contains(pattern2) {
+            return true;
+        }
+    }
+
+    false
+}
+
 // Application-specific errors with better context
 #[derive(Debug)]
 pub enum AppError {
@@ -77,8 +97,10 @@ impl IntoResponse for AppError {
             ),
         };
 
-        // Log all errors to Sentry
-        sentry::capture_message(&message, sentry_level);
+        // Log all errors to Sentry, except filtered federation errors
+        if !should_filter_from_sentry(&message) {
+            sentry::capture_message(&message, sentry_level);
+        }
 
         (status, message).into_response()
     }
