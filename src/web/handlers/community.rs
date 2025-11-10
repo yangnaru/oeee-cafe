@@ -21,8 +21,9 @@ use crate::web::responses::{
     CommunityComment, CommunityDetailResponse, CommunityInfo, CommunityInvitationResponse,
     CommunityInvitationsListResponse, CommunityMemberResponse, CommunityMembersListResponse,
     CommunityPostThumbnail, CommunityStats, CommunityWithPosts, CreateCommunityResponse,
-    InvitationCommunityInfo, InvitationUserInfo, MyCommunitiesResponse, PaginationMeta,
-    PublicCommunitiesResponse, UserInvitationResponse, UserInvitationsListResponse,
+    ErrorResponse, InvitationCommunityInfo, InvitationUserInfo, MyCommunitiesResponse,
+    PaginationMeta, PublicCommunitiesResponse, UserInvitationResponse,
+    UserInvitationsListResponse,
 };
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
@@ -2516,22 +2517,18 @@ pub async fn create_community_json(
     auth_session: AuthSession,
     State(state): State<AppState>,
     Json(request): Json<CreateCommunityRequest>,
-) -> Result<Json<CreateCommunityResponse>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let user = match &auth_session.user {
         Some(u) => u,
         None => {
-            return Ok(Json(CreateCommunityResponse {
-                community: CommunityInfo {
-                    id: Uuid::nil(),
-                    name: String::new(),
-                    slug: String::new(),
-                    description: String::new(),
-                    visibility: CommunityVisibility::Public,
-                    owner_id: Uuid::nil(),
-                    background_color: None,
-                    foreground_color: None,
-                },
-            }))
+            return Ok((
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse::new(
+                    "UNAUTHORIZED",
+                    "You must be logged in to create a community",
+                )),
+            )
+                .into_response());
         }
     };
 
@@ -2544,34 +2541,26 @@ pub async fn create_community_json(
         .chars()
         .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
     {
-        return Ok(Json(CreateCommunityResponse {
-            community: CommunityInfo {
-                id: Uuid::nil(),
-                name: String::new(),
-                slug: String::new(),
-                description: String::new(),
-                visibility: CommunityVisibility::Public,
-                owner_id: Uuid::nil(),
-                background_color: None,
-                foreground_color: None,
-            },
-        }));
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse::new(
+                "INVALID_SLUG_FORMAT",
+                "Slug must contain only alphanumeric characters, hyphens, and underscores",
+            )),
+        )
+            .into_response());
     }
 
     // Check if slug conflicts with an existing user's login_name
     if slug_conflicts_with_user(&mut tx, &request.slug).await? {
-        return Ok(Json(CreateCommunityResponse {
-            community: CommunityInfo {
-                id: Uuid::nil(),
-                name: String::new(),
-                slug: String::new(),
-                description: String::new(),
-                visibility: CommunityVisibility::Public,
-                owner_id: Uuid::nil(),
-                background_color: None,
-                foreground_color: None,
-            },
-        }));
+        return Ok((
+            StatusCode::CONFLICT,
+            Json(ErrorResponse::new(
+                "SLUG_CONFLICTS_WITH_USER",
+                "This slug is already taken by a user",
+            )),
+        )
+            .into_response());
     }
 
     // Parse visibility
@@ -2611,7 +2600,8 @@ pub async fn create_community_json(
             background_color: community.background_color,
             foreground_color: community.foreground_color,
         },
-    }))
+    })
+    .into_response())
 }
 
 /// Update community (JSON API for mobile)
