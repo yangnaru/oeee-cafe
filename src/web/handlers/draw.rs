@@ -366,6 +366,20 @@ pub async fn draw_finish(
 
     let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
 
+    // If creating a reply but community_id is not provided, inherit from parent post
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    if community_id.is_none() {
+        if let Some(parent_id) = parent_post_id {
+            if let Some(parent_post) = find_post_by_id(&mut tx, parent_id).await? {
+                if let Some(parent_community_id_str) = parent_post.get("community_id").and_then(|v| v.as_ref()) {
+                    community_id = Uuid::parse_str(parent_community_id_str).ok();
+                }
+            }
+        }
+    }
+
     let tool_enum: Tool = match tool.as_str() {
         "neo" => Tool::Neo,
         "tegaki" => Tool::Tegaki,
@@ -389,8 +403,6 @@ pub async fn draw_finish(
         parent_post_id,
     };
 
-    let db = &state.db_pool;
-    let mut tx = db.begin().await?;
     let post = create_post(&mut tx, post_draft).await?;
     let _ = tx.commit().await;
 
