@@ -134,36 +134,23 @@ pub async fn start_draw_mobile(
         None
     };
 
-    // If community has defined colors, serve neo-cucumber offline mode directly
+    // If community has defined colors, redirect to neo-cucumber offline mode
     if let Some(ref comm) = community {
         if let (Some(bg), Some(fg)) = (&comm.background_color, &comm.foreground_color) {
-            // Read the built neo-cucumber HTML
-            let mut html = std::fs::read_to_string("neo-cucumber/dist/index.html")
-                .map_err(|_| anyhow::anyhow!("Failed to load neo-cucumber app"))?;
-
-            // Build query parameters
-            let mut params = format!(
-                "offline=true&width={}&height={}&twoTone=true&backgroundColor={}&foregroundColor={}",
+            let mut redirect_url = format!(
+                "/collaborate/?offline=true&width={}&height={}&twoTone=true&backgroundColor={}&foregroundColor={}",
                 input.width, input.height, bg, fg
             );
+
             if let Some(cid) = community_id {
-                params.push_str(&format!("&community_id={}", cid));
+                redirect_url.push_str(&format!("&community_id={}", cid));
             }
+
             if let Some(ref parent_id) = input.parent_post_id {
-                params.push_str(&format!("&parent_post_id={}", parent_id));
+                redirect_url.push_str(&format!("&parent_post_id={}", parent_id));
             }
 
-            // Inject query parameters by replacing the URL via history API before React loads
-            // This needs to happen before the React app initializes and reads window.location.search
-            let inject_script = format!(
-                r#"<script>history.replaceState(null, '', '/draw/mobile?{}');</script>"#,
-                params
-            );
-
-            // Insert the script right after <head> tag so it runs before any app code
-            html = html.replace("<head>", &format!("<head>{}", inject_script));
-
-            return Ok(Html(html).into_response());
+            return Ok(Redirect::to(&redirect_url).into_response());
         }
     }
 
