@@ -1431,8 +1431,7 @@ pub async fn delete_post(
             deleted_at = now(),
             deletion_reason = $2,
             title = NULL,
-            content = NULL,
-            is_sensitive = NULL
+            content = NULL
         WHERE id = $1
         RETURNING image_id
     ",
@@ -1480,8 +1479,7 @@ pub async fn soft_delete_community_posts(
             deleted_at = now(),
             deletion_reason = 'cascade',
             title = NULL,
-            content = NULL,
-            is_sensitive = NULL
+            content = NULL
         WHERE community_id = $1
           AND deleted_at IS NULL
         ",
