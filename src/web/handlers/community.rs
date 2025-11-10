@@ -2558,6 +2558,22 @@ pub async fn create_community_json(
         }));
     }
 
+    // Check if slug conflicts with an existing user's login_name
+    if slug_conflicts_with_user(&mut tx, &request.slug).await? {
+        return Ok(Json(CreateCommunityResponse {
+            community: CommunityInfo {
+                id: Uuid::nil(),
+                name: String::new(),
+                slug: String::new(),
+                description: String::new(),
+                visibility: CommunityVisibility::Public,
+                owner_id: Uuid::nil(),
+                background_color: None,
+                foreground_color: None,
+            },
+        }));
+    }
+
     // Parse visibility
     let visibility = match request.visibility.to_lowercase().as_str() {
         "public" => CommunityVisibility::Public,
