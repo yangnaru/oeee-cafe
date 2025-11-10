@@ -26,6 +26,7 @@ pub struct NotificationItem {
     pub actor_id: Uuid,
     pub actor_name: String,
     pub actor_handle: String,
+    pub actor_login_name: Option<String>,
     pub notification_type: NotificationType,
     pub post_id: Option<Uuid>,
     pub comment_id: Option<Uuid>,

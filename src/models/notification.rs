@@ -50,6 +50,7 @@ pub struct NotificationWithActor {
     pub actor_id: Uuid,
     pub actor_name: String,
     pub actor_handle: String,
+    pub actor_login_name: Option<String>,
     pub notification_type: NotificationType,
     pub post_id: Option<Uuid>,
     pub comment_id: Option<Uuid>,
@@ -154,6 +155,7 @@ pub async fn list_notifications(
             n.actor_id,
             a.name AS actor_name,
             a.handle AS actor_handle,
+            actor_users.login_name AS "actor_login_name?",
             n.notification_type as "notification_type: NotificationType",
             n.post_id,
             n.comment_id,
@@ -172,6 +174,7 @@ pub async fn list_notifications(
             g.content AS "guestbook_content?"
         FROM notifications n
         LEFT JOIN actors a ON n.actor_id = a.id
+        LEFT JOIN users actor_users ON a.user_id = actor_users.id
         LEFT JOIN posts p ON n.post_id = p.id
         LEFT JOIN users post_authors ON p.author_id = post_authors.id
         LEFT JOIN images ON p.image_id = images.id
@@ -197,6 +200,7 @@ pub async fn list_notifications(
             actor_id: row.actor_id,
             actor_name: row.actor_name,
             actor_handle: row.actor_handle,
+            actor_login_name: row.actor_login_name,
             notification_type: row.notification_type,
             post_id: row.post_id,
             comment_id: row.comment_id,
@@ -231,6 +235,7 @@ pub async fn get_notification_by_id(
             n.actor_id,
             a.name AS actor_name,
             a.handle AS actor_handle,
+            actor_users.login_name AS "actor_login_name?",
             n.notification_type as "notification_type: NotificationType",
             n.post_id,
             n.comment_id,
@@ -249,6 +254,7 @@ pub async fn get_notification_by_id(
             g.content AS "guestbook_content?"
         FROM notifications n
         LEFT JOIN actors a ON n.actor_id = a.id
+        LEFT JOIN users actor_users ON a.user_id = actor_users.id
         LEFT JOIN posts p ON n.post_id = p.id
         LEFT JOIN users post_authors ON p.author_id = post_authors.id
         LEFT JOIN images ON p.image_id = images.id
@@ -269,6 +275,7 @@ pub async fn get_notification_by_id(
         actor_id: row.actor_id,
         actor_name: row.actor_name,
         actor_handle: row.actor_handle,
+        actor_login_name: row.actor_login_name,
         notification_type: row.notification_type,
         post_id: row.post_id,
         comment_id: row.comment_id,

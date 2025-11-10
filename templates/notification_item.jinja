@@ -59,8 +59,13 @@
     <div class="notification-content">
       {# Actor information #}
       <p class="notification-actor">
-        <a href="{{ notification.actor_handle }}">{{ notification.actor_name }}</a>
-        <span class="muted">{{ notification.actor_handle }}</span>
+        {% if notification.actor_login_name %}
+          <a href="/@{{ notification.actor_login_name }}">{{ notification.actor_name }}</a>
+          <span class="muted">@{{ notification.actor_login_name }}</span>
+        {% else %}
+          <a href="{{ notification.actor_handle }}">{{ notification.actor_name }}</a>
+          <span class="muted">{{ notification.actor_handle }}</span>
+        {% endif %}
       </p>
 
       {# Notification-specific content #}
