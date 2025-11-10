@@ -2577,8 +2577,10 @@ pub async fn create_community_json(
     // Create community (this already adds the owner as a member)
     let community = create_community(&mut tx, user.id, draft).await?;
 
-    // Create ActivityPub actor for the community
-    create_actor_for_community(&mut tx, &community, &state.config).await?;
+    // Create ActivityPub actor only for non-private communities
+    if visibility != CommunityVisibility::Private {
+        create_actor_for_community(&mut tx, &community, &state.config).await?;
+    }
 
     tx.commit().await?;
 
