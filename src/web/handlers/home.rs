@@ -1116,7 +1116,7 @@ pub async fn add_reaction_api(
         if let Some(author_id_str) = post.get("author_id").and_then(|v| v.as_ref()) {
             if let Ok(author_id) = Uuid::parse_str(author_id_str) {
                 // Don't notify if reacting to own post
-                if author_id != actor.id {
+                if author_id != user.id {
                     // Create notification for post author
                     let notification = create_notification(
                         &mut tx,
