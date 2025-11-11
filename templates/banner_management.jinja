@@ -16,7 +16,7 @@
                         <img src="{{ image_url }}" alt="Banner" style="width: 100%; height: auto; display: block;">
                         <div style="margin-top: 0.5rem;">
                             <div style="font-size: 0.875rem; color: #666;">
-                                {{ ftl_get_message("banner-management-created") }}: {{ banner.created_at.format("%Y-%m-%d %H:%M") }}
+                                {{ ftl_get_message("banner-management-created") }}: {{ banner.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}
                             </div>
                             {% if banner.is_active %}
                                 <div style="font-weight: bold; color: #2e7d32; margin-top: 0.25rem;">
