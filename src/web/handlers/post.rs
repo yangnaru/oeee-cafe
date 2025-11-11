@@ -1834,8 +1834,24 @@ pub async fn post_edit_community(
     Ok(Html(rendered).into_response())
 }
 
+fn deserialize_empty_string_as_none<'de, D>(deserializer: D) -> Result<Option<Uuid>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s {
+        Some(s) if s.is_empty() => Ok(None),
+        Some(s) => Uuid::parse_str(&s)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+        None => Ok(None),
+    }
+}
+
 #[derive(Deserialize)]
 pub struct EditPostCommunityForm {
+    #[serde(deserialize_with = "deserialize_empty_string_as_none")]
     pub community_id: Option<Uuid>,
 }
 
