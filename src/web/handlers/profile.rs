@@ -1213,7 +1213,8 @@ pub async fn activate_banner_api(
 
     tx.commit().await?;
 
-    Ok(StatusCode::OK.into_response())
+    // Return empty JSON object for API clients
+    Ok(Json(serde_json::json!({})))
 }
 
 /// API endpoint to delete a banner
@@ -1232,7 +1233,8 @@ pub async fn delete_banner_api(
 
     tx.commit().await?;
 
-    Ok(StatusCode::OK.into_response())
+    // Return empty JSON object for API clients
+    Ok(Json(serde_json::json!({})))
 }
 
 /// HTML endpoint to activate a banner
