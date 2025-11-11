@@ -13,6 +13,7 @@
       <h2>
         {{ user.display_name }}
         <span class="muted fediverse-handle">@{{ user.login_name }}@{{ domain }}</span>
+        {% if user.id == current_user.id %}<a href="/@{{ user.login_name }}/settings">{{ ftl_get_message("profile-manage") }}</a>{% endif %}
       </h2>
       <div class="banner-controls">
         {% if current_user %}
@@ -44,7 +45,6 @@
 </div>
 <div class="flex-inline">
   <h3>{{ ftl_get_message("profile-link") }}</h3>
-  {% if user.id == current_user.id %}<a href="/@{{ user.login_name }}/settings">{{ ftl_get_message("profile-manage") }}</a>{% endif %}
 </div>
 <ul class="links">
   <li>
