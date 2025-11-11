@@ -105,6 +105,29 @@
                autocomplete="off" />
 
         <div id="community-list" class="community-list">
+          {# Show "Personal Post" option only if post is currently in a community #}
+          {% if current_community %}
+            <div class="community-move-card" data-community-name="personal post" data-community-slug="personal" data-community-description="">
+              <div class="community-move-card-content">
+                <div class="community-move-card-main">
+                  <div class="community-move-card-header">
+                    <div>
+                      <span class="community-name">{{ ftl_get_message("post-personal-post") }}</span>
+                    </div>
+                  </div>
+                  <p class="community-description">{{ ftl_get_message("post-personal-post-description") }}</p>
+                  <form method="post"
+                        action="/@{{ current_community.slug }}/{{ post_id }}/edit/community"
+                        onsubmit="return confirm('{{ ftl_get_message("post-move-confirm-personal") }}');"
+                        class="community-move-form">
+                    <input type="hidden" name="community_id" value="" />
+                    <button type="submit" class="btn btn-move">{{ ftl_get_message("post-move-to-personal") }}</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          {% endif %}
+
           {% if available_communities %}
             {% for community in available_communities %}
               <div class="community-move-card" data-community-name="{{ community.name|lower }}" data-community-slug="{{ community.slug|lower }}" data-community-description="{{ community.description|lower if community.description else '' }}">

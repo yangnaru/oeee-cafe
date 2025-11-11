@@ -1804,7 +1804,7 @@ pub async fn post_edit_community(
 
 #[derive(Deserialize)]
 pub struct EditPostCommunityForm {
-    pub community_id: Uuid,
+    pub community_id: Option<Uuid>,
 }
 
 pub async fn do_post_edit_community(
@@ -1844,7 +1844,7 @@ pub async fn do_post_edit_community(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    let _ = edit_post_community(&mut tx, post_uuid, Some(form.community_id)).await;
+    let _ = edit_post_community(&mut tx, post_uuid, form.community_id).await;
     let _ = tx.commit().await;
 
     Ok(Redirect::to(&format!("/posts/{}", id)).into_response())
@@ -3292,7 +3292,7 @@ pub async fn get_movable_communities_api(
 
     // Get post data to check ownership and movability
     let post = sqlx::query!(
-        r#"SELECT id, author_id FROM posts WHERE id = $1 AND deleted_at IS NULL"#,
+        r#"SELECT id, author_id, community_id FROM posts WHERE id = $1 AND deleted_at IS NULL"#,
         post_id
     )
     .fetch_optional(&mut *tx)
@@ -3316,21 +3316,29 @@ pub async fn get_movable_communities_api(
     // Get list of movable communities
     let communities = get_movable_communities(&mut tx, user.id).await?;
 
-    // Build response with "Personal Post" option first
-    let mut response_communities = vec![MovableCommunity {
-        id: None,
-        name: "Personal Post".to_string(),
-        slug: None,
-        visibility: None,
-        background_color: None,
-        foreground_color: None,
-        owner_login_name: None,
-        owner_display_name: None,
-    }];
+    // Build response - only add "Personal Post" option if post is currently in a community
+    let mut response_communities = vec![];
+    if post.community_id.is_some() {
+        response_communities.push(MovableCommunity {
+            id: None,
+            name: "Personal Post".to_string(),
+            slug: None,
+            visibility: None,
+            background_color: None,
+            foreground_color: None,
+            owner_login_name: None,
+            owner_display_name: None,
+        });
+    }
 
-    // Add other communities
+    // Add other communities, excluding the current community
     for (id, name, slug, visibility, bg_color, fg_color, owner_login, owner_display) in communities
     {
+        // Skip the current community
+        if Some(id) == post.community_id {
+            continue;
+        }
+
         response_communities.push(MovableCommunity {
             id: Some(id),
             name,
