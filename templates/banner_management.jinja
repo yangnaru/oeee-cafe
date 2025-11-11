@@ -23,10 +23,17 @@
                                     {{ ftl_get_message("banner-management-active-badge") }}
                                 </div>
                             {% else %}
-                                <button onclick="activateBanner('{{ banner.id }}')" style="margin-top: 0.5rem; width: 100%;">
+                                <button hx-post="/banners/{{ banner.id }}/activate"
+                                        hx-swap="none"
+                                        hx-on::after-request="window.location.reload()"
+                                        style="margin-top: 0.5rem; width: 100%;">
                                     {{ ftl_get_message("banner-management-set-active") }}
                                 </button>
-                                <button onclick="deleteBanner('{{ banner.id }}')" style="margin-top: 0.25rem; width: 100%; background-color: #d32f2f; color: white;">
+                                <button hx-delete="/banners/{{ banner.id }}"
+                                        hx-confirm="{{ ftl_get_message("banner-management-delete-confirm") }}"
+                                        hx-swap="none"
+                                        hx-on::after-request="window.location.reload()"
+                                        style="margin-top: 0.25rem; width: 100%; background-color: #d32f2f; color: white;">
                                     {{ ftl_get_message("banner-management-delete") }}
                                 </button>
                             {% endif %}
@@ -44,46 +51,4 @@
             <a href="/@{{ user.login_name }}/settings">{{ ftl_get_message("banner-management-back-to-settings") }}</a>
         </div>
     </div>
-
-    <script>
-        async function activateBanner(bannerId) {
-            try {
-                const response = await fetch(`/api/v1/banners/${bannerId}/activate`, {
-                    method: 'POST',
-                    credentials: 'same-origin'
-                });
-
-                if (response.ok) {
-                    window.location.reload();
-                } else {
-                    alert('{{ ftl_get_message("banner-management-activate-error") }}');
-                }
-            } catch (error) {
-                console.error('Error activating banner:', error);
-                alert('{{ ftl_get_message("banner-management-activate-error") }}');
-            }
-        }
-
-        async function deleteBanner(bannerId) {
-            if (!confirm('{{ ftl_get_message("banner-management-delete-confirm") }}')) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/v1/banners/${bannerId}`, {
-                    method: 'DELETE',
-                    credentials: 'same-origin'
-                });
-
-                if (response.ok) {
-                    window.location.reload();
-                } else {
-                    alert('{{ ftl_get_message("banner-management-delete-error") }}');
-                }
-            } catch (error) {
-                console.error('Error deleting banner:', error);
-                alert('{{ ftl_get_message("banner-management-delete-error") }}');
-            }
-        }
-    </script>
 {% endblock content %}

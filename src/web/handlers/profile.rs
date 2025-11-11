@@ -1234,3 +1234,41 @@ pub async fn delete_banner_api(
 
     Ok(StatusCode::OK.into_response())
 }
+
+/// HTML endpoint to activate a banner
+pub async fn do_activate_banner(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(banner_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    activate_banner(&mut tx, user.id, banner_id).await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::OK.into_response())
+}
+
+/// HTML endpoint to delete a banner
+pub async fn do_delete_banner(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(banner_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    delete_banner(&mut tx, user.id, banner_id).await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::OK.into_response())
+}

@@ -61,12 +61,12 @@ use crate::web::handlers::post::{
 };
 use crate::web::handlers::privacy::privacy;
 use crate::web::handlers::profile::{
-    activate_banner_api, banner_management, delete_banner_api, do_add_link,
-    do_delete_guestbook_entry, do_delete_link, do_follow_profile, do_move_link_down,
-    do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile, do_write_guestbook_entry,
-    follow_profile_api, guestbook, list_banners_json, profile, profile_banners_iframe,
-    profile_followings_json, profile_iframe, profile_json, profile_settings,
-    unfollow_profile_api,
+    activate_banner_api, banner_management, delete_banner_api, do_activate_banner, do_add_link,
+    do_delete_banner, do_delete_guestbook_entry, do_delete_link, do_follow_profile,
+    do_move_link_down, do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile,
+    do_write_guestbook_entry, follow_profile_api, guestbook, list_banners_json, profile,
+    profile_banners_iframe, profile_followings_json, profile_iframe, profile_json,
+    profile_settings, unfollow_profile_api,
 };
 use crate::web::handlers::push_tokens::{
     delete_push_token_handler, list_push_tokens_handler, register_push_token_handler,
@@ -420,6 +420,8 @@ impl App {
             )
             .route("/@:login_name/settings", get(profile_settings))
             .route("/@:login_name/settings/banners", get(banner_management))
+            .route("/banners/:banner_id/activate", post(do_activate_banner))
+            .route("/banners/:banner_id", delete(do_delete_banner))
             .route("/@:login_name/guestbook", get(guestbook))
             .route("/@:login_name/:post_id", get(post_view_by_login_name))
             .route(
