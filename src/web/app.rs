@@ -72,7 +72,7 @@ use crate::web::handlers::push_tokens::{
     delete_push_token_handler, list_push_tokens_handler, register_push_token_handler,
 };
 use crate::web::handlers::search::search_json;
-use crate::web::handlers::well_known::apple_app_site_association;
+use crate::web::handlers::well_known::{android_assetlinks, apple_app_site_association};
 use activitypub_federation::config::{FederationConfig, FederationMiddleware};
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
@@ -273,6 +273,10 @@ impl App {
             .route(
                 "/.well-known/apple-app-site-association",
                 get(apple_app_site_association),
+            )
+            .route(
+                "/.well-known/assetlinks.json",
+                get(android_assetlinks),
             )
             .route("/api/home/posts", get(load_more_public_posts))
             .route("/api/v1/posts/public", get(load_more_public_posts_json))
