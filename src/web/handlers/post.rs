@@ -1626,11 +1626,19 @@ pub async fn post_edit_community(
 
     // Fetch both public and known communities
     let public_communities = crate::models::community::get_public_communities(&mut tx).await?;
-    let known_communities = get_known_communities(
-        &mut tx,
-        auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id,
+    let user_id = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?.id;
+    let known_communities = get_known_communities(&mut tx, user_id).await?;
+
+    // Get communities the user has participated in
+    let participated_community_ids: std::collections::HashSet<Uuid> = sqlx::query!(
+        r#"SELECT DISTINCT community_id FROM posts WHERE author_id = $1 AND community_id IS NOT NULL"#,
+        user_id
     )
-    .await?;
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .filter_map(|row| row.community_id)
+    .collect();
 
     // Separate known and public-only communities, filtering out current community
     use std::collections::HashSet;
@@ -1703,81 +1711,103 @@ pub async fn post_edit_community(
         }
     }
 
-    let mut known_list: Vec<_> = known_communities
-        .into_iter()
-        .filter(|c| {
-            // Filter out current community and two-tone communities
-            if let Some(curr_id) = current_community_id {
-                if c.id == curr_id {
-                    return false;
-                }
+    // Combine all communities (known + public), filtering out current and two-tone communities
+    let mut all_communities: Vec<_> = Vec::new();
+
+    // Add known communities
+    for c in known_communities {
+        if let Some(curr_id) = current_community_id {
+            if c.id == curr_id {
+                continue;
             }
-            // Filter out two-tone communities (both colors set)
-            !(c.background_color.is_some() && c.foreground_color.is_some())
-        })
-        .map(|c| {
-            let recent_posts = posts_by_community.get(&c.id).cloned().unwrap_or_default();
-            serde_json::json!({
-                "id": c.id.to_string(),
-                "name": c.name,
-                "slug": c.slug,
-                "description": c.description,
-                "visibility": c.visibility,
-                "owner_login_name": c.owner_login_name,
-                "posts_count": null,
-                "is_known": true,
-                "recent_posts": recent_posts,
-            })
-        })
+        }
+        // Filter out two-tone communities
+        if c.background_color.is_some() && c.foreground_color.is_some() {
+            continue;
+        }
+        // Filter out private communities - moving to private communities is restricted
+        if matches!(c.visibility, crate::models::community::CommunityVisibility::Private) {
+            continue;
+        }
+
+        let recent_posts = posts_by_community.get(&c.id).cloned().unwrap_or_default();
+        let has_participated = participated_community_ids.contains(&c.id);
+        all_communities.push(serde_json::json!({
+            "id": c.id.to_string(),
+            "name": c.name,
+            "slug": c.slug,
+            "description": c.description,
+            "visibility": c.visibility,
+            "owner_login_name": c.owner_login_name,
+            "posts_count": null,
+            "recent_posts": recent_posts,
+            "has_participated": has_participated,
+        }));
+    }
+
+    // Add public communities (that aren't already in known)
+    for c in public_communities {
+        if let Some(curr_id) = current_community_id {
+            if c.id == curr_id {
+                continue;
+            }
+        }
+        if known_ids.contains(&c.id) {
+            continue;
+        }
+        // Filter out two-tone communities
+        if c.background_color.is_some() && c.foreground_color.is_some() {
+            continue;
+        }
+
+        let recent_posts = posts_by_community.get(&c.id).cloned().unwrap_or_default();
+        let has_participated = participated_community_ids.contains(&c.id);
+        all_communities.push(serde_json::json!({
+            "id": c.id.to_string(),
+            "name": c.name,
+            "slug": c.slug,
+            "description": c.description,
+            "visibility": c.visibility,
+            "owner_login_name": c.owner_login_name,
+            "posts_count": c.posts_count,
+            "recent_posts": recent_posts,
+            "has_participated": has_participated,
+        }));
+    }
+
+    // Separate by visibility type and participation
+    let mut unlisted_communities: Vec<_> = all_communities.iter()
+        .filter(|c| c.get("visibility").and_then(|v| v.as_str()) == Some("unlisted"))
+        .cloned()
         .collect();
 
-    let mut public_list: Vec<_> = public_communities
-        .into_iter()
+    let mut public_participated_communities: Vec<_> = all_communities.iter()
         .filter(|c| {
-            // Filter out current community, known communities, and two-tone communities
-            let not_current = if let Some(curr_id) = current_community_id {
-                c.id != curr_id
-            } else {
-                true
-            };
-            let not_known = !known_ids.contains(&c.id);
-            let not_two_tone = !(c.background_color.is_some() && c.foreground_color.is_some());
-            not_current && not_known && not_two_tone
+            c.get("visibility").and_then(|v| v.as_str()) == Some("public")
+                && c.get("has_participated").and_then(|v| v.as_bool()) == Some(true)
         })
-        .map(|c| {
-            let recent_posts = posts_by_community.get(&c.id).cloned().unwrap_or_default();
-            serde_json::json!({
-                "id": c.id.to_string(),
-                "name": c.name,
-                "slug": c.slug,
-                "description": c.description,
-                "visibility": c.visibility,
-                "owner_login_name": c.owner_login_name,
-                "posts_count": c.posts_count,
-                "is_known": false,
-                "recent_posts": recent_posts,
-            })
-        })
+        .cloned()
         .collect();
 
-    // Sort both lists alphabetically by name
-    known_list.sort_by(|a, b| {
+    let mut public_other_communities: Vec<_> = all_communities.iter()
+        .filter(|c| {
+            c.get("visibility").and_then(|v| v.as_str()) == Some("public")
+                && c.get("has_participated").and_then(|v| v.as_bool()) == Some(false)
+        })
+        .cloned()
+        .collect();
+
+    // Sort each list alphabetically by name
+    let sort_by_name = |a: &serde_json::Value, b: &serde_json::Value| {
         a.get("name")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .cmp(b.get("name").and_then(|v| v.as_str()).unwrap_or(""))
-    });
+    };
 
-    public_list.sort_by(|a, b| {
-        a.get("name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .cmp(b.get("name").and_then(|v| v.as_str()).unwrap_or(""))
-    });
-
-    // Concatenate: known communities first, then public communities
-    let mut available_communities = known_list;
-    available_communities.extend(public_list);
+    unlisted_communities.sort_by(sort_by_name);
+    public_participated_communities.sort_by(sort_by_name);
+    public_other_communities.sort_by(sort_by_name);
 
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
@@ -1791,7 +1821,9 @@ pub async fn post_edit_community(
         post,
         post_id => id,
         current_community,
-        available_communities,
+        unlisted_communities,
+        public_participated_communities,
+        public_other_communities,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
@@ -3328,14 +3360,20 @@ pub async fn get_movable_communities_api(
             foreground_color: None,
             owner_login_name: None,
             owner_display_name: None,
+            has_participated: None,
         });
     }
 
-    // Add other communities, excluding the current community
-    for (id, name, slug, visibility, bg_color, fg_color, owner_login, owner_display) in communities
+    // Add other communities, excluding the current community and private communities
+    for (id, name, slug, visibility, bg_color, fg_color, owner_login, owner_display, has_participated) in communities
     {
         // Skip the current community
         if Some(id) == post.community_id {
+            continue;
+        }
+
+        // Skip private communities - moving to private communities is restricted
+        if matches!(visibility, crate::models::community::CommunityVisibility::Private) {
             continue;
         }
 
@@ -3348,6 +3386,7 @@ pub async fn get_movable_communities_api(
             foreground_color: fg_color,
             owner_login_name: Some(owner_login),
             owner_display_name: Some(owner_display),
+            has_participated: Some(has_participated),
         });
     }
 

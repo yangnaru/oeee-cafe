@@ -1301,6 +1301,7 @@ pub async fn get_movable_communities(
         Option<String>,
         String,
         String,
+        bool,
     )>,
 > {
     let communities = query!(
@@ -1313,7 +1314,11 @@ pub async fn get_movable_communities(
             c.background_color,
             c.foreground_color,
             u.login_name as "owner_login_name!",
-            u.display_name as "owner_display_name!"
+            u.display_name as "owner_display_name!",
+            EXISTS(
+                SELECT 1 FROM posts p
+                WHERE p.community_id = c.id AND p.author_id = $1
+            ) as "has_participated!"
         FROM communities c
         INNER JOIN users u ON c.owner_id = u.id
         WHERE c.deleted_at IS NULL
@@ -1355,6 +1360,7 @@ pub async fn get_movable_communities(
             row.foreground_color,
             row.owner_login_name,
             row.owner_display_name,
+            row.has_participated,
         )
     })
     .collect();

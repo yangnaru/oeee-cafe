@@ -183,6 +183,7 @@ pub struct MovableCommunity {
     pub foreground_color: Option<String>,
     pub owner_login_name: Option<String>,
     pub owner_display_name: Option<String>,
+    pub has_participated: Option<bool>, // None for "Personal Post" option, true/false for communities
 }
 
 /// Request body for moving a post to a community
