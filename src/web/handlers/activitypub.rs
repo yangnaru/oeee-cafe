@@ -914,7 +914,7 @@ impl ActivityHandler for Follow {
             .send(
                 accept,
                 vec![follower_actor.shared_inbox_or_inbox()],
-                false,
+                data.app_data().config.use_activitypub_queue(),
                 data,
             )
             .await?;
@@ -1835,7 +1835,7 @@ pub async fn send_update_activity(
         .send(
             update_activity,
             inbox_urls,
-            false, // Don't use queue for now
+            app_state.config.use_activitypub_queue(),
             &federation_data,
         )
         .await?;
@@ -1905,7 +1905,7 @@ pub async fn send_delete_activity(
         .send(
             delete_activity,
             inbox_urls,
-            false, // Don't use queue for now
+            app_state.config.use_activitypub_queue(),
             &federation_data,
         )
         .await?;

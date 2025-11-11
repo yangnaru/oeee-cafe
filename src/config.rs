@@ -57,4 +57,11 @@ impl AppConfig {
             .build()
             .and_then(|cfg| cfg.try_deserialize::<Self>())
     }
+
+    /// Determines whether to use ActivityPub message queueing.
+    /// Returns true in production for reliability (automatic retries on failure),
+    /// false in development for easier debugging (immediate sending).
+    pub fn use_activitypub_queue(&self) -> bool {
+        self.env == "production"
+    }
 }
