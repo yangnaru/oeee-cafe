@@ -147,3 +147,132 @@ pub async fn find_banner_by_id(
         created_at: banner.created_at,
     })
 }
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct BannerListItem {
+    pub id: Uuid,
+    pub image_filename: String,
+    pub created_at: DateTime<Utc>,
+    pub is_active: bool,
+}
+
+pub async fn list_user_banners(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<Vec<BannerListItem>> {
+    let banners = query!(
+        "
+            SELECT
+                banners.id,
+                images.image_filename,
+                banners.created_at,
+                users.banner_id
+            FROM banners
+            LEFT JOIN images ON banners.image_id = images.id
+            LEFT JOIN users ON users.id = banners.author_id
+            WHERE banners.author_id = $1
+            ORDER BY banners.created_at DESC
+        ",
+        user_id
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(banners
+        .into_iter()
+        .map(|banner| BannerListItem {
+            id: banner.id,
+            image_filename: banner.image_filename,
+            created_at: banner.created_at,
+            is_active: banner.banner_id == Some(banner.id),
+        })
+        .collect())
+}
+
+pub async fn activate_banner(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    banner_id: Uuid,
+) -> Result<()> {
+    // Verify the banner belongs to the user
+    let banner = query!(
+        "
+            SELECT author_id
+            FROM banners
+            WHERE id = $1
+        ",
+        banner_id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    if banner.author_id != user_id {
+        anyhow::bail!("Banner does not belong to user");
+    }
+
+    // Update user's banner_id
+    query!(
+        "
+            UPDATE users
+            SET banner_id = $1
+            WHERE id = $2
+        ",
+        banner_id,
+        user_id,
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn delete_banner(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    banner_id: Uuid,
+) -> Result<()> {
+    // Verify the banner belongs to the user
+    let banner = query!(
+        "
+            SELECT author_id
+            FROM banners
+            WHERE id = $1
+        ",
+        banner_id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    if banner.author_id != user_id {
+        anyhow::bail!("Banner does not belong to user");
+    }
+
+    // Check if this is the active banner
+    let user = query!(
+        "
+            SELECT banner_id
+            FROM users
+            WHERE id = $1
+        ",
+        user_id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    if user.banner_id == Some(banner_id) {
+        anyhow::bail!("Cannot delete active banner");
+    }
+
+    // Delete the banner
+    query!(
+        "
+            DELETE FROM banners
+            WHERE id = $1
+        ",
+        banner_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}

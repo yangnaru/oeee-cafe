@@ -311,6 +311,21 @@ profile-link-delete-confirm = Are you sure you want to delete this link?
 profile-link-add = Add
 profile-link-description = Description
 
+banner-management-title = Banner Management
+banner-management-description = Manage your profile banners. Select which banner to display on your profile.
+banner-management-link = Manage your banners
+banner-management-no-banners = You don't have any banners yet.
+banner-management-create-first = Create your first banner
+banner-management-create-new = Create new banner
+banner-management-created = Created
+banner-management-active-badge = Active
+banner-management-set-active = Set as active
+banner-management-delete = Delete
+banner-management-delete-confirm = Are you sure you want to delete this banner? This action cannot be undone.
+banner-management-activate-error = Failed to activate banner. Please try again.
+banner-management-delete-error = Failed to delete banner. You cannot delete your active banner.
+banner-management-back-to-settings = Back to settings
+
 follow = Follow
 unfollow = Unfollow
 

@@ -1,6 +1,8 @@
 use crate::app_error::AppError;
 use crate::models::actor::Actor;
-use crate::models::banner::find_banner_by_id;
+use crate::models::banner::{
+    activate_banner, delete_banner, find_banner_by_id, list_user_banners,
+};
 use crate::models::follow::{
     count_followings_by_user_id, find_followings_by_user_id, follow_user, is_following,
     unfollow_user,
@@ -32,7 +34,7 @@ use axum::response::IntoResponse;
 use axum::{extract::State, http::StatusCode, response::Html, response::Json, Form};
 
 use minijinja::context;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::ExtractFtlLang;
@@ -488,6 +490,53 @@ pub async fn profile_settings(
         unread_notification_count => common_ctx.unread_notification_count,
         links,
         user => Some(user),
+        ftl_lang,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+pub async fn banner_management(
+    auth_session: AuthSession,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let user = find_user_by_id(&mut tx, current_user.id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("User".to_string()))?;
+
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+
+    let banners = list_user_banners(&mut tx, user.id).await?;
+
+    tx.commit().await?;
+
+    // Convert banners to include full image URLs
+    let banners_with_urls: Vec<_> = banners
+        .into_iter()
+        .map(|banner| {
+            let image_prefix = &banner.image_filename[..2];
+            let image_url = format!(
+                "{}/image/{}/{}",
+                state.config.r2_public_endpoint_url, image_prefix, banner.image_filename
+            );
+            (banner, image_url)
+        })
+        .collect();
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("banner_management.jinja")?;
+    let rendered = template.render(context! {
+        current_user => auth_session.user,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
+        user => Some(user),
+        banners => banners_with_urls,
         ftl_lang,
     })?;
 
@@ -1090,6 +1139,96 @@ pub async fn unfollow_profile_api(
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     unfollow_user(&mut tx, user.id, target_user.id).await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::OK.into_response())
+}
+
+#[derive(Serialize)]
+pub struct BannerListResponse {
+    pub banners: Vec<BannerListItemResponse>,
+}
+
+#[derive(Serialize)]
+pub struct BannerListItemResponse {
+    pub id: Uuid,
+    pub image_url: String,
+    pub created_at: String,
+    pub is_active: bool,
+}
+
+/// API endpoint to list all banners for the current user
+pub async fn list_banners_json(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let banners = list_user_banners(&mut tx, user.id).await?;
+
+    tx.commit().await?;
+
+    // Convert to response format with full image URLs
+    let banners_response: Vec<BannerListItemResponse> = banners
+        .into_iter()
+        .map(|banner| {
+            let image_prefix = &banner.image_filename[..2];
+            let image_url = format!(
+                "{}/image/{}/{}",
+                state.config.r2_public_endpoint_url, image_prefix, banner.image_filename
+            );
+
+            BannerListItemResponse {
+                id: banner.id,
+                image_url,
+                created_at: banner.created_at.to_rfc3339(),
+                is_active: banner.is_active,
+            }
+        })
+        .collect();
+
+    Ok(Json(BannerListResponse {
+        banners: banners_response,
+    }))
+}
+
+/// API endpoint to activate a banner
+pub async fn activate_banner_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(banner_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    activate_banner(&mut tx, user.id, banner_id).await?;
+
+    tx.commit().await?;
+
+    Ok(StatusCode::OK.into_response())
+}
+
+/// API endpoint to delete a banner
+pub async fn delete_banner_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(banner_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    delete_banner(&mut tx, user.id, banner_id).await?;
 
     tx.commit().await?;
 

@@ -313,6 +313,21 @@ profile-link-delete-confirm = 确定要删除这个链接吗？
 profile-link-add = 添加链接
 profile-link-description = 链接描述
 
+banner-management-title = 横幅管理
+banner-management-description = 管理您的个人资料横幅，并选择要显示的横幅。
+banner-management-link = 管理横幅
+banner-management-no-banners = 您还没有横幅。
+banner-management-create-first = 创建第一个横幅
+banner-management-create-new = 创建新横幅
+banner-management-created = 创建时间
+banner-management-active-badge = 已启用
+banner-management-set-active = 设为启用
+banner-management-delete = 删除
+banner-management-delete-confirm = 确定要删除此横幅吗？此操作无法撤销。
+banner-management-activate-error = 启用横幅失败，请重试。
+banner-management-delete-error = 删除横幅失败。您无法删除已启用的横幅。
+banner-management-back-to-settings = 返回设置
+
 follow = 关注
 unfollow = 取消关注
 

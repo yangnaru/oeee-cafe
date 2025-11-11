@@ -313,6 +313,21 @@ profile-link-delete-confirm = 本当にリンクを削除してもよろしい�
 profile-link-add = リンクを追加
 profile-link-description = リンクの説明
 
+banner-management-title = バナー管理
+banner-management-description = プロフィールバナーを管理し、表示するバナーを選択します。
+banner-management-link = バナーを管理
+banner-management-no-banners = まだバナーがありません。
+banner-management-create-first = 最初のバナーを作成
+banner-management-create-new = 新しいバナーを作成
+banner-management-created = 作成日
+banner-management-active-badge = アクティブ
+banner-management-set-active = アクティブにする
+banner-management-delete = 削除
+banner-management-delete-confirm = 本当にこのバナーを削除してもよろしいですか？この操作は元に戻せません。
+banner-management-activate-error = バナーのアクティブ化に失敗しました。もう一度お試しください。
+banner-management-delete-error = バナーの削除に失敗しました。アクティブなバナーは削除できません。
+banner-management-back-to-settings = 設定に戻る
+
 follow = 同盟を結ぶ
 unfollow = 同盟を破る
 
