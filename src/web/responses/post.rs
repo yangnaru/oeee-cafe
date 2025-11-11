@@ -165,3 +165,28 @@ pub struct CommentsListResponse {
     pub comments: Vec<ThreadedCommentResponse>,
     pub pagination: PaginationMeta,
 }
+
+/// Response for movable communities endpoint
+#[derive(Serialize, Debug)]
+pub struct MovableCommunitiesResponse {
+    pub communities: Vec<MovableCommunity>,
+}
+
+/// Community that a post can be moved to
+#[derive(Serialize, Debug)]
+pub struct MovableCommunity {
+    pub id: Option<Uuid>, // None for "Personal Post" option
+    pub name: String,
+    pub slug: Option<String>,
+    pub visibility: Option<crate::models::community::CommunityVisibility>,
+    pub background_color: Option<String>,
+    pub foreground_color: Option<String>,
+    pub owner_login_name: Option<String>,
+    pub owner_display_name: Option<String>,
+}
+
+/// Request body for moving a post to a community
+#[derive(serde::Deserialize, Debug)]
+pub struct MoveCommunityRequest {
+    pub community_id: Option<Uuid>, // None to move to personal posts
+}

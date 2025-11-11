@@ -1540,88 +1540,76 @@ pub async fn post_edit_community(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    // Don't allow moving reply posts (posts with a parent)
-    if post
-        .get("parent_post_id")
-        .and_then(|v| v.as_ref())
-        .is_some()
-    {
+    // Check if post is movable using the helper function
+    use crate::models::post::is_post_movable;
+    if !is_post_movable(&mut tx, post_uuid).await? {
+        // Post cannot be moved (part of thread, in private/two-tone community)
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    // Personal posts don't have a community to edit
     let post_data = post.clone();
     let current_community_id = post_data
         .get("community_id")
         .and_then(|id| id.as_ref())
         .and_then(|id_str| Uuid::parse_str(id_str).ok());
 
-    let current_community_id = match current_community_id {
-        Some(id) => id,
-        None => {
-            // Personal posts cannot have their community edited
-            return Ok(StatusCode::FORBIDDEN.into_response());
-        }
-    };
+    // Get current community details with owner info (if post is in a community)
+    let (current_community_result, current_community_recent_posts) = if let Some(comm_id) = current_community_id {
+        let community_result = sqlx::query!(
+            r#"
+            SELECT
+                c.id, c.owner_id, c.name, c.slug, c.description,
+                c.visibility as "visibility: crate::models::community::CommunityVisibility", c.updated_at, c.created_at, c.background_color, c.foreground_color,
+                u.login_name AS "owner_login_name?"
+            FROM communities c
+            LEFT JOIN users u ON c.owner_id = u.id
+            WHERE c.id = $1
+            "#,
+            comm_id
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
 
-    // Get current community details with owner info
-    let current_community_result = sqlx::query!(
-        r#"
-        SELECT
-            c.id, c.owner_id, c.name, c.slug, c.description,
-            c.visibility as "visibility: crate::models::community::CommunityVisibility", c.updated_at, c.created_at, c.background_color, c.foreground_color,
-            u.login_name AS "owner_login_name?"
-        FROM communities c
-        LEFT JOIN users u ON c.owner_id = u.id
-        WHERE c.id = $1
-        "#,
-        current_community_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
+        // Get recent posts for current community
+        let current_posts = sqlx::query!(
+            r#"
+            SELECT
+                p.id,
+                i.image_filename,
+                i.width as image_width,
+                i.height as image_height,
+                u.login_name as author_login_name
+            FROM posts p
+            INNER JOIN images i ON p.image_id = i.id
+            INNER JOIN users u ON p.author_id = u.id
+            WHERE p.community_id = $1
+                AND p.published_at IS NOT NULL
+                AND p.deleted_at IS NULL
+            ORDER BY p.published_at DESC
+            LIMIT 3
+            "#,
+            comm_id
+        )
+        .fetch_all(&mut *tx)
+        .await?;
 
-    // Don't allow moving posts from private communities
-    if let Some(ref current_community) = current_community_result {
-        if current_community.visibility == crate::models::community::CommunityVisibility::Private {
-            return Ok(StatusCode::FORBIDDEN.into_response());
-        }
-    }
-
-    // Get recent posts for current community
-    let current_community_posts = sqlx::query!(
-        r#"
-        SELECT
-            p.id,
-            i.image_filename,
-            i.width as image_width,
-            i.height as image_height,
-            u.login_name as author_login_name
-        FROM posts p
-        INNER JOIN images i ON p.image_id = i.id
-        INNER JOIN users u ON p.author_id = u.id
-        WHERE p.community_id = $1
-            AND p.published_at IS NOT NULL
-            AND p.deleted_at IS NULL
-        ORDER BY p.published_at DESC
-        LIMIT 3
-        "#,
-        current_community_id
-    )
-    .fetch_all(&mut *tx)
-    .await?;
-
-    let current_community_recent_posts: Vec<serde_json::Value> = current_community_posts
-        .into_iter()
-        .map(|post| {
-            serde_json::json!({
-                "id": post.id.to_string(),
-                "image_filename": post.image_filename,
-                "image_width": post.image_width,
-                "image_height": post.image_height,
-                "author_login_name": post.author_login_name,
+        let posts: Vec<serde_json::Value> = current_posts
+            .into_iter()
+            .map(|post| {
+                serde_json::json!({
+                    "id": post.id.to_string(),
+                    "image_filename": post.image_filename,
+                    "image_width": post.image_width,
+                    "image_height": post.image_height,
+                    "author_login_name": post.author_login_name,
+                })
             })
-        })
-        .collect();
+            .collect();
+
+        (community_result, posts)
+    } else {
+        (None, Vec::new())
+    };
 
     let current_community = current_community_result.map(|row| {
         serde_json::json!({
@@ -1651,12 +1639,12 @@ pub async fn post_edit_community(
     // Get all community IDs for fetching recent posts
     let mut all_community_ids: Vec<Uuid> = Vec::new();
     for c in &known_communities {
-        if c.id != current_community_id {
+        if current_community_id.map_or(true, |curr_id| c.id != curr_id) {
             all_community_ids.push(c.id);
         }
     }
     for c in &public_communities {
-        if c.id != current_community_id && !known_ids.contains(&c.id) {
+        if current_community_id.map_or(true, |curr_id| c.id != curr_id) && !known_ids.contains(&c.id) {
             all_community_ids.push(c.id);
         }
     }
@@ -1717,7 +1705,16 @@ pub async fn post_edit_community(
 
     let mut known_list: Vec<_> = known_communities
         .into_iter()
-        .filter(|c| c.id != current_community_id)
+        .filter(|c| {
+            // Filter out current community and two-tone communities
+            if let Some(curr_id) = current_community_id {
+                if c.id == curr_id {
+                    return false;
+                }
+            }
+            // Filter out two-tone communities (both colors set)
+            !(c.background_color.is_some() && c.foreground_color.is_some())
+        })
         .map(|c| {
             let recent_posts = posts_by_community.get(&c.id).cloned().unwrap_or_default();
             serde_json::json!({
@@ -1736,7 +1733,17 @@ pub async fn post_edit_community(
 
     let mut public_list: Vec<_> = public_communities
         .into_iter()
-        .filter(|c| c.id != current_community_id && !known_ids.contains(&c.id))
+        .filter(|c| {
+            // Filter out current community, known communities, and two-tone communities
+            let not_current = if let Some(curr_id) = current_community_id {
+                c.id != curr_id
+            } else {
+                true
+            };
+            let not_known = !known_ids.contains(&c.id);
+            let not_two_tone = !(c.background_color.is_some() && c.foreground_color.is_some());
+            not_current && not_known && not_two_tone
+        })
         .map(|c| {
             let recent_posts = posts_by_community.get(&c.id).cloned().unwrap_or_default();
             serde_json::json!({
@@ -1830,39 +1837,14 @@ pub async fn do_post_edit_community(
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    // Don't allow moving reply posts (posts with a parent)
-    if post
-        .get("parent_post_id")
-        .and_then(|v| v.as_ref())
-        .is_some()
-    {
+    // Check if post is movable using the helper function
+    use crate::models::post::is_post_movable;
+    if !is_post_movable(&mut tx, post_uuid).await? {
+        // Post cannot be moved (part of thread, in private/two-tone community)
         return Ok(StatusCode::FORBIDDEN.into_response());
     }
 
-    // Get current community and check if it's private
-    // Personal posts cannot have their community changed (they don't have one)
-    let current_community_id = post
-        .get("community_id")
-        .and_then(|v| v.as_ref())
-        .and_then(|s| Uuid::parse_str(s).ok());
-
-    let current_community_id = match current_community_id {
-        Some(id) => id,
-        None => {
-            // This is a personal post - cannot change community
-            return Ok(StatusCode::FORBIDDEN.into_response());
-        }
-    };
-
-    let current_community = find_community_by_id(&mut tx, current_community_id).await?;
-    if let Some(community) = current_community {
-        // Don't allow moving posts from private communities
-        if community.visibility == crate::models::community::CommunityVisibility::Private {
-            return Ok(StatusCode::FORBIDDEN.into_response());
-        }
-    }
-
-    let _ = edit_post_community(&mut tx, post_uuid, form.community_id).await;
+    let _ = edit_post_community(&mut tx, post_uuid, Some(form.community_id)).await;
     let _ = tx.commit().await;
 
     Ok(Redirect::to(&format!("/posts/{}", id)).into_response())
@@ -3293,4 +3275,148 @@ pub async fn post_reactions_detail(
     })?;
 
     Ok(Html(rendered).into_response())
+}
+
+/// API endpoint to get list of communities that a post can be moved to
+pub async fn get_movable_communities_api(
+    State(state): State<AppState>,
+    auth_session: AuthSession,
+    Path(post_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    use crate::models::post::{get_movable_communities, is_post_movable};
+    use crate::web::responses::post::{MovableCommunity, MovableCommunitiesResponse};
+
+    let user = auth_session.user.ok_or(AppError::Unauthorized)?;
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Get post data to check ownership and movability
+    let post = sqlx::query!(
+        r#"SELECT id, author_id FROM posts WHERE id = $1 AND deleted_at IS NULL"#,
+        post_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Post".to_string()))?;
+
+    // Check if user is the author
+    if post.author_id != user.id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    // Check if post is movable
+    if !is_post_movable(&mut tx, post_id).await? {
+        // Return empty list if post is not movable
+        return Ok(Json(MovableCommunitiesResponse {
+            communities: vec![],
+        })
+        .into_response());
+    }
+
+    // Get list of movable communities
+    let communities = get_movable_communities(&mut tx, user.id).await?;
+
+    // Build response with "Personal Post" option first
+    let mut response_communities = vec![MovableCommunity {
+        id: None,
+        name: "Personal Post".to_string(),
+        slug: None,
+        visibility: None,
+        background_color: None,
+        foreground_color: None,
+        owner_login_name: None,
+        owner_display_name: None,
+    }];
+
+    // Add other communities
+    for (id, name, slug, visibility, bg_color, fg_color, owner_login, owner_display) in communities
+    {
+        response_communities.push(MovableCommunity {
+            id: Some(id),
+            name,
+            slug: Some(slug),
+            visibility: Some(visibility),
+            background_color: bg_color,
+            foreground_color: fg_color,
+            owner_login_name: Some(owner_login),
+            owner_display_name: Some(owner_display),
+        });
+    }
+
+    tx.commit().await?;
+
+    Ok(Json(MovableCommunitiesResponse {
+        communities: response_communities,
+    })
+    .into_response())
+}
+
+/// API endpoint to move a post to a different community
+pub async fn move_post_community_api(
+    State(state): State<AppState>,
+    auth_session: AuthSession,
+    Path(post_id): Path<Uuid>,
+    Json(payload): Json<crate::web::responses::post::MoveCommunityRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    use crate::models::community::{find_community_by_id, is_user_member};
+    use crate::models::post::is_post_movable;
+
+    let user = auth_session.user.ok_or(AppError::Unauthorized)?;
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Get post data to check ownership and current community
+    let post = sqlx::query!(
+        r#"SELECT id, author_id, community_id FROM posts WHERE id = $1 AND deleted_at IS NULL"#,
+        post_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Post".to_string()))?;
+
+    // Check if user is the author
+    if post.author_id != user.id {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    // Check if post is movable
+    if !is_post_movable(&mut tx, post_id).await? {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    // If moving to a community (not personal), validate access and restrictions
+    if let Some(target_community_id) = payload.community_id {
+        let target_community = find_community_by_id(&mut tx, target_community_id)
+            .await?
+            .ok_or_else(|| AppError::NotFound("Community".to_string()))?;
+
+        // Check if target is a two-tone community (both colors set)
+        if target_community.background_color.is_some()
+            && target_community.foreground_color.is_some()
+        {
+            return Ok(StatusCode::FORBIDDEN.into_response());
+        }
+
+        // Check user has access to target community
+        use crate::models::community::CommunityVisibility;
+        match target_community.visibility {
+            CommunityVisibility::Private => {
+                // Must be a member of private communities
+                if !is_user_member(&mut tx, target_community_id, user.id).await? {
+                    return Ok(StatusCode::FORBIDDEN.into_response());
+                }
+            }
+            CommunityVisibility::Public | CommunityVisibility::Unlisted => {
+                // Anyone can post to public/unlisted communities
+            }
+        }
+    }
+
+    // Move the post
+    edit_post_community(&mut tx, post_id, payload.community_id).await?;
+
+    tx.commit().await?;
+
+    // Return success with updated post data
+    Ok(StatusCode::OK.into_response())
 }

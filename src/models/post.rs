@@ -1200,33 +1200,166 @@ pub async fn edit_post(
 pub async fn edit_post_community(
     tx: &mut Transaction<'_, Postgres>,
     id: Uuid,
-    new_community_id: Uuid,
+    new_community_id: Option<Uuid>,
 ) -> Result<()> {
-    // Use a recursive CTE to update the post and all its descendants
+    // Update the post's community (can be None for personal posts)
+    // Note: We don't use recursive CTE anymore since threaded posts cannot be moved
     let q = query!(
         r#"
-            WITH RECURSIVE post_tree AS (
-                -- Base case: the root post being moved
-                SELECT id
-                FROM posts
-                WHERE id = $2
-
-                UNION ALL
-
-                -- Recursive case: all child posts
-                SELECT p.id
-                FROM posts p
-                INNER JOIN post_tree pt ON p.parent_post_id = pt.id
-            )
             UPDATE posts
             SET community_id = $1
-            WHERE id IN (SELECT id FROM post_tree)
+            WHERE id = $2
         "#,
         new_community_id,
         id
     );
     q.execute(&mut **tx).await?;
     Ok(())
+}
+
+/// Check if a post can be moved to a different community
+/// Returns true if the post is movable (not part of a thread and not in private/two-tone community)
+pub async fn is_post_movable(
+    tx: &mut Transaction<'_, Postgres>,
+    post_id: Uuid,
+) -> Result<bool> {
+    // Check if post has a parent (is a reply)
+    let has_parent = query!(
+        r#"SELECT parent_post_id FROM posts WHERE id = $1"#,
+        post_id
+    )
+    .fetch_one(&mut **tx)
+    .await?
+    .parent_post_id
+    .is_some();
+
+    if has_parent {
+        return Ok(false);
+    }
+
+    // Check if post has children (is a parent)
+    let has_children = query!(
+        r#"SELECT EXISTS(SELECT 1 FROM posts WHERE parent_post_id = $1) as "has_children!""#,
+        post_id
+    )
+    .fetch_one(&mut **tx)
+    .await?
+    .has_children;
+
+    if has_children {
+        return Ok(false);
+    }
+
+    // Check if post is in a private or two-tone community
+    let community_info = query!(
+        r#"
+        SELECT
+            c.visibility::text as visibility,
+            c.background_color,
+            c.foreground_color
+        FROM posts p
+        LEFT JOIN communities c ON p.community_id = c.id
+        WHERE p.id = $1
+        "#,
+        post_id
+    )
+    .fetch_one(&mut **tx)
+    .await?;
+
+    // If in a community, check restrictions
+    if let Some(visibility_str) = community_info.visibility {
+        // Cannot move from private communities
+        if visibility_str == "private" {
+            return Ok(false);
+        }
+
+        // Cannot move from two-tone communities (both colors set)
+        if community_info.background_color.is_some() && community_info.foreground_color.is_some() {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+/// Get list of communities that a post can be moved to
+/// Includes:
+/// - All public communities
+/// - Unlisted communities where the user has posted before
+/// - Private communities where the user is a member
+/// Excludes two-tone communities (both colors set)
+pub async fn get_movable_communities(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+) -> Result<
+    Vec<(
+        Uuid,
+        String,
+        String,
+        CommunityVisibility,
+        Option<String>,
+        Option<String>,
+        String,
+        String,
+    )>,
+> {
+    let communities = query!(
+        r#"
+        SELECT
+            c.id,
+            c.name,
+            c.slug,
+            c.visibility as "visibility: CommunityVisibility",
+            c.background_color,
+            c.foreground_color,
+            u.login_name as "owner_login_name!",
+            u.display_name as "owner_display_name!"
+        FROM communities c
+        INNER JOIN users u ON c.owner_id = u.id
+        WHERE c.deleted_at IS NULL
+          AND NOT (c.background_color IS NOT NULL AND c.foreground_color IS NOT NULL)
+          AND (
+            -- All public communities
+            c.visibility = 'public'
+            OR (
+              -- Unlisted communities where user has posted
+              c.visibility = 'unlisted'
+              AND EXISTS(
+                SELECT 1 FROM posts p
+                WHERE p.community_id = c.id AND p.author_id = $1
+              )
+            )
+            OR (
+              -- Private communities where user is a member
+              c.visibility = 'private'
+              AND EXISTS(
+                SELECT 1 FROM community_members cm
+                WHERE cm.community_id = c.id AND cm.user_id = $1
+              )
+            )
+          )
+        ORDER BY c.name ASC
+        "#,
+        user_id
+    )
+    .fetch_all(&mut **tx)
+    .await?
+    .into_iter()
+    .map(|row| {
+        (
+            row.id,
+            row.name,
+            row.slug,
+            row.visibility,
+            row.background_color,
+            row.foreground_color,
+            row.owner_login_name,
+            row.owner_display_name,
+        )
+    })
+    .collect();
+
+    Ok(communities)
 }
 
 pub async fn find_public_community_posts(

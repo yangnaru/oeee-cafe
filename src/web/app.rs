@@ -53,10 +53,11 @@ use crate::web::handlers::password_reset::{
 };
 use crate::web::handlers::post::{
     add_reaction, do_create_comment, do_post_edit_community, draft_posts, draft_posts_api,
-    hx_delete_post, hx_do_edit_post, hx_edit_post, post_edit_community, post_publish,
-    post_publish_form, post_reactions_detail, post_relay_view, post_relay_view_by_login_name,
-    post_replay_view, post_replay_view_by_login_name, post_replay_view_mobile,
-    post_view_by_login_name, redirect_post_to_login_name, remove_reaction,
+    get_movable_communities_api, hx_delete_post, hx_do_edit_post, hx_edit_post,
+    move_post_community_api, post_edit_community, post_publish, post_publish_form,
+    post_reactions_detail, post_relay_view, post_relay_view_by_login_name, post_replay_view,
+    post_replay_view_by_login_name, post_replay_view_mobile, post_view_by_login_name,
+    redirect_post_to_login_name, remove_reaction,
 };
 use crate::web::handlers::privacy::privacy;
 use crate::web::handlers::profile::{
@@ -292,6 +293,14 @@ impl App {
             .route(
                 "/api/v1/posts/:post_id/reactions/:emoji",
                 delete(remove_reaction_api),
+            )
+            .route(
+                "/api/v1/posts/:post_id/movable-communities",
+                get(get_movable_communities_api),
+            )
+            .route(
+                "/api/v1/posts/:post_id/community",
+                put(move_post_community_api),
             )
             .route("/api/v1/search", get(search_json))
             .route("/api/v1/profiles/:login_name", get(profile_json))
