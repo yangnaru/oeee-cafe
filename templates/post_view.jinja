@@ -134,10 +134,15 @@
             </p>
             {% if post.community_slug %}
               <p>{{ ftl_get_message("community") }}: <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
-                {% if current_user.id == post.author_id and (not post_community or post_community.visibility != "private") and not post.parent_post_id %}
+                {% if current_user.id == post.author_id and (not post_community or post_community.visibility != "private") and not post.parent_post_id and not (post_community and post_community.background_color and post_community.foreground_color) %}
                   (<a href="/@{{ post.community_slug }}/{{ post_id }}/edit/community">{{ ftl_get_message("edit") }}</a>)
                 {% endif %}
               </p>
+            {% else %}
+              {# Personal post - show edit link #}
+              {% if current_user.id == post.author_id and not post.parent_post_id %}
+                <p>(<a href="/@{{ post.login_name }}/{{ post_id }}/edit/community">{{ ftl_get_message("edit-community-button") }}</a>)</p>
+              {% endif %}
             {% endif %}
             <p>HIT: {{ post.viewer_count }}</p>
           </div>
