@@ -38,8 +38,41 @@
           {{ stats.total_comments }} {{ ftl_get_message("community-stats-comments") }}
         </div>
         {% if current_user and community.background_color %}
-          <a href="/collaborate/?offline=true&twoTone=true&backgroundColor={{ community.background_color | replace('#', '%23') }}&foregroundColor={{ community.foreground_color | replace('#', '%23') }}&width=640&height=480&community_id={{ community_id }}"
-             class="community-stats-draw-link">{{ ftl_get_message('community-drawing-new') }}</a>
+          <div class="community-drawing-card">
+            <form action="/collaborate/" method="get" onsubmit="setOrientationDimensions(event, this)">
+              <input type="hidden" name="offline" value="true" />
+              <input type="hidden" name="twoTone" value="true" />
+              <input type="hidden" name="backgroundColor" value="{{ community.background_color }}" />
+              <input type="hidden" name="foregroundColor" value="{{ community.foreground_color }}" />
+              <input type="hidden" name="community_id" value="{{ community_id }}" />
+              <input type="hidden" name="width" value="640" />
+              <input type="hidden" name="height" value="480" />
+              <fieldset>
+                <legend>{{ ftl_get_message('community-drawing-orientation') }}</legend>
+                <label>
+                  <input type="radio" name="orientation" value="landscape" checked />
+                  {{ ftl_get_message('community-drawing-landscape') }} (640 × 480)
+                </label>
+                <label>
+                  <input type="radio" name="orientation" value="portrait" />
+                  {{ ftl_get_message('community-drawing-portrait') }} (480 × 640)
+                </label>
+              </fieldset>
+              <input type="submit" value="{{ ftl_get_message('community-drawing-new') }}" />
+            </form>
+            <script>
+              function setOrientationDimensions(event, form) {
+                const orientation = form.querySelector('input[name="orientation"]:checked').value;
+                if (orientation === 'landscape') {
+                  form.querySelector('input[name="width"]').value = '640';
+                  form.querySelector('input[name="height"]').value = '480';
+                } else if (orientation === 'portrait') {
+                  form.querySelector('input[name="width"]').value = '480';
+                  form.querySelector('input[name="height"]').value = '640';
+                }
+              }
+            </script>
+          </div>
         {% endif %}
       </div>
     {% endif %}

@@ -197,49 +197,83 @@
               </div>
               <fieldset id="reply-form-{{ post_id }}" style="display: none;">
                 <legend>{{ ftl_get_message("post-reply-select-tool") }}</legend>
-                <form action="/draw" method="post">
-                  <input type="hidden" name="parent_post_id" value="{{ post_id }}" />
-                  {% if post.community_id %}
-                  <input type="hidden" name="community_id" value="{{ post.community_id }}" />
-                  {% endif %}
-                  <select name="tool">
-                    <option value="neo" selected>PaintBBS NEO</option>
-                    <option value="tegaki">Tegaki</option>
-                    <option value="cucumber">Cucumber</option>
-                  </select>
-                  <select name="width">
-                    <option value="300" selected>300</option>
-                    <option value="350">350</option>
-                    <option value="400">400</option>
-                    <option value="450">450</option>
-                    <option value="500">500</option>
-                    <option value="550">550</option>
-                    <option value="600">600</option>
-                    <option value="650">650</option>
-                    <option value="700">700</option>
-                    <option value="750">750</option>
-                    <option value="800">800</option>
-                    <option value="850">850</option>
-                    <option value="900">900</option>
-                    <option value="950">950</option>
-                    <option value="1000">1000</option>
-                  </select>
-                  X
-                  <select name="height">
-                    <option value="300" selected>300</option>
-                    <option value="350">350</option>
-                    <option value="400">400</option>
-                    <option value="450">450</option>
-                    <option value="500">500</option>
-                    <option value="550">550</option>
-                    <option value="600">600</option>
-                    <option value="650">650</option>
-                    <option value="700">700</option>
-                    <option value="750">750</option>
-                    <option value="800">800</option>
-                  </select>
-                  <input type="submit" value="Start Drawing" />
-                </form>
+                {% if post_community and post_community.background_color and post_community.foreground_color %}
+                  <form action="/collaborate/" method="get" onsubmit="setOrientationDimensions(event, this)">
+                    <input type="hidden" name="offline" value="true" />
+                    <input type="hidden" name="twoTone" value="true" />
+                    <input type="hidden" name="backgroundColor" value="{{ post_community.background_color }}" />
+                    <input type="hidden" name="foregroundColor" value="{{ post_community.foreground_color }}" />
+                    <input type="hidden" name="community_id" value="{{ post.community_id }}" />
+                    <input type="hidden" name="parent_post_id" value="{{ post_id }}" />
+                    <input type="hidden" name="width" value="640" />
+                    <input type="hidden" name="height" value="480" />
+                    <label>
+                      <input type="radio" name="orientation" value="landscape" checked />
+                      {{ ftl_get_message('community-drawing-landscape') }} (640 × 480)
+                    </label>
+                    <label>
+                      <input type="radio" name="orientation" value="portrait" />
+                      {{ ftl_get_message('community-drawing-portrait') }} (480 × 640)
+                    </label>
+                    <input type="submit" value="Start Drawing" />
+                  </form>
+                  <script>
+                    function setOrientationDimensions(event, form) {
+                      const orientation = form.querySelector('input[name="orientation"]:checked').value;
+                      if (orientation === 'landscape') {
+                        form.querySelector('input[name="width"]').value = '640';
+                        form.querySelector('input[name="height"]').value = '480';
+                      } else if (orientation === 'portrait') {
+                        form.querySelector('input[name="width"]').value = '480';
+                        form.querySelector('input[name="height"]').value = '640';
+                      }
+                    }
+                  </script>
+                {% else %}
+                  <form action="/draw" method="post">
+                    <input type="hidden" name="parent_post_id" value="{{ post_id }}" />
+                    {% if post.community_id %}
+                    <input type="hidden" name="community_id" value="{{ post.community_id }}" />
+                    {% endif %}
+                    <select name="tool">
+                      <option value="neo" selected>PaintBBS NEO</option>
+                      <option value="tegaki">Tegaki</option>
+                      <option value="cucumber">Cucumber</option>
+                    </select>
+                    <select name="width">
+                      <option value="300" selected>300</option>
+                      <option value="350">350</option>
+                      <option value="400">400</option>
+                      <option value="450">450</option>
+                      <option value="500">500</option>
+                      <option value="550">550</option>
+                      <option value="600">600</option>
+                      <option value="650">650</option>
+                      <option value="700">700</option>
+                      <option value="750">750</option>
+                      <option value="800">800</option>
+                      <option value="850">850</option>
+                      <option value="900">900</option>
+                      <option value="950">950</option>
+                      <option value="1000">1000</option>
+                    </select>
+                    X
+                    <select name="height">
+                      <option value="300" selected>300</option>
+                      <option value="350">350</option>
+                      <option value="400">400</option>
+                      <option value="450">450</option>
+                      <option value="500">500</option>
+                      <option value="550">550</option>
+                      <option value="600">600</option>
+                      <option value="650">650</option>
+                      <option value="700">700</option>
+                      <option value="750">750</option>
+                      <option value="800">800</option>
+                    </select>
+                    <input type="submit" value="Start Drawing" />
+                  </form>
+                {% endif %}
               </fieldset>
             {% endif %}
           </div>
