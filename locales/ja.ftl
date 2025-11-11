@@ -115,6 +115,7 @@ community-stats-contributors = 寄稿者
 community-stats-comments = コメント
 
 edit = 修正
+edit-community-button = コミュニティに移動
 save = 保存
 cancel = キャンセル
 delete = 削除

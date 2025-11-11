@@ -113,6 +113,7 @@ community-stats-contributors = contributors
 community-stats-comments = comments
 
 edit = Edit
+edit-community-button = Move to Community
 save = Save
 cancel = Cancel
 delete = Delete

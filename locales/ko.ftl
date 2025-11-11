@@ -115,6 +115,7 @@ community-stats-contributors = 기여자
 community-stats-comments = 댓글
 
 edit = 수정
+edit-community-button = 커뮤니티로 이동
 save = 저장
 cancel = 취소
 delete = 삭제

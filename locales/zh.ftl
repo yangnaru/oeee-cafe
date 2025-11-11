@@ -115,6 +115,7 @@ community-stats-contributors = 贡献者
 community-stats-comments = 评论
 
 edit = 编辑
+edit-community-button = 移至社区
 save = 保存
 cancel = 取消
 delete = 删除
