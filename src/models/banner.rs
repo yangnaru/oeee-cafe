@@ -127,6 +127,7 @@ pub async fn find_banner_by_id(
             FROM banners
             LEFT JOIN images ON banners.image_id = images.id
             WHERE banners.id = $1
+            AND banners.deleted_at IS NULL
         ",
         id
     )
@@ -171,6 +172,7 @@ pub async fn list_user_banners(
             LEFT JOIN images ON banners.image_id = images.id
             LEFT JOIN users ON users.id = banners.author_id
             WHERE banners.author_id = $1
+            AND banners.deleted_at IS NULL
             ORDER BY banners.created_at DESC
         ",
         user_id
@@ -194,12 +196,13 @@ pub async fn activate_banner(
     user_id: Uuid,
     banner_id: Uuid,
 ) -> Result<()> {
-    // Verify the banner belongs to the user
+    // Verify the banner belongs to the user and is not deleted
     let banner = query!(
         "
             SELECT author_id
             FROM banners
             WHERE id = $1
+            AND deleted_at IS NULL
         ",
         banner_id
     )
@@ -231,12 +234,13 @@ pub async fn delete_banner(
     user_id: Uuid,
     banner_id: Uuid,
 ) -> Result<()> {
-    // Verify the banner belongs to the user
+    // Verify the banner belongs to the user and get image_id
     let banner = query!(
         "
-            SELECT author_id
+            SELECT author_id, image_id
             FROM banners
             WHERE id = $1
+            AND deleted_at IS NULL
         ",
         banner_id
     )
@@ -263,13 +267,26 @@ pub async fn delete_banner(
         anyhow::bail!("Cannot delete active banner");
     }
 
-    // Delete the banner
+    // Soft delete the banner
     query!(
         "
-            DELETE FROM banners
+            UPDATE banners
+            SET deleted_at = now()
             WHERE id = $1
         ",
         banner_id
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    // Soft delete the associated image
+    query!(
+        "
+            UPDATE images
+            SET deleted_at = now()
+            WHERE id = $1
+        ",
+        banner.image_id
     )
     .execute(&mut **tx)
     .await?;

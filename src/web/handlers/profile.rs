@@ -29,6 +29,10 @@ use crate::web::responses::{
     ProfilePost, ProfileResponse, ProfileUser,
 };
 use crate::web::state::AppState;
+use anyhow::Error;
+use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
+use aws_sdk_s3::types::{Delete, ObjectIdentifier};
+use aws_sdk_s3::Client;
 use axum::extract::{Path, Query};
 use axum::response::IntoResponse;
 use axum::{extract::State, http::StatusCode, response::Html, response::Json, Form};
@@ -1229,6 +1233,81 @@ pub async fn delete_banner_api(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
+    // Get banner details before deletion
+    let banner = find_banner_by_id(&mut tx, banner_id).await?;
+
+    // Verify ownership
+    if banner.author_id != user.id {
+        return Err(AppError::Unauthorized);
+    }
+
+    // Build R2 keys for deletion using banner's image_filename
+    let mut keys = vec![format!(
+        "image/{}{}/{}",
+        banner
+            .image_filename
+            .chars()
+            .next()
+            .ok_or_else(|| AppError::InvalidFormData("Image filename too short".to_string()))?,
+        banner
+            .image_filename
+            .chars()
+            .nth(1)
+            .ok_or_else(|| AppError::InvalidFormData("Image filename too short".to_string()))?,
+        banner.image_filename
+    )];
+
+    // Add replay file if it exists
+    if let Some(ref replay_filename) = banner.replay_filename {
+        keys.push(format!(
+            "replay/{}{}/{}",
+            replay_filename
+                .chars()
+                .next()
+                .ok_or_else(|| AppError::InvalidFormData("Replay filename too short".to_string()))?,
+            replay_filename
+                .chars()
+                .nth(1)
+                .ok_or_else(|| AppError::InvalidFormData("Replay filename too short".to_string()))?,
+            replay_filename
+        ));
+    }
+
+    // Delete objects from R2
+    let credentials = AwsCredentials::new(
+        state.config.aws_access_key_id.clone(),
+        state.config.aws_secret_access_key.clone(),
+        None,
+        None,
+        "",
+    );
+    let credentials_provider = SharedCredentialsProvider::new(credentials);
+    let config = aws_sdk_s3::Config::builder()
+        .endpoint_url(state.config.r2_endpoint_url.clone())
+        .region(Region::new(state.config.aws_region.clone()))
+        .credentials_provider(credentials_provider)
+        .behavior_version_latest()
+        .build();
+    let client = Client::from_conf(config);
+    let objects: Vec<ObjectIdentifier> = keys
+        .iter()
+        .map(|key| ObjectIdentifier::builder().key(key).build())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| AppError::from(anyhow::anyhow!("Failed to build object identifiers: {}", e)))?;
+
+    client
+        .delete_objects()
+        .bucket(state.config.aws_s3_bucket.clone())
+        .delete(
+            Delete::builder()
+                .set_objects(Some(objects))
+                .build()
+                .map_err(Error::from)?,
+        )
+        .send()
+        .await?;
+
+    // Now delete from database (soft delete)
     delete_banner(&mut tx, user.id, banner_id).await?;
 
     tx.commit().await?;
@@ -1268,6 +1347,81 @@ pub async fn do_delete_banner(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
+    // Get banner details before deletion
+    let banner = find_banner_by_id(&mut tx, banner_id).await?;
+
+    // Verify ownership
+    if banner.author_id != user.id {
+        return Err(AppError::Unauthorized);
+    }
+
+    // Build R2 keys for deletion using banner's image_filename
+    let mut keys = vec![format!(
+        "image/{}{}/{}",
+        banner
+            .image_filename
+            .chars()
+            .next()
+            .ok_or_else(|| AppError::InvalidFormData("Image filename too short".to_string()))?,
+        banner
+            .image_filename
+            .chars()
+            .nth(1)
+            .ok_or_else(|| AppError::InvalidFormData("Image filename too short".to_string()))?,
+        banner.image_filename
+    )];
+
+    // Add replay file if it exists
+    if let Some(ref replay_filename) = banner.replay_filename {
+        keys.push(format!(
+            "replay/{}{}/{}",
+            replay_filename
+                .chars()
+                .next()
+                .ok_or_else(|| AppError::InvalidFormData("Replay filename too short".to_string()))?,
+            replay_filename
+                .chars()
+                .nth(1)
+                .ok_or_else(|| AppError::InvalidFormData("Replay filename too short".to_string()))?,
+            replay_filename
+        ));
+    }
+
+    // Delete objects from R2
+    let credentials = AwsCredentials::new(
+        state.config.aws_access_key_id.clone(),
+        state.config.aws_secret_access_key.clone(),
+        None,
+        None,
+        "",
+    );
+    let credentials_provider = SharedCredentialsProvider::new(credentials);
+    let config = aws_sdk_s3::Config::builder()
+        .endpoint_url(state.config.r2_endpoint_url.clone())
+        .region(Region::new(state.config.aws_region.clone()))
+        .credentials_provider(credentials_provider)
+        .behavior_version_latest()
+        .build();
+    let client = Client::from_conf(config);
+    let objects: Vec<ObjectIdentifier> = keys
+        .iter()
+        .map(|key| ObjectIdentifier::builder().key(key).build())
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| AppError::from(anyhow::anyhow!("Failed to build object identifiers: {}", e)))?;
+
+    client
+        .delete_objects()
+        .bucket(state.config.aws_s3_bucket.clone())
+        .delete(
+            Delete::builder()
+                .set_objects(Some(objects))
+                .build()
+                .map_err(Error::from)?,
+        )
+        .send()
+        .await?;
+
+    // Now delete from database (soft delete)
     delete_banner(&mut tx, user.id, banner_id).await?;
 
     tx.commit().await?;
