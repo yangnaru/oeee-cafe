@@ -566,7 +566,13 @@ pub async fn get_post_details_json(
             post_data.community_name,
             post_data.community_slug,
         ) {
-            (Some(id), Some(name), Some(slug)) => Some(PostCommunityInfo { id, name, slug }),
+            (Some(id), Some(name), Some(slug)) => Some(PostCommunityInfo {
+                id,
+                name,
+                slug,
+                background_color: post_data.community_background_color,
+                foreground_color: post_data.community_foreground_color,
+            }),
             _ => None,
         },
         hashtags,

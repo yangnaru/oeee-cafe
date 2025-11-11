@@ -28,6 +28,8 @@ pub struct PostCommunityInfo {
     pub id: Uuid,
     pub name: String,
     pub slug: String,
+    pub background_color: Option<String>,
+    pub foreground_color: Option<String>,
 }
 
 /// Nested image information for child posts (simplified, URL-based)

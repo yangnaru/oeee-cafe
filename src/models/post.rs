@@ -135,6 +135,8 @@ pub struct PostDetailForJson {
     pub community_id: Option<Uuid>,
     pub community_name: Option<String>,
     pub community_slug: Option<String>,
+    pub community_background_color: Option<String>,
+    pub community_foreground_color: Option<String>,
     pub parent_post_id: Option<Uuid>,
 }
 
@@ -828,7 +830,9 @@ pub async fn find_post_detail_for_json(
                 users.display_name AS display_name,
                 users.login_name AS login_name,
                 communities.name AS \"community_name?\",
-                communities.slug AS \"community_slug?\"
+                communities.slug AS \"community_slug?\",
+                communities.background_color AS \"community_background_color?\",
+                communities.foreground_color AS \"community_foreground_color?\"
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN users ON posts.author_id = users.id
@@ -865,6 +869,8 @@ pub async fn find_post_detail_for_json(
             community_id: row.community_id,
             community_name: row.community_name,
             community_slug: row.community_slug,
+            community_background_color: row.community_background_color,
+            community_foreground_color: row.community_foreground_color,
             parent_post_id: row.parent_post_id,
         }
     }))
