@@ -327,6 +327,7 @@ banner-management-delete-confirm = 确定要删除此横幅吗？此操作无法
 banner-management-activate-error = 启用横幅失败，请重试。
 banner-management-delete-error = 删除横幅失败。您无法删除已启用的横幅。
 banner-management-back-to-settings = 返回设置
+banner-draw-error = 发布横幅时发生错误，请重试。
 
 follow = 关注
 unfollow = 取消关注

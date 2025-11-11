@@ -327,6 +327,7 @@ banner-management-delete-confirm = 本当にこのバナーを削除してもよ
 banner-management-activate-error = バナーのアクティブ化に失敗しました。もう一度お試しください。
 banner-management-delete-error = バナーの削除に失敗しました。アクティブなバナーは削除できません。
 banner-management-back-to-settings = 設定に戻る
+banner-draw-error = バナーの投稿中にエラーが発生しました。もう一度お試しください。
 
 follow = 同盟を結ぶ
 unfollow = 同盟を破る

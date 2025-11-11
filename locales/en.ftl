@@ -325,6 +325,7 @@ banner-management-delete-confirm = Are you sure you want to delete this banner? 
 banner-management-activate-error = Failed to activate banner. Please try again.
 banner-management-delete-error = Failed to delete banner. You cannot delete your active banner.
 banner-management-back-to-settings = Back to settings
+banner-draw-error = An error occurred while posting your banner. Please try again.
 
 follow = Follow
 unfollow = Unfollow

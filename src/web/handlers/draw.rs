@@ -584,14 +584,22 @@ pub async fn banner_draw_finish(
     let banner = create_banner(&mut tx, banner_draft).await?;
     let _ = tx.commit().await;
 
+    let image_prefix = &banner.image_filename[..2];
+    let image_url = format!(
+        "{}/image/{}/{}",
+        state.config.r2_public_endpoint_url, image_prefix, banner.image_filename
+    );
+
     Ok(Json(BannerDrawFinishResponse {
         banner_id: banner.id.to_string(),
+        image_url,
     }))
 }
 
 #[derive(Serialize)]
 pub struct BannerDrawFinishResponse {
     pub banner_id: String,
+    pub image_url: String,
 }
 
 pub async fn start_banner_draw(
@@ -600,6 +608,22 @@ pub async fn start_banner_draw(
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
     let template: minijinja::Template<'_, '_> = state.env.get_template("draw_banner.jinja")?;
+    let rendered = template.render(context! {
+        width => 200,
+        height => 40,
+        current_user => auth_session.user,
+        ftl_lang,
+    })?;
+
+    Ok(Html(rendered))
+}
+
+pub async fn start_banner_draw_mobile(
+    auth_session: AuthSession,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
+    State(state): State<AppState>,
+) -> Result<Html<String>, AppError> {
+    let template: minijinja::Template<'_, '_> = state.env.get_template("draw_banner_mobile.jinja")?;
     let rendered = template.render(context! {
         width => 200,
         height => 40,

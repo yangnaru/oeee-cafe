@@ -327,6 +327,7 @@ banner-management-delete-confirm = 정말 이 배너를 삭제하시겠습니까
 banner-management-activate-error = 배너 활성화에 실패했습니다. 다시 시도해주세요.
 banner-management-delete-error = 배너 삭제에 실패했습니다. 활성화된 배너는 삭제할 수 없습니다.
 banner-management-back-to-settings = 설정으로 돌아가기
+banner-draw-error = 배너를 게시하는 도중 오류가 발생했습니다. 다시 시도해주세요.
 
 follow = 동맹 맺기
 unfollow = 동맹 끊기

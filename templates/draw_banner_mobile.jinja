@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="{{ ftl_lang }}">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ ftl_get_message("profile-draw-banner") }}</title>
+    <link rel="stylesheet"
+          href="{{ '/static/neo/dist/neo.css' | cachebuster | safe }}"
+          type="text/css" />
+    <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #appstage {
+      width: 100%;
+      height: 100vh;
+    }
+    </style>
+  </head>
+  <body>
+    <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}"
+            charset="utf-8"></script>
+    <script>
+    // Unified native bridge for iOS and Android
+    window.NativeBridge = {
+      postMessage: function(message) {
+        try {
+          // iOS WKWebView
+          if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.oeee) {
+            window.webkit.messageHandlers.oeee.postMessage(message);
+            return;
+          }
+
+          // Android WebView
+          if (window.OeeeCafe && window.OeeeCafe.postMessage) {
+            window.OeeeCafe.postMessage(JSON.stringify(message));
+            return;
+          }
+
+          // Fallback for web debugging
+          console.log('NativeBridge message:', message);
+        } catch (error) {
+          console.error('NativeBridge error:', error);
+        }
+      }
+    };
+
+    // Create Neo painter applet using document.write
+    document.write(`
+      <div id="appstage">
+        <applet-dummy name="paintbbs" width="{{ width + 150 }}" height="{{ height + 172 }}">
+          <param name="image_width" value="{{ width }}">
+          <param name="image_height" value="{{ height }}">
+          <param name="thumbnail_type" value="animation">
+        </applet-dummy>
+      </div>
+    `);
+
+    // Wait for Neo to initialize, then enable fullscreen mode
+    window.addEventListener('load', function() {
+      if (typeof Neo !== 'undefined') {
+        Neo.fullScreen = true;
+        Neo.updateWindow();
+        console.log('Neo fullscreen mode enabled');
+      }
+    });
+
+    // Neo painter callback for form submission
+    document.paintBBSCallback = function (str) {
+      if (str === "check") {
+        const image = Neo.painter.getImage();
+        const animation = Neo.painter.getThumbnail("animation");
+
+        const form = new FormData();
+        form.append("image", image.toDataURL("image/png"));
+        form.append("animation", animation);
+        form.append("security_timer", Neo.painter.securityTimer);
+        form.append("security_count", Neo.painter.securityCount);
+        form.append("width", image.width);
+        form.append("height", image.height);
+
+        // Post form to server
+        fetch("/banners/draw/finish", {
+          method: "POST",
+          body: form,
+        })
+          .then((response) => response.json())
+          .then(async (data) => {
+            if (data?.error) {
+              alert(data.error);
+            } else {
+              Neo.uploaded = true;
+
+              // Notify native app of completion
+              window.NativeBridge.postMessage({
+                type: 'banner_complete',
+                bannerId: data.banner_id,
+                imageUrl: data.image_url
+              });
+            }
+          })
+          .catch((error) => {
+            alert("{{ ftl_get_message("banner-draw-error") }}");
+            console.error('Upload error:', error);
+          });
+
+        return false;
+      }
+    };
+    </script>
+  </body>
+</html>

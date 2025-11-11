@@ -31,8 +31,8 @@ use crate::web::handlers::community::{
     retract_invitation_json, search_public_communities_json, update_community_json,
 };
 use crate::web::handlers::draw::{
-    banner_draw_finish, draw_finish, start_banner_draw, start_draw, start_draw_get,
-    start_draw_mobile,
+    banner_draw_finish, draw_finish, start_banner_draw, start_banner_draw_mobile, start_draw,
+    start_draw_get, start_draw_mobile,
 };
 use crate::web::handlers::handler_404;
 use crate::web::handlers::hashtag::{hashtag_autocomplete, hashtag_discovery, hashtag_view};
@@ -213,6 +213,7 @@ impl App {
                 post(do_post_edit_community),
             )
             .route("/banners/draw", get(start_banner_draw))
+            .route("/banners/draw/mobile", get(start_banner_draw_mobile))
             .route("/banners/draw/finish", post(banner_draw_finish))
             .route("/posts/:id/publish", get(post_publish_form))
             .route("/posts/:id/replay", get(post_replay_view))
