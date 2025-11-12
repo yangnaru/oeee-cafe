@@ -248,6 +248,7 @@ community-invite-error = Failed to send invitation
 community-invite-user-not-found = User not found
 community-invite-already-member = User is already a member
 community-invite-already-invited = User already has a pending invitation
+private-community-no-access = You do not have access to this private community.
 community-remove-member = Remove member
 community-remove-member-confirm = Are you sure you want to remove this member?
 community-retract-invitation = Cancel invitation

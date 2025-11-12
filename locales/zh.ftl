@@ -250,6 +250,7 @@ community-invite-error = 发送邀请失败
 community-invite-user-not-found = 未找到用户
 community-invite-already-member = 该用户已是成员
 community-invite-already-invited = 该用户已有待处理的邀请
+private-community-no-access = 您无权访问此私有社区。
 community-remove-member = 移除成员
 community-remove-member-confirm = 确定要移除此成员吗？
 community-retract-invitation = 撤回邀请

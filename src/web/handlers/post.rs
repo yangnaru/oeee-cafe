@@ -30,7 +30,7 @@ use crate::web::handlers::activitypub::{
     create_note_from_post, create_updated_note_from_post, generate_object_id, Announce, Create,
     Note, UpdateNote,
 };
-use crate::web::handlers::{handler_404, parse_id_with_legacy_support, ExtractFtlLang, ParsedId};
+use crate::web::handlers::{get_bundle, handler_404, parse_id_with_legacy_support, safe_get_message, ExtractFtlLang, ParsedId};
 use crate::web::state::AppState;
 use activitypub_federation::fetch::object_id::ObjectId;
 use activitypub_federation::traits::Actor as ActivityPubActor;
@@ -42,6 +42,7 @@ use axum::extract::Path;
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Json, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
+use axum_messages::Messages;
 use minijinja::context;
 use serde::{Deserialize, Serialize};
 use urlencoding;
@@ -269,9 +270,11 @@ async fn send_post_to_community_followers(
 
 pub async fn post_relay_view(
     auth_session: AuthSession,
+    headers: HeaderMap,
     State(state): State<AppState>,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Path(id): Path<String>,
+    messages: Messages,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&id, "/posts", &state)? {
         ParsedId::Uuid(uuid) => uuid,
@@ -308,7 +311,15 @@ pub async fn post_relay_view(
                             get_user_role_in_community(&mut tx, user.id, comm.id).await?;
                         if user_role.is_none() {
                             // User is not a member of this private community
-                            return Ok(StatusCode::FORBIDDEN.into_response());
+                            let accept_language = headers
+                                .get(axum::http::header::ACCEPT_LANGUAGE)
+                                .cloned()
+                                .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
+                            let user_preferred_language = user.preferred_language.clone();
+                            let bundle = get_bundle(&accept_language, user_preferred_language);
+                            let error_message = safe_get_message(&bundle, "private-community-no-access");
+                            messages.error(error_message);
+                            return Ok(Redirect::to("/").into_response());
                         }
                     }
                     None => {
@@ -382,6 +393,7 @@ pub async fn post_view(
     State(state): State<AppState>,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Path(id): Path<String>,
+    messages: Messages,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&id, "/posts", &state)? {
         ParsedId::Uuid(uuid) => uuid,
@@ -417,7 +429,15 @@ pub async fn post_view(
                                 get_user_role_in_community(&mut tx, user.id, community.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
-                                return Ok(StatusCode::FORBIDDEN.into_response());
+                                let accept_language = headers
+                                    .get(axum::http::header::ACCEPT_LANGUAGE)
+                                    .cloned()
+                                    .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
+                                let user_preferred_language = user.preferred_language.clone();
+                                let bundle = get_bundle(&accept_language, user_preferred_language);
+                                let error_message = safe_get_message(&bundle, "private-community-no-access");
+                                messages.error(error_message);
+                                return Ok(Redirect::to("/").into_response());
                             }
                         }
                         None => {
@@ -630,9 +650,11 @@ pub async fn post_view(
 
 pub async fn post_replay_view(
     auth_session: AuthSession,
+    headers: HeaderMap,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(id): Path<String>,
+    messages: Messages,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&id, "/posts", &state)? {
         ParsedId::Uuid(uuid) => uuid,
@@ -664,7 +686,15 @@ pub async fn post_replay_view(
                             get_user_role_in_community(&mut tx, user.id, comm.id).await?;
                         if user_role.is_none() {
                             // User is not a member of this private community
-                            return Ok(StatusCode::FORBIDDEN.into_response());
+                            let accept_language = headers
+                                .get(axum::http::header::ACCEPT_LANGUAGE)
+                                .cloned()
+                                .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
+                            let user_preferred_language = user.preferred_language.clone();
+                            let bundle = get_bundle(&accept_language, user_preferred_language);
+                            let error_message = safe_get_message(&bundle, "private-community-no-access");
+                            messages.error(error_message);
+                            return Ok(Redirect::to("/").into_response());
                         }
                     }
                     None => {
@@ -2248,6 +2278,7 @@ pub async fn post_view_by_login_name(
     State(state): State<AppState>,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Path((login_name, post_id)): Path<(String, String)>,
+    messages: Messages,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&post_id, &format!("/@{}", login_name), &state)? {
         ParsedId::Uuid(uuid) => uuid,
@@ -2306,7 +2337,15 @@ pub async fn post_view_by_login_name(
                                 get_user_role_in_community(&mut tx, user.id, community.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
-                                return Ok(StatusCode::FORBIDDEN.into_response());
+                                let accept_language = headers
+                                    .get(axum::http::header::ACCEPT_LANGUAGE)
+                                    .cloned()
+                                    .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
+                                let user_preferred_language = user.preferred_language.clone();
+                                let bundle = get_bundle(&accept_language, user_preferred_language);
+                                let error_message = safe_get_message(&bundle, "private-community-no-access");
+                                messages.error(error_message);
+                                return Ok(Redirect::to("/").into_response());
                             }
                         }
                         None => {
@@ -2628,9 +2667,11 @@ async fn send_post_update_to_followers(
 
 pub async fn post_relay_view_by_login_name(
     auth_session: AuthSession,
+    headers: HeaderMap,
     State(state): State<AppState>,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Path((login_name, post_id)): Path<(String, String)>,
+    messages: Messages,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&post_id, &format!("/@{}", login_name), &state)? {
         ParsedId::Uuid(uuid) => uuid,
@@ -2681,7 +2722,15 @@ pub async fn post_relay_view_by_login_name(
                                 get_user_role_in_community(&mut tx, user.id, comm.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
-                                return Ok(StatusCode::FORBIDDEN.into_response());
+                                let accept_language = headers
+                                    .get(axum::http::header::ACCEPT_LANGUAGE)
+                                    .cloned()
+                                    .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
+                                let user_preferred_language = user.preferred_language.clone();
+                                let bundle = get_bundle(&accept_language, user_preferred_language);
+                                let error_message = safe_get_message(&bundle, "private-community-no-access");
+                                messages.error(error_message);
+                                return Ok(Redirect::to("/").into_response());
                             }
                         }
                         None => {
@@ -2759,9 +2808,11 @@ pub async fn post_relay_view_by_login_name(
 
 pub async fn post_replay_view_by_login_name(
     auth_session: AuthSession,
+    headers: HeaderMap,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path((login_name, post_id)): Path<(String, String)>,
+    messages: Messages,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&post_id, &format!("/@{}", login_name), &state)? {
         ParsedId::Uuid(uuid) => uuid,
@@ -2812,7 +2863,15 @@ pub async fn post_replay_view_by_login_name(
                                 get_user_role_in_community(&mut tx, user.id, comm.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
-                                return Ok(StatusCode::FORBIDDEN.into_response());
+                                let accept_language = headers
+                                    .get(axum::http::header::ACCEPT_LANGUAGE)
+                                    .cloned()
+                                    .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
+                                let user_preferred_language = user.preferred_language.clone();
+                                let bundle = get_bundle(&accept_language, user_preferred_language);
+                                let error_message = safe_get_message(&bundle, "private-community-no-access");
+                                messages.error(error_message);
+                                return Ok(Redirect::to("/").into_response());
                             }
                         }
                         None => {

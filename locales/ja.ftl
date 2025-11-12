@@ -250,6 +250,7 @@ community-invite-error = 招待の送信に失敗しました
 community-invite-user-not-found = ユーザーが見つかりません
 community-invite-already-member = すでにメンバーです
 community-invite-already-invited = すでに保留中の招待があります
+private-community-no-access = このプライベートコミュニティにアクセスできません。
 community-remove-member = メンバーを削除
 community-remove-member-confirm = 本当にこのメンバーを削除しますか？
 community-retract-invitation = 招待を取り消す
