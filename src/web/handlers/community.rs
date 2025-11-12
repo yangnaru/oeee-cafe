@@ -44,6 +44,12 @@ use uuid::Uuid;
 use crate::web::context::CommonContext;
 use crate::web::handlers::{get_bundle, safe_get_message, ExtractAcceptLanguage, ExtractFtlLang};
 
+pub async fn redirect_community_to_unified(
+    Path(slug): Path<String>,
+) -> Redirect {
+    Redirect::permanent(&format!("/@{}", slug))
+}
+
 pub async fn community(
     auth_session: AuthSession,
     headers: HeaderMap,

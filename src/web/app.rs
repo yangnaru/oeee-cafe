@@ -27,8 +27,9 @@ use crate::web::handlers::community::{
     get_community_invitations_json, get_community_members_json, get_members,
     get_public_communities_json, get_user_invitations_json, hx_delete_community,
     hx_do_edit_community, hx_edit_community, invite_user, invite_user_json,
-    leave_community_json, members_page, remove_member, remove_member_json, retract_invitation,
-    retract_invitation_json, search_public_communities_json, update_community_json,
+    leave_community_json, members_page, redirect_community_to_unified, remove_member,
+    remove_member_json, retract_invitation, retract_invitation_json,
+    search_public_communities_json, update_community_json,
 };
 use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_banner_draw_mobile, start_draw,
@@ -64,9 +65,9 @@ use crate::web::handlers::profile::{
     activate_banner_api, banner_management, delete_banner_api, do_activate_banner, do_add_link,
     do_delete_banner, do_delete_guestbook_entry, do_delete_link, do_follow_profile,
     do_move_link_down, do_move_link_up, do_reply_guestbook_entry, do_unfollow_profile,
-    do_write_guestbook_entry, follow_profile_api, guestbook, list_banners_json, profile,
+    do_write_guestbook_entry, follow_profile_api, guestbook, list_banners_json,
     profile_banners_iframe, profile_followings_json, profile_iframe, profile_json,
-    profile_settings, unfollow_profile_api,
+    profile_or_community, profile_settings, unfollow_profile_api,
 };
 use crate::web::handlers::push_tokens::{
     delete_push_token_handler, list_push_tokens_handler, register_push_token_handler,
@@ -188,6 +189,7 @@ impl App {
                 "/communities/@:slug/invitations/:invitation_id",
                 delete(retract_invitation),
             )
+            .route("/communities/@:slug", get(redirect_community_to_unified))
             .route("/communities/:id/members", get(get_members))
             .route("/communities/:id/invite", post(invite_user))
             .route("/communities/:id/members/:user_id", delete(remove_member))
@@ -413,7 +415,7 @@ impl App {
             .route("/hashtags", get(hashtag_discovery))
             .route("/hashtags/:hashtag_name", get(hashtag_view))
             .route("/api/hashtags/autocomplete", get(hashtag_autocomplete))
-            .route("/@:login_name", get(profile))
+            .route("/@:slug", get(profile_or_community))
             .route("/@:login_name/embed", get(profile_iframe))
             .route("/@:login_name/banners/embed", get(profile_banners_iframe))
             .route("/@:login_name/settings/links", post(do_add_link))

@@ -18,8 +18,13 @@ use crate::models::notification::{
     create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
     CreateNotificationParams, NotificationType,
 };
+use crate::models::comment::find_latest_comments_in_community;
 use crate::models::post::{
     find_published_posts_by_author_id, find_published_public_posts_by_author_id,
+    find_published_posts_by_community_id,
+};
+use crate::models::community::{
+    find_community_by_slug, get_community_stats, is_user_member, CommunityVisibility,
 };
 use crate::models::user::{find_user_by_id, find_user_by_login_name, AuthSession};
 use crate::web::context::CommonContext;
@@ -34,11 +39,13 @@ use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredential
 use aws_sdk_s3::types::{Delete, ObjectIdentifier};
 use aws_sdk_s3::Client;
 use axum::extract::{Path, Query};
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::IntoResponse;
 use axum::{extract::State, http::StatusCode, response::Html, response::Json, Form};
 
 use minijinja::context;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::ExtractFtlLang;
@@ -235,6 +242,168 @@ pub async fn profile(
     })?;
 
     Ok(Html(rendered).into_response())
+}
+
+pub async fn profile_or_community(
+    auth_session: AuthSession,
+    headers: HeaderMap,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // First, try to find a user by login_name
+    if let Some(user) = find_user_by_login_name(&mut tx, &slug).await? {
+        // User found - render profile page
+        let published_posts = find_published_posts_by_author_id(&mut tx, user.id).await?;
+        let public_community_posts = published_posts
+            .iter()
+            .filter(|post| {
+                post.community_visibility == Some(CommunityVisibility::Public)
+                    || post.community_visibility.is_none()
+            })
+            .collect::<Vec<_>>();
+        let private_community_posts = published_posts
+            .iter()
+            .filter(|post| {
+                post.community_visibility != Some(CommunityVisibility::Public)
+                    && post.community_visibility.is_some()
+            })
+            .collect::<Vec<_>>();
+
+        let common_ctx =
+            CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+
+        let mut is_current_user_following = false;
+        if let Some(current_user) = auth_session.user.clone() {
+            is_current_user_following = is_following(&mut tx, current_user.id, user.id).await?;
+        }
+
+        let followings = find_followings_by_user_id(&mut tx, user.id, 9999, 0, false).await?;
+
+        let banner = match user.banner_id {
+            Some(banner_id) => Some(find_banner_by_id(&mut tx, banner_id).await?),
+            None => None,
+        };
+
+        let links = find_links_by_user_id(&mut tx, user.id).await?;
+        let links = links
+            .iter()
+            .map(|link| {
+                let target = if link.url.starts_with(&state.config.base_url) {
+                    "_self"
+                } else {
+                    "_blank"
+                };
+                (link, target)
+            })
+            .collect::<Vec<_>>();
+
+        let template: minijinja::Template<'_, '_> = state.env.get_template("profile.jinja")?;
+        let rendered = template.render(context! {
+            current_user => auth_session.user,
+            links,
+            banner,
+            is_following => is_current_user_following,
+            followings,
+            user => Some(user),
+            domain => state.config.domain.clone(),
+            public_community_posts,
+            private_community_posts,
+            draft_post_count => common_ctx.draft_post_count,
+            unread_notification_count => common_ctx.unread_notification_count,
+            ftl_lang,
+        })?;
+
+        return Ok(Html(rendered).into_response());
+    }
+
+    // User not found - try to find a community by slug
+    if let Some(community) = find_community_by_slug(&mut tx, slug.clone()).await? {
+        let community_uuid = community.id;
+
+        // Access control: For private communities, verify membership
+        if community.visibility == CommunityVisibility::Private {
+            // Non-authenticated users cannot access private communities
+            let user_id = match &auth_session.user {
+                Some(user) => user.id,
+                None => return Ok(StatusCode::NOT_FOUND.into_response()),
+            };
+
+            // Check if user is a member
+            let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
+            if !is_member {
+                return Ok(StatusCode::NOT_FOUND.into_response());
+            }
+        }
+
+        let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+            (Some(user.id), user.show_sensitive_content)
+        } else {
+            (None, false)
+        };
+
+        let posts = find_published_posts_by_community_id(
+            &mut tx,
+            community_uuid,
+            1000,
+            0,
+            viewer_user_id,
+            viewer_show_sensitive,
+        )
+        .await?;
+        let comments = find_latest_comments_in_community(&mut tx, community_uuid, 5).await?;
+        let stats = get_community_stats(&mut tx, community_uuid).await?;
+        let common_ctx =
+            CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+
+        let template: minijinja::Template<'_, '_> = state.env.get_template("community.jinja")?;
+
+        if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
+            let rendered = template
+                .eval_to_state(context! {
+                    current_user => auth_session.user,
+                    community => Some(&community),
+                    community_id => community.id.to_string(),
+                    domain => state.config.domain.clone(),
+                    ftl_lang
+                })?
+                .render_block("community_edit_block")?;
+            return Ok(Html(rendered).into_response());
+        } else {
+            let rendered = template.render(context! {
+                current_user => auth_session.user,
+                community => Some(community),
+                community_id => community_uuid.to_string(),
+                domain => state.config.domain.clone(),
+                unread_notification_count => common_ctx.unread_notification_count,
+                comments => comments,
+                stats => stats,
+                posts => posts.iter().map(|post| {
+                    HashMap::<String, String>::from_iter(vec![
+                        ("id".to_string(), post.id.to_string()),
+                        ("title".to_string(), post.title.clone().unwrap_or_default().to_string()),
+                        ("author_id".to_string(), post.author_id.to_string()),
+                        ("user_login_name".to_string(), post.user_login_name.clone().unwrap_or_default()),
+                        ("image_filename".to_string(), post.image_filename.to_string()),
+                        ("image_width".to_string(), post.image_width.to_string()),
+                        ("image_height".to_string(), post.image_height.to_string()),
+                        ("replay_filename".to_string(), post.replay_filename.clone().unwrap_or_default()),
+                        ("created_at".to_string(), post.created_at.to_string()),
+                        ("updated_at".to_string(), post.updated_at.to_string()),
+                        ])
+                    }).collect::<Vec<_>>(),
+                    draft_post_count => common_ctx.draft_post_count,
+                    ftl_lang,
+            })?;
+            return Ok(Html(rendered).into_response());
+        }
+    }
+
+    // Neither user nor community found - return 404
+    Err(AppError::NotFound("User or Community".to_string()))
 }
 
 pub async fn profile_iframe(
