@@ -44,6 +44,7 @@ use axum::response::{IntoResponse, Json, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, Form};
 use minijinja::context;
 use serde::{Deserialize, Serialize};
+use urlencoding;
 use uuid::Uuid;
 
 // Helper function to get community @slug URL from UUID
@@ -311,8 +312,10 @@ pub async fn post_relay_view(
                         }
                     }
                     None => {
-                        // Not logged in, cannot access private community
-                        return Ok(StatusCode::FORBIDDEN.into_response());
+                        // Not logged in, cannot access private community - redirect to login
+                        let current_path = format!("/posts/{}/relay", id);
+                        let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
+                        return Ok(Redirect::to(&login_url).into_response());
                     }
                 }
             }
@@ -418,8 +421,10 @@ pub async fn post_view(
                             }
                         }
                         None => {
-                            // Not logged in, cannot access private community
-                            return Ok(StatusCode::FORBIDDEN.into_response());
+                            // Not logged in, cannot access private community - redirect to login
+                            let current_path = format!("/posts/{}", id);
+                            let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
+                            return Ok(Redirect::to(&login_url).into_response());
                         }
                     }
                 }
@@ -663,8 +668,10 @@ pub async fn post_replay_view(
                         }
                     }
                     None => {
-                        // Not logged in, cannot access private community
-                        return Ok(StatusCode::FORBIDDEN.into_response());
+                        // Not logged in, cannot access private community - redirect to login
+                        let current_path = format!("/posts/{}/replay", id);
+                        let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
+                        return Ok(Redirect::to(&login_url).into_response());
                     }
                 }
             }
@@ -2303,8 +2310,10 @@ pub async fn post_view_by_login_name(
                             }
                         }
                         None => {
-                            // Not logged in, cannot access private community
-                            return Ok(StatusCode::FORBIDDEN.into_response());
+                            // Not logged in, cannot access private community - redirect to login
+                            let current_path = format!("/@{}/{}", login_name, post_id);
+                            let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
+                            return Ok(Redirect::to(&login_url).into_response());
                         }
                     }
                 }
@@ -2676,8 +2685,10 @@ pub async fn post_relay_view_by_login_name(
                             }
                         }
                         None => {
-                            // Not logged in, cannot access private community
-                            return Ok(StatusCode::FORBIDDEN.into_response());
+                            // Not logged in, cannot access private community - redirect to login
+                            let current_path = format!("/@{}/{}/relay", login_name, post_id);
+                            let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
+                            return Ok(Redirect::to(&login_url).into_response());
                         }
                     }
                 }
@@ -2805,8 +2816,10 @@ pub async fn post_replay_view_by_login_name(
                             }
                         }
                         None => {
-                            // Not logged in, cannot access private community
-                            return Ok(StatusCode::FORBIDDEN.into_response());
+                            // Not logged in, cannot access private community - redirect to login
+                            let current_path = format!("/@{}/{}/replay", login_name, post_id);
+                            let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
+                            return Ok(Redirect::to(&login_url).into_response());
                         }
                     }
                 }
