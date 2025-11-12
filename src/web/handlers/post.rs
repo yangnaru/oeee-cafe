@@ -24,7 +24,7 @@ use crate::models::post::{
 use crate::models::reaction::{
     create_reaction, delete_reaction, find_reactions_by_post_id, get_reaction_counts, ReactionDraft,
 };
-use crate::models::user::{find_user_by_id, AuthSession};
+use crate::models::user::{find_user_by_id, AuthSession, Language};
 use crate::web::context::CommonContext;
 use crate::web::handlers::activitypub::{
     create_note_from_post, create_updated_note_from_post, generate_object_id, Announce, Create,
@@ -59,6 +59,30 @@ async fn get_community_slug_url(
     } else {
         Ok(format!("/communities/{}", community_id)) // Fallback to UUID if community not found
     }
+}
+
+/// Helper function to show a flash error message and redirect
+fn flash_error_and_redirect(
+    headers: &HeaderMap,
+    user_preferred_language: Option<Language>,
+    messages: Messages,
+    message_key: &str,
+    redirect_path: &str,
+) -> axum::response::Response {
+    let accept_language = headers
+        .get(axum::http::header::ACCEPT_LANGUAGE)
+        .cloned()
+        .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
+    let bundle = get_bundle(&accept_language, user_preferred_language);
+    let error_message = safe_get_message(&bundle, message_key);
+    messages.error(error_message);
+    Redirect::to(redirect_path).into_response()
+}
+
+/// Helper function to redirect unauthenticated users to login with next parameter
+fn redirect_to_login(current_path: &str) -> axum::response::Response {
+    let login_url = format!("/login?next={}", urlencoding::encode(current_path));
+    Redirect::to(&login_url).into_response()
 }
 
 async fn send_post_to_followers(
@@ -324,9 +348,7 @@ pub async fn post_relay_view(
                     }
                     None => {
                         // Not logged in, cannot access private community - redirect to login
-                        let current_path = format!("/posts/{}/relay", id);
-                        let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
-                        return Ok(Redirect::to(&login_url).into_response());
+                        return Ok(redirect_to_login(&format!("/posts/{}/relay", id)));
                     }
                 }
             }
@@ -429,22 +451,12 @@ pub async fn post_view(
                                 get_user_role_in_community(&mut tx, user.id, community.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
-                                let accept_language = headers
-                                    .get(axum::http::header::ACCEPT_LANGUAGE)
-                                    .cloned()
-                                    .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
-                                let user_preferred_language = user.preferred_language.clone();
-                                let bundle = get_bundle(&accept_language, user_preferred_language);
-                                let error_message = safe_get_message(&bundle, "private-community-no-access");
-                                messages.error(error_message);
-                                return Ok(Redirect::to("/").into_response());
+                                return Ok(flash_error_and_redirect(&headers, user.preferred_language.clone(), messages, "private-community-no-access", "/"));
                             }
                         }
                         None => {
                             // Not logged in, cannot access private community - redirect to login
-                            let current_path = format!("/posts/{}", id);
-                            let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
-                            return Ok(Redirect::to(&login_url).into_response());
+                            return Ok(redirect_to_login(&format!("/posts/{}", id)));
                         }
                     }
                 }
@@ -699,9 +711,7 @@ pub async fn post_replay_view(
                     }
                     None => {
                         // Not logged in, cannot access private community - redirect to login
-                        let current_path = format!("/posts/{}/replay", id);
-                        let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
-                        return Ok(Redirect::to(&login_url).into_response());
+                        return Ok(redirect_to_login(&format!("/posts/{}/replay", id)));
                     }
                 }
             }
@@ -2337,22 +2347,12 @@ pub async fn post_view_by_login_name(
                                 get_user_role_in_community(&mut tx, user.id, community.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
-                                let accept_language = headers
-                                    .get(axum::http::header::ACCEPT_LANGUAGE)
-                                    .cloned()
-                                    .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
-                                let user_preferred_language = user.preferred_language.clone();
-                                let bundle = get_bundle(&accept_language, user_preferred_language);
-                                let error_message = safe_get_message(&bundle, "private-community-no-access");
-                                messages.error(error_message);
-                                return Ok(Redirect::to("/").into_response());
+                                return Ok(flash_error_and_redirect(&headers, user.preferred_language.clone(), messages, "private-community-no-access", "/"));
                             }
                         }
                         None => {
                             // Not logged in, cannot access private community - redirect to login
-                            let current_path = format!("/@{}/{}", login_name, post_id);
-                            let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
-                            return Ok(Redirect::to(&login_url).into_response());
+                            return Ok(redirect_to_login(&format!("/@{}/{}", login_name, post_id)));
                         }
                     }
                 }
@@ -2722,22 +2722,12 @@ pub async fn post_relay_view_by_login_name(
                                 get_user_role_in_community(&mut tx, user.id, comm.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
-                                let accept_language = headers
-                                    .get(axum::http::header::ACCEPT_LANGUAGE)
-                                    .cloned()
-                                    .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
-                                let user_preferred_language = user.preferred_language.clone();
-                                let bundle = get_bundle(&accept_language, user_preferred_language);
-                                let error_message = safe_get_message(&bundle, "private-community-no-access");
-                                messages.error(error_message);
-                                return Ok(Redirect::to("/").into_response());
+                                return Ok(flash_error_and_redirect(&headers, user.preferred_language.clone(), messages, "private-community-no-access", "/"));
                             }
                         }
                         None => {
                             // Not logged in, cannot access private community - redirect to login
-                            let current_path = format!("/@{}/{}/relay", login_name, post_id);
-                            let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
-                            return Ok(Redirect::to(&login_url).into_response());
+                            return Ok(redirect_to_login(&format!("/@{}/{}/relay", login_name, post_id)));
                         }
                     }
                 }
@@ -2863,22 +2853,12 @@ pub async fn post_replay_view_by_login_name(
                                 get_user_role_in_community(&mut tx, user.id, comm.id).await?;
                             if user_role.is_none() {
                                 // User is not a member of this private community
-                                let accept_language = headers
-                                    .get(axum::http::header::ACCEPT_LANGUAGE)
-                                    .cloned()
-                                    .unwrap_or_else(|| axum::http::HeaderValue::from_static(""));
-                                let user_preferred_language = user.preferred_language.clone();
-                                let bundle = get_bundle(&accept_language, user_preferred_language);
-                                let error_message = safe_get_message(&bundle, "private-community-no-access");
-                                messages.error(error_message);
-                                return Ok(Redirect::to("/").into_response());
+                                return Ok(flash_error_and_redirect(&headers, user.preferred_language.clone(), messages, "private-community-no-access", "/"));
                             }
                         }
                         None => {
                             // Not logged in, cannot access private community - redirect to login
-                            let current_path = format!("/@{}/{}/replay", login_name, post_id);
-                            let login_url = format!("/login?next={}", urlencoding::encode(&current_path));
-                            return Ok(Redirect::to(&login_url).into_response());
+                            return Ok(redirect_to_login(&format!("/@{}/{}/replay", login_name, post_id)));
                         }
                     }
                 }
