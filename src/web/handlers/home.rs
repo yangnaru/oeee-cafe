@@ -560,6 +560,7 @@ pub async fn get_post_details_json(
             paint_duration: post_data.paint_duration,
         },
         is_sensitive: post_data.is_sensitive,
+        allow_relay: post_data.allow_relay,
         published_at_utc: post_data.published_at_utc,
         community: match (
             post_data.community_id,
