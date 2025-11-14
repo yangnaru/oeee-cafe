@@ -233,10 +233,6 @@ impl App {
             )
             .route("/api/v1/push-tokens", post(register_push_token_handler))
             .route("/api/v1/push-tokens", get(list_push_tokens_handler))
-            .route(
-                "/api/v1/push-tokens/:device_token",
-                delete(delete_push_token_handler),
-            )
             .route_layer(login_required!(Backend, login_url = "/login"));
 
         let state = self.state.clone();
@@ -312,6 +308,10 @@ impl App {
                 put(move_post_community_api),
             )
             .route("/api/v1/search", get(search_json))
+            .route(
+                "/api/v1/push-tokens/:device_token",
+                delete(delete_push_token_handler),
+            )
             .route("/api/v1/profiles/:login_name", get(profile_json))
             .route(
                 "/api/v1/profiles/:login_name/followings",

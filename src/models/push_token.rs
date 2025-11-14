@@ -56,26 +56,6 @@ pub async fn register_push_token(
     Ok(token)
 }
 
-/// Delete a push token
-pub async fn delete_push_token(
-    tx: &mut Transaction<'_, Postgres>,
-    user_id: Uuid,
-    device_token: String,
-) -> Result<bool> {
-    let result = sqlx::query!(
-        r#"
-        DELETE FROM push_tokens
-        WHERE user_id = $1 AND device_token = $2
-        "#,
-        user_id,
-        device_token,
-    )
-    .execute(&mut **tx)
-    .await?;
-
-    Ok(result.rows_affected() > 0)
-}
-
 /// Get all push tokens for a user
 pub async fn get_user_tokens(
     tx: &mut Transaction<'_, Postgres>,
@@ -116,6 +96,26 @@ pub async fn delete_invalid_token(
         "#,
         device_token,
         platform as PlatformType,
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+/// Delete a push token by device token only (for unauthenticated deletion)
+/// Device tokens are cryptographically unguessable, so possession of the token
+/// is sufficient authentication
+pub async fn delete_push_token_by_token(
+    tx: &mut Transaction<'_, Postgres>,
+    device_token: String,
+) -> Result<bool> {
+    let result = sqlx::query!(
+        r#"
+        DELETE FROM push_tokens
+        WHERE device_token = $1
+        "#,
+        device_token,
     )
     .execute(&mut **tx)
     .await?;

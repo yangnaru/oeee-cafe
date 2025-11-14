@@ -1,5 +1,5 @@
 use crate::models::push_token::{
-    delete_push_token, get_user_tokens, register_push_token, PlatformType, PushToken,
+    delete_push_token_by_token, get_user_tokens, register_push_token, PlatformType, PushToken,
 };
 use crate::models::user::AuthSession;
 use crate::web::state::AppState;
@@ -60,21 +60,20 @@ pub async fn register_push_token_handler(
     Ok(Json(token.into()))
 }
 
-/// Delete a push token for the authenticated user
+/// Delete a push token by device token (unauthenticated)
+/// Device tokens are cryptographically unguessable, so possession of the token
+/// is sufficient authentication
 pub async fn delete_push_token_handler(
-    auth_session: AuthSession,
     State(state): State<AppState>,
     Path(device_token): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
-    let user = auth_session.user.ok_or(StatusCode::UNAUTHORIZED)?;
-
     let mut tx = state
         .db_pool
         .begin()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let deleted = delete_push_token(&mut tx, user.id, device_token)
+    let deleted = delete_push_token_by_token(&mut tx, device_token)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
