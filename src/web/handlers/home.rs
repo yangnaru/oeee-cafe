@@ -8,13 +8,13 @@ use crate::models::comment::{
 use crate::models::community::{
     get_communities_members_count, get_public_communities, is_user_member, Community,
 };
-use crate::models::hashtag::{get_hashtags_for_post, unlink_post_hashtags};
+use crate::models::hashtag::{get_hashtags_for_post, link_post_to_hashtags, parse_hashtag_input, unlink_post_hashtags};
 use crate::models::notification::{
     create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
     CreateNotificationParams, NotificationType,
 };
 use crate::models::post::{
-    build_thread_tree, delete_post_with_activity, find_following_posts_by_user_id, find_post_by_id,
+    build_thread_tree, delete_post_with_activity, edit_post, find_following_posts_by_user_id, find_post_by_id,
     find_post_detail_for_json, find_public_community_posts, find_recent_posts_by_communities,
     SerializableThreadedPost,
 };
@@ -1052,6 +1052,80 @@ pub async fn delete_post_api(
     tx.commit().await?;
 
     Ok(Json(DeletePostResponse { success: true }).into_response())
+}
+
+#[derive(Deserialize)]
+pub struct EditPostRequest {
+    pub title: String,
+    pub content: String,
+    pub hashtags: Option<String>,
+    pub is_sensitive: bool,
+    pub allow_relay: bool,
+}
+
+#[derive(Serialize)]
+pub struct EditPostResponse {
+    pub success: bool,
+}
+
+pub async fn edit_post_api(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(post_id): Path<String>,
+    Json(request): Json<EditPostRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    // Require authentication
+    let user = match auth_session.user {
+        Some(u) => u,
+        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+    };
+
+    let post_uuid = Uuid::parse_str(&post_id)?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    // Find the post
+    let post = find_post_by_id(&mut tx, post_uuid).await?;
+    if post.is_none() {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
+
+    // Check if the user is the author
+    let author_id = match post.get("author_id").and_then(|v| v.as_ref()) {
+        Some(id) => id,
+        None => return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+    };
+
+    if author_id != &user.id.to_string() {
+        return Ok(StatusCode::FORBIDDEN.into_response());
+    }
+
+    // Update the post
+    edit_post(
+        &mut tx,
+        post_uuid,
+        request.title,
+        request.content,
+        request.is_sensitive,
+        request.allow_relay,
+    )
+    .await?;
+
+    // Handle hashtags: first unlink existing ones, then link new ones
+    let _ = unlink_post_hashtags(&mut tx, post_uuid).await;
+    if let Some(hashtags_input) = &request.hashtags {
+        if !hashtags_input.trim().is_empty() {
+            let hashtag_names = parse_hashtag_input(hashtags_input);
+            let _ = link_post_to_hashtags(&mut tx, post_uuid, &hashtag_names).await;
+        }
+    }
+
+    tx.commit().await?;
+
+    Ok(Json(EditPostResponse { success: true }).into_response())
 }
 
 #[derive(Deserialize)]
