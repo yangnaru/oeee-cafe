@@ -36,6 +36,7 @@ pub mod auth;
 pub mod collaborate;
 pub mod collaborate_cleanup;
 pub mod community;
+pub mod devices;
 pub mod draw;
 pub mod hashtag;
 pub mod home;
@@ -44,7 +45,6 @@ pub mod password_reset;
 pub mod post;
 pub mod privacy;
 pub mod profile;
-pub mod push_tokens;
 pub mod search;
 pub mod well_known;
 

@@ -1,7 +1,7 @@
 pub mod apns;
 pub mod fcm;
 
-use crate::models::push_token::{delete_invalid_token, get_user_tokens_by_platform, PlatformType};
+use crate::models::device::{delete_invalid_device, get_user_devices_by_platform, PlatformType};
 use crate::AppConfig;
 use anyhow::Result;
 use apns::ApnsClient;
@@ -93,9 +93,9 @@ impl PushService {
 
         // Send to iOS devices
         if self.apns_client.is_some() {
-            let ios_tokens =
-                get_user_tokens_by_platform(&mut tx, user_id, PlatformType::Ios).await?;
-            for token in ios_tokens {
+            let ios_devices =
+                get_user_devices_by_platform(&mut tx, user_id, PlatformType::Ios).await?;
+            for token in ios_devices {
                 match self
                     .send_to_apns(&token.device_token, title, body, badge, data.clone())
                     .await
@@ -103,7 +103,7 @@ impl PushService {
                     Ok(_) => {}
                     Err(PushError::InvalidToken) => {
                         tracing::info!("Removing invalid APNs token: {}", token.device_token);
-                        let _ = delete_invalid_token(
+                        let _ = delete_invalid_device(
                             &mut tx,
                             token.device_token.clone(),
                             PlatformType::Ios,
@@ -123,9 +123,9 @@ impl PushService {
 
         // Send to Android devices
         if self.fcm_client.is_some() {
-            let android_tokens =
-                get_user_tokens_by_platform(&mut tx, user_id, PlatformType::Android).await?;
-            for token in android_tokens {
+            let android_devices =
+                get_user_devices_by_platform(&mut tx, user_id, PlatformType::Android).await?;
+            for token in android_devices {
                 match self
                     .send_to_fcm(&token.device_token, title, body, badge, data.clone())
                     .await
@@ -133,7 +133,7 @@ impl PushService {
                     Ok(_) => {}
                     Err(PushError::InvalidToken) => {
                         tracing::info!("Removing invalid FCM token: {}", token.device_token);
-                        let _ = delete_invalid_token(
+                        let _ = delete_invalid_device(
                             &mut tx,
                             token.device_token.clone(),
                             PlatformType::Android,

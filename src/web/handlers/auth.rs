@@ -1,5 +1,5 @@
 use crate::app_error::AppError;
-use crate::models::push_token::delete_push_token_by_token;
+use crate::models::device::delete_device_by_token;
 use crate::models::user::{create_user, AuthSession, Credentials, Language, UserDraft};
 use crate::web::handlers::{get_bundle, safe_format_message, safe_get_message, ExtractFtlLang};
 use crate::web::state::AppState;
@@ -313,7 +313,7 @@ pub async fn api_logout(
     if let Some(device_token) = request.device_token {
         let db_pool = &state.db_pool;
         if let Ok(mut tx) = db_pool.begin().await {
-            let _ = delete_push_token_by_token(&mut tx, device_token).await;
+            let _ = delete_device_by_token(&mut tx, device_token).await;
             let _ = tx.commit().await;
         }
     }

@@ -4,7 +4,7 @@ use oeee_cafe::{
     models::{
         actor::{backfill_actors_for_existing_communities, backfill_actors_for_existing_users},
         community::get_communities,
-        push_token::get_user_tokens,
+        device::get_user_devices,
         user::{find_user_by_id, find_user_by_login_name, update_password},
     },
     push::PushService,
@@ -152,10 +152,10 @@ async fn main() -> Result<()> {
                 Some(user) => {
                     println!("Found user: {} ({})", user.display_name, user.id);
 
-                    // Get push tokens for this user
-                    let tokens = get_user_tokens(&mut tx, user.id).await?;
-                    println!("User has {} push token(s) registered:", tokens.len());
-                    for token in &tokens {
+                    // Get devices for this user
+                    let devices = get_user_devices(&mut tx, user.id).await?;
+                    println!("User has {} device(s) registered:", devices.len());
+                    for token in &devices {
                         println!(
                             "  - {:?}: {}...",
                             token.platform,
@@ -163,8 +163,8 @@ async fn main() -> Result<()> {
                         );
                     }
 
-                    if tokens.is_empty() {
-                        println!("❌ No push tokens registered for this user");
+                    if devices.is_empty() {
+                        println!("❌ No devices registered for this user");
                         exit(1);
                     }
 

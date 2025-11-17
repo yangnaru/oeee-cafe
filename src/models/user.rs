@@ -553,10 +553,10 @@ pub async fn delete_user(
     // The user won't be able to log in again anyway because authentication
     // checks filter out deleted users.
 
-    // Delete push tokens (will cascade automatically)
+    // Delete devices (will cascade automatically)
     query!(
         r#"
-        DELETE FROM push_tokens
+        DELETE FROM devices
         WHERE user_id = $1
         "#,
         id
