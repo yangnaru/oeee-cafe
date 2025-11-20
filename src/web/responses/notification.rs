@@ -49,25 +49,12 @@ pub struct NotificationItem {
 /// Response for marking notification as read
 #[derive(Serialize, Debug)]
 pub struct MarkNotificationReadResponse {
-    pub success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub notification: Option<NotificationItem>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
-/// Response for deleting notification
-#[derive(Serialize, Debug)]
-pub struct DeleteNotificationResponse {
-    pub success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub notification: NotificationItem,
 }
 
 /// Response for marking all notifications as read
 #[derive(Serialize, Debug)]
 pub struct MarkAllReadResponse {
-    pub success: bool,
     pub count: i64,
 }
 

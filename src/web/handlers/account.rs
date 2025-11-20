@@ -1,4 +1,5 @@
-use crate::app_error::AppError;
+use crate::app_error::{error_codes, AppError};
+use crate::web::responses::ErrorResponse;
 use crate::models::email_verification_challenge::{
     create_email_verification_challenge, find_email_verification_challenge_by_id,
 };
@@ -365,13 +366,6 @@ pub struct DeleteAccountRequest {
     password: String,
 }
 
-#[derive(serde::Serialize)]
-pub struct DeleteAccountResponse {
-    success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
-}
-
 pub async fn delete_account(
     mut auth_session: AuthSession,
     State(state): State<AppState>,
@@ -382,10 +376,10 @@ pub async fn delete_account(
         None => {
             return Ok((
                 StatusCode::UNAUTHORIZED,
-                Json(DeleteAccountResponse {
-                    success: false,
-                    error: Some("Not authenticated".to_string()),
-                }),
+                Json(ErrorResponse::new(
+                    error_codes::UNAUTHORIZED,
+                    "Not authenticated",
+                )),
             )
                 .into_response())
         }
@@ -410,24 +404,17 @@ pub async fn delete_account(
             // Log the user out
             auth_session.logout().await?;
 
-            Ok((
-                StatusCode::OK,
-                Json(DeleteAccountResponse {
-                    success: true,
-                    error: None,
-                }),
-            )
-                .into_response())
+            Ok(StatusCode::NO_CONTENT.into_response())
         }
         Err(e) => {
             tx.rollback().await?;
 
             Ok((
                 StatusCode::BAD_REQUEST,
-                Json(DeleteAccountResponse {
-                    success: false,
-                    error: Some(e.to_string()),
-                }),
+                Json(ErrorResponse::new(
+                    error_codes::VALIDATION_ERROR,
+                    e.to_string(),
+                )),
             )
                 .into_response())
         }
@@ -557,15 +544,9 @@ pub struct RequestEmailVerificationJson {
 
 #[derive(serde::Serialize)]
 pub struct RequestEmailVerificationResponseJson {
-    success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    challenge_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    email: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    expires_in_seconds: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
+    challenge_id: Uuid,
+    email: String,
+    expires_in_seconds: i64,
 }
 
 pub async fn request_email_verification_json(
@@ -579,13 +560,10 @@ pub async fn request_email_verification_json(
         None => {
             return Ok((
                 StatusCode::UNAUTHORIZED,
-                Json(RequestEmailVerificationResponseJson {
-                    success: false,
-                    challenge_id: None,
-                    email: None,
-                    expires_in_seconds: None,
-                    error: Some("Not authenticated".to_string()),
-                }),
+                Json(ErrorResponse::new(
+                    error_codes::UNAUTHORIZED,
+                    "Not authenticated",
+                )),
             )
                 .into_response())
         }
@@ -595,13 +573,10 @@ pub async fn request_email_verification_json(
     if user.email.as_ref() == Some(&payload.email) && user.email_verified_at.is_some() {
         return Ok((
             StatusCode::BAD_REQUEST,
-            Json(RequestEmailVerificationResponseJson {
-                success: false,
-                challenge_id: None,
-                email: None,
-                expires_in_seconds: None,
-                error: Some("EMAIL_ALREADY_VERIFIED".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::EMAIL_ALREADY_VERIFIED,
+                "Email is already verified",
+            )),
         )
             .into_response());
     }
@@ -610,13 +585,10 @@ pub async fn request_email_verification_json(
     if !payload.email.contains('@') || payload.email.parse::<lettre::Address>().is_err() {
         return Ok((
             StatusCode::BAD_REQUEST,
-            Json(RequestEmailVerificationResponseJson {
-                success: false,
-                challenge_id: None,
-                email: None,
-                expires_in_seconds: None,
-                error: Some("INVALID_EMAIL".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::VALIDATION_ERROR,
+                "Invalid email format",
+            )),
         )
             .into_response());
     }
@@ -629,23 +601,18 @@ pub async fn request_email_verification_json(
         Ok(email_verification_challenge) => Ok((
             StatusCode::OK,
             Json(RequestEmailVerificationResponseJson {
-                success: true,
-                challenge_id: Some(email_verification_challenge.id),
-                email: Some(payload.email),
-                expires_in_seconds: Some(300),
-                error: None,
+                challenge_id: email_verification_challenge.id,
+                email: payload.email,
+                expires_in_seconds: 300,
             }),
         )
             .into_response()),
         Err(e) => Ok((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(RequestEmailVerificationResponseJson {
-                success: false,
-                challenge_id: None,
-                email: None,
-                expires_in_seconds: None,
-                error: Some(format!("Failed to send email: {}", e)),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::INTERNAL_ERROR,
+                format!("Failed to send email: {}", e),
+            )),
         )
             .into_response()),
     }
@@ -655,15 +622,6 @@ pub async fn request_email_verification_json(
 pub struct VerifyEmailCodeJson {
     challenge_id: Uuid,
     token: String,
-}
-
-#[derive(serde::Serialize)]
-pub struct VerifyEmailCodeResponseJson {
-    success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    message: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
 }
 
 pub async fn verify_email_code_json(
@@ -676,11 +634,10 @@ pub async fn verify_email_code_json(
         None => {
             return Ok((
                 StatusCode::UNAUTHORIZED,
-                Json(VerifyEmailCodeResponseJson {
-                    success: false,
-                    message: None,
-                    error: Some("Not authenticated".to_string()),
-                }),
+                Json(ErrorResponse::new(
+                    error_codes::UNAUTHORIZED,
+                    "Not authenticated",
+                )),
             )
                 .into_response())
         }
@@ -694,11 +651,10 @@ pub async fn verify_email_code_json(
     if challenge.is_none() {
         return Ok((
             StatusCode::NOT_FOUND,
-            Json(VerifyEmailCodeResponseJson {
-                success: false,
-                message: None,
-                error: Some("CHALLENGE_NOT_FOUND".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::NOT_FOUND,
+                "Verification challenge not found",
+            )),
         )
             .into_response());
     }
@@ -711,11 +667,10 @@ pub async fn verify_email_code_json(
     if challenge.token != payload.token {
         return Ok((
             StatusCode::BAD_REQUEST,
-            Json(VerifyEmailCodeResponseJson {
-                success: false,
-                message: None,
-                error: Some("TOKEN_MISMATCH".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::INVALID_VERIFICATION_CODE,
+                "Invalid verification code",
+            )),
         )
             .into_response());
     }
@@ -724,11 +679,10 @@ pub async fn verify_email_code_json(
     if challenge.expires_at < now {
         return Ok((
             StatusCode::BAD_REQUEST,
-            Json(VerifyEmailCodeResponseJson {
-                success: false,
-                message: None,
-                error: Some("TOKEN_EXPIRED".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::VALIDATION_ERROR,
+                "Verification code has expired",
+            )),
         )
             .into_response());
     }
@@ -737,15 +691,7 @@ pub async fn verify_email_code_json(
     update_user_email_verified_at(&mut tx, user.id, challenge.email, now).await?;
     tx.commit().await?;
 
-    Ok((
-        StatusCode::OK,
-        Json(VerifyEmailCodeResponseJson {
-            success: true,
-            message: Some("Email verified successfully".to_string()),
-            error: None,
-        }),
-    )
-        .into_response())
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 pub async fn get_account_json(auth_session: AuthSession) -> Result<impl IntoResponse, AppError> {

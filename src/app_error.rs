@@ -1,7 +1,25 @@
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Response;
+use axum::Json;
 use std::fmt;
+
+use crate::web::responses::ErrorResponse;
+
+// Standard error codes
+pub mod error_codes {
+    pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
+    pub const UNAUTHORIZED: &str = "UNAUTHORIZED";
+    pub const NOT_FOUND: &str = "NOT_FOUND";
+    pub const VALIDATION_ERROR: &str = "VALIDATION_ERROR";
+    pub const INVALID_CREDENTIALS: &str = "INVALID_CREDENTIALS";
+    pub const EMAIL_ALREADY_EXISTS: &str = "EMAIL_ALREADY_EXISTS";
+    pub const USERNAME_ALREADY_EXISTS: &str = "USERNAME_ALREADY_EXISTS";
+    pub const EMAIL_ALREADY_VERIFIED: &str = "EMAIL_ALREADY_VERIFIED";
+    pub const INVALID_VERIFICATION_CODE: &str = "INVALID_VERIFICATION_CODE";
+    pub const FORBIDDEN: &str = "FORBIDDEN";
+    pub const CONFLICT: &str = "CONFLICT";
+}
 
 /// Check if an error should be filtered from Sentry reporting.
 /// These are expected federation errors that shouldn't be treated as application errors.
@@ -44,7 +62,7 @@ pub enum AppError {
 // Tell axum how to convert `AppError` into a response.
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let (status, message, should_capture) = match &self {
+        let (status, code, message, should_capture) = match &self {
             AppError::Anyhow(err) => {
                 let message = format!("Something went wrong: {}", err);
                 let should_capture = !should_filter_from_sentry(&message);
@@ -54,50 +72,64 @@ impl IntoResponse for AppError {
                     sentry::integrations::anyhow::capture_anyhow(err);
                 }
 
-                (StatusCode::INTERNAL_SERVER_ERROR, message, false)
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    error_codes::INTERNAL_ERROR,
+                    message,
+                    false,
+                )
             }
             AppError::LocalizationError(key) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
+                error_codes::INTERNAL_ERROR,
                 format!("Missing translation key: {}", key),
                 true,
             ),
             AppError::InvalidFormData(msg) => (
                 StatusCode::BAD_REQUEST,
+                error_codes::VALIDATION_ERROR,
                 format!("Invalid form data: {}", msg),
                 true,
             ),
             AppError::InvalidHash(msg) => (
                 StatusCode::BAD_REQUEST,
+                error_codes::VALIDATION_ERROR,
                 format!("Invalid hash: {}", msg),
                 true,
             ),
             AppError::InvalidEmail(msg) => (
                 StatusCode::BAD_REQUEST,
+                error_codes::VALIDATION_ERROR,
                 format!("Invalid email: {}", msg),
                 true,
             ),
             AppError::InvalidUuid(msg) => (
                 StatusCode::BAD_REQUEST,
+                error_codes::VALIDATION_ERROR,
                 format!("Invalid UUID: {}", msg),
                 true,
             ),
             AppError::InvalidCommunityId(msg) => (
                 StatusCode::BAD_REQUEST,
+                error_codes::VALIDATION_ERROR,
                 format!("Invalid community ID: {}", msg),
                 true,
             ),
             AppError::Unauthorized => (
                 StatusCode::UNAUTHORIZED,
+                error_codes::UNAUTHORIZED,
                 "Unauthorized".to_string(),
                 true,
             ),
             AppError::NotFound(resource) => (
                 StatusCode::NOT_FOUND,
+                error_codes::NOT_FOUND,
                 format!("{} not found", resource),
                 true,
             ),
             AppError::DatabaseError(msg) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
+                error_codes::INTERNAL_ERROR,
                 format!("Database error: {}", msg),
                 true,
             ),
@@ -115,7 +147,7 @@ impl IntoResponse for AppError {
             sentry::capture_message(&message, sentry_level);
         }
 
-        (status, message).into_response()
+        (status, Json(ErrorResponse::new(code, message))).into_response()
     }
 }
 

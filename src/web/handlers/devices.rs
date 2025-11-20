@@ -1,11 +1,14 @@
+use crate::app_error::{error_codes, AppError};
 use crate::models::device::{
     delete_device_by_token, get_user_devices, register_device, Device, PlatformType,
 };
 use crate::models::user::AuthSession;
+use crate::web::responses::ErrorResponse;
 use crate::web::state::AppState;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    response::IntoResponse,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -40,22 +43,14 @@ pub async fn register_device_handler(
     auth_session: AuthSession,
     State(state): State<AppState>,
     Json(payload): Json<RegisterDeviceRequest>,
-) -> Result<Json<DeviceResponse>, StatusCode> {
-    let user = auth_session.user.ok_or(StatusCode::UNAUTHORIZED)?;
+) -> Result<Json<DeviceResponse>, AppError> {
+    let user = auth_session.user.ok_or(AppError::Unauthorized)?;
 
-    let mut tx = state
-        .db_pool
-        .begin()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut tx = state.db_pool.begin().await?;
 
-    let device = register_device(&mut tx, user.id, payload.device_token, payload.platform)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let device = register_device(&mut tx, user.id, payload.device_token, payload.platform).await?;
 
-    tx.commit()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    tx.commit().await?;
 
     Ok(Json(device.into()))
 }
@@ -66,25 +61,21 @@ pub async fn register_device_handler(
 pub async fn delete_device_handler(
     State(state): State<AppState>,
     Path(device_token): Path<String>,
-) -> Result<StatusCode, StatusCode> {
-    let mut tx = state
-        .db_pool
-        .begin()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+) -> Result<impl IntoResponse, AppError> {
+    let mut tx = state.db_pool.begin().await?;
 
-    let deleted = delete_device_by_token(&mut tx, device_token)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let deleted = delete_device_by_token(&mut tx, device_token).await?;
 
-    tx.commit()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    tx.commit().await?;
 
     if deleted {
-        Ok(StatusCode::NO_CONTENT)
+        Ok(StatusCode::NO_CONTENT.into_response())
     } else {
-        Ok(StatusCode::NOT_FOUND)
+        Ok((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse::new(error_codes::NOT_FOUND, "Device not found")),
+        )
+            .into_response())
     }
 }
 
@@ -92,22 +83,14 @@ pub async fn delete_device_handler(
 pub async fn list_devices_handler(
     auth_session: AuthSession,
     State(state): State<AppState>,
-) -> Result<Json<Vec<DeviceResponse>>, StatusCode> {
-    let user = auth_session.user.ok_or(StatusCode::UNAUTHORIZED)?;
+) -> Result<Json<Vec<DeviceResponse>>, AppError> {
+    let user = auth_session.user.ok_or(AppError::Unauthorized)?;
 
-    let mut tx = state
-        .db_pool
-        .begin()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut tx = state.db_pool.begin().await?;
 
-    let devices = get_user_devices(&mut tx, user.id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let devices = get_user_devices(&mut tx, user.id).await?;
 
-    tx.commit()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    tx.commit().await?;
 
     let response: Vec<DeviceResponse> = devices.into_iter().map(|d| d.into()).collect();
 

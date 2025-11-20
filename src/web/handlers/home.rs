@@ -1,5 +1,5 @@
 use super::ExtractFtlLang;
-use crate::app_error::AppError;
+use crate::app_error::{error_codes, AppError};
 use crate::models::actor::Actor;
 use crate::models::comment::{
     build_comment_thread_tree_paginated, create_comment,
@@ -27,7 +27,7 @@ use crate::web::context::CommonContext;
 use crate::web::responses::{
     AuthorInfo, ChildPostAuthor, ChildPostImage, ChildPostResponse, CommentListResponse,
     CommentWithPost, CommentsListResponse, CommunityListResponse, CommunityPostThumbnail,
-    CommunityWithPosts, ImageInfo, PaginationMeta, PostCommunityInfo, PostDetail,
+    CommunityWithPosts, ErrorResponse, ImageInfo, PaginationMeta, PostCommunityInfo, PostDetail,
     PostDetailResponse, PostListResponse, PostThumbnail, ReactionCount, ReactionsDetailResponse,
     Reactor, ThreadedCommentResponse,
 };
@@ -1005,11 +1005,6 @@ pub async fn delete_comment_api(
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
-#[derive(Serialize)]
-pub struct DeletePostResponse {
-    pub success: bool,
-}
-
 pub async fn delete_post_api(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -1018,7 +1013,16 @@ pub async fn delete_post_api(
     // Require authentication
     let user = match auth_session.user {
         Some(u) => u,
-        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+        None => {
+            return Ok((
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse::new(
+                    error_codes::UNAUTHORIZED,
+                    "Not authenticated",
+                )),
+            )
+                .into_response())
+        }
     };
 
     let post_uuid = Uuid::parse_str(&post_id)?;
@@ -1029,7 +1033,11 @@ pub async fn delete_post_api(
     // Find the post
     let post = find_post_by_id(&mut tx, post_uuid).await?;
     if post.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
+        return Ok((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse::new(error_codes::NOT_FOUND, "Post not found")),
+        )
+            .into_response());
     }
 
     let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
@@ -1037,11 +1045,27 @@ pub async fn delete_post_api(
     // Check if the user is the author
     let author_id = match post.get("author_id").and_then(|v| v.as_ref()) {
         Some(id) => id,
-        None => return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+        None => {
+            return Ok((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse::new(
+                    error_codes::INTERNAL_ERROR,
+                    "Invalid post data",
+                )),
+            )
+                .into_response())
+        }
     };
 
     if author_id != &user.id.to_string() {
-        return Ok(StatusCode::FORBIDDEN.into_response());
+        return Ok((
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse::new(
+                error_codes::FORBIDDEN,
+                "Not authorized to delete this post",
+            )),
+        )
+            .into_response());
     }
 
     // Unlink hashtags before deleting post to properly decrement post_count
@@ -1052,7 +1076,7 @@ pub async fn delete_post_api(
 
     tx.commit().await?;
 
-    Ok(Json(DeletePostResponse { success: true }).into_response())
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 #[derive(Deserialize)]
@@ -1064,11 +1088,6 @@ pub struct EditPostRequest {
     pub allow_relay: bool,
 }
 
-#[derive(Serialize)]
-pub struct EditPostResponse {
-    pub success: bool,
-}
-
 pub async fn edit_post_api(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -1078,7 +1097,16 @@ pub async fn edit_post_api(
     // Require authentication
     let user = match auth_session.user {
         Some(u) => u,
-        None => return Ok(StatusCode::UNAUTHORIZED.into_response()),
+        None => {
+            return Ok((
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse::new(
+                    error_codes::UNAUTHORIZED,
+                    "Not authenticated",
+                )),
+            )
+                .into_response())
+        }
     };
 
     let post_uuid = Uuid::parse_str(&post_id)?;
@@ -1089,7 +1117,11 @@ pub async fn edit_post_api(
     // Find the post
     let post = find_post_by_id(&mut tx, post_uuid).await?;
     if post.is_none() {
-        return Ok(StatusCode::NOT_FOUND.into_response());
+        return Ok((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse::new(error_codes::NOT_FOUND, "Post not found")),
+        )
+            .into_response());
     }
 
     let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
@@ -1097,11 +1129,27 @@ pub async fn edit_post_api(
     // Check if the user is the author
     let author_id = match post.get("author_id").and_then(|v| v.as_ref()) {
         Some(id) => id,
-        None => return Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+        None => {
+            return Ok((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse::new(
+                    error_codes::INTERNAL_ERROR,
+                    "Invalid post data",
+                )),
+            )
+                .into_response())
+        }
     };
 
     if author_id != &user.id.to_string() {
-        return Ok(StatusCode::FORBIDDEN.into_response());
+        return Ok((
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse::new(
+                error_codes::FORBIDDEN,
+                "Not authorized to edit this post",
+            )),
+        )
+            .into_response());
     }
 
     // Update the post
@@ -1126,7 +1174,7 @@ pub async fn edit_post_api(
 
     tx.commit().await?;
 
-    Ok(Json(EditPostResponse { success: true }).into_response())
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 #[derive(Deserialize)]

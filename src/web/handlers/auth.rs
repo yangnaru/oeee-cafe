@@ -1,7 +1,8 @@
-use crate::app_error::AppError;
+use crate::app_error::{error_codes, AppError};
 use crate::models::device::delete_device_by_token;
 use crate::models::user::{create_user, AuthSession, Credentials, Language, UserDraft};
 use crate::web::handlers::{get_bundle, safe_format_message, safe_get_message, ExtractFtlLang};
+use crate::web::responses::ErrorResponse;
 use crate::web::state::AppState;
 use axum::extract::Query;
 use axum::response::{IntoResponse, Redirect};
@@ -181,11 +182,7 @@ pub struct LoginRequest {
 
 #[derive(Debug, Serialize)]
 pub struct LoginResponse {
-    pub success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user: Option<UserInfo>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub user: UserInfo,
 }
 
 #[derive(Debug, Serialize)]
@@ -209,10 +206,7 @@ pub struct LogoutRequest {
     pub device_token: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct LogoutResponse {
-    pub success: bool,
-}
+// LogoutResponse is now empty - success is indicated by 204 No Content
 
 #[derive(Debug, Deserialize)]
 pub struct SignupRequest {
@@ -223,11 +217,7 @@ pub struct SignupRequest {
 
 #[derive(Debug, Serialize)]
 pub struct SignupResponse {
-    pub success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user: Option<UserInfo>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub user: UserInfo,
 }
 
 // JSON API endpoint for login
@@ -249,22 +239,20 @@ pub async fn api_login(
         Ok(None) => {
             return (
                 StatusCode::UNAUTHORIZED,
-                Json(LoginResponse {
-                    success: false,
-                    user: None,
-                    error: Some("Invalid credentials".to_string()),
-                }),
+                Json(ErrorResponse::new(
+                    error_codes::INVALID_CREDENTIALS,
+                    "Invalid credentials",
+                )),
             )
                 .into_response();
         }
         Err(_) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(LoginResponse {
-                    success: false,
-                    user: None,
-                    error: Some("Authentication error".to_string()),
-                }),
+                Json(ErrorResponse::new(
+                    error_codes::INTERNAL_ERROR,
+                    "Authentication error",
+                )),
             )
                 .into_response();
         }
@@ -274,11 +262,10 @@ pub async fn api_login(
     if auth_session.login(&user).await.is_err() {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(LoginResponse {
-                success: false,
-                user: None,
-                error: Some("Login error".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::INTERNAL_ERROR,
+                "Login error",
+            )),
         )
             .into_response();
     }
@@ -287,8 +274,7 @@ pub async fn api_login(
     (
         StatusCode::OK,
         Json(LoginResponse {
-            success: true,
-            user: Some(UserInfo {
+            user: UserInfo {
                 id: user.id.to_string(),
                 login_name: user.login_name,
                 display_name: user.display_name,
@@ -296,8 +282,7 @@ pub async fn api_login(
                 email_verified_at: user.email_verified_at.map(|dt| dt.to_rfc3339()),
                 banner_id: user.banner_id.map(|id| id.to_string()),
                 preferred_language: user.preferred_language,
-            }),
-            error: None,
+            },
         }),
     )
         .into_response()
@@ -319,10 +304,13 @@ pub async fn api_logout(
     }
 
     match auth_session.logout().await {
-        Ok(_) => (StatusCode::OK, Json(LogoutResponse { success: true })).into_response(),
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(LogoutResponse { success: false }),
+            Json(ErrorResponse::new(
+                error_codes::INTERNAL_ERROR,
+                "Logout error",
+            )),
         )
             .into_response(),
     }
@@ -344,7 +332,14 @@ pub async fn api_me(auth_session: AuthSession) -> impl IntoResponse {
             }),
         )
             .into_response(),
-        None => (StatusCode::UNAUTHORIZED).into_response(),
+        None => (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse::new(
+                error_codes::UNAUTHORIZED,
+                "Not authenticated",
+            )),
+        )
+            .into_response(),
     }
 }
 
@@ -361,11 +356,10 @@ pub async fn api_signup(
         Err(e) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(SignupResponse {
-                    success: false,
-                    user: None,
-                    error: Some(e.to_string()),
-                }),
+                Json(ErrorResponse::new(
+                    error_codes::VALIDATION_ERROR,
+                    e.to_string(),
+                )),
             )
                 .into_response();
         }
@@ -378,11 +372,10 @@ pub async fn api_signup(
         Err(_) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(SignupResponse {
-                    success: false,
-                    user: None,
-                    error: Some("Database error".to_string()),
-                }),
+                Json(ErrorResponse::new(
+                    error_codes::INTERNAL_ERROR,
+                    "Database error",
+                )),
             )
                 .into_response();
         }
@@ -393,22 +386,20 @@ pub async fn api_signup(
         Ok(true) => {
             return (
                 StatusCode::CONFLICT,
-                Json(SignupResponse {
-                    success: false,
-                    user: None,
-                    error: Some("Login name conflicts with an existing community".to_string()),
-                }),
+                Json(ErrorResponse::new(
+                    error_codes::CONFLICT,
+                    "Login name conflicts with an existing community",
+                )),
             )
                 .into_response();
         }
         Err(_) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(SignupResponse {
-                    success: false,
-                    user: None,
-                    error: Some("Database error".to_string()),
-                }),
+                Json(ErrorResponse::new(
+                    error_codes::INTERNAL_ERROR,
+                    "Database error",
+                )),
             )
                 .into_response();
         }
@@ -419,35 +410,36 @@ pub async fn api_signup(
         Ok(user) => user,
         Err(e) => {
             // Check if this is a unique constraint violation for login_name
-            let error_message = if let Some(db_err) = e.downcast_ref::<sqlx::Error>() {
+            let (error_code, error_message) = if let Some(db_err) = e.downcast_ref::<sqlx::Error>() {
                 match db_err {
                     sqlx::Error::Database(db_error) => {
                         // PostgreSQL error code 23505 is unique_violation
                         if db_error.code().as_deref() == Some("23505") {
                             // Check if the error message mentions login_name
                             if db_error.message().contains("login_name") {
-                                "This login name is already taken. Please choose a different one."
-                                    .to_string()
+                                (
+                                    error_codes::USERNAME_ALREADY_EXISTS,
+                                    "This login name is already taken. Please choose a different one.",
+                                )
                             } else {
-                                "A user with this information already exists.".to_string()
+                                (
+                                    error_codes::CONFLICT,
+                                    "A user with this information already exists.",
+                                )
                             }
                         } else {
-                            "Failed to create user.".to_string()
+                            (error_codes::INTERNAL_ERROR, "Failed to create user.")
                         }
                     }
-                    _ => "Failed to create user.".to_string(),
+                    _ => (error_codes::INTERNAL_ERROR, "Failed to create user."),
                 }
             } else {
-                e.to_string()
+                (error_codes::VALIDATION_ERROR, "Failed to create user.")
             };
 
             return (
-                StatusCode::BAD_REQUEST,
-                Json(SignupResponse {
-                    success: false,
-                    user: None,
-                    error: Some(error_message),
-                }),
+                StatusCode::CONFLICT,
+                Json(ErrorResponse::new(error_code, error_message)),
             )
                 .into_response();
         }
@@ -456,11 +448,10 @@ pub async fn api_signup(
     if tx.commit().await.is_err() {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(SignupResponse {
-                success: false,
-                user: None,
-                error: Some("Database error".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::INTERNAL_ERROR,
+                "Database error",
+            )),
         )
             .into_response();
     }
@@ -469,11 +460,10 @@ pub async fn api_signup(
     if auth_session.login(&user).await.is_err() {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(SignupResponse {
-                success: false,
-                user: None,
-                error: Some("Login error".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::INTERNAL_ERROR,
+                "Login error",
+            )),
         )
             .into_response();
     }
@@ -482,8 +472,7 @@ pub async fn api_signup(
     (
         StatusCode::CREATED,
         Json(SignupResponse {
-            success: true,
-            user: Some(UserInfo {
+            user: UserInfo {
                 id: user.id.to_string(),
                 login_name: user.login_name,
                 display_name: user.display_name,
@@ -491,8 +480,7 @@ pub async fn api_signup(
                 email_verified_at: user.email_verified_at.map(|dt| dt.to_rfc3339()),
                 banner_id: user.banner_id.map(|id| id.to_string()),
                 preferred_language: user.preferred_language,
-            }),
-            error: None,
+            },
         }),
     )
         .into_response()

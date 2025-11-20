@@ -1,4 +1,4 @@
-use crate::app_error::AppError;
+use crate::app_error::{error_codes, AppError};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -23,8 +23,8 @@ use crate::{
         context::CommonContext,
         handlers::ExtractFtlLang,
         responses::{
-            DeleteNotificationResponse, MarkAllReadResponse, MarkNotificationReadResponse,
-            NotificationItem, NotificationsListResponse, UnreadCountResponse,
+            ErrorResponse, MarkAllReadResponse, MarkNotificationReadResponse, NotificationItem,
+            NotificationsListResponse, UnreadCountResponse,
         },
         state::AppState,
     },
@@ -146,7 +146,6 @@ pub async fn mark_all_notifications_read(
     tx.commit().await?;
 
     Ok(Json(MarkAllReadResponse {
-        success: true,
         count: count as i64,
     }))
 }
@@ -306,11 +305,10 @@ pub async fn api_mark_notification_read(
         tx.rollback().await?;
         return Ok((
             StatusCode::NOT_FOUND,
-            Json(MarkNotificationReadResponse {
-                success: false,
-                notification: None,
-                error: Some("Notification not found".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::NOT_FOUND,
+                "Notification not found",
+            )),
         )
             .into_response());
     }
@@ -355,19 +353,16 @@ pub async fn api_mark_notification_read(
         };
 
         Ok(Json(MarkNotificationReadResponse {
-            success: true,
-            notification: Some(notification_item),
-            error: None,
+            notification: notification_item,
         })
         .into_response())
     } else {
         Ok((
             StatusCode::NOT_FOUND,
-            Json(MarkNotificationReadResponse {
-                success: false,
-                notification: None,
-                error: Some("Notification not found".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::NOT_FOUND,
+                "Notification not found",
+            )),
         )
             .into_response())
     }
@@ -393,18 +388,14 @@ pub async fn api_delete_notification(
     tx.commit().await?;
 
     if success {
-        Ok(Json(DeleteNotificationResponse {
-            success: true,
-            error: None,
-        })
-        .into_response())
+        Ok(StatusCode::NO_CONTENT.into_response())
     } else {
         Ok((
             StatusCode::NOT_FOUND,
-            Json(DeleteNotificationResponse {
-                success: false,
-                error: Some("Notification not found".to_string()),
-            }),
+            Json(ErrorResponse::new(
+                error_codes::NOT_FOUND,
+                "Notification not found",
+            )),
         )
             .into_response())
     }
