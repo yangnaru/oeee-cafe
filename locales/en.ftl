@@ -393,4 +393,24 @@ privacy-content = We respect your privacy. By default, we do not collect any per
 
   If you have any questions about this privacy policy, please contact us.
 
+community-guidelines = Community Guidelines
+community-guidelines-content = { brand } is committed to providing a safe, welcoming, and respectful environment for all users. We have zero tolerance for objectionable content and abusive behavior.
+
+  Prohibited Content and Behavior:
+  • Harassment, threats, or bullying of other users
+  • Hate speech or discrimination based on race, ethnicity, religion, gender, sexual orientation, disability, or any other protected characteristic
+  • Sexual content involving minors or non-consensual sexual content
+  • Illegal content or activities, including but not limited to: promotion of violence, distribution of controlled substances, copyright infringement
+  • Spam, malware, or phishing attempts
+  • Impersonation or identity fraud
+  • Doxxing or sharing others' private information without consent
+
+  Enforcement:
+  Violations of these guidelines may result in immediate and permanent account termination without warning. We reserve the right to report illegal activities to law enforcement authorities.
+
+  Reporting:
+  If you encounter content or behavior that violates these guidelines, please report it immediately. We take all reports seriously and will investigate promptly.
+
+  By using { brand }, you agree to abide by these community guidelines. We reserve the right to update these guidelines at any time.
+
 personal-post = Personal post

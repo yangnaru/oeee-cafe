@@ -60,6 +60,7 @@ use crate::web::handlers::post::{
     post_replay_view_by_login_name, post_replay_view_mobile, post_view_by_login_name,
     redirect_post_to_login_name, remove_reaction,
 };
+use crate::web::handlers::policy::policy;
 use crate::web::handlers::privacy::privacy;
 use crate::web::handlers::profile::{
     activate_banner_api, banner_management, delete_banner_api, do_activate_banner, do_add_link,
@@ -459,6 +460,7 @@ impl App {
             .route("/collaboration/:uuid/meta", get(get_collaboration_meta))
             .route("/about", get(about))
             .route("/privacy", get(privacy))
+            .route("/policy", get(policy))
             .route("/signup", get(signup))
             .route("/signup", post(do_signup))
             .route("/login", get(login))

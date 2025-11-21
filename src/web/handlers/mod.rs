@@ -43,6 +43,7 @@ pub mod home;
 pub mod notifications;
 pub mod password_reset;
 pub mod post;
+pub mod policy;
 pub mod privacy;
 pub mod profile;
 pub mod search;
