@@ -6,6 +6,11 @@
   <div class="center">
     <h2>{{ ftl_get_message("brand") }}?</h2>
     <p>{{ ftl_get_message("about") }}</p>
+    <p style="margin-top: 2em;">
+      <a href="/privacy">{{ ftl_get_message("privacy-policy") }}</a>
+      ·
+      <a href="/policy">{{ ftl_get_message("community-guidelines") }}</a>
+    </p>
     <h3>한국어 SNS</h3>
     <ul>
       <li>
@@ -41,10 +46,5 @@
         {% endfor %}
       </div>
     {% endif %}
-    <p style="margin-top: 2em;">
-      <a href="/privacy">{{ ftl_get_message("privacy-policy") }}</a>
-      ·
-      <a href="/policy">{{ ftl_get_message("community-guidelines") }}</a>
-    </p>
   </div>
 {% endblock content %}
