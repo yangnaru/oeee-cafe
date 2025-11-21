@@ -62,6 +62,7 @@ use crate::web::handlers::post::{
 };
 use crate::web::handlers::policy::policy;
 use crate::web::handlers::privacy::privacy;
+use crate::web::handlers::report::{report_post_api, report_profile_api};
 use crate::web::handlers::profile::{
     activate_banner_api, banner_management, delete_banner_api, do_activate_banner, do_add_link,
     do_delete_banner, do_delete_guestbook_entry, do_delete_link, do_follow_profile,
@@ -283,6 +284,7 @@ impl App {
             .route("/api/v1/posts/:post_id", get(get_post_details_json))
             .route("/api/v1/posts/:post_id", delete(delete_post_api))
             .route("/api/v1/posts/:post_id", put(edit_post_api))
+            .route("/api/v1/posts/:post_id/report", post(report_post_api))
             .route(
                 "/api/v1/posts/:post_id/comments",
                 get(get_post_comments_api),
@@ -326,6 +328,10 @@ impl App {
             .route(
                 "/api/v1/profiles/:login_name/unfollow",
                 post(unfollow_profile_api),
+            )
+            .route(
+                "/api/v1/profiles/:login_name/report",
+                post(report_profile_api),
             )
             .route("/api/v1/banners", get(list_banners_json))
             .route(

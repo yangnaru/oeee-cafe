@@ -45,6 +45,7 @@ pub mod password_reset;
 pub mod post;
 pub mod policy;
 pub mod privacy;
+pub mod report;
 pub mod profile;
 pub mod search;
 pub mod well_known;

@@ -21,6 +21,9 @@
             {{ unfollow_button() }} {%
             else %} {{ follow_button() }}
           {% endif %}
+          {% if user.id != current_user.id %}
+            <button type="button" onclick="showProfileReportModal('{{ user.login_name }}')">{{ ftl_get_message("profile-report") }}</button>
+          {% endif %}
         {% endif %}
         {% if banner %}
           {%
@@ -123,6 +126,82 @@
   {% else %}
     <p>{{ ftl_get_message("profile-private-community-posts-nil") }}</p>
   {% endif %}
+{% endif %}
+
+{# Profile Report Modal #}
+{% if current_user and user.id != current_user.id %}
+  <div id="profile-report-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: var(--main-bg-color); padding: 20px; border-radius: 8px; max-width: 500px; width: 90%;">
+      <h2>{{ ftl_get_message("profile-report-title") }}</h2>
+      <form id="profile-report-form" onsubmit="submitProfileReport(event)">
+        <label for="profile-report-description">{{ ftl_get_message("profile-report-description-label") }}</label>
+        <textarea id="profile-report-description"
+                  name="description"
+                  required
+                  rows="5"
+                  style="width: 100%; margin-top: 8px; padding: 8px;"
+                  placeholder="{{ ftl_get_message('profile-report-description-placeholder') }}"></textarea>
+        <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" onclick="hideProfileReportModal()">{{ ftl_get_message("cancel") }}</button>
+          <button type="submit">{{ ftl_get_message("profile-report-submit") }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let currentReportLoginName = '';
+
+    function showProfileReportModal(loginName) {
+      currentReportLoginName = loginName;
+      const modal = document.getElementById('profile-report-modal');
+      modal.style.display = 'flex';
+      document.getElementById('profile-report-description').value = '';
+      document.getElementById('profile-report-description').focus();
+    }
+
+    function hideProfileReportModal() {
+      document.getElementById('profile-report-modal').style.display = 'none';
+      currentReportLoginName = '';
+    }
+
+    async function submitProfileReport(event) {
+      event.preventDefault();
+      const description = document.getElementById('profile-report-description').value.trim();
+
+      if (description.length === 0) {
+        alert('{{ ftl_get_message("profile-report-error") }}');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/v1/profiles/${currentReportLoginName}/report`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ description }),
+        });
+
+        if (response.ok) {
+          alert('{{ ftl_get_message("profile-report-success") }}');
+          hideProfileReportModal();
+        } else {
+          const error = await response.json();
+          alert(error.message || '{{ ftl_get_message("profile-report-error") }}');
+        }
+      } catch (error) {
+        alert('{{ ftl_get_message("profile-report-error") }}');
+      }
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('profile-report-modal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        hideProfileReportModal();
+      }
+    });
+  </script>
 {% endif %}
 </div>
 {% endblock content %}
