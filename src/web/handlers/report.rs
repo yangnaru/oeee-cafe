@@ -80,10 +80,10 @@ pub async fn report_post_api(
     tx.commit().await?;
 
     // Prepare email content
-    let post_url = format!("https://{}/posts/{}", state.config.domain, post_id);
-    let reporter_profile_url = format!("https://{}/users/{}", state.config.domain, user.login_name);
+    let post_url = format!("https://{}/@{}/{}", state.config.domain, post_author.login_name, post_id);
+    let reporter_profile_url = format!("https://{}/@{}", state.config.domain, user.login_name);
     let post_author_profile_url = format!(
-        "https://{}/users/{}",
+        "https://{}/@{}",
         state.config.domain, post_author.login_name
     );
 
