@@ -324,18 +324,24 @@ pub async fn profile_or_community(
     if let Some(community) = find_community_by_slug(&mut tx, slug.clone()).await? {
         let community_uuid = community.id;
 
-        // Access control: For private communities, verify membership
-        if community.visibility == CommunityVisibility::Private {
-            // Non-authenticated users cannot access private communities
-            let user_id = match &auth_session.user {
-                Some(user) => user.id,
-                None => return Ok(StatusCode::NOT_FOUND.into_response()),
-            };
+        // Access control: verify access based on community visibility
+        match community.visibility {
+            CommunityVisibility::Private => {
+                // Private communities require authentication AND membership
+                let user_id = match &auth_session.user {
+                    Some(user) => user.id,
+                    None => return Ok(StatusCode::NOT_FOUND.into_response()),
+                };
 
-            // Check if user is a member
-            let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
-            if !is_member {
-                return Ok(StatusCode::NOT_FOUND.into_response());
+                // Check if user is a member
+                let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
+                if !is_member {
+                    return Ok(StatusCode::NOT_FOUND.into_response());
+                }
+            }
+            CommunityVisibility::Public | CommunityVisibility::Unlisted => {
+                // Public and unlisted communities are accessible to everyone
+                // No authentication required
             }
         }
 

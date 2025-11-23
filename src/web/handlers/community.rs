@@ -91,18 +91,24 @@ pub async fn community(
     let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
     let community_uuid = community.id;
 
-    // Access control: For member_only communities, verify membership
-    if community.visibility == CommunityVisibility::Private {
-        // Non-authenticated users cannot access member_only communities
-        let user_id = match &auth_session.user {
-            Some(user) => user.id,
-            None => return Ok(StatusCode::NOT_FOUND.into_response()),
-        };
+    // Access control: verify access based on community visibility
+    match community.visibility {
+        CommunityVisibility::Private => {
+            // Private communities require authentication AND membership
+            let user_id = match &auth_session.user {
+                Some(user) => user.id,
+                None => return Ok(StatusCode::NOT_FOUND.into_response()),
+            };
 
-        // Check if user is a member
-        let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
-        if !is_member {
-            return Ok(StatusCode::NOT_FOUND.into_response());
+            // Check if user is a member
+            let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
+            if !is_member {
+                return Ok(StatusCode::NOT_FOUND.into_response());
+            }
+        }
+        CommunityVisibility::Public | CommunityVisibility::Unlisted => {
+            // Public and unlisted communities are accessible to everyone
+            // No authentication required
         }
     }
 
@@ -210,16 +216,23 @@ pub async fn community_iframe(
     let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
     let community_uuid = community.id;
 
-    // Access control: For member_only communities, verify membership
-    if community.visibility == CommunityVisibility::Private {
-        let user_id = match &auth_session.user {
-            Some(user) => user.id,
-            None => return Ok(StatusCode::NOT_FOUND.into_response()),
-        };
+    // Access control: verify access based on community visibility
+    match community.visibility {
+        CommunityVisibility::Private => {
+            // Private communities require authentication AND membership
+            let user_id = match &auth_session.user {
+                Some(user) => user.id,
+                None => return Ok(StatusCode::NOT_FOUND.into_response()),
+            };
 
-        let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
-        if !is_member {
-            return Ok(StatusCode::NOT_FOUND.into_response());
+            let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
+            if !is_member {
+                return Ok(StatusCode::NOT_FOUND.into_response());
+            }
+        }
+        CommunityVisibility::Public | CommunityVisibility::Unlisted => {
+            // Public and unlisted communities are accessible to everyone
+            // No authentication required
         }
     }
 
@@ -889,16 +902,23 @@ pub async fn community_comments(
     let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
     let community_uuid = community.id;
 
-    // Access control: For member_only communities, verify membership
-    if community.visibility == CommunityVisibility::Private {
-        let user_id = match &auth_session.user {
-            Some(user) => user.id,
-            None => return Ok(StatusCode::NOT_FOUND.into_response()),
-        };
+    // Access control: verify access based on community visibility
+    match community.visibility {
+        CommunityVisibility::Private => {
+            // Private communities require authentication AND membership
+            let user_id = match &auth_session.user {
+                Some(user) => user.id,
+                None => return Ok(StatusCode::NOT_FOUND.into_response()),
+            };
 
-        let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
-        if !is_member {
-            return Ok(StatusCode::NOT_FOUND.into_response());
+            let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
+            if !is_member {
+                return Ok(StatusCode::NOT_FOUND.into_response());
+            }
+        }
+        CommunityVisibility::Public | CommunityVisibility::Unlisted => {
+            // Public and unlisted communities are accessible to everyone
+            // No authentication required
         }
     }
 
@@ -1583,11 +1603,24 @@ pub async fn community_detail_json(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Community not found"))?;
 
-    // Access control: For private communities, return 404 for unauthenticated users
-    // Note: We're not checking membership here, just returning public info
-    // The iOS app can show "private community" UI
-    if community.visibility == CommunityVisibility::Private {
-        // For now, return basic info but no posts/comments for private communities
+    // Access control: verify access based on community visibility
+    match community.visibility {
+        CommunityVisibility::Private => {
+            // Private communities require authentication AND membership
+            let user_id = match &auth_session.user {
+                Some(user) => user.id,
+                None => return Err(anyhow::anyhow!("Community not found").into()),
+            };
+
+            let is_member = is_user_member(&mut tx, user_id, community.id).await?;
+            if !is_member {
+                return Err(anyhow::anyhow!("Community not found").into());
+            }
+        }
+        CommunityVisibility::Public | CommunityVisibility::Unlisted => {
+            // Public and unlisted communities are accessible to everyone
+            // No authentication required
+        }
     }
 
     let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
@@ -2108,15 +2141,23 @@ pub async fn get_community_members_json(
 
     let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
 
-    // Access control: verify user is a member for private communities
-    if community.visibility == CommunityVisibility::Private {
-        if let Some(user) = &auth_session.user {
-            let is_member = is_user_member(&mut tx, user.id, community.id).await?;
+    // Access control: verify access based on community visibility
+    match community.visibility {
+        CommunityVisibility::Private => {
+            // Private communities require authentication AND membership
+            let user_id = match &auth_session.user {
+                Some(user) => user.id,
+                None => return Ok(Json(CommunityMembersListResponse { members: vec![] })),
+            };
+
+            let is_member = is_user_member(&mut tx, user_id, community.id).await?;
             if !is_member {
                 return Ok(Json(CommunityMembersListResponse { members: vec![] }));
             }
-        } else {
-            return Ok(Json(CommunityMembersListResponse { members: vec![] }));
+        }
+        CommunityVisibility::Public | CommunityVisibility::Unlisted => {
+            // Public and unlisted communities are accessible to everyone
+            // No authentication required
         }
     }
 
