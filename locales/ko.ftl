@@ -67,6 +67,12 @@ push-notification-comment-reply-body = { $name }님이 댓글에 답글을 남�
 push-notification-community-post-title = 새 커뮤니티 게시물
 push-notification-community-post-body = { $name }님이 커뮤니티에 그림을 그렸습니다
 push-notification-community-post-body-with-title = { $name }님이 커뮤니티에 그림을 그렸습니다: { $title }
+push-notification-community-invite-title = 커뮤니티 초대
+push-notification-community-invite-body = { $inviter }님이 @{ $community }에 초대했습니다
+push-notification-invite-accepted-title = 초대 수락됨
+push-notification-invite-accepted-body = { $accepter }님이 @{ $community } 초대를 수락했습니다
+push-notification-invite-declined-title = 초대 거절됨
+push-notification-invite-declined-body = { $decliner }님이 @{ $community } 초대를 거절했습니다
 
 sign-in = 로그인
 sign-up = 회원가입

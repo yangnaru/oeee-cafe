@@ -383,18 +383,28 @@ pub async fn send_push_for_notification(
     badge_count: Option<u32>,
 ) {
     // Get recipient's preferred language
-    let preferred_language =
-        match get_user_language_preference(pool, notification.recipient_id).await {
-            Ok(lang) => lang,
-            Err(e) => {
-                tracing::warn!(
-                "Failed to get language preference for user {}: {:?}. Using English as fallback.",
-                notification.recipient_id,
+    let preferred_language = match pool.acquire().await {
+        Ok(mut conn) => {
+            match get_user_language_preference(&mut conn, notification.recipient_id).await {
+                Ok(lang) => lang,
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to get language preference for user {}: {:?}. Using English as fallback.",
+                        notification.recipient_id,
+                        e
+                    );
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to acquire connection from pool: {:?}. Using English as fallback.",
                 e
             );
-                None
-            }
-        };
+            None
+        }
+    };
 
     // Format notification message based on type and user's language
     let (title, body) = format_notification_message(notification, preferred_language);
@@ -445,8 +455,8 @@ pub async fn send_push_for_notification(
 }
 
 /// Get user's language preference from database
-async fn get_user_language_preference(
-    pool: &sqlx::PgPool,
+pub async fn get_user_language_preference(
+    conn: &mut sqlx::PgConnection,
     user_id: Uuid,
 ) -> Result<Option<Language>> {
     let result = sqlx::query!(
@@ -457,7 +467,7 @@ async fn get_user_language_preference(
         "#,
         user_id
     )
-    .fetch_one(pool)
+    .fetch_one(conn)
     .await?;
 
     Ok(result.preferred_language)
@@ -610,6 +620,49 @@ fn format_notification_message(
                 )
             };
             (title, body)
+        }
+    }
+}
+
+/// Format a community invitation-related message for push notifications
+/// Returns a tuple of (title, body) localized for the user's language preference
+pub fn format_community_invitation_message(
+    notification_type: &str, // "invite", "accepted", "declined"
+    language: Option<Language>,
+    inviter_name: &str,
+    community_slug: &str,
+) -> (String, String) {
+    let bundle = get_fluent_bundle(language);
+    let mut args = FluentArgs::new();
+
+    match notification_type {
+        "invite" => {
+            args.set("inviter", inviter_name.to_string());
+            args.set("community", community_slug.to_string());
+
+            let title = get_localized_message(&bundle, "push-notification-community-invite-title", None);
+            let body = get_localized_message(&bundle, "push-notification-community-invite-body", Some(&args));
+            (title, body)
+        }
+        "accepted" => {
+            args.set("accepter", inviter_name.to_string());
+            args.set("community", community_slug.to_string());
+
+            let title = get_localized_message(&bundle, "push-notification-invite-accepted-title", None);
+            let body = get_localized_message(&bundle, "push-notification-invite-accepted-body", Some(&args));
+            (title, body)
+        }
+        "declined" => {
+            args.set("decliner", inviter_name.to_string());
+            args.set("community", community_slug.to_string());
+
+            let title = get_localized_message(&bundle, "push-notification-invite-declined-title", None);
+            let body = get_localized_message(&bundle, "push-notification-invite-declined-body", Some(&args));
+            (title, body)
+        }
+        _ => {
+            // Fallback to English for unknown types
+            ("Notification".to_string(), "You have a new notification".to_string())
         }
     }
 }

@@ -67,6 +67,12 @@ push-notification-comment-reply-body = { $name }回复了您的评论
 push-notification-community-post-title = 新社区作品
 push-notification-community-post-body = { $name }在您的社区发布了作品
 push-notification-community-post-body-with-title = { $name }在您的社区发布了作品：{ $title }
+push-notification-community-invite-title = 社区邀请
+push-notification-community-invite-body = { $inviter }邀请您加入@{ $community }
+push-notification-invite-accepted-title = 邀请已接受
+push-notification-invite-accepted-body = { $accepter }接受了您加入@{ $community }的邀请
+push-notification-invite-declined-title = 邀请已拒绝
+push-notification-invite-declined-body = { $decliner }拒绝了您加入@{ $community }的邀请
 
 sign-in = 登录
 sign-up = 注册

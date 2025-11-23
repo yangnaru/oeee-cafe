@@ -67,6 +67,12 @@ push-notification-comment-reply-body = { $name }さんがコメントに返信�
 push-notification-community-post-title = 新しいコミュニティ投稿
 push-notification-community-post-body = { $name }さんがコミュニティに絵を描きました
 push-notification-community-post-body-with-title = { $name }さんがコミュニティに絵を描きました: { $title }
+push-notification-community-invite-title = コミュニティ招待
+push-notification-community-invite-body = { $inviter }さんが@{ $community }に招待しました
+push-notification-invite-accepted-title = 招待を承認しました
+push-notification-invite-accepted-body = { $accepter }さんが@{ $community }への招待を承認しました
+push-notification-invite-declined-title = 招待を拒否しました
+push-notification-invite-declined-body = { $decliner }さんが@{ $community }への招待を拒否しました
 
 sign-in = ログイン
 sign-up = 会員登録

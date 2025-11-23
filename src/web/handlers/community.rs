@@ -13,6 +13,7 @@ use crate::models::community::{
     slug_conflicts_with_user, soft_delete_community_with_activity,
     update_community_with_activity, CommunityDraft, CommunityMemberRole, CommunityVisibility,
 };
+use crate::models::notification::{format_community_invitation_message, get_user_language_preference};
 use crate::models::post::{find_published_posts_by_community_id, find_recent_posts_by_communities};
 use crate::models::user::{find_user_by_login_name, AuthSession};
 use crate::web::handlers::home::LoadMoreQuery;
@@ -1085,13 +1086,17 @@ pub async fn invite_user(
     // Create invitation
     match create_invitation(&mut tx, community.id, inviter.id, invitee.id).await {
         Ok(_invitation) => {
+            // Get invitee's language preference before committing transaction
+            let invitee_language = get_user_language_preference(&mut tx, invitee.id).await.ok().flatten();
+
             tx.commit().await?;
 
-            // Send push notification to invitee
-            let title = "Community Invitation".to_string();
-            let body = format!(
-                "{} invited you to join @{}",
-                inviter.display_name, community.slug
+            // Send push notification to invitee with localized message
+            let (title, body) = format_community_invitation_message(
+                "invite",
+                invitee_language,
+                &inviter.display_name,
+                &community.slug,
             );
 
             let mut data = serde_json::Map::new();
@@ -1274,13 +1279,17 @@ pub async fn do_accept_invitation(
     )
     .await?;
 
+    // Get inviter's language preference before committing transaction
+    let inviter_language = get_user_language_preference(&mut tx, inviter_id).await.ok().flatten();
+
     tx.commit().await?;
 
-    // Send push notification to inviter
-    let title = "Invitation Accepted".to_string();
-    let body = format!(
-        "{} accepted your invitation to join @{}",
-        user.display_name, community.slug
+    // Send push notification to inviter with localized message
+    let (title, body) = format_community_invitation_message(
+        "accepted",
+        inviter_language,
+        &user.display_name,
+        &community.slug,
     );
 
     let mut data = serde_json::Map::new();
@@ -1384,13 +1393,17 @@ pub async fn do_reject_invitation(
     // Reject the invitation
     reject_invitation(&mut tx, invitation_id).await?;
 
+    // Get inviter's language preference before committing transaction
+    let inviter_language = get_user_language_preference(&mut tx, inviter_id).await.ok().flatten();
+
     tx.commit().await?;
 
-    // Send push notification to inviter
-    let title = "Invitation Declined".to_string();
-    let body = format!(
-        "{} declined your invitation to join @{}",
-        user.display_name, community.slug
+    // Send push notification to inviter with localized message
+    let (title, body) = format_community_invitation_message(
+        "declined",
+        inviter_language,
+        &user.display_name,
+        &community.slug,
     );
 
     let mut data = serde_json::Map::new();
@@ -2319,13 +2332,17 @@ pub async fn invite_user_json(
     // Create invitation
     create_invitation(&mut tx, community.id, user.id, invitee.id).await?;
 
+    // Get invitee's language preference before committing transaction
+    let invitee_language = get_user_language_preference(&mut tx, invitee.id).await.ok().flatten();
+
     tx.commit().await?;
 
-    // Send push notification to invitee
-    let title = "Community Invitation".to_string();
-    let body = format!(
-        "{} invited you to join @{}",
-        user.display_name, community.slug
+    // Send push notification to invitee with localized message
+    let (title, body) = format_community_invitation_message(
+        "invite",
+        invitee_language,
+        &user.display_name,
+        &community.slug,
     );
 
     let mut data = serde_json::Map::new();

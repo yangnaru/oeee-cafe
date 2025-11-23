@@ -65,6 +65,12 @@ push-notification-comment-reply-body = { $name } replied to your comment
 push-notification-community-post-title = New community post
 push-notification-community-post-body = { $name } posted in your community
 push-notification-community-post-body-with-title = { $name } posted in your community: { $title }
+push-notification-community-invite-title = Community Invitation
+push-notification-community-invite-body = { $inviter } invited you to join @{ $community }
+push-notification-invite-accepted-title = Invitation Accepted
+push-notification-invite-accepted-body = { $accepter } accepted your invitation to join @{ $community }
+push-notification-invite-declined-title = Invitation Declined
+push-notification-invite-declined-body = { $decliner } declined your invitation to join @{ $community }
 
 sign-in = Sign in
 sign-up = Sign up
