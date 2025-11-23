@@ -94,6 +94,29 @@ pub async fn render_403(
     Ok((StatusCode::FORBIDDEN, Html(rendered)).into_response())
 }
 
+pub fn detect_preferred_language(accept_language: &HeaderValue) -> Option<Language> {
+    let header_str = accept_language.to_str().ok()?;
+    let requested = parse_accepted_languages(header_str);
+    let available = convert_vec_str_to_langids_lossy(["ko", "ja", "en", "zh"]);
+
+    let supported = negotiate_languages(
+        &requested,
+        &available,
+        None, // No default - if no match, return None
+        NegotiationStrategy::Filtering,
+    );
+
+    let lang_code = supported.first().map(|l| l.language.as_str())?;
+
+    match lang_code {
+        "ko" => Some(Language::Ko),
+        "ja" => Some(Language::Ja),
+        "en" => Some(Language::En),
+        "zh" => Some(Language::Zh),
+        _ => None, // No match - return None instead of defaulting
+    }
+}
+
 pub struct ExtractAcceptLanguage(HeaderValue);
 
 #[async_trait]
@@ -187,7 +210,7 @@ fn get_bundle(
             // Fallback to "en" if header is not valid UTF-8
             let header_str = accept_language.to_str().unwrap_or("en");
             let requested = parse_accepted_languages(header_str);
-            let available = convert_vec_str_to_langids_lossy(["ko", "ja", "en"]);
+            let available = convert_vec_str_to_langids_lossy(["ko", "ja", "en", "zh"]);
             let default = "en".parse().expect("Failed to parse a langid.");
 
             let supported = negotiate_languages(

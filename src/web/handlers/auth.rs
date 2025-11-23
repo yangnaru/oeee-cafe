@@ -1,7 +1,11 @@
 use crate::app_error::{error_codes, AppError};
 use crate::models::device::delete_device_by_token;
-use crate::models::user::{create_user, AuthSession, Credentials, Language, UserDraft};
-use crate::web::handlers::{get_bundle, safe_format_message, safe_get_message, ExtractFtlLang};
+use crate::models::user::{
+    create_user, update_user_preferred_language, AuthSession, Credentials, Language, UserDraft,
+};
+use crate::web::handlers::{
+    detect_preferred_language, get_bundle, safe_format_message, safe_get_message, ExtractFtlLang,
+};
 use crate::web::responses::ErrorResponse;
 use crate::web::state::AppState;
 use axum::extract::Query;
@@ -80,6 +84,12 @@ pub async fn do_signup(
     }
 
     let user = create_user(&mut tx, user_draft, &state.config).await?;
+
+    // Auto-set language preference from browser if it matches a supported language
+    if let Some(lang) = detect_preferred_language(&accept_language) {
+        update_user_preferred_language(&mut tx, user.id, Some(lang)).await?;
+    }
+
     tx.commit().await?;
 
     if auth_session.login(&user).await.is_err() {
@@ -120,6 +130,7 @@ pub async fn do_login(
     mut auth_session: AuthSession,
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     messages: Messages,
+    State(state): State<AppState>,
     Form(creds): Form<Credentials>,
 ) -> impl IntoResponse {
     let user_preferred_language = auth_session
@@ -143,6 +154,21 @@ pub async fn do_login(
         }
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
+
+    // Auto-set language preference from browser if not already set
+    if user.preferred_language.is_none() {
+        if let Some(lang) = detect_preferred_language(&accept_language) {
+            let db = &state.db_pool;
+            if let Ok(mut tx) = db.begin().await {
+                if update_user_preferred_language(&mut tx, user.id, Some(lang))
+                    .await
+                    .is_ok()
+                {
+                    let _ = tx.commit().await;
+                }
+            }
+        }
+    }
 
     if auth_session.login(&user).await.is_err() {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -223,7 +249,8 @@ pub struct SignupResponse {
 // JSON API endpoint for login
 pub async fn api_login(
     mut auth_session: AuthSession,
-    State(_state): State<AppState>,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
+    State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> impl IntoResponse {
     // Create credentials from JSON request
@@ -257,6 +284,21 @@ pub async fn api_login(
                 .into_response();
         }
     };
+
+    // Auto-set language preference from browser if not already set
+    if user.preferred_language.is_none() {
+        if let Some(lang) = detect_preferred_language(&accept_language) {
+            let db = &state.db_pool;
+            if let Ok(mut tx) = db.begin().await {
+                if update_user_preferred_language(&mut tx, user.id, Some(lang))
+                    .await
+                    .is_ok()
+                {
+                    let _ = tx.commit().await;
+                }
+            }
+        }
+    }
 
     // Login user (sets session cookie)
     if auth_session.login(&user).await.is_err() {
@@ -346,6 +388,7 @@ pub async fn api_me(auth_session: AuthSession) -> impl IntoResponse {
 // JSON API endpoint for signup
 pub async fn api_signup(
     mut auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     Json(req): Json<SignupRequest>,
 ) -> impl IntoResponse {
@@ -444,6 +487,23 @@ pub async fn api_signup(
                 .into_response();
         }
     };
+
+    // Auto-set language preference from browser if it matches a supported language
+    if let Some(lang) = detect_preferred_language(&accept_language) {
+        if update_user_preferred_language(&mut tx, user.id, Some(lang))
+            .await
+            .is_err()
+        {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse::new(
+                    error_codes::INTERNAL_ERROR,
+                    "Database error",
+                )),
+            )
+                .into_response();
+        }
+    }
 
     if tx.commit().await.is_err() {
         return (
