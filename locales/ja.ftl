@@ -1,6 +1,7 @@
 brand = OEEEカフェ
 email-from-address = OEEEカフェ <noreply@oeee.cafe>
 error-404 = ページが見つかりません.
+error-403 = このページにアクセスする権限がありません。
 
 about = お絵かきの発音はOEEEカフェに似ています。
   OEEEは韓国語でキュウリという意味です。

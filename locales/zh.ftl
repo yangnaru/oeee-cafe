@@ -1,6 +1,7 @@
 brand = 黄瓜咖啡馆
 email-from-address = 黄瓜咖啡馆 <noreply@oeee.cafe>
 error-404 = 页面未找到
+error-403 = 您无权访问此页面。
 
 about = 黄瓜画板是一个可以画画的留言板。
   以前也被称为黄瓜削皮。

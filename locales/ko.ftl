@@ -1,6 +1,7 @@
 brand = 오이카페
 email-from-address = 오이카페 <noreply@oeee.cafe>
 error-404 = 페이지를 찾을 수 없습니다.
+error-403 = 이 페이지에 접근할 권한이 없습니다.
 
 about = 오에카키는 그림을 그릴 수 있는 게시판입니다.
   옛날에는 오에카키를 오이깎이라고도 불렀습니다.

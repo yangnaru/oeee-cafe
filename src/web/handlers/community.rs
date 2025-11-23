@@ -25,9 +25,10 @@ use crate::web::responses::{
     PaginationMeta, PublicCommunitiesResponse, UserInvitationResponse,
     UserInvitationsListResponse,
 };
+use crate::web::handlers::render_403;
 use crate::web::state::AppState;
 use axum::extract::{Path, Query};
-use axum::http::{HeaderMap, HeaderValue};
+use axum::http::{uri::Uri, HeaderMap, HeaderValue};
 use axum::response::{IntoResponse, Redirect};
 use axum::{
     extract::State,
@@ -56,6 +57,7 @@ pub async fn community(
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(id): Path<String>,
+    uri: Uri,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
@@ -95,15 +97,20 @@ pub async fn community(
     match community.visibility {
         CommunityVisibility::Private => {
             // Private communities require authentication AND membership
-            let user_id = match &auth_session.user {
-                Some(user) => user.id,
-                None => return Ok(StatusCode::NOT_FOUND.into_response()),
-            };
-
-            // Check if user is a member
-            let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
-            if !is_member {
-                return Ok(StatusCode::NOT_FOUND.into_response());
+            match &auth_session.user {
+                Some(user) => {
+                    // User is authenticated, check membership
+                    let is_member = is_user_member(&mut tx, user.id, community_uuid).await?;
+                    if !is_member {
+                        // Authenticated but not a member - show 403 forbidden
+                        return Ok(render_403(&auth_session, &state, ftl_lang).await?.into_response());
+                    }
+                }
+                None => {
+                    // Not authenticated - redirect to login with next URL
+                    let next_url = uri.path();
+                    return Ok(Redirect::to(&format!("/login?next={}", next_url)).into_response());
+                }
             }
         }
         CommunityVisibility::Public | CommunityVisibility::Unlisted => {
@@ -180,6 +187,7 @@ pub async fn community_iframe(
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(id): Path<String>,
+    uri: Uri,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
@@ -220,14 +228,20 @@ pub async fn community_iframe(
     match community.visibility {
         CommunityVisibility::Private => {
             // Private communities require authentication AND membership
-            let user_id = match &auth_session.user {
-                Some(user) => user.id,
-                None => return Ok(StatusCode::NOT_FOUND.into_response()),
-            };
-
-            let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
-            if !is_member {
-                return Ok(StatusCode::NOT_FOUND.into_response());
+            match &auth_session.user {
+                Some(user) => {
+                    // User is authenticated, check membership
+                    let is_member = is_user_member(&mut tx, user.id, community_uuid).await?;
+                    if !is_member {
+                        // Authenticated but not a member - show 403 forbidden
+                        return Ok(render_403(&auth_session, &state, ftl_lang).await?.into_response());
+                    }
+                }
+                None => {
+                    // Not authenticated - redirect to login with next URL
+                    let next_url = uri.path();
+                    return Ok(Redirect::to(&format!("/login?next={}", next_url)).into_response());
+                }
             }
         }
         CommunityVisibility::Public | CommunityVisibility::Unlisted => {
@@ -866,6 +880,7 @@ pub async fn community_comments(
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(id): Path<String>,
+    uri: Uri,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
@@ -906,14 +921,20 @@ pub async fn community_comments(
     match community.visibility {
         CommunityVisibility::Private => {
             // Private communities require authentication AND membership
-            let user_id = match &auth_session.user {
-                Some(user) => user.id,
-                None => return Ok(StatusCode::NOT_FOUND.into_response()),
-            };
-
-            let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
-            if !is_member {
-                return Ok(StatusCode::NOT_FOUND.into_response());
+            match &auth_session.user {
+                Some(user) => {
+                    // User is authenticated, check membership
+                    let is_member = is_user_member(&mut tx, user.id, community_uuid).await?;
+                    if !is_member {
+                        // Authenticated but not a member - show 403 forbidden
+                        return Ok(render_403(&auth_session, &state, ftl_lang).await?.into_response());
+                    }
+                }
+                None => {
+                    // Not authenticated - redirect to login with next URL
+                    let next_url = uri.path();
+                    return Ok(Redirect::to(&format!("/login?next={}", next_url)).into_response());
+                }
             }
         }
         CommunityVisibility::Public | CommunityVisibility::Unlisted => {
@@ -1607,14 +1628,67 @@ pub async fn community_detail_json(
     match community.visibility {
         CommunityVisibility::Private => {
             // Private communities require authentication AND membership
-            let user_id = match &auth_session.user {
-                Some(user) => user.id,
-                None => return Err(anyhow::anyhow!("Community not found").into()),
-            };
-
-            let is_member = is_user_member(&mut tx, user_id, community.id).await?;
-            if !is_member {
-                return Err(anyhow::anyhow!("Community not found").into());
+            match &auth_session.user {
+                Some(user) => {
+                    // User is authenticated, check membership
+                    let is_member = is_user_member(&mut tx, user.id, community.id).await?;
+                    if !is_member {
+                        // Authenticated but not a member - return 403 Forbidden
+                        return Ok(Json(CommunityDetailResponse {
+                            community: CommunityInfo {
+                                id: community.id,
+                                name: community.name,
+                                slug: community.slug,
+                                description: community.description,
+                                visibility: community.visibility,
+                                owner_id: community.owner_id,
+                                background_color: community.background_color,
+                                foreground_color: community.foreground_color,
+                            },
+                            stats: CommunityStats {
+                                total_posts: 0,
+                                total_contributors: 0,
+                                total_comments: 0,
+                            },
+                            posts: vec![],
+                            pagination: PaginationMeta {
+                                offset: 0,
+                                limit: 0,
+                                total: None,
+                                has_more: false,
+                            },
+                            comments: vec![],
+                        }));
+                    }
+                }
+                None => {
+                    // Not authenticated - return basic info only for private communities
+                    return Ok(Json(CommunityDetailResponse {
+                        community: CommunityInfo {
+                            id: community.id,
+                            name: community.name,
+                            slug: community.slug,
+                            description: community.description,
+                            visibility: community.visibility,
+                            owner_id: community.owner_id,
+                            background_color: community.background_color,
+                            foreground_color: community.foreground_color,
+                        },
+                        stats: CommunityStats {
+                            total_posts: 0,
+                            total_contributors: 0,
+                            total_comments: 0,
+                        },
+                        posts: vec![],
+                        pagination: PaginationMeta {
+                            offset: 0,
+                            limit: 0,
+                            total: None,
+                            has_more: false,
+                        },
+                        comments: vec![],
+                    }));
+                }
             }
         }
         CommunityVisibility::Public | CommunityVisibility::Unlisted => {

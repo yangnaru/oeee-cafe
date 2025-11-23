@@ -1,6 +1,7 @@
 brand = Oeee Cafe
 email-from-address = Oeee Cafe <noreply@oeee.cafe>
 error-404 = Page not found.
+error-403 = You do not have permission to access this page.
 
 about = Oeee Cafe is an oekaki board.
 user-contributors = Users who made Oeee Cafe together

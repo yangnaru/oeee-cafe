@@ -72,6 +72,28 @@ pub async fn handler_404(
     Ok(Html(rendered).into_response())
 }
 
+pub async fn render_403(
+    auth_session: &AuthSession,
+    state: &AppState,
+    ftl_lang: String,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let common_ctx =
+        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+
+    let template: minijinja::Template<'_, '_> = state.env.get_template("403.jinja")?;
+    let rendered: String = template.render(context! {
+        current_user => auth_session.user,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
+        ftl_lang
+    })?;
+
+    Ok((StatusCode::FORBIDDEN, Html(rendered)).into_response())
+}
+
 pub struct ExtractAcceptLanguage(HeaderValue);
 
 #[async_trait]

@@ -33,14 +33,15 @@ use crate::web::responses::{
     PaginationMeta, ProfileBanner, ProfileFollowing, ProfileFollowingsListResponse, ProfileLink,
     ProfilePost, ProfileResponse, ProfileUser,
 };
+use crate::web::handlers::render_403;
 use crate::web::state::AppState;
 use anyhow::Error;
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::types::{Delete, ObjectIdentifier};
 use aws_sdk_s3::Client;
 use axum::extract::{Path, Query};
-use axum::http::{HeaderMap, HeaderValue};
-use axum::response::IntoResponse;
+use axum::http::{uri::Uri, HeaderMap, HeaderValue};
+use axum::response::{IntoResponse, Redirect};
 use axum::{extract::State, http::StatusCode, response::Html, response::Json, Form};
 
 use minijinja::context;
@@ -250,6 +251,7 @@ pub async fn profile_or_community(
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
     Path(slug): Path<String>,
+    uri: Uri,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
@@ -328,15 +330,20 @@ pub async fn profile_or_community(
         match community.visibility {
             CommunityVisibility::Private => {
                 // Private communities require authentication AND membership
-                let user_id = match &auth_session.user {
-                    Some(user) => user.id,
-                    None => return Ok(StatusCode::NOT_FOUND.into_response()),
-                };
-
-                // Check if user is a member
-                let is_member = is_user_member(&mut tx, user_id, community_uuid).await?;
-                if !is_member {
-                    return Ok(StatusCode::NOT_FOUND.into_response());
+                match &auth_session.user {
+                    Some(user) => {
+                        // User is authenticated, check membership
+                        let is_member = is_user_member(&mut tx, user.id, community_uuid).await?;
+                        if !is_member {
+                            // Authenticated but not a member - show 403 forbidden
+                            return Ok(render_403(&auth_session, &state, ftl_lang).await?.into_response());
+                        }
+                    }
+                    None => {
+                        // Not authenticated - redirect to login with next URL
+                        let next_url = uri.path();
+                        return Ok(Redirect::to(&format!("/login?next={}", next_url)).into_response());
+                    }
                 }
             }
             CommunityVisibility::Public | CommunityVisibility::Unlisted => {
