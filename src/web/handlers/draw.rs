@@ -2,9 +2,12 @@ use crate::app_error::AppError;
 use crate::models::banner::{create_banner, BannerDraft};
 use crate::models::community::find_community_by_id;
 use crate::models::post::{create_post, find_post_by_id, PostDraft, Tool};
-use crate::models::user::AuthSession;
+use crate::models::user::{update_user_preferred_language, AuthSession};
 use crate::web::context::CommonContext;
-use crate::web::handlers::{safe_decode_hash, safe_parse_uuid, ExtractFtlLang};
+use crate::web::handlers::{
+    detect_preferred_language, safe_decode_hash, safe_parse_uuid, ExtractAcceptLanguage,
+    ExtractFtlLang,
+};
 use crate::web::state::AppState;
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::error::SdkError;
@@ -117,12 +120,27 @@ pub async fn start_draw(
 
 pub async fn start_draw_mobile(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     State(state): State<AppState>,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Form(input): Form<InputMobile>,
 ) -> Result<impl IntoResponse, AppError> {
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
+
+    // Auto-set language preference from browser if not already set
+    if let Some(user) = &auth_session.user {
+        if user.preferred_language.is_none() {
+            if let Some(lang) = detect_preferred_language(&accept_language) {
+                if update_user_preferred_language(&mut tx, user.id, Some(lang))
+                    .await
+                    .is_ok()
+                {
+                    // Language preference saved, will be committed with the transaction
+                }
+            }
+        }
+    }
 
     let community_id = input
         .community_id
@@ -620,9 +638,27 @@ pub async fn start_banner_draw(
 
 pub async fn start_banner_draw_mobile(
     auth_session: AuthSession,
+    ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
+    // Auto-set language preference from browser if not already set
+    if let Some(user) = &auth_session.user {
+        if user.preferred_language.is_none() {
+            if let Some(lang) = detect_preferred_language(&accept_language) {
+                let db = &state.db_pool;
+                if let Ok(mut tx) = db.begin().await {
+                    if update_user_preferred_language(&mut tx, user.id, Some(lang))
+                        .await
+                        .is_ok()
+                    {
+                        let _ = tx.commit().await;
+                    }
+                }
+            }
+        }
+    }
+
     let template: minijinja::Template<'_, '_> = state.env.get_template("draw_banner_mobile.jinja")?;
     let rendered = template.render(context! {
         width => 200,
