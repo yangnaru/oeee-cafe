@@ -204,6 +204,7 @@ pub async fn do_logout(mut auth_session: AuthSession) -> impl IntoResponse {
 pub struct LoginRequest {
     pub login_name: String,
     pub password: String,
+    pub preferred_language: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -239,6 +240,7 @@ pub struct SignupRequest {
     pub login_name: String,
     pub password: String,
     pub display_name: String,
+    pub preferred_language: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -285,9 +287,20 @@ pub async fn api_login(
         }
     };
 
-    // Auto-set language preference from browser if not already set
+    // Auto-set language preference if not already set
     if user.preferred_language.is_none() {
-        if let Some(lang) = detect_preferred_language(&accept_language) {
+        // Determine language: explicit request field takes priority over Accept-Language
+        let lang_to_set = req.preferred_language.as_deref().and_then(|lang_str| {
+            match lang_str {
+                "ko" => Some(Language::Ko),
+                "ja" => Some(Language::Ja),
+                "en" => Some(Language::En),
+                "zh" => Some(Language::Zh),
+                _ => None,
+            }
+        }).or_else(|| detect_preferred_language(&accept_language));
+
+        if let Some(lang) = lang_to_set {
             let db = &state.db_pool;
             if let Ok(mut tx) = db.begin().await {
                 if update_user_preferred_language(&mut tx, user.id, Some(lang))
@@ -488,8 +501,18 @@ pub async fn api_signup(
         }
     };
 
-    // Auto-set language preference from browser if it matches a supported language
-    if let Some(lang) = detect_preferred_language(&accept_language) {
+    // Determine language: explicit request field takes priority over Accept-Language
+    let lang_to_set = req.preferred_language.as_deref().and_then(|lang_str| {
+        match lang_str {
+            "ko" => Some(Language::Ko),
+            "ja" => Some(Language::Ja),
+            "en" => Some(Language::En),
+            "zh" => Some(Language::Zh),
+            _ => None,
+        }
+    }).or_else(|| detect_preferred_language(&accept_language));
+
+    if let Some(lang) = lang_to_set {
         if update_user_preferred_language(&mut tx, user.id, Some(lang))
             .await
             .is_err()
