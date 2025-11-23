@@ -157,6 +157,28 @@ pub async fn do_unfollow_profile(
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     let _ = unfollow_user(&mut tx, current_user.id, user.id).await;
+
+    // Delete follow notification
+    let follower_actor = Actor::find_by_user_id(&mut tx, current_user.id).await?;
+    if let Some(follower_actor) = follower_actor {
+        match sqlx::query!(
+            r#"
+            DELETE FROM notifications
+            WHERE recipient_id = $1
+              AND actor_id = $2
+              AND notification_type = 'follow'
+            "#,
+            user.id,
+            follower_actor.id
+        )
+        .execute(&mut *tx)
+        .await
+        {
+            Ok(_) => tracing::info!("Deleted follow notification"),
+            Err(e) => tracing::warn!("Failed to delete follow notification: {:?}", e),
+        }
+    }
+
     let _ = tx.commit().await;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("follow_button.jinja")?;
@@ -1333,6 +1355,27 @@ pub async fn unfollow_profile_api(
         .ok_or_else(|| AppError::NotFound("User".to_string()))?;
 
     unfollow_user(&mut tx, user.id, target_user.id).await?;
+
+    // Delete follow notification
+    let follower_actor = Actor::find_by_user_id(&mut tx, user.id).await?;
+    if let Some(follower_actor) = follower_actor {
+        match sqlx::query!(
+            r#"
+            DELETE FROM notifications
+            WHERE recipient_id = $1
+              AND actor_id = $2
+              AND notification_type = 'follow'
+            "#,
+            target_user.id,
+            follower_actor.id
+        )
+        .execute(&mut *tx)
+        .await
+        {
+            Ok(_) => tracing::info!("Deleted follow notification"),
+            Err(e) => tracing::warn!("Failed to delete follow notification: {:?}", e),
+        }
+    }
 
     tx.commit().await?;
 

@@ -1043,6 +1043,26 @@ impl ActivityHandler for Undo {
                     following_actor.iri
                 );
 
+                // Delete follow notification
+                if let Some(following_user_id) = following_actor.user_id {
+                    match sqlx::query!(
+                        r#"
+                        DELETE FROM notifications
+                        WHERE recipient_id = $1
+                          AND actor_id = $2
+                          AND notification_type = 'follow'
+                        "#,
+                        following_user_id,
+                        follower_actor.id
+                    )
+                    .execute(&mut *tx)
+                    .await
+                    {
+                        Ok(_) => tracing::info!("Deleted follow notification"),
+                        Err(e) => tracing::warn!("Failed to delete follow notification: {:?}", e),
+                    }
+                }
+
                 tx.commit().await?;
             }
             UndoObject::Like(like) => {
