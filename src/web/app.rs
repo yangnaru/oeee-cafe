@@ -191,7 +191,6 @@ impl App {
                 "/communities/@:slug/invitations/:invitation_id",
                 delete(retract_invitation),
             )
-            .route("/communities/@:slug", get(redirect_community_to_unified))
             .route("/communities/:id/members", get(get_members))
             .route("/communities/:id/invite", post(invite_user))
             .route("/communities/:id/members/:user_id", delete(remove_member))
@@ -414,6 +413,7 @@ impl App {
             )
             .route("/communities", get(communities))
             .route("/communities", post(do_create_community))
+            .route("/communities/@:slug", get(redirect_community_to_unified))
             .route("/communities/:id", get(community))
             .route("/communities/:id", put(hx_do_edit_community))
             .route("/communities/:id/delete", delete(hx_delete_community))
