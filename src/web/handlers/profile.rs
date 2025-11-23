@@ -415,8 +415,16 @@ pub async fn profile_or_community(
         }
     }
 
-    // Neither user nor community found - return 404
-    Err(AppError::NotFound("User or Community".to_string()))
+    // Neither user nor community found - render 404 page
+    let common_ctx = CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("404.jinja")?;
+    let rendered: String = template.render(context! {
+        current_user => auth_session.user,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
+        ftl_lang,
+    })?;
+    Ok((StatusCode::NOT_FOUND, Html(rendered)).into_response())
 }
 
 pub async fn profile_iframe(
