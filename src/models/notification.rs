@@ -434,6 +434,12 @@ pub async fn send_push_for_notification(
             serde_json::json!(comment_id.to_string()),
         );
     }
+    if let Some(actor_login_name) = &notification.actor_login_name {
+        data.insert(
+            "actor_login_name".to_string(),
+            serde_json::json!(actor_login_name),
+        );
+    }
 
     // Send push notification (don't fail if this errors)
     if let Err(e) = push_service
