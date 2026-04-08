@@ -41,7 +41,6 @@ use crate::web::handlers::home::{
     add_reaction_api, create_comment_api, delete_comment_api, delete_post_api, edit_post_api,
     get_active_communities_json, get_latest_comments_json, get_post_comments_api,
     get_post_details_json, get_post_reactions_by_emoji_json, home, load_more_public_posts,
-    load_more_posts_without_community, load_more_posts_without_community_json,
     load_more_public_posts_json, my_timeline, remove_reaction_api,
 };
 use crate::web::handlers::notifications::{
@@ -279,15 +278,7 @@ impl App {
                 get(android_assetlinks),
             )
             .route("/api/home/posts", get(load_more_public_posts))
-            .route(
-                "/api/home/posts-without-community",
-                get(load_more_posts_without_community),
-            )
             .route("/api/v1/posts/public", get(load_more_public_posts_json))
-            .route(
-                "/api/v1/posts/without-community",
-                get(load_more_posts_without_community_json),
-            )
             .route("/api/v1/posts/drafts", get(draft_posts_api))
             .route("/api/v1/posts/:post_id", get(get_post_details_json))
             .route("/api/v1/posts/:post_id", delete(delete_post_api))

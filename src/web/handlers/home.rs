@@ -15,8 +15,7 @@ use crate::models::notification::{
 };
 use crate::models::post::{
     build_thread_tree, delete_post_with_activity, edit_post, find_following_posts_by_user_id, find_post_by_id,
-    find_post_detail_for_json, find_posts_without_community, find_public_community_posts,
-    find_recent_posts_by_communities,
+    find_post_detail_for_json, find_public_community_posts, find_recent_posts_by_communities,
     SerializableThreadedPost,
 };
 use crate::models::reaction::{
@@ -63,8 +62,6 @@ pub async fn home(
 
     let non_official_public_community_posts =
         find_public_community_posts(&mut tx, 18, 0, viewer_user_id, viewer_show_sensitive).await?;
-    let posts_without_community =
-        find_posts_without_community(&mut tx, 18, 0, viewer_user_id, viewer_show_sensitive).await?;
     let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
     // Filter to communities with at least 10 posts
@@ -147,7 +144,6 @@ pub async fn home(
         messages => messages.into_iter().collect::<Vec<_>>(),
         active_public_communities,
         non_official_public_community_posts,
-        posts_without_community,
         recent_comments,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
@@ -266,99 +262,6 @@ pub async fn load_more_public_posts_json(
     };
 
     let posts = find_public_community_posts(
-        &mut tx,
-        query.limit,
-        query.offset,
-        viewer_user_id,
-        viewer_show_sensitive,
-    )
-    .await?;
-
-    tx.commit().await?;
-
-    let thumbnails: Vec<PostThumbnail> = posts
-        .into_iter()
-        .map(|post| {
-            let image_prefix = &post.image_filename[..2];
-            PostThumbnail {
-                id: post.id,
-                image_url: format!(
-                    "{}/image/{}/{}",
-                    state.config.r2_public_endpoint_url, image_prefix, post.image_filename
-                ),
-                image_width: post.image_width,
-                image_height: post.image_height,
-                is_sensitive: post.is_sensitive,
-            }
-        })
-        .collect();
-
-    let has_more = thumbnails.len() as i64 == query.limit;
-
-    Ok(Json(PostListResponse {
-        posts: thumbnails,
-        pagination: PaginationMeta {
-            offset: query.offset + query.limit,
-            limit: query.limit,
-            total: None,
-            has_more,
-        },
-    }))
-}
-
-pub async fn load_more_posts_without_community(
-    auth_session: AuthSession,
-    State(state): State<AppState>,
-    Query(query): Query<LoadMoreQuery>,
-) -> Result<impl IntoResponse, AppError> {
-    let db = &state.db_pool;
-    let mut tx = db.begin().await?;
-
-    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
-        (Some(user.id), user.show_sensitive_content)
-    } else {
-        (None, false)
-    };
-
-    let posts = find_posts_without_community(
-        &mut tx,
-        query.limit,
-        query.offset,
-        viewer_user_id,
-        viewer_show_sensitive,
-    )
-    .await?;
-
-    tx.commit().await?;
-
-    let template: minijinja::Template<'_, '_> = state
-        .env
-        .get_template("home_posts_without_community_fragment.jinja")?;
-    let rendered = template.render(context! {
-        posts,
-        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        offset => query.offset + query.limit,
-        has_more => posts.len() as i64 == query.limit,
-    })?;
-
-    Ok(Html(rendered).into_response())
-}
-
-pub async fn load_more_posts_without_community_json(
-    auth_session: AuthSession,
-    State(state): State<AppState>,
-    Query(query): Query<LoadMoreQuery>,
-) -> Result<Json<PostListResponse>, AppError> {
-    let db = &state.db_pool;
-    let mut tx = db.begin().await?;
-
-    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
-        (Some(user.id), user.show_sensitive_content)
-    } else {
-        (None, false)
-    };
-
-    let posts = find_posts_without_community(
         &mut tx,
         query.limit,
         query.offset,
