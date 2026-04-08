@@ -229,6 +229,7 @@ my-communities-nil = There are no communities created by you.
 
 latest-active-communities = Latest active communities
 posts-from-public-communities = Posts from public communities
+posts-without-community = Posts without a community
 official-communities = Official communities
 official-communities-nil = There are no official communities.
 active-communities-nil = There are no active communities.
