@@ -1371,7 +1371,7 @@ pub async fn get_movable_communities(
     Ok(communities)
 }
 
-pub async fn find_public_community_posts(
+pub async fn find_public_posts(
     tx: &mut Transaction<'_, Postgres>,
     limit: i64,
     offset: i64,
@@ -1437,7 +1437,7 @@ pub async fn find_public_community_posts(
         .collect())
 }
 
-pub async fn find_public_community_posts_excluding_from_community_owner(
+pub async fn find_public_posts_excluding_from_community_owner(
     tx: &mut Transaction<'_, Postgres>,
     community_owner_id: Uuid,
     limit: i64,

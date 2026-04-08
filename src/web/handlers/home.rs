@@ -15,7 +15,7 @@ use crate::models::notification::{
 };
 use crate::models::post::{
     build_thread_tree, delete_post_with_activity, edit_post, find_following_posts_by_user_id, find_post_by_id,
-    find_post_detail_for_json, find_public_community_posts, find_recent_posts_by_communities,
+    find_post_detail_for_json, find_public_posts, find_recent_posts_by_communities,
     SerializableThreadedPost,
 };
 use crate::models::reaction::{
@@ -61,7 +61,7 @@ pub async fn home(
     };
 
     let non_official_public_community_posts =
-        find_public_community_posts(&mut tx, 18, 0, viewer_user_id, viewer_show_sensitive).await?;
+        find_public_posts(&mut tx, 18, 0, viewer_user_id, viewer_show_sensitive).await?;
     let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
     // Filter to communities with at least 10 posts
@@ -224,7 +224,7 @@ pub async fn load_more_public_posts(
         (None, false)
     };
 
-    let posts = find_public_community_posts(
+    let posts = find_public_posts(
         &mut tx,
         query.limit,
         query.offset,
@@ -261,7 +261,7 @@ pub async fn load_more_public_posts_json(
         (None, false)
     };
 
-    let posts = find_public_community_posts(
+    let posts = find_public_posts(
         &mut tx,
         query.limit,
         query.offset,
