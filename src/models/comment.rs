@@ -674,7 +674,7 @@ pub async fn find_latest_comments_from_public_communities(
             LEFT JOIN users AS post_authors ON posts.author_id = post_authors.id
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN communities ON posts.community_id = communities.id
-            WHERE communities.visibility = 'public'
+            WHERE (communities.visibility = 'public' OR posts.community_id IS NULL)
             AND posts.published_at IS NOT NULL
             AND (actors.user_id IS NULL OR actors.user_id != posts.author_id)
             AND posts.deleted_at IS NULL
