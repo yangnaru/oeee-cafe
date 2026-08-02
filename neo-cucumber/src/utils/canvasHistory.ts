@@ -184,21 +184,46 @@ export class CanvasHistory {
   }
 
   canUndo(): boolean {
-    return this.entries.some(
-      (e) =>
-        e.msg.type === "undoPoint" &&
-        e.msg.userId === this.localUserId &&
-        e.undo === "done"
-    );
+    return this.projectedUndoCounts().done > 0;
   }
 
   canRedo(): boolean {
-    return this.entries.some(
-      (e) =>
-        e.msg.type === "undoPoint" &&
-        e.msg.userId === this.localUserId &&
-        e.undo === "undone"
-    );
+    return this.projectedUndoCounts().undone > 0;
+  }
+
+  /**
+   * Counts the local user's undoable/redoable strokes, projecting the effect
+   * of unconfirmed fork messages. Undo takes effect only on server echo, so
+   * without this projection a quickly repeated undo click would send multiple
+   * UNDO messages and revert more strokes than intended.
+   */
+  private projectedUndoCounts(): { done: number; undone: number } {
+    let done = 0;
+    let undone = 0;
+    for (const e of this.entries) {
+      if (e.msg.type === "undoPoint" && e.msg.userId === this.localUserId) {
+        if (e.undo === "done") done++;
+        else if (e.undo === "undone") undone++;
+      }
+    }
+    for (const f of this.fork) {
+      if (f.msg.type === "undoPoint") {
+        // A new stroke will be undoable and kills the redo stack
+        done++;
+        undone = 0;
+      } else if (f.msg.type === "undo") {
+        if (f.msg.redo) {
+          if (undone > 0) {
+            undone--;
+            done++;
+          }
+        } else if (done > 0) {
+          done--;
+          undone++;
+        }
+      }
+    }
+    return { done, undone };
   }
 
   /**
@@ -220,6 +245,8 @@ export class CanvasHistory {
     } else if (msg.type !== "undo") {
       this.applyDrawSync(msg, this.engine.layers, this.liveStrokes);
     }
+    // Update undo/redo button state immediately (projected over the fork)
+    this.notify();
   }
 
   /**
