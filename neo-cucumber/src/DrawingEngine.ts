@@ -26,6 +26,24 @@ export class DrawingEngine {
   private tone: { [key: string]: Uint8Array } = {};
   private aerr = 0;
   private prevLine: [[number, number], [number, number]] | null = null;
+
+  // Stroke continuation state accessors: collaborative replay tracks a
+  // per-user stroke state externally so line-joint deduplication is a
+  // deterministic function of the canonical message sequence
+  public getStrokeState(): [[number, number], [number, number]] | null {
+    return this.prevLine === null
+      ? null
+      : [
+          [this.prevLine[0][0], this.prevLine[0][1]],
+          [this.prevLine[1][0], this.prevLine[1][1]],
+        ];
+  }
+
+  public setStrokeState(
+    state: [[number, number], [number, number]] | null
+  ): void {
+    this.prevLine = state;
+  }
   private panOffsetX = 0;
   private panOffsetY = 0;
   private isFlippedHorizontal = false;

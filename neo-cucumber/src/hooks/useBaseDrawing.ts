@@ -59,7 +59,10 @@ export const useBaseDrawing = (
   onDrawingChange?: () => void,
   containerRef?: React.RefObject<HTMLDivElement | null>,
   isDrawingDisabled: boolean = false,
-  callbacks?: DrawingEventCallbacks
+  callbacks?: DrawingEventCallbacks,
+  // In remote-sync (collaborative) mode the callbacks own applying strokes to
+  // the layers and undo history; this hook only tracks pointer state.
+  remoteSync: boolean = false
 ) => {
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const drawingEngineRef = useRef<DrawingEngine | null>(null);
@@ -133,6 +136,7 @@ export const useBaseDrawing = (
 
   const currentDrawingStateRef = useRef(drawingState);
   const isDrawingDisabledRef = useRef(isDrawingDisabled);
+  const remoteSyncRef = useRef(remoteSync);
 
   useEffect(() => {
     currentDrawingStateRef.current = drawingState;
@@ -141,6 +145,10 @@ export const useBaseDrawing = (
   useEffect(() => {
     isDrawingDisabledRef.current = isDrawingDisabled;
   }, [isDrawingDisabled]);
+
+  useEffect(() => {
+    remoteSyncRef.current = remoteSync;
+  }, [remoteSync]);
 
   // Convert screen coordinates to canvas coordinates
   const getCanvasCoordinates = useCallback((clientX: number, clientY: number) => {
@@ -181,19 +189,22 @@ export const useBaseDrawing = (
 
     const targetLayer = drawingEngineRef.current.layers[currentDrawingStateRef.current.layerType];
 
-    // Callbacks run before the local apply so the collaboration layer can
-    // capture the pre-stroke state for rollback before the canvas mutates
+    // Callbacks run before the local apply; in remote-sync mode they fully
+    // own applying the stroke (via the canvas history), so the direct engine
+    // application below is skipped.
     if (operation === "fill") {
       callbacks?.onFill?.(Math.floor(coords.x), Math.floor(coords.y), r, g, b, effectiveOpacity);
-      drawingEngineRef.current.doFloodFill(
-        targetLayer,
-        Math.floor(coords.x),
-        Math.floor(coords.y),
-        r,
-        g,
-        b,
-        effectiveOpacity
-      );
+      if (!remoteSyncRef.current) {
+        drawingEngineRef.current.doFloodFill(
+          targetLayer,
+          Math.floor(coords.x),
+          Math.floor(coords.y),
+          r,
+          g,
+          b,
+          effectiveOpacity
+        );
+      }
     } else if (operation === "point") {
       callbacks?.onDrawPoint?.(
         coords.x,
@@ -205,19 +216,21 @@ export const useBaseDrawing = (
         b,
         effectiveOpacity
       );
-      drawingEngineRef.current.drawLine(
-        targetLayer,
-        coords.x,
-        coords.y,
-        coords.x,
-        coords.y,
-        currentDrawingStateRef.current.brushSize,
-        currentDrawingStateRef.current.brushType,
-        r,
-        g,
-        b,
-        effectiveOpacity
-      );
+      if (!remoteSyncRef.current) {
+        drawingEngineRef.current.drawLine(
+          targetLayer,
+          coords.x,
+          coords.y,
+          coords.x,
+          coords.y,
+          currentDrawingStateRef.current.brushSize,
+          currentDrawingStateRef.current.brushType,
+          r,
+          g,
+          b,
+          effectiveOpacity
+        );
+      }
     } else if (operation === "line" && coords.prevX !== undefined && coords.prevY !== undefined) {
       callbacks?.onDrawLine?.(
         coords.prevX,
@@ -231,19 +244,21 @@ export const useBaseDrawing = (
         b,
         effectiveOpacity
       );
-      drawingEngineRef.current.drawLine(
-        targetLayer,
-        coords.prevX,
-        coords.prevY,
-        coords.x,
-        coords.y,
-        currentDrawingStateRef.current.brushSize,
-        currentDrawingStateRef.current.brushType,
-        r,
-        g,
-        b,
-        effectiveOpacity
-      );
+      if (!remoteSyncRef.current) {
+        drawingEngineRef.current.drawLine(
+          targetLayer,
+          coords.prevX,
+          coords.prevY,
+          coords.x,
+          coords.y,
+          currentDrawingStateRef.current.brushSize,
+          currentDrawingStateRef.current.brushType,
+          r,
+          g,
+          b,
+          effectiveOpacity
+        );
+      }
     }
 
     lastModifiedLayerRef.current = currentDrawingStateRef.current.layerType;
@@ -333,7 +348,9 @@ export const useBaseDrawing = (
 
         if (currentDrawingStateRef.current.brushType === "fill") {
           performDrawing("fill", coords);
-          saveToHistory();
+          if (!remoteSyncRef.current) {
+            saveToHistory();
+          }
           isDrawingRef.current = false;
         } else {
           performDrawing("point", coords);
@@ -375,7 +392,9 @@ export const useBaseDrawing = (
           (e.button === 0 || e.pointerType === "touch" || e.pointerType === "pen") &&
           isDrawingRef.current
         ) {
-          saveToHistory();
+          if (!remoteSyncRef.current) {
+            saveToHistory();
+          }
           callbacks?.onPointerUp?.();
         }
         isDrawingRef.current = false;

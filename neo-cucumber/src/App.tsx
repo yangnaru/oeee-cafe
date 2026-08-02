@@ -14,7 +14,6 @@ import {
   type Participant,
 } from "./types/collaboration";
 import { ToolboxPanel } from "./components/ToolboxPanel";
-import { DrawingEngine } from "./DrawingEngine";
 import { useDrawing } from "./hooks/useDrawing";
 import { useDrawingState } from "./hooks/useDrawingState";
 import { useZoomControls } from "./hooks/useZoomControls";
@@ -26,7 +25,7 @@ import {
   encodeResetBegin,
   encodeSnapshot,
 } from "./utils/binaryProtocol";
-import { LocalFork } from "./utils/localFork";
+import { CanvasHistory } from "./utils/canvasHistory";
 import { layerToPngBlob } from "./utils/canvasSnapshot";
 
 // Function to get session ID from URL
@@ -159,21 +158,6 @@ function App() {
     []
   );
 
-  // Track user IDs and their drawing engines (using ref to avoid re-renders)
-  const userEnginesRef = useRef<
-    Map<
-      string,
-      {
-        engine: DrawingEngine;
-        firstSeen: number;
-        canvas: HTMLCanvasElement;
-        username: string;
-      }
-    >
-  >(new Map());
-
-  // userOrderRef removed - now derived directly from participants
-
   const appRef = useRef<HTMLDivElement>(null);
   const userIdRef = useRef<string>("");
   const userLoginNameRef = useRef<string>("");
@@ -233,24 +217,14 @@ function App() {
   // Create a stable wsRef that will be populated by useWebSocket
   const drawingWsRef = useRef<WebSocket | null>(null);
 
-  // Local fork for optimistic drawing with server reconciliation
-  const localForkRef = useRef<LocalFork | null>(null);
-  if (localForkRef.current === null) {
-    localForkRef.current = new LocalFork();
-  }
+  // Canonical shared-canvas history (conflict resolution + collaborative undo)
+  const canvasHistoryRef = useRef<CanvasHistory | null>(null);
 
   // Highest canonical history position fully applied to the canvases
   const lastSeqRef = useRef<number>(0);
 
   // Use the drawing hook with stable wsRef
-  const {
-    undo,
-    redo,
-    drawingEngine,
-    addSnapshotToHistory,
-    markDrawingComplete,
-    isDrawingRef,
-  } = useDrawing(
+  const { undo, redo, drawingEngine, isDrawingRef } = useDrawing(
     tempLocalUserCanvasRef,
     appRef,
     drawingState,
@@ -264,7 +238,7 @@ function App() {
     isCatchingUp,
     connectionState,
     tempCanvasContainerRef,
-    localForkRef
+    canvasHistoryRef
   );
 
   // Zoom controls
@@ -277,26 +251,30 @@ function App() {
     });
 
   // Canvas management (after drawing engine is available)
-  const {
-    canvasContainerRef,
-    createUserEngine,
-    compositeCanvasesForExport,
-    downloadCanvasAsPNG,
-  } = useCanvas({
-    canvasMeta,
-    participants,
-    userEnginesRef,
-    drawingEngine,
-    userIdRef,
-    currentZoom,
-    drawingState,
-  });
+  const { canvasContainerRef, compositeCanvasesForExport, downloadCanvasAsPNG } =
+    useCanvas({
+      canvasMeta,
+      drawingEngine,
+      currentZoom,
+      drawingState,
+    });
 
   // Keep drawingEngine ref in sync to avoid circular dependencies
   const drawingEngineRef = useRef(drawingEngine);
   useEffect(() => {
     drawingEngineRef.current = drawingEngine;
   }, [drawingEngine]);
+
+  // Create the canonical canvas history once the engine and user are known
+  useEffect(() => {
+    if (drawingEngine && userIdRef.current && !canvasHistoryRef.current) {
+      canvasHistoryRef.current = new CanvasHistory(
+        drawingEngine,
+        userIdRef.current,
+        handleHistoryChange
+      );
+    }
+  }, [drawingEngine, canvasMeta, handleHistoryChange]);
 
   // Cursor management
   const { createOrUpdateCursor, hideCursor } = useCursor({
@@ -328,16 +306,16 @@ function App() {
         return;
       }
 
-      const fork = localForkRef.current;
-      if ((fork && fork.size > 0) || isDrawingRef.current) {
+      const history = canvasHistoryRef.current;
+      if ((history && history.forkSize > 0) || isDrawingRef.current) {
         if (retries++ < MAX_RETRIES) {
           setTimeout(attempt, RETRY_MS);
         }
         return;
       }
 
-      // Capture all layers and the history position in one synchronous block
-      // so every snapshot describes the same canonical state
+      // Capture the shared layers and the history position in one synchronous
+      // block so both snapshots describe the same canonical state
       const baseSeq = lastSeqRef.current;
       const captures: {
         userId: string;
@@ -350,16 +328,6 @@ function App() {
           layer,
           data: new Uint8ClampedArray(engine.layers[layer]),
         });
-      }
-      for (const [userId, userEngine] of userEnginesRef.current) {
-        if (userId === userIdRef.current) continue;
-        for (const layer of ["foreground", "background"] as const) {
-          captures.push({
-            userId,
-            layer,
-            data: new Uint8ClampedArray(userEngine.engine.layers[layer]),
-          });
-        }
       }
 
       try {
@@ -396,10 +364,8 @@ function App() {
     userIdRef,
     userLoginNameRef,
     localUserJoinTimeRef,
-    drawingEngineRef,
-    userEnginesRef,
+    canvasHistoryRef,
     participantsRef,
-    localForkRef,
     lastSeqRef,
     shouldConnectRef,
     catchupTimeoutRef,
@@ -407,10 +373,6 @@ function App() {
     isCatchingUpRef,
     setConnectionState,
     setIsCatchingUp,
-    createUserEngine,
-    handleLocalDrawingChange,
-    addSnapshotToHistory,
-    markDrawingComplete,
     createOrUpdateCursor,
     hideCursor,
     addParticipant,

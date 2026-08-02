@@ -6,9 +6,7 @@ import {
   type DecodedMessage,
 } from "../utils/binaryProtocol";
 import { type CollaborationMeta } from "../types/collaboration";
-import { DrawingEngine } from "../DrawingEngine";
-import { pngDataToLayer } from "../utils/canvasSnapshot";
-import { type LocalFork } from "../utils/localFork";
+import { type CanvasHistory } from "../utils/canvasHistory";
 
 export type ConnectionState = "disconnected" | "connecting" | "connected";
 
@@ -23,15 +21,8 @@ interface WebSocketHookParams {
   userIdRef: React.RefObject<string | null>;
   userLoginNameRef: React.RefObject<string>;
   localUserJoinTimeRef: React.RefObject<number>;
-  drawingEngineRef: React.RefObject<DrawingEngine | null>;
-  userEnginesRef: React.RefObject<
-    Map<
-      string,
-      { engine: DrawingEngine; username: string; canvas: HTMLCanvasElement }
-    >
-  >;
+  canvasHistoryRef: React.RefObject<CanvasHistory | null>;
   participantsRef: React.RefObject<Map<string, Participant>>;
-  localForkRef: React.RefObject<LocalFork | null>;
   lastSeqRef: React.RefObject<number>;
   shouldConnectRef: React.RefObject<boolean>;
   catchupTimeoutRef: React.RefObject<number | null>;
@@ -39,13 +30,6 @@ interface WebSocketHookParams {
   isCatchingUpRef: React.RefObject<boolean>;
   setConnectionState: (state: ConnectionState) => void;
   setIsCatchingUp: (catching: boolean) => void;
-  createUserEngine: (userId: string, username?: string) => void;
-  handleLocalDrawingChange: () => void;
-  addSnapshotToHistory: (
-    layerName: "foreground" | "background",
-    layerData: Uint8ClampedArray
-  ) => void;
-  markDrawingComplete: () => void;
   createOrUpdateCursor: (
     userId: string,
     x: number,
@@ -70,10 +54,8 @@ export const useWebSocket = ({
   canvasMeta,
   userIdRef,
   localUserJoinTimeRef,
-  drawingEngineRef,
-  userEnginesRef,
+  canvasHistoryRef,
   participantsRef,
-  localForkRef,
   lastSeqRef,
   shouldConnectRef,
   catchupTimeoutRef,
@@ -81,10 +63,6 @@ export const useWebSocket = ({
   isCatchingUpRef,
   setConnectionState,
   setIsCatchingUp,
-  createUserEngine,
-  handleLocalDrawingChange,
-  addSnapshotToHistory,
-  markDrawingComplete,
   createOrUpdateCursor,
   hideCursor,
   addParticipant,
@@ -110,67 +88,36 @@ export const useWebSocket = ({
 
   // Function to get WebSocket URL dynamically
   const getWebSocketUrl = useCallback(() => {
-    console.log("Generating WebSocket URL:", {
-      canvasMeta: !!canvasMeta,
-      pathname: window.location.pathname,
-      hostname: window.location.hostname,
-    });
-
     // Check for explicitly set environment variable
     const envWsUrl = import.meta.env.VITE_WS_URL;
     if (envWsUrl) {
-      console.log(
-        "Using environment WebSocket URL:",
-        envWsUrl,
-        "from VITE_WS_URL"
-      );
       return envWsUrl;
     }
 
     // Detect if we're in development
     const isDevelopment = window.location.hostname === "localhost";
+    const pathSegments = window.location.pathname.split("/");
+    const sessionId = pathSegments[2]; // /collaborate/:sessionId
 
     if (isDevelopment) {
-      // Extract session ID from URL path
-      const pathSegments = window.location.pathname.split("/");
-      const sessionId = pathSegments[2]; // /collaborate/:sessionId
-      const wsUrl = `ws://localhost:3000/collaborate/${sessionId}/ws`;
-      console.log("Generated WebSocket URL:", wsUrl);
-      return wsUrl;
-    } else {
-      // Production: use current host with wss protocol
-      const pathSegments = window.location.pathname.split("/");
-      const sessionId = pathSegments[2]; // /collaborate/:sessionId
-      const wsUrl = `wss://${window.location.host}/collaborate/${sessionId}/ws`;
-      console.log("Generated WebSocket URL:", wsUrl);
-      return wsUrl;
+      return `ws://localhost:3000/collaborate/${sessionId}/ws`;
     }
-  }, [canvasMeta]);
+    return `wss://${window.location.host}/collaborate/${sessionId}/ws`;
+  }, []);
 
   const connectWebSocket = useCallback(async () => {
-    console.log("WebSocket connection attempt started:", {
-      shouldConnect: shouldConnectRef.current,
-      existingConnection: !!wsRef.current,
-      isConnecting: isConnectingRef.current,
-      currentUser: userIdRef.current,
-      timestamp: new Date().toISOString(),
-    });
-
     // Only connect if we should be connecting
     if (!shouldConnectRef.current && wsRef.current) {
-      console.log("Connection attempt aborted - should not connect");
       return;
     }
 
     // Prevent multiple simultaneous connection attempts
     if (isConnectingRef.current) {
-      console.log("Connection attempt aborted - already connecting");
       return;
     }
 
     // If already connected, don't reconnect
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      console.log("Connection attempt aborted - already connected");
       return;
     }
 
@@ -179,7 +126,6 @@ export const useWebSocket = ({
 
     // Clean up any existing connection
     if (wsRef.current) {
-      console.log("Cleaning up existing WebSocket connection");
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -196,18 +142,13 @@ export const useWebSocket = ({
       return;
     }
 
-    console.log("Using initialized user ID:", userIdRef.current);
-
     try {
       const wsUrl = getWebSocketUrl();
       console.log("Creating WebSocket connection to:", wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
     } catch (error) {
-      console.error("Failed to create WebSocket:", {
-        error: error,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      console.error("Failed to create WebSocket:", error);
       setConnectionState("disconnected");
       isConnectingRef.current = false;
       return;
@@ -216,23 +157,16 @@ export const useWebSocket = ({
     const ws = wsRef.current!;
 
     ws.onopen = () => {
-      console.log("WebSocket connected successfully:", {
-        url: ws.url,
-        readyState: ws.readyState,
-        timestamp: new Date().toISOString(),
-      });
+      console.log("WebSocket connected successfully:", ws.url);
       setConnectionState("connected");
       isConnectingRef.current = false;
 
-      // Fresh connection: any unconfirmed local fork state is stale since the
-      // server will replay the canonical history from scratch
-      localForkRef.current?.clear();
+      // Fresh connection: the server replays the canonical history from
+      // scratch, so any local history state is stale
+      canvasHistoryRef.current?.reset();
       lastSeqRef.current = 0;
 
-      // Don't add current user here - wait for server LAYERS message
-      // This ensures all clients get consistent participant order from server
-
-      // Send initial join message to establish user presence and layer order
+      // Send initial join message to establish user presence
       try {
         const binaryMessage = encodeJoin(userIdRef.current!, Date.now());
         ws.send(binaryMessage);
@@ -288,20 +222,10 @@ export const useWebSocket = ({
       if (isCatchingUpRef.current) {
         // During catch-up, queue messages for sequential processing
         messageQueueRef.current.push({ message, raw, seq: sequenced?.seq });
-        console.log(`📥 Queued message during catch-up (queue size: ${messageQueueRef.current.length})`);
         // Process queue immediately if not already processing
         await processMessageQueue();
       } else {
-        // During normal operation, process immediately
-        // Create drawing engine for new user if they don't exist (skip for messages without userId)
-        if ("userId" in message && message.userId) {
-          const username =
-            "username" in message ? message.username : message.userId;
-          createUserEngine(message.userId, username);
-        }
-
-        // Handle message types
-        await handleBinaryMessage(message, raw);
+        await handleBinaryMessage(message, raw, sequenced?.seq);
 
         if (sequenced) {
           lastSeqRef.current = Math.max(lastSeqRef.current, sequenced.seq);
@@ -324,22 +248,16 @@ export const useWebSocket = ({
         readyState: ws.readyState,
         url: ws.url,
         event: event,
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent,
       });
       setConnectionState("disconnected");
       isConnectingRef.current = false;
     };
 
     ws.onclose = (event) => {
-      console.log("WebSocket closed details:", {
+      console.log("WebSocket closed:", {
         code: event.code,
         reason: event.reason,
         wasClean: event.wasClean,
-        url: ws.url,
-        timestamp: new Date().toISOString(),
-        readyState: ws.readyState,
-        shouldConnect: shouldConnectRef.current,
       });
       setConnectionState("disconnected");
       isConnectingRef.current = false;
@@ -358,21 +276,11 @@ export const useWebSocket = ({
       processingMessageRef.current = true;
       const totalMessages = messageQueueRef.current.length;
 
-      console.log(
-        `🚀 Processing ${totalMessages} queued messages during catch-up (no batching)`
-      );
-
       // Process all messages immediately without artificial delays
       while (messageQueueRef.current.length > 0) {
         const { message, raw, seq } = messageQueueRef.current.shift()!;
 
-        // Create drawing engine for new user if they don't exist
-        if ("userId" in message && message.userId) {
-          createUserEngine(message.userId);
-        }
-
-        // Handle message types
-        await handleBinaryMessage(message, raw);
+        await handleBinaryMessage(message, raw, seq);
 
         if (seq !== undefined) {
           lastSeqRef.current = Math.max(lastSeqRef.current, seq);
@@ -380,375 +288,53 @@ export const useWebSocket = ({
       }
 
       processingMessageRef.current = false;
-      console.log(`✅ Completed processing all ${totalMessages} messages from catch-up queue`);
-      
+      console.log(`✅ Processed ${totalMessages} messages from catch-up queue`);
+
       // End catch-up phase now that queue is empty
       setIsCatchingUp(false);
-      console.log("🎯 Catch-up phase completed - queue is empty");
-    };
-
-    // Applies a canvas-affecting message to the local user's engine. Used to
-    // replay messages after a fork rollback.
-    const applyMessageToLocalEngine = async (
-      engine: DrawingEngine,
-      m: DecodedMessage
-    ) => {
-      switch (m.type) {
-        case "drawLine":
-          engine.drawLine(
-            engine.layers[m.layer],
-            m.fromX,
-            m.fromY,
-            m.toX,
-            m.toY,
-            m.brushSize,
-            m.brushType,
-            m.color.r,
-            m.color.g,
-            m.color.b,
-            m.color.a
-          );
-          break;
-        case "drawPoint":
-          engine.drawLine(
-            engine.layers[m.layer],
-            m.x,
-            m.y,
-            m.x,
-            m.y,
-            m.brushSize,
-            m.brushType,
-            m.color.r,
-            m.color.g,
-            m.color.b,
-            m.color.a
-          );
-          break;
-        case "fill":
-          engine.doFloodFill(
-            engine.layers[m.layer],
-            m.x,
-            m.y,
-            m.color.r,
-            m.color.g,
-            m.color.b,
-            m.color.a
-          );
-          break;
-        case "snapshot": {
-          if (canvasMeta?.width && canvasMeta?.height) {
-            const layerData = await pngDataToLayer(
-              m.pngData,
-              canvasMeta.width,
-              canvasMeta.height
-            );
-            engine.layers[m.layer].set(layerData);
-          }
-          break;
-        }
-      }
-    };
-
-    // Reconciles an echoed local-user message against the local fork
-    // (Drawpile's local fork model): if the echo matches the fork head the
-    // message is already on the canvas; if the server's order diverged, roll
-    // the layers back to the savepoint and replay the confirmed messages.
-    // Returns "handled" when the caller must not apply the message again.
-    const reconcileLocalEcho = async (
-      message: DecodedMessage,
-      raw: Uint8Array | undefined
-    ): Promise<"handled" | "apply"> => {
-      const fork = localForkRef.current;
-      const engine = drawingEngineRef.current;
-      if (!fork || !engine || !raw) return "apply";
-
-      const result = fork.reconcile(raw, message);
-      if (result.action === "already-done") {
-        return "handled";
-      }
-      if (result.action === "rollback") {
-        console.warn(
-          "Local fork rollback - server order diverged from local drawing"
-        );
-        engine.layers.foreground.set(result.savepoint.foreground);
-        engine.layers.background.set(result.savepoint.background);
-        for (const confirmedMsg of result.confirmed) {
-          await applyMessageToLocalEngine(engine, confirmedMsg);
-        }
-        await applyMessageToLocalEngine(engine, message);
-        engine.queueLayerUpdate("foreground");
-        engine.queueLayerUpdate("background");
-        handleLocalDrawingChange();
-        return "handled";
-      }
-      return "apply";
     };
 
     // Helper function to handle decoded binary messages (moved inside connectWebSocket)
     const handleBinaryMessage = async (
       message: DecodedMessage,
-      raw?: Uint8Array
+      raw?: Uint8Array,
+      seq?: number
     ) => {
       try {
         // Handle different message types
         switch (message.type) {
-          case "drawLine": {
-            console.log("Drawing event - drawLine", message);
-            // Check if this is the local user's drawing event
+          // All canvas-affecting messages fold into the shared canonical
+          // canvas history, which owns conflict resolution (local fork
+          // reconciliation) and collaborative undo
+          case "drawLine":
+          case "drawPoint":
+          case "fill":
+          case "snapshot":
+          case "undoPoint":
+          case "undo": {
+            if (raw) {
+              await canvasHistoryRef.current?.handleRemote(raw, message, seq);
+            }
+
+            // Show remote users' cursors at their latest drawing position
             if (
-              message.userId === userIdRef.current &&
-              drawingEngineRef.current
+              "userId" in message &&
+              message.userId !== userIdRef.current &&
+              (message.type === "drawLine" ||
+                message.type === "drawPoint" ||
+                message.type === "fill")
             ) {
-              if ((await reconcileLocalEcho(message, raw)) === "handled") {
-                break;
-              }
-              const targetLayer =
-                message.layer === "foreground"
-                  ? drawingEngineRef.current.layers.foreground
-                  : drawingEngineRef.current.layers.background;
-
-              drawingEngineRef.current.drawLine(
-                targetLayer,
-                message.fromX,
-                message.fromY,
-                message.toX,
-                message.toY,
-                message.brushSize,
-                message.brushType,
-                message.color.r,
-                message.color.g,
-                message.color.b,
-                message.color.a
-              );
-
-              // Queue DOM canvases for batched update for local drawing
-              drawingEngineRef.current.queueLayerUpdate(
-                message.layer as "foreground" | "background"
-              );
-
-              // Mark drawing operation as complete to prevent double-saving in pointerup
-              markDrawingComplete();
-
-              // Notify parent component that drawing has changed
-              handleLocalDrawingChange();
-            } else {
-              // Handle remote user's drawing event
-              const userEngine = userEnginesRef.current?.get(message.userId);
-              if (userEngine) {
-                const engine = userEngine.engine;
-                const targetLayer =
-                  message.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-
-                engine.drawLine(
-                  targetLayer,
-                  message.fromX,
-                  message.fromY,
-                  message.toX,
-                  message.toY,
-                  message.brushSize,
-                  message.brushType,
-                  message.color.r,
-                  message.color.g,
-                  message.color.b,
-                  message.color.a
-                );
-
-                // Queue DOM canvases for batched update for remote drawing
-                engine.queueLayerUpdate(
-                  message.layer as "foreground" | "background"
-                );
-
-                // Show cursor at the end position of the line
-                const participant = participantsRef.current?.get(
-                  message.userId
-                );
-                const username = participant?.username || userEngine.username;
-                createOrUpdateCursor(
-                  message.userId,
-                  message.toX,
-                  message.toY,
-                  username
-                );
-              }
+              const participant = participantsRef.current?.get(message.userId);
+              const username = participant?.username || message.userId;
+              const x = message.type === "drawLine" ? message.toX : message.x;
+              const y = message.type === "drawLine" ? message.toY : message.y;
+              createOrUpdateCursor(message.userId, x, y, username);
             }
             break;
           }
 
-          case "drawPoint": {
-            console.log("Drawing event - drawPoint:", {
-              userId: message.userId.substring(0, 8),
-              isLocalUser: message.userId === userIdRef.current,
-              layer: message.layer,
-              point: { x: message.x, y: message.y },
-              brushSize: message.brushSize,
-              brushType: message.brushType,
-              color: message.color,
-            });
-
-            // Check if this is the local user's drawing event
-            if (
-              message.userId === userIdRef.current &&
-              drawingEngineRef.current
-            ) {
-              if ((await reconcileLocalEcho(message, raw)) === "handled") {
-                break;
-              }
-              const targetLayer =
-                message.layer === "foreground"
-                  ? drawingEngineRef.current.layers.foreground
-                  : drawingEngineRef.current.layers.background;
-
-              drawingEngineRef.current.drawLine(
-                targetLayer,
-                message.x,
-                message.y,
-                message.x,
-                message.y,
-                message.brushSize,
-                message.brushType,
-                message.color.r,
-                message.color.g,
-                message.color.b,
-                message.color.a
-              );
-
-              // Queue DOM canvases for batched update for local drawing
-              drawingEngineRef.current.queueLayerUpdate(
-                message.layer as "foreground" | "background"
-              );
-
-              // Mark drawing operation as complete to prevent double-saving in pointerup
-              markDrawingComplete();
-
-              // Notify parent component that drawing has changed
-              handleLocalDrawingChange();
-            } else {
-              // Handle remote user's drawing event
-              const userEngine = userEnginesRef.current?.get(message.userId);
-              if (userEngine) {
-                const engine = userEngine.engine;
-                const targetLayer =
-                  message.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-
-                engine.drawLine(
-                  targetLayer,
-                  message.x,
-                  message.y,
-                  message.x,
-                  message.y,
-                  message.brushSize,
-                  message.brushType,
-                  message.color.r,
-                  message.color.g,
-                  message.color.b,
-                  message.color.a
-                );
-
-                // Queue DOM canvases for batched update for remote drawing
-                engine.queueLayerUpdate(
-                  message.layer as "foreground" | "background"
-                );
-
-                // Show cursor at the drawing point
-                const participant = participantsRef.current?.get(
-                  message.userId
-                );
-                const username = participant?.username || userEngine.username;
-                createOrUpdateCursor(
-                  message.userId,
-                  message.x,
-                  message.y,
-                  username
-                );
-              }
-            }
-            break;
-          }
-
-          case "fill": {
-            console.log("Drawing event - fill:", {
-              userId: message.userId.substring(0, 8),
-              isLocalUser: message.userId === userIdRef.current,
-              layer: message.layer,
-              point: { x: message.x, y: message.y },
-              color: message.color,
-            });
-
-            // Check if this is the local user's drawing event
-            if (
-              message.userId === userIdRef.current &&
-              drawingEngineRef.current
-            ) {
-              if ((await reconcileLocalEcho(message, raw)) === "handled") {
-                break;
-              }
-              const targetLayer =
-                message.layer === "foreground"
-                  ? drawingEngineRef.current.layers.foreground
-                  : drawingEngineRef.current.layers.background;
-
-              drawingEngineRef.current.doFloodFill(
-                targetLayer,
-                message.x,
-                message.y,
-                message.color.r,
-                message.color.g,
-                message.color.b,
-                message.color.a
-              );
-
-              // Queue DOM canvases for batched update for local drawing
-              drawingEngineRef.current.queueLayerUpdate(
-                message.layer as "foreground" | "background"
-              );
-
-              // Mark drawing operation as complete to prevent double-saving in pointerup
-              markDrawingComplete();
-
-              // Notify parent component that drawing has changed
-              handleLocalDrawingChange();
-            } else {
-              // Handle remote user's drawing event
-              const userEngine = userEnginesRef.current?.get(message.userId);
-              if (userEngine) {
-                const engine = userEngine.engine;
-                const targetLayer =
-                  message.layer === "foreground"
-                    ? engine.layers.foreground
-                    : engine.layers.background;
-
-                engine.doFloodFill(
-                  targetLayer,
-                  message.x,
-                  message.y,
-                  message.color.r,
-                  message.color.g,
-                  message.color.b,
-                  message.color.a
-                );
-
-                // Queue DOM canvases for batched update for remote drawing
-                engine.queueLayerUpdate(
-                  message.layer as "foreground" | "background"
-                );
-
-                // Show cursor at the fill point
-                const participant = participantsRef.current?.get(
-                  message.userId
-                );
-                const username = participant?.username || userEngine.username;
-                createOrUpdateCursor(
-                  message.userId,
-                  message.x,
-                  message.y,
-                  username
-                );
-              }
-            }
+          case "resetPoint": {
+            await canvasHistoryRef.current?.handleResetPoint(message.baseSeq);
             break;
           }
 
@@ -761,12 +347,6 @@ export const useWebSocket = ({
           }
 
           case "join": {
-            console.log("User joined:", {
-              userId: message.userId.substring(0, 8),
-              username: message.username,
-              timestamp: message.timestamp,
-            });
-
             // Don't add participant here - wait for LAYERS message
             // This ensures consistent participant ordering from server
 
@@ -783,11 +363,6 @@ export const useWebSocket = ({
           }
 
           case "leave": {
-            console.log("User left:", {
-              userId: message.userId.substring(0, 8),
-              username: message.username,
-            });
-
             // Add leave notification to chat
             addChatMessage({
               id: `${message.userId}-${message.timestamp}-leave`,
@@ -798,21 +373,12 @@ export const useWebSocket = ({
               timestamp: message.timestamp,
             });
 
-            // Hide cursor for the user (but keep participant in layer order)
+            // Hide cursor for the user (but keep participant in the list)
             hideCursor(message.userId);
             break;
           }
 
           case "chat": {
-            console.log("Chat message received:", {
-              userId: message.userId.substring(0, 8),
-              username: message.username,
-              message:
-                message.message.substring(0, 50) +
-                (message.message.length > 50 ? "..." : ""),
-              timestamp: message.timestamp,
-            });
-
             // Add chat message to the chat component via the callback
             addChatMessage({
               id: `${message.userId}-${message.timestamp}`,
@@ -825,120 +391,29 @@ export const useWebSocket = ({
             break;
           }
 
-          case "snapshot": {
-            console.log("Snapshot received:", {
-              userId: message.userId.substring(0, 8),
-              layer: message.layer,
-              pngDataLength: message.pngData.length,
-            });
-
-            if (!canvasMeta?.width || !canvasMeta?.height) {
-              console.error(
-                "Canvas dimensions not available for snapshot processing"
-              );
-              break;
-            }
-
-            try {
-              if (message.userId === userIdRef.current) {
-                // Local user's snapshot (undo/redo or snapshot response echo)
-                if ((await reconcileLocalEcho(message, raw)) === "handled") {
-                  break;
-                }
-                if (drawingEngineRef.current) {
-                  const layerData = await pngDataToLayer(
-                    message.pngData,
-                    canvasMeta.width,
-                    canvasMeta.height
-                  );
-                  const targetLayer =
-                    message.layer === "foreground"
-                      ? drawingEngineRef.current.layers.foreground
-                      : drawingEngineRef.current.layers.background;
-
-                  targetLayer.set(layerData);
-                  drawingEngineRef.current.queueLayerUpdate(
-                    message.layer as "foreground" | "background"
-                  );
-
-                  // Add to history for undo/redo
-                  addSnapshotToHistory(
-                    message.layer as "foreground" | "background",
-                    layerData
-                  );
-                }
-              } else {
-                // Apply to remote user's canvas
-                const userEngine = userEnginesRef.current?.get(message.userId);
-                if (userEngine) {
-                  const layerData = await pngDataToLayer(
-                    message.pngData,
-                    canvasMeta.width,
-                    canvasMeta.height
-                  );
-                  const engine = userEngine.engine;
-                  const targetLayer =
-                    message.layer === "foreground"
-                      ? engine.layers.foreground
-                      : engine.layers.background;
-
-                  targetLayer.set(layerData);
-                  engine.queueLayerUpdate(
-                    message.layer as "foreground" | "background"
-                  );
-
-                  // Note: Remote canvases don't need undo/redo history
-                }
-              }
-            } catch (error) {
-              console.error("Failed to decode PNG snapshot data:", error);
-            }
-            break;
-          }
-
           case "layers": {
             console.log("Layers message received:", {
-              participants: message.participants.map((p) => ({
-                userId: p.userId.substring(0, 8),
-                username: p.username,
-                joinTimestamp: p.joinTimestamp,
-              })),
               participantCount: message.participants.length,
             });
-
-            console.log(
-              "LAYERS message - clearing and rebuilding participant order from server"
-            );
 
             // Clear existing participants to avoid inconsistencies
             // This ensures all clients have identical participant ordering from server
             participantsRef.current?.clear();
             clearParticipants();
 
-            // Sort participants by join timestamp to ensure correct layer ordering
-            // (participants are already sorted on the server, but we verify here)
+            // Sort participants by join timestamp (already sorted on the
+            // server, but we verify here)
             const sortedParticipants = message.participants.sort(
               (a, b) => a.joinTimestamp - b.joinTimestamp
             );
-            console.log("Sorted participants:", sortedParticipants);
 
-            // Initialize participants from layers message - this provides complete
-            // participant information with user IDs, usernames, and join timestamps
             for (const participant of sortedParticipants) {
               addParticipant(
                 participant.userId,
                 participant.username,
                 participant.joinTimestamp
               );
-
-              // Create drawing engine for the user
-              createUserEngine(participant.userId, participant.username);
             }
-
-            console.log("All participants processed, z-indices will update declaratively");
-            
-            // Z-index updates now happen declaratively via useEffect in useCanvas hook
-            // No manual triggering needed - changes to userOrderRef will automatically update z-indices
             break;
           }
 
@@ -956,12 +431,10 @@ export const useWebSocket = ({
             console.log("Session ended:", {
               userId: message.userId.substring(0, 8),
               postUrl: message.postUrl,
-              isLocalUser: message.userId === userIdRef.current,
             });
 
             // Redirect to the post page
             if (message.postUrl) {
-              console.log("Redirecting to post:", message.postUrl);
               window.location.href = message.postUrl;
             }
             break;
@@ -979,27 +452,21 @@ export const useWebSocket = ({
   }, [
     getWebSocketUrl,
     canvasMeta,
-    localForkRef,
+    canvasHistoryRef,
     lastSeqRef,
     setConnectionState,
     setIsCatchingUp,
-    createUserEngine,
-    handleLocalDrawingChange,
-    addSnapshotToHistory,
-    markDrawingComplete,
     createOrUpdateCursor,
     hideCursor,
     addParticipant,
     clearParticipants,
     addChatMessage,
     catchupTimeoutRef,
-    drawingEngineRef,
     isCatchingUpRef,
     localUserJoinTimeRef,
     participantsRef,
     processingMessageRef,
     shouldConnectRef,
-    userEnginesRef,
     userIdRef,
   ]);
 

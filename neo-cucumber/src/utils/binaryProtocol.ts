@@ -22,12 +22,18 @@ export const MSG_TYPE = {
   RESET_REQUEST: 0x0b,
   // Announces a session reset upload: base seq + snapshot count (client -> server)
   RESET_BEGIN: 0x0c,
+  // Notifies clients that history at or below a base seq was squashed (server -> client)
+  RESET_POINT: 0x0d,
 
   // Client messages (>= 0x10) - server just broadcasts
   DRAW_LINE: 0x10,
   DRAW_POINT: 0x11,
   FILL: 0x12,
   POINTER_UP: 0x13,
+  // Marks the start of an undoable operation (stroke or fill)
+  UNDO_POINT: 0x14,
+  // Undo (or redo) the sender's most recent operation
+  UNDO: 0x15,
 } as const;
 
 // Layer constants
@@ -356,6 +362,29 @@ export function encodeResetBegin(lastSeq: number, count: number): ArrayBuffer {
 }
 
 /**
+ * Encode UNDO_POINT message (0x14)
+ * Format: [0x14][UUID:16]
+ */
+export function encodeUndoPoint(userId: string): ArrayBuffer {
+  const buffer = new Uint8Array(17);
+  buffer[0] = MSG_TYPE.UNDO_POINT;
+  buffer.set(uuidToBytes(userId), 1);
+  return buffer.buffer;
+}
+
+/**
+ * Encode UNDO message (0x15)
+ * Format: [0x15][UUID:16][redo:1]
+ */
+export function encodeUndo(userId: string, redo: boolean): ArrayBuffer {
+  const buffer = new Uint8Array(18);
+  buffer[0] = MSG_TYPE.UNDO;
+  buffer.set(uuidToBytes(userId), 1);
+  buffer[17] = redo ? 1 : 0;
+  return buffer.buffer;
+}
+
+/**
  * Unwrap a SEQUENCED envelope (0x0A): [0x0A][seq:8][payload]
  * Returns null if the buffer is not a sequenced envelope.
  */
@@ -485,6 +514,22 @@ export interface ResetRequestMessage {
   timestamp: number;
 }
 
+export interface ResetPointMessage {
+  type: "resetPoint";
+  baseSeq: number;
+}
+
+export interface UndoPointMessage {
+  type: "undoPoint";
+  userId: string;
+}
+
+export interface UndoMessage {
+  type: "undo";
+  userId: string;
+  redo: boolean;
+}
+
 export interface PointerUpMessage {
   type: "pointerup";
   userId: string;
@@ -518,6 +563,9 @@ export type DecodedMessage =
   | SnapshotMessage
   | ChatMessage
   | ResetRequestMessage
+  | ResetPointMessage
+  | UndoPointMessage
+  | UndoMessage
   | DrawLineMessage
   | DrawPointMessage
   | FillMessage
@@ -630,6 +678,28 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       return {
         type: "resetRequest",
         timestamp: readUint64LE(buffer, 1),
+      };
+
+    case MSG_TYPE.RESET_POINT:
+      if (buffer.length < 9) return null;
+      return {
+        type: "resetPoint",
+        baseSeq: readUint64LE(buffer, 1),
+      };
+
+    case MSG_TYPE.UNDO_POINT:
+      if (buffer.length < 17) return null;
+      return {
+        type: "undoPoint",
+        userId: bytesToUuid(buffer.slice(1, 17)),
+      };
+
+    case MSG_TYPE.UNDO:
+      if (buffer.length < 18) return null;
+      return {
+        type: "undo",
+        userId: bytesToUuid(buffer.slice(1, 17)),
+        redo: buffer[17] !== 0,
       };
 
     case MSG_TYPE.SNAPSHOT: {

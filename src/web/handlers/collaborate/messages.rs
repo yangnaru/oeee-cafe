@@ -44,6 +44,8 @@ pub enum MessageType {
     ResetRequest = 0x0B,
     // Announces a session reset upload: base seq + snapshot count (client -> server)
     ResetBegin = 0x0C,
+    // Notifies clients that history at or below a base seq was squashed (server -> client)
+    ResetPoint = 0x0D,
 }
 
 // Message structures
@@ -197,6 +199,7 @@ pub fn parse_message_type(data: &[u8]) -> Option<MessageType> {
         0x0A => Some(MessageType::Sequenced),
         0x0B => Some(MessageType::ResetRequest),
         0x0C => Some(MessageType::ResetBegin),
+        0x0D => Some(MessageType::ResetPoint),
         _ => None,
     }
 }

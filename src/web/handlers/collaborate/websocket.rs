@@ -314,12 +314,13 @@ fn should_forward_to_connection(
     if room_msg.from_connection != connection_id {
         return true;
     }
-    // Echo the sender's own canvas-affecting messages (snapshot, draw, fill)
-    // back in canonical server order so the client can reconcile its local
-    // fork against them. Chat is echoed as delivery confirmation.
+    // Echo the sender's own canvas-affecting messages (snapshot, draw, fill,
+    // undo point, undo) back in canonical server order so the client can
+    // reconcile its local fork against them. Chat is echoed as delivery
+    // confirmation.
     matches!(
         room_msg.payload.first().copied(),
-        Some(0x02) | Some(0x03) | Some(0x10) | Some(0x11) | Some(0x12)
+        Some(0x02) | Some(0x03) | Some(0x10) | Some(0x11) | Some(0x12) | Some(0x14) | Some(0x15)
     )
 }
 
@@ -503,6 +504,25 @@ async fn finish_reset(ctx: &SessionContext<'_>, reset: PendingReset) {
                 reset.base_seq,
                 reset.payloads.len()
             );
+
+            // Tell all clients (and future late joiners, via history) that
+            // everything at or below base_seq is squashed into the reset
+            // snapshots, so they can freeze undo state and reclaim memory
+            let mut reset_point = vec![messages::MessageType::ResetPoint as u8];
+            reset_point.extend_from_slice(&reset.base_seq.to_le_bytes());
+            if let Err(e) = messages::sequence_and_broadcast(
+                &Message::Binary(reset_point),
+                ctx.room_uuid,
+                "system",
+                ctx.state,
+            )
+            .await
+            {
+                error!(
+                    "Failed to broadcast reset point for room {}: {}",
+                    ctx.room_uuid, e
+                );
+            }
         }
         Err(e) => {
             error!(
