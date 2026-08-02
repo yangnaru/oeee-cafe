@@ -24,6 +24,12 @@ Always run and check linting:
 pnpm run lint
 ```
 
+Run the unit tests (vitest) after changing collaboration logic:
+
+```bash
+pnpm run test
+```
+
 When extracting and compiling Lingui locales, use these commands:
 
 ```bash
