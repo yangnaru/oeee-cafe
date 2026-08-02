@@ -29,12 +29,42 @@ pub struct ConnectionInfo {
     pub last_heartbeat: u64,
 }
 
+// Serializes the binary payload as base64 (~1.33x) instead of serde_json's
+// default number array (~3.7x), which matters for snapshot-sized messages on
+// the pub/sub channel. Deserialization also accepts the old number-array form
+// so envelopes from a previous server version still parse during a deploy.
+mod base64_payload {
+    use data_encoding::BASE64;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&BASE64.encode(bytes))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum PayloadRepr {
+            Base64(String),
+            Raw(Vec<u8>),
+        }
+
+        match PayloadRepr::deserialize(deserializer)? {
+            PayloadRepr::Base64(s) => BASE64
+                .decode(s.as_bytes())
+                .map_err(serde::de::Error::custom),
+            PayloadRepr::Raw(bytes) => Ok(bytes),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoomMessage {
     pub from_connection: String,
     pub user_id: Uuid,
     pub user_login_name: String,
     pub message_type: String, // "websocket" | "join" | "leave" | "end_session"
+    #[serde(with = "base64_payload")]
     pub payload: Vec<u8>,
     pub timestamp: u64,
     // Canonical sequence number assigned by the atomic sequencer for messages
