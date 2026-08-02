@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { CanvasHistory } from "./canvasHistory";
 import {
   decodeMessage,
-  encodeDrawLine,
   encodeFill,
+  encodeStroke,
   encodeUndo,
   encodeUndoPoint,
 } from "./binaryProtocol";
@@ -14,8 +14,8 @@ vi.mock("./canvasSnapshot", () => ({
 }));
 
 const SIZE = 16;
-const LOCAL = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-const REMOTE = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+const LOCAL = 1;
+const REMOTE = 2;
 
 type StrokeState = [[number, number], [number, number]] | null;
 
@@ -71,10 +71,8 @@ class FakeEngine {
 
 function setup() {
   const engine = new FakeEngine();
-  const history = new CanvasHistory(
-    engine as unknown as DrawingEngine,
-    LOCAL
-  );
+  const history = new CanvasHistory(engine as unknown as DrawingEngine);
+  history.setLocalUserId(LOCAL);
   return { engine, history };
 }
 
@@ -82,18 +80,35 @@ function red(engine: FakeEngine, x: number, y: number): number {
   return engine.layers.foreground[(y * SIZE + x) * 4];
 }
 
-function line(
-  userId: string,
+function stroke(userId: number, x: number, y: number, r: number): ArrayBuffer {
+  return encodeStroke(userId, "foreground", 1, "solid", r, 0, 0, 255, [
+    { x, y },
+  ]);
+}
+
+// Dispatches a locally generated non-stroke message (undo point, undo, fill)
+function local(history: CanvasHistory, bytes: ArrayBuffer) {
+  history.handleLocal(bytes, decodeMessage(bytes)!);
+}
+
+// Draws one local segment and flushes it into a STROKE fork entry
+function localStroke(
+  history: CanvasHistory,
   x: number,
   y: number,
   r: number
 ): ArrayBuffer {
-  return encodeDrawLine(userId, "foreground", x, y, x, y, 1, "solid", r, 0, 0, 255, "mouse");
-}
-
-// Dispatches a locally drawn message (optimistic apply + fork entry)
-function local(history: CanvasHistory, bytes: ArrayBuffer) {
-  history.handleLocal(bytes, decodeMessage(bytes)!);
+  history.addLocalSegment(
+    "foreground",
+    1,
+    "solid",
+    { r, g: 0, b: 0, a: 255 },
+    x,
+    y
+  );
+  const bytes = history.flushLocalStroke();
+  if (!bytes) throw new Error("expected a flushed stroke");
+  return bytes;
 }
 
 // Delivers a message from the canonical server stream
@@ -102,12 +117,32 @@ async function remote(history: CanvasHistory, bytes: ArrayBuffer, seq?: number) 
 }
 
 describe("canonical application", () => {
-  it("applies remote draws in server order, last writer wins", async () => {
+  it("applies remote strokes in server order, last writer wins", async () => {
     const { engine, history } = setup();
-    await remote(history, line(REMOTE, 1, 1, 50), 1);
-    await remote(history, line(REMOTE, 1, 1, 60), 2);
+    await remote(history, stroke(REMOTE, 1, 1, 50), 1);
+    await remote(history, stroke(REMOTE, 1, 1, 60), 2);
     expect(red(engine, 1, 1)).toBe(60);
     expect(engine.ops).toHaveLength(2);
+  });
+
+  it("chains a user's stroke points and resets on their undo point", async () => {
+    const { engine, history } = setup();
+    await remote(history, encodeUndoPoint(REMOTE), 1);
+    await remote(
+      history,
+      encodeStroke(REMOTE, "foreground", 1, "solid", 50, 0, 0, 255, [
+        { x: 1, y: 1 },
+        { x: 3, y: 3 },
+      ]),
+      2
+    );
+    // Dot at first point, then a segment continuing from it
+    expect(engine.ops).toEqual(["line:1,1-1,1:50", "line:1,1-3,3:50"]);
+
+    await remote(history, encodeUndoPoint(REMOTE), 3);
+    await remote(history, stroke(REMOTE, 5, 5, 60), 4);
+    // New stroke starts with a dot, not a segment from (3,3)
+    expect(engine.ops[2]).toBe("line:5,5-5,5:60");
   });
 
   it("applies a remote snapshot's decoded pixels", async () => {
@@ -124,39 +159,37 @@ describe("canonical application", () => {
 });
 
 describe("local fork reconciliation", () => {
-  it("does not re-apply the echo of a local message", async () => {
+  it("does not re-apply the echo of a local stroke", async () => {
     const { engine, history } = setup();
-    const bytes = line(LOCAL, 2, 2, 100);
-    local(history, bytes);
+    const bytes = localStroke(history, 2, 2, 100);
     expect(red(engine, 2, 2)).toBe(100);
-    expect(history.forkSize).toBe(1);
+    expect(history.hasPendingLocal).toBe(true);
 
     await remote(history, bytes, 1);
-    expect(history.forkSize).toBe(0);
+    expect(history.hasPendingLocal).toBe(false);
     expect(engine.ops).toHaveLength(1); // applied exactly once
     expect(red(engine, 2, 2)).toBe(100);
   });
 
-  it("applies a non-overlapping remote draw without replaying the fork", async () => {
+  it("applies a non-overlapping remote stroke without replaying the fork", async () => {
     const { engine, history } = setup();
     local(history, encodeUndoPoint(LOCAL));
-    local(history, line(LOCAL, 1, 1, 100));
+    localStroke(history, 1, 1, 100);
 
-    await remote(history, line(REMOTE, 10, 10, 200), 1);
+    await remote(history, stroke(REMOTE, 10, 10, 200), 1);
     expect(red(engine, 1, 1)).toBe(100);
     expect(red(engine, 10, 10)).toBe(200);
     expect(engine.ops).toHaveLength(2); // no replay of the fork entry
   });
 
-  it("replays the fork on top of an overlapping remote draw", async () => {
+  it("replays the fork on top of an overlapping remote stroke", async () => {
     const { engine, history } = setup();
     local(history, encodeUndoPoint(LOCAL));
-    const mine = line(LOCAL, 5, 5, 100);
-    local(history, mine);
+    const mine = localStroke(history, 5, 5, 100);
 
     // Same pixel: canonical order is remote first, so the unconfirmed local
     // stroke must end up on top
-    await remote(history, line(REMOTE, 5, 5, 200), 1);
+    await remote(history, stroke(REMOTE, 5, 5, 200), 1);
     expect(red(engine, 5, 5)).toBe(100);
     expect(engine.ops).toHaveLength(3); // local, remote (replay), local again
 
@@ -164,21 +197,45 @@ describe("local fork reconciliation", () => {
     await remote(history, encodeUndoPoint(LOCAL), 2);
     await remote(history, mine, 3);
     expect(red(engine, 5, 5)).toBe(100);
-    expect(history.forkSize).toBe(0);
+    expect(history.hasPendingLocal).toBe(false);
+  });
+
+  it("re-applies an unflushed open batch on top of a conflicting remote stroke", async () => {
+    const { engine, history } = setup();
+    local(history, encodeUndoPoint(LOCAL));
+    history.addLocalSegment(
+      "foreground",
+      1,
+      "solid",
+      { r: 100, g: 0, b: 0, a: 255 },
+      5,
+      5
+    );
+    expect(history.hasPendingLocal).toBe(true);
+
+    await remote(history, stroke(REMOTE, 5, 5, 200), 1);
+    expect(red(engine, 5, 5)).toBe(100); // open batch replayed on top
+
+    // Flush and echo everything; the canvas must not change
+    const mine = history.flushLocalStroke();
+    expect(mine).not.toBeNull();
+    await remote(history, encodeUndoPoint(LOCAL), 2);
+    await remote(history, mine!, 3);
+    expect(red(engine, 5, 5)).toBe(100);
+    expect(history.hasPendingLocal).toBe(false);
   });
 
   it("drops the fork and converges when the same user draws from another connection", async () => {
     const { engine, history } = setup();
     local(history, encodeUndoPoint(LOCAL));
-    const mine = line(LOCAL, 3, 3, 100);
-    local(history, mine);
+    const mine = localStroke(history, 3, 3, 100);
 
     // A different message from the same user arrives first: server order
     // diverged, so the optimistic stroke is rolled back...
-    await remote(history, line(LOCAL, 4, 4, 50), 1);
+    await remote(history, stroke(LOCAL, 4, 4, 50), 1);
     expect(red(engine, 3, 3)).toBe(0);
     expect(red(engine, 4, 4)).toBe(50);
-    expect(history.forkSize).toBe(0);
+    expect(history.hasPendingLocal).toBe(false);
 
     // ...and re-appears when its echo arrives in canonical order
     await remote(history, encodeUndoPoint(LOCAL), 2);
@@ -191,20 +248,20 @@ describe("local fork reconciliation", () => {
 describe("collaborative undo", () => {
   async function confirmedStroke(
     history: CanvasHistory,
-    userId: string,
+    userId: number,
     x: number,
     y: number,
     r: number,
     seq: number
   ) {
     await remote(history, encodeUndoPoint(userId), seq);
-    await remote(history, line(userId, x, y, r), seq + 1);
+    await remote(history, stroke(userId, x, y, r), seq + 1);
   }
 
   it("undoes only the sender's stroke and redo restores it", async () => {
     const { engine, history } = setup();
     await confirmedStroke(history, LOCAL, 1, 1, 100, 1);
-    await remote(history, line(REMOTE, 2, 2, 200), 3);
+    await remote(history, stroke(REMOTE, 2, 2, 200), 3);
     expect(history.canUndo()).toBe(true);
 
     const undo = encodeUndo(LOCAL, false);
@@ -251,7 +308,7 @@ describe("collaborative undo", () => {
   it("disables undo immediately while an undo is in flight", async () => {
     const { history } = setup();
     await remote(history, encodeUndoPoint(LOCAL), 1);
-    await remote(history, line(LOCAL, 1, 1, 100), 2);
+    await remote(history, stroke(LOCAL, 1, 1, 100), 2);
     expect(history.canUndo()).toBe(true);
 
     // Click undo: not yet echoed, but a second click must be refused
@@ -283,9 +340,9 @@ describe("reset point squashing", () => {
   it("freezes undo below the base seq but keeps newer strokes undoable", async () => {
     const { engine, history } = setup();
     await remote(history, encodeUndoPoint(LOCAL), 1);
-    await remote(history, line(LOCAL, 1, 1, 10), 2);
+    await remote(history, stroke(LOCAL, 1, 1, 10), 2);
     await remote(history, encodeUndoPoint(LOCAL), 3);
-    await remote(history, line(LOCAL, 2, 2, 20), 4);
+    await remote(history, stroke(LOCAL, 2, 2, 20), 4);
 
     await history.handleResetPoint(2);
 

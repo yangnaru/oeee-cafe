@@ -1,7 +1,7 @@
 use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::redis::RedisPool;
@@ -12,6 +12,8 @@ const RESET_PENDING_PREFIX: &str = "oeee:reset_pending:";
 const CONNECTION_PREFIX: &str = "oeee:connection:";
 const ROOM_PREFIX: &str = "oeee:room:";
 const PUBSUB_PREFIX: &str = "oeee:pubsub:";
+pub(crate) const USER_ID_PREFIX: &str = "oeee:user_ids:";
+const USER_ID_TTL: u64 = 3600; // matches (and is refreshed with) message history
 
 // TTL constants
 const ACTIVITY_TTL: u64 = 3600; // 1 hour
@@ -286,6 +288,69 @@ impl RedisStateManager {
         Ok(connections)
     }
 
+    // Session User Id Assignment
+    //
+    // Every drawing message carries a 1-byte session-scoped user id instead
+    // of a 16-byte UUID (Drawpile's context id). The mapping is stable for
+    // the lifetime of the session history: it lives in a Redis hash whose TTL
+    // is refreshed by the message sequencer alongside the history itself.
+    pub async fn assign_user_id(
+        &self,
+        room_uuid: Uuid,
+        user_uuid: Uuid,
+    ) -> Result<Option<u8>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("{}{}", USER_ID_PREFIX, room_uuid);
+        let field = user_uuid.to_string();
+
+        if let Some(existing) = conn.hget::<_, _, Option<u16>>(&key, &field).await? {
+            return Ok(u8::try_from(existing).ok());
+        }
+
+        let next: i64 = conn.hincr(&key, "__next", 1).await?;
+        if next > 255 {
+            error!(
+                "Session user id space exhausted for room {} (user {})",
+                room_uuid, user_uuid
+            );
+            return Ok(None);
+        }
+
+        // HSETNX resolves the race between two concurrent connections of the
+        // same user: the loser re-reads the winner's id (one counter slot is
+        // wasted, which is fine)
+        let set: bool = conn.hset_nx(&key, &field, next).await?;
+        conn.expire::<_, ()>(&key, USER_ID_TTL as i64).await?;
+        if set {
+            Ok(u8::try_from(next).ok())
+        } else {
+            let existing: Option<u16> = conn.hget(&key, &field).await?;
+            Ok(existing.and_then(|id| u8::try_from(id).ok()))
+        }
+    }
+
+    /// Returns the uuid -> session id mapping for all known users of a room.
+    pub async fn get_user_ids(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<std::collections::HashMap<Uuid, u8>, Box<dyn std::error::Error + Send + Sync>>
+    {
+        let mut conn = self.pool.get().await?;
+        let key = format!("{}{}", USER_ID_PREFIX, room_uuid);
+
+        let entries: std::collections::HashMap<String, u16> = conn.hgetall(&key).await?;
+        let mut result = std::collections::HashMap::new();
+        for (field, id) in entries {
+            if field == "__next" {
+                continue;
+            }
+            if let (Ok(uuid), Ok(id)) = (field.parse::<Uuid>(), u8::try_from(id)) {
+                result.insert(uuid, id);
+            }
+        }
+        Ok(result)
+    }
+
     // Pub/Sub for message broadcasting
     pub async fn publish_message(
         &self,
@@ -340,6 +405,7 @@ impl RedisStateManager {
             format!("{}{}:*", ROOM_PREFIX, room_uuid),
             format!("{}{}", ACTIVITY_PREFIX, room_uuid),
             format!("{}{}", RESET_PENDING_PREFIX, room_uuid),
+            format!("{}{}", USER_ID_PREFIX, room_uuid),
         ];
 
         let mut total_deleted = 0;

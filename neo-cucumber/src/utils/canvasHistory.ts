@@ -20,12 +20,19 @@
  */
 
 import { DrawingEngine } from "../DrawingEngine";
-import { type DecodedMessage, type SnapshotMessage } from "./binaryProtocol";
+import {
+  decodeMessage,
+  encodeStroke,
+  type DecodedMessage,
+  type SnapshotMessage,
+  type StrokeMessage,
+} from "./binaryProtocol";
 import { pngDataToLayer } from "./canvasSnapshot";
 
 type LayerName = "foreground" | "background";
 type StrokeState = [[number, number], [number, number]] | null;
-type StrokeStates = Map<string, StrokeState>;
+// Keyed by 1-byte session user id
+type StrokeStates = Map<number, StrokeState>;
 
 type UndoState = "done" | "undone" | "gone";
 
@@ -51,6 +58,17 @@ interface ForkEntry {
   bytes: Uint8Array;
   msg: DecodedMessage;
   area: Area;
+}
+
+// A stroke being drawn locally: its segments are painted optimistically as
+// they happen, then flushed into one STROKE message (a fork entry) at a time
+interface OpenBatch {
+  layer: LayerName;
+  brushSize: number;
+  brushType: "solid" | "halftone" | "eraser";
+  color: { r: number; g: number; b: number; a: number };
+  points: { x: number; y: number }[];
+  area: { kind: "pixels"; layer: LayerName; x0: number; y0: number; x1: number; y1: number };
 }
 
 const SAVEPOINT_INTERVAL = 64;
@@ -82,26 +100,25 @@ function cloneStrokes(strokes: StrokeStates): StrokeStates {
 
 function affectedArea(msg: DecodedMessage): Area {
   switch (msg.type) {
-    case "drawLine": {
+    case "stroke": {
       const pad = msg.brushSize;
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (const p of msg.points) {
+        x0 = Math.min(x0, p.x);
+        y0 = Math.min(y0, p.y);
+        x1 = Math.max(x1, p.x);
+        y1 = Math.max(y1, p.y);
+      }
       return {
         kind: "pixels",
         layer: msg.layer,
-        x0: Math.min(msg.fromX, msg.toX) - pad,
-        y0: Math.min(msg.fromY, msg.toY) - pad,
-        x1: Math.max(msg.fromX, msg.toX) + pad,
-        y1: Math.max(msg.fromY, msg.toY) + pad,
-      };
-    }
-    case "drawPoint": {
-      const pad = msg.brushSize;
-      return {
-        kind: "pixels",
-        layer: msg.layer,
-        x0: msg.x - pad,
-        y0: msg.y - pad,
-        x1: msg.x + pad,
-        y1: msg.y + pad,
+        x0: x0 - pad,
+        y0: y0 - pad,
+        x1: x1 + pad,
+        y1: y1 + pad,
       };
     }
     case "fill":
@@ -124,8 +141,7 @@ function areasConcurrent(a: Area, b: Area): boolean {
 
 function isHistoryMessage(msg: DecodedMessage): boolean {
   switch (msg.type) {
-    case "drawLine":
-    case "drawPoint":
+    case "stroke":
     case "fill":
     case "snapshot":
     case "undoPoint":
@@ -138,31 +154,36 @@ function isHistoryMessage(msg: DecodedMessage): boolean {
 
 export class CanvasHistory {
   private engine: DrawingEngine;
-  private localUserId: string;
+  // 1-byte session user id assigned by the server's WELCOME; -1 until known
+  private localUserId = -1;
   private onChange?: (canUndo: boolean, canRedo: boolean) => void;
 
   private entries: Entry[] = [];
   private savepoints: Savepoint[] = [];
   private fork: ForkEntry[] = [];
+  private openBatch: OpenBatch | null = null;
   // Per-user stroke continuation state of the currently rendered canvas
   private liveStrokes: StrokeStates = new Map();
   private snapshotCache = new WeakMap<SnapshotMessage, Uint8ClampedArray>();
 
   constructor(
     engine: DrawingEngine,
-    localUserId: string,
     onChange?: (canUndo: boolean, canRedo: boolean) => void
   ) {
     this.engine = engine;
-    this.localUserId = localUserId;
     this.onChange = onChange;
     this.reset();
+  }
+
+  setLocalUserId(id: number): void {
+    this.localUserId = id;
   }
 
   /** Clears everything and takes a base savepoint of the current layers. */
   reset(): void {
     this.entries = [];
     this.fork = [];
+    this.openBatch = null;
     this.liveStrokes = new Map();
     this.savepoints = [
       {
@@ -175,12 +196,12 @@ export class CanvasHistory {
     this.notify();
   }
 
-  get forkSize(): number {
-    return this.fork.length;
-  }
-
-  clearFork(): void {
-    this.fork = [];
+  /** True while any locally drawn state is not yet server-confirmed. */
+  get hasPendingLocal(): boolean {
+    return (
+      this.fork.length > 0 ||
+      (this.openBatch !== null && this.openBatch.points.length > 0)
+    );
   }
 
   canUndo(): boolean {
@@ -250,6 +271,81 @@ export class CanvasHistory {
   }
 
   /**
+   * Appends one point to the open local stroke batch, painting it
+   * immediately. The batch becomes a single STROKE fork entry on flush.
+   * Returns the number of accumulated points (so the caller can force a
+   * flush on large batches).
+   */
+  addLocalSegment(
+    layer: LayerName,
+    brushSize: number,
+    brushType: "solid" | "halftone" | "eraser",
+    color: { r: number; g: number; b: number; a: number },
+    x: number,
+    y: number
+  ): number {
+    if (this.localUserId < 0) return 0;
+    if (!this.openBatch) {
+      this.openBatch = {
+        layer,
+        brushSize,
+        brushType,
+        color,
+        points: [],
+        area: {
+          kind: "pixels",
+          layer,
+          x0: x - brushSize,
+          y0: y - brushSize,
+          x1: x + brushSize,
+          y1: y + brushSize,
+        },
+      };
+    }
+    const batch = this.openBatch;
+    batch.points.push({ x, y });
+    batch.area.x0 = Math.min(batch.area.x0, x - brushSize);
+    batch.area.y0 = Math.min(batch.area.y0, y - brushSize);
+    batch.area.x1 = Math.max(batch.area.x1, x + brushSize);
+    batch.area.y1 = Math.max(batch.area.y1, y + brushSize);
+
+    this.applyStrokePoints(
+      this.localUserId,
+      batch,
+      [{ x, y }],
+      this.engine.layers,
+      this.liveStrokes
+    );
+    return batch.points.length;
+  }
+
+  /**
+   * Encodes the open batch into a STROKE message, moves it into the fork,
+   * and returns the exact bytes to send (null if there is nothing to flush).
+   */
+  flushLocalStroke(): ArrayBuffer | null {
+    const batch = this.openBatch;
+    this.openBatch = null;
+    if (!batch || batch.points.length === 0) return null;
+
+    const bytes = encodeStroke(
+      this.localUserId,
+      batch.layer,
+      batch.brushSize,
+      batch.brushType,
+      batch.color.r,
+      batch.color.g,
+      batch.color.b,
+      batch.color.a,
+      batch.points
+    );
+    const msg = decodeMessage(bytes);
+    if (!msg) return null;
+    this.fork.push({ bytes: new Uint8Array(bytes), msg, area: batch.area });
+    return bytes;
+  }
+
+  /**
    * Handles a message from the canonical server stream (a remote user's
    * message or the echo of a local one).
    */
@@ -277,11 +373,11 @@ export class CanvasHistory {
     }
 
     // Same user from another connection: the server's order diverged from the
-    // fork. Drop the fork (in-flight messages re-arrive as ordinary echoes)
-    // and unconditionally rebuild from canonical history, since the canvas
-    // still shows the dropped fork's optimistic pixels.
+    // fork. Drop the pending local state (in-flight messages re-arrive as
+    // ordinary echoes) and unconditionally rebuild from canonical history,
+    // since the canvas still shows the dropped fork's optimistic pixels.
     if (
-      this.fork.length > 0 &&
+      this.hasPendingLocal &&
       "userId" in msg &&
       msg.userId === this.localUserId
     ) {
@@ -289,6 +385,7 @@ export class CanvasHistory {
         "Canvas history rollback: server order diverged from local fork"
       );
       this.fork = [];
+      this.openBatch = null;
       let first = -1;
       if (msg.type === "undo") {
         first = this.markUndo(msg.userId, msg.redo);
@@ -306,11 +403,15 @@ export class CanvasHistory {
     }
 
     // Remote message while local strokes are unconfirmed: apply directly only
-    // if it can't touch any fork entry's affected area (Drawpile's
-    // concurrency check); otherwise rebuild and re-apply the fork on top.
-    if (this.fork.length > 0) {
+    // if it can't touch any pending area (Drawpile's concurrency check);
+    // otherwise rebuild and re-apply the pending local state on top.
+    if (this.hasPendingLocal) {
       const area = affectedArea(msg);
-      const concurrent = this.fork.every((f) => areasConcurrent(f.area, area));
+      const pendingAreas: Area[] = this.fork.map((f) => f.area);
+      if (this.openBatch && this.openBatch.points.length > 0) {
+        pendingAreas.push(this.openBatch.area);
+      }
+      const concurrent = pendingAreas.every((a) => areasConcurrent(a, area));
       await this.applyCanonical(msg, seq, { replay: !concurrent });
       return;
     }
@@ -401,7 +502,7 @@ export class CanvasHistory {
   }
 
   /** Marks entries and replays; no-op if there is nothing to undo/redo. */
-  private async processUndo(userId: string, redo: boolean): Promise<void> {
+  private async processUndo(userId: number, redo: boolean): Promise<void> {
     const first = this.markUndo(userId, redo);
     if (first < 0) return;
     await this.replayFrom(this.savepointFor(first));
@@ -415,7 +516,7 @@ export class CanvasHistory {
    * end of history become undone. Redo: the user's entries from their
    * earliest undone undo point to their next undo point become done again.
    */
-  private markUndo(userId: string, redo: boolean): number {
+  private markUndo(userId: number, redo: boolean): number {
     let first = -1;
     if (redo) {
       first = this.entries.findIndex(
@@ -486,6 +587,15 @@ export class CanvasHistory {
         this.applyDrawSync(f.msg, this.engine.layers, strokes);
       }
     }
+    if (this.openBatch && this.openBatch.points.length > 0) {
+      this.applyStrokePoints(
+        this.localUserId,
+        this.openBatch,
+        this.openBatch.points,
+        this.engine.layers,
+        strokes
+      );
+    }
     this.liveStrokes = strokes;
     this.queueUpdates();
   }
@@ -505,7 +615,8 @@ export class CanvasHistory {
   }
 
   private maybeSavepoint(): void {
-    if (this.fork.length > 0) return;
+    // Savepoints must capture confirmed-only state
+    if (this.hasPendingLocal) return;
     const last = this.latestSavepoint();
     if (this.entries.length - last.index < SAVEPOINT_INTERVAL) return;
     this.savepoints.push({
@@ -553,39 +664,8 @@ export class CanvasHistory {
     strokes: StrokeStates
   ): void {
     switch (msg.type) {
-      case "drawLine":
-        this.engine.setStrokeState(strokes.get(msg.userId) ?? null);
-        this.engine.drawLine(
-          layers[msg.layer],
-          msg.fromX,
-          msg.fromY,
-          msg.toX,
-          msg.toY,
-          msg.brushSize,
-          msg.brushType,
-          msg.color.r,
-          msg.color.g,
-          msg.color.b,
-          msg.color.a
-        );
-        strokes.set(msg.userId, this.engine.getStrokeState());
-        break;
-      case "drawPoint":
-        this.engine.setStrokeState(strokes.get(msg.userId) ?? null);
-        this.engine.drawLine(
-          layers[msg.layer],
-          msg.x,
-          msg.y,
-          msg.x,
-          msg.y,
-          msg.brushSize,
-          msg.brushType,
-          msg.color.r,
-          msg.color.g,
-          msg.color.b,
-          msg.color.a
-        );
-        strokes.set(msg.userId, this.engine.getStrokeState());
+      case "stroke":
+        this.applyStrokePoints(msg.userId, msg, msg.points, layers, strokes);
         break;
       case "fill":
         this.engine.doFloodFill(
@@ -599,6 +679,39 @@ export class CanvasHistory {
         );
         break;
     }
+  }
+
+  /**
+   * Applies polyline points for one user. Each point continues from the
+   * user's previous point (tracked in `strokes`); a null continuation state
+   * (set by their UNDO_POINT) starts a new stroke with a dot.
+   */
+  private applyStrokePoints(
+    userId: number,
+    props: Pick<StrokeMessage, "layer" | "brushSize" | "brushType" | "color">,
+    points: { x: number; y: number }[],
+    layers: Record<string, Uint8ClampedArray>,
+    strokes: StrokeStates
+  ): void {
+    this.engine.setStrokeState(strokes.get(userId) ?? null);
+    for (const p of points) {
+      const prev = this.engine.getStrokeState();
+      const [fromX, fromY] = prev === null ? [p.x, p.y] : prev[1];
+      this.engine.drawLine(
+        layers[props.layer],
+        fromX,
+        fromY,
+        p.x,
+        p.y,
+        props.brushSize,
+        props.brushType,
+        props.color.r,
+        props.color.g,
+        props.color.b,
+        props.color.a
+      );
+    }
+    strokes.set(userId, this.engine.getStrokeState());
   }
 
   private queueUpdates(): void {

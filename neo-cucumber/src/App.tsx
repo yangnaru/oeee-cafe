@@ -220,6 +220,9 @@ function App() {
   // Canonical shared-canvas history (conflict resolution + collaborative undo)
   const canvasHistoryRef = useRef<CanvasHistory | null>(null);
 
+  // 1-byte session user id assigned by the server's WELCOME message
+  const localIdRef = useRef<number | null>(null);
+
   // Highest canonical history position fully applied to the canvases
   const lastSeqRef = useRef<number>(0);
 
@@ -233,7 +236,7 @@ function App() {
     canvasMeta?.width,
     canvasMeta?.height,
     drawingWsRef, // Stable wsRef that gets populated later
-    userIdRef,
+    localIdRef,
     handleLocalDrawingChange,
     isCatchingUp,
     connectionState,
@@ -265,16 +268,16 @@ function App() {
     drawingEngineRef.current = drawingEngine;
   }, [drawingEngine]);
 
-  // Create the canonical canvas history once the engine and user are known
+  // Create the canonical canvas history once the engine is available; the
+  // local session user id is set when the server's WELCOME arrives
   useEffect(() => {
-    if (drawingEngine && userIdRef.current && !canvasHistoryRef.current) {
+    if (drawingEngine && !canvasHistoryRef.current) {
       canvasHistoryRef.current = new CanvasHistory(
         drawingEngine,
-        userIdRef.current,
         handleHistoryChange
       );
     }
-  }, [drawingEngine, canvasMeta, handleHistoryChange]);
+  }, [drawingEngine, handleHistoryChange]);
 
   // Cursor management
   const { createOrUpdateCursor, hideCursor } = useCursor({
@@ -295,19 +298,20 @@ function App() {
     const attempt = async () => {
       const ws = drawingWsRef.current;
       const engine = drawingEngineRef.current;
+      const localId = localIdRef.current;
       if (
         !ws ||
         ws.readyState !== WebSocket.OPEN ||
         !engine ||
         !canvasMeta?.width ||
         !canvasMeta?.height ||
-        !userIdRef.current
+        localId == null
       ) {
         return;
       }
 
       const history = canvasHistoryRef.current;
-      if ((history && history.forkSize > 0) || isDrawingRef.current) {
+      if ((history && history.hasPendingLocal) || isDrawingRef.current) {
         if (retries++ < MAX_RETRIES) {
           setTimeout(attempt, RETRY_MS);
         }
@@ -318,13 +322,13 @@ function App() {
       // block so both snapshots describe the same canonical state
       const baseSeq = lastSeqRef.current;
       const captures: {
-        userId: string;
+        userId: number;
         layer: "foreground" | "background";
         data: Uint8ClampedArray;
       }[] = [];
       for (const layer of ["foreground", "background"] as const) {
         captures.push({
-          userId: userIdRef.current,
+          userId: localId,
           layer,
           data: new Uint8ClampedArray(engine.layers[layer]),
         });
@@ -366,6 +370,7 @@ function App() {
     localUserJoinTimeRef,
     canvasHistoryRef,
     participantsRef,
+    localIdRef,
     lastSeqRef,
     shouldConnectRef,
     catchupTimeoutRef,

@@ -46,6 +46,8 @@ pub enum MessageType {
     ResetBegin = 0x0C,
     // Notifies clients that history at or below a base seq was squashed (server -> client)
     ResetPoint = 0x0D,
+    // Tells a connecting client its 1-byte session user id (server -> client)
+    Welcome = 0x0E,
 }
 
 // Message structures
@@ -58,7 +60,8 @@ pub struct JoinMessage {
 
 #[derive(Debug, Clone)]
 pub struct LayersMessage {
-    pub participants: Vec<(Uuid, String, i64)>, // (user_id, login_name, join_timestamp)
+    // (user_uuid, session_id, login_name, join_timestamp)
+    pub participants: Vec<(Uuid, u8, String, i64)>,
 }
 
 #[derive(Debug, Clone)]
@@ -102,14 +105,13 @@ impl LayersMessage {
     pub fn serialize(&self) -> Vec<u8> {
         let participant_count = self.participants.len() as u16;
 
-        // Calculate total buffer size: 1 + 2 + sum of (16 + 2 + name_length + 8) for each participant
-        // Added 8 bytes for join timestamp per participant
+        // 1 + 2 + per participant: uuid(16) + session id(1) + name len(2) + name + timestamp(8)
         let total_size = 1
             + 2
             + self
                 .participants
                 .iter()
-                .map(|(_, name, _)| 16 + 2 + name.len() + 8)
+                .map(|(_, _, name, _)| 16 + 1 + 2 + name.len() + 8)
                 .sum::<usize>();
 
         let mut buffer = Vec::with_capacity(total_size);
@@ -117,9 +119,10 @@ impl LayersMessage {
         buffer.push(MessageType::Layers as u8);
         buffer.extend_from_slice(&participant_count.to_le_bytes());
 
-        for (user_id, login_name, join_timestamp) in &self.participants {
-            // Add user ID (16 bytes)
-            buffer.extend_from_slice(user_id.as_bytes());
+        for (user_uuid, session_id, login_name, join_timestamp) in &self.participants {
+            // Add user UUID (16 bytes) and 1-byte session id
+            buffer.extend_from_slice(user_uuid.as_bytes());
+            buffer.push(*session_id);
 
             // Add login name length (2 bytes) + login name
             let name_bytes = login_name.as_bytes();
@@ -200,6 +203,7 @@ pub fn parse_message_type(data: &[u8]) -> Option<MessageType> {
         0x0B => Some(MessageType::ResetRequest),
         0x0C => Some(MessageType::ResetBegin),
         0x0D => Some(MessageType::ResetPoint),
+        0x0E => Some(MessageType::Welcome),
         _ => None,
     }
 }
@@ -293,6 +297,19 @@ async fn broadcast_layers(_db: &Pool<Postgres>, room_uuid: Uuid, state: &AppStat
     // Use database as the canonical source for participant join order
     match get_session_participants(room_uuid, state).await {
         Ok(participants) => {
+            // Attach the 1-byte session ids from Redis (0 = unknown/expired)
+            let session_ids = state
+                .redis_state
+                .get_user_ids(room_uuid)
+                .await
+                .unwrap_or_default();
+            let participants: Vec<(Uuid, u8, String, i64)> = participants
+                .into_iter()
+                .map(|(uuid, name, ts)| {
+                    (uuid, session_ids.get(&uuid).copied().unwrap_or(0), name, ts)
+                })
+                .collect();
+
             // Participants are already sorted by join time from the database query
             let layers_message = LayersMessage {
                 participants: participants.clone(),

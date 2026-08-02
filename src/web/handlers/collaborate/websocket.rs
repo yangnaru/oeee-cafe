@@ -67,7 +67,7 @@ pub async fn handle_socket(
 
     let db = &state.db_pool;
 
-    let (is_owner, owner_id) = match setup_connection(
+    let (is_owner, owner_id, session_user_id) = match setup_connection(
         db,
         room_uuid,
         user_id,
@@ -80,6 +80,20 @@ pub async fn handle_socket(
         Ok(owner_info) => owner_info,
         Err(_) => return,
     };
+
+    // Tell the client its 1-byte session user id before any history arrives;
+    // all its drawing messages will carry this id instead of a UUID
+    let welcome = Message::Binary(vec![
+        messages::MessageType::Welcome as u8,
+        session_user_id,
+    ]);
+    if sender.send(welcome).await.is_err() {
+        error!(
+            "Failed to send welcome to connection {} in room {}",
+            connection_id, room_uuid
+        );
+        return;
+    }
 
     // Subscribe to the room channel BEFORE replaying history so no message can
     // fall into the gap between history replay and the live stream. Messages
@@ -199,7 +213,7 @@ async fn setup_connection(
     user_login_name: &str,
     connection_id: &str,
     state: &AppState,
-) -> Result<(bool, Uuid), ()> {
+) -> Result<(bool, Uuid, u8), ()> {
     let session_info = match db::get_session_info(db, room_uuid).await {
         Ok(Some(info)) => info,
         Ok(None) => {
@@ -241,7 +255,26 @@ async fn setup_connection(
     // Atomically handle all connection management
     setup_connection_atomically(state, room_uuid, user_id, connection_id, user_login_name).await;
 
-    Ok((session_info.owner_id == user_id, session_info.owner_id))
+    let session_user_id = match state.redis_state.assign_user_id(room_uuid, user_id).await {
+        Ok(Some(id)) => id,
+        Ok(None) => {
+            error!(
+                "No session user id available for user {} in room {}",
+                user_login_name, room_uuid
+            );
+            return Err(());
+        }
+        Err(e) => {
+            error!("Failed to assign session user id: {}", e);
+            return Err(());
+        }
+    };
+
+    Ok((
+        session_info.owner_id == user_id,
+        session_info.owner_id,
+        session_user_id,
+    ))
 }
 
 async fn setup_connection_atomically(
@@ -314,13 +347,13 @@ fn should_forward_to_connection(
     if room_msg.from_connection != connection_id {
         return true;
     }
-    // Echo the sender's own canvas-affecting messages (snapshot, draw, fill,
-    // undo point, undo) back in canonical server order so the client can
+    // Echo the sender's own canvas-affecting messages (snapshot, fill, undo
+    // point, undo, stroke) back in canonical server order so the client can
     // reconcile its local fork against them. Chat is echoed as delivery
     // confirmation.
     matches!(
         room_msg.payload.first().copied(),
-        Some(0x02) | Some(0x03) | Some(0x10) | Some(0x11) | Some(0x12) | Some(0x14) | Some(0x15)
+        Some(0x02) | Some(0x03) | Some(0x12) | Some(0x14) | Some(0x15) | Some(0x16)
     )
 }
 

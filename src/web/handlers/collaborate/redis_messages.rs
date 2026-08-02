@@ -6,8 +6,9 @@ use uuid::Uuid;
 use crate::redis::RedisPool;
 
 const MESSAGE_HISTORY_TTL: u64 = 3600; // 1 hour TTL
-// v2: entries are "{seq}:{payload}" in chronological (oldest-first) order
-const MESSAGE_HISTORY_PREFIX: &str = "oeee:msg_history:v2:";
+// v3: entries are "{seq}:{payload}" oldest-first; payloads use 1-byte session
+// user ids and STROKE batches
+const MESSAGE_HISTORY_PREFIX: &str = "oeee:msg_history:v3:";
 const MESSAGE_SEQ_PREFIX: &str = "oeee:msg_seq:";
 const MAX_REDIS_MESSAGES: usize = 50000;
 
@@ -26,6 +27,7 @@ redis.call('RPUSH', KEYS[2], tostring(seq) .. ':' .. ARGV[1])
 redis.call('LTRIM', KEYS[2], -tonumber(ARGV[3]), -1)
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[4]))
+redis.call('EXPIRE', KEYS[4], tonumber(ARGV[4]))
 local envelope = cjson.decode(ARGV[2])
 envelope['seq'] = seq
 redis.call('PUBLISH', KEYS[3], cjson.encode(envelope))
@@ -73,6 +75,11 @@ impl RedisMessageStore {
             .key(seq_key(room_uuid))
             .key(history_key(room_uuid))
             .key(channel)
+            .key(format!(
+                "{}{}",
+                super::redis_state::USER_ID_PREFIX,
+                room_uuid
+            ))
             .arg(payload)
             .arg(envelope_json)
             .arg(MAX_REDIS_MESSAGES)
@@ -212,7 +219,11 @@ return #kept
         let mut conn = self.pool.get().await?;
 
         let deleted: usize = conn
-            .del(&[history_key(room_uuid), seq_key(room_uuid)])
+            .del(&[
+                history_key(room_uuid),
+                seq_key(room_uuid),
+                format!("{}{}", super::redis_state::USER_ID_PREFIX, room_uuid),
+            ])
             .await?;
         if deleted > 0 {
             debug!("Cleaned up Redis message history for room {}", room_uuid);

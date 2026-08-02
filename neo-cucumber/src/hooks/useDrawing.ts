@@ -2,14 +2,18 @@ import { useEffect, useRef, useCallback } from "react";
 import { useBaseDrawing, type DrawingState } from "./useBaseDrawing";
 import {
   decodeMessage,
-  encodeDrawLine,
-  encodeDrawPoint,
   encodeFill,
   encodePointerUp,
   encodeUndo,
   encodeUndoPoint,
 } from "../utils/binaryProtocol";
 import { type CanvasHistory } from "../utils/canvasHistory";
+
+// Stroke segments accumulate into one STROKE message and flush on this
+// cadence (or on pointer-up / when the batch grows large); this trades a
+// little remote-view latency for a large reduction in message count
+const STROKE_FLUSH_MS = 60;
+const STROKE_FLUSH_MAX_POINTS = 64;
 
 export const useDrawing = (
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
@@ -20,7 +24,7 @@ export const useDrawing = (
   canvasWidth?: number,
   canvasHeight?: number,
   wsRef?: React.RefObject<WebSocket | null>,
-  userIdRef?: React.RefObject<string>,
+  localIdRef?: React.RefObject<number | null>,
   onDrawingChange?: () => void,
   isCatchingUp: boolean = false,
   connectionState: "connecting" | "connected" | "disconnected" = "connected",
@@ -33,6 +37,7 @@ export const useDrawing = (
   const connectionStateRef = useRef(connectionState);
   // True while a stroke is open and its UNDO_POINT has been sent
   const strokeOpenRef = useRef(false);
+  const flushTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     isCatchingUpRef.current = isCatchingUp;
@@ -88,36 +93,99 @@ export const useDrawing = (
     [wsRef, queueMessage]
   );
 
-  // Registers a locally generated message with the canonical canvas history
-  // (optimistic apply + fork tracking) and sends it to the server.
+  // Flushes the open stroke batch into a STROKE message and sends it
+  const flushStroke = useCallback(() => {
+    if (flushTimerRef.current !== null) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    const bytes = canvasHistoryRef?.current?.flushLocalStroke();
+    if (bytes) {
+      sendOrQueueMessage(bytes);
+    }
+  }, [canvasHistoryRef, sendOrQueueMessage]);
+
+  const scheduleFlush = useCallback(
+    (pendingPoints: number) => {
+      if (pendingPoints >= STROKE_FLUSH_MAX_POINTS) {
+        flushStroke();
+        return;
+      }
+      if (flushTimerRef.current === null) {
+        flushTimerRef.current = window.setTimeout(() => {
+          flushTimerRef.current = null;
+          flushStroke();
+        }, STROKE_FLUSH_MS);
+      }
+    },
+    [flushStroke]
+  );
+
+  // Registers a locally generated (non-stroke) message with the canvas
+  // history and sends it. Any open stroke batch is flushed first so the wire
+  // order matches the fork order.
   const dispatchLocalMessage = useCallback(
     (message: ArrayBuffer) => {
+      flushStroke();
       const decoded = decodeMessage(message);
       if (decoded) {
         canvasHistoryRef?.current?.handleLocal(message, decoded);
       }
       sendOrQueueMessage(message);
     },
-    [canvasHistoryRef, sendOrQueueMessage]
+    [canvasHistoryRef, sendOrQueueMessage, flushStroke]
   );
 
   // Sends the UNDO_POINT that delimits an undoable operation, once per stroke
   const openStroke = useCallback(() => {
-    if (strokeOpenRef.current || !userIdRef?.current) return;
+    if (strokeOpenRef.current || localIdRef?.current == null) return;
     strokeOpenRef.current = true;
     try {
-      dispatchLocalMessage(encodeUndoPoint(userIdRef.current));
+      dispatchLocalMessage(encodeUndoPoint(localIdRef.current));
     } catch (error) {
       console.error("Failed to encode/send undo point:", error);
     }
-  }, [userIdRef, dispatchLocalMessage]);
+  }, [localIdRef, dispatchLocalMessage]);
+
+  // Appends one stroke segment to the open batch (optimistically painted by
+  // the canvas history) and schedules a flush
+  const addSegment = useCallback(
+    (
+      x: number,
+      y: number,
+      brushSize: number,
+      brushType: "solid" | "halftone" | "eraser" | "fill" | "pan",
+      r: number,
+      g: number,
+      b: number,
+      opacity: number
+    ) => {
+      const history = canvasHistoryRef?.current;
+      if (!history || localIdRef?.current == null) return;
+
+      const validBrushType: "solid" | "halftone" | "eraser" =
+        brushType === "fill" || brushType === "pan" ? "solid" : brushType;
+
+      openStroke();
+      const pending = history.addLocalSegment(
+        drawingState.layerType,
+        brushSize,
+        validBrushType,
+        { r, g, b, a: opacity },
+        Math.round(x),
+        Math.round(y)
+      );
+      scheduleFlush(pending);
+    },
+    [canvasHistoryRef, localIdRef, drawingState.layerType, openStroke, scheduleFlush]
+  );
 
   // WebSocket callbacks for drawing events
   const callbacks = {
     onDrawLine: useCallback(
       (
-        fromX: number,
-        fromY: number,
+        _fromX: number,
+        _fromY: number,
         toX: number,
         toY: number,
         brushSize: number,
@@ -127,35 +195,10 @@ export const useDrawing = (
         b: number,
         opacity: number
       ) => {
-        if (userIdRef?.current) {
-          try {
-            // Filter out "fill" and "pan" which are not valid for line drawing protocol
-            const validBrushType: "solid" | "halftone" | "eraser" =
-              brushType === "fill" || brushType === "pan" ? "solid" : brushType;
-
-            openStroke();
-            const binaryMessage = encodeDrawLine(
-              userIdRef.current,
-              drawingState.layerType,
-              fromX,
-              fromY,
-              toX,
-              toY,
-              brushSize,
-              validBrushType,
-              r,
-              g,
-              b,
-              opacity,
-              "mouse"
-            );
-            dispatchLocalMessage(binaryMessage);
-          } catch (error) {
-            console.error("Failed to encode/send drawLine event:", error);
-          }
-        }
+        // The from-point is implied: each point continues the sender's stroke
+        addSegment(toX, toY, brushSize, brushType, r, g, b, opacity);
       },
-      [userIdRef, drawingState.layerType, dispatchLocalMessage, openStroke]
+      [addSegment]
     ),
 
     onDrawPoint: useCallback(
@@ -169,33 +212,9 @@ export const useDrawing = (
         b: number,
         opacity: number
       ) => {
-        if (userIdRef?.current) {
-          try {
-            // Filter out "fill" and "pan" which are not valid for point drawing protocol
-            const validBrushType: "solid" | "halftone" | "eraser" =
-              brushType === "fill" || brushType === "pan" ? "solid" : brushType;
-
-            openStroke();
-            const binaryMessage = encodeDrawPoint(
-              userIdRef.current,
-              drawingState.layerType,
-              x,
-              y,
-              brushSize,
-              validBrushType,
-              r,
-              g,
-              b,
-              opacity,
-              "mouse"
-            );
-            dispatchLocalMessage(binaryMessage);
-          } catch (error) {
-            console.error("Failed to encode/send drawPoint event:", error);
-          }
-        }
+        addSegment(x, y, brushSize, brushType, r, g, b, opacity);
       },
-      [userIdRef, drawingState.layerType, dispatchLocalMessage, openStroke]
+      [addSegment]
     ),
 
     onFill: useCallback(
@@ -207,47 +226,43 @@ export const useDrawing = (
         b: number,
         opacity: number
       ) => {
-        if (userIdRef?.current) {
-          try {
-            openStroke();
-            const binaryMessage = encodeFill(
-              userIdRef.current,
-              drawingState.layerType,
-              x,
-              y,
-              r,
-              g,
-              b,
-              opacity
-            );
-            dispatchLocalMessage(binaryMessage);
-            // A fill is a complete operation on its own
-            strokeOpenRef.current = false;
-          } catch (error) {
-            console.error("Failed to encode/send fill event:", error);
-          }
+        if (localIdRef?.current == null) return;
+        try {
+          openStroke();
+          const binaryMessage = encodeFill(
+            localIdRef.current,
+            drawingState.layerType,
+            x,
+            y,
+            r,
+            g,
+            b,
+            opacity
+          );
+          dispatchLocalMessage(binaryMessage);
+          // A fill is a complete operation on its own
+          strokeOpenRef.current = false;
+        } catch (error) {
+          console.error("Failed to encode/send fill event:", error);
         }
       },
-      [userIdRef, drawingState.layerType, dispatchLocalMessage, openStroke]
+      [localIdRef, drawingState.layerType, dispatchLocalMessage, openStroke]
     ),
 
     onPointerUp: useCallback(() => {
       strokeOpenRef.current = false;
-      if (userIdRef?.current && wsRef?.current?.readyState === WebSocket.OPEN) {
+      flushStroke();
+      if (
+        localIdRef?.current != null &&
+        wsRef?.current?.readyState === WebSocket.OPEN
+      ) {
         try {
-          const binaryMessage = encodePointerUp(
-            userIdRef.current,
-            0,
-            0,
-            0,
-            "mouse"
-          );
-          sendOrQueueMessage(binaryMessage);
+          sendOrQueueMessage(encodePointerUp(localIdRef.current));
         } catch (error) {
           console.error("Failed to encode/send pointerup event:", error);
         }
       }
-    }, [userIdRef, wsRef, sendOrQueueMessage]),
+    }, [localIdRef, wsRef, sendOrQueueMessage, flushStroke]),
   };
 
   // Drawing disabled when catching up or disconnected
@@ -274,23 +289,23 @@ export const useDrawing = (
   // server echoes it back in canonical order (Drawpile-style)
   const handleUndo = useCallback(() => {
     const history = canvasHistoryRef?.current;
-    if (!history || !history.canUndo() || !userIdRef?.current) return;
+    if (!history || !history.canUndo() || localIdRef?.current == null) return;
     try {
-      dispatchLocalMessage(encodeUndo(userIdRef.current, false));
+      dispatchLocalMessage(encodeUndo(localIdRef.current, false));
     } catch (error) {
       console.error("Failed to encode/send undo:", error);
     }
-  }, [canvasHistoryRef, userIdRef, dispatchLocalMessage]);
+  }, [canvasHistoryRef, localIdRef, dispatchLocalMessage]);
 
   const handleRedo = useCallback(() => {
     const history = canvasHistoryRef?.current;
-    if (!history || !history.canRedo() || !userIdRef?.current) return;
+    if (!history || !history.canRedo() || localIdRef?.current == null) return;
     try {
-      dispatchLocalMessage(encodeUndo(userIdRef.current, true));
+      dispatchLocalMessage(encodeUndo(localIdRef.current, true));
     } catch (error) {
       console.error("Failed to encode/send redo:", error);
     }
-  }, [canvasHistoryRef, userIdRef, dispatchLocalMessage]);
+  }, [canvasHistoryRef, localIdRef, dispatchLocalMessage]);
 
   return {
     ...baseDrawing,

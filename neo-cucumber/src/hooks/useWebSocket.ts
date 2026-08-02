@@ -23,6 +23,7 @@ interface WebSocketHookParams {
   localUserJoinTimeRef: React.RefObject<number>;
   canvasHistoryRef: React.RefObject<CanvasHistory | null>;
   participantsRef: React.RefObject<Map<string, Participant>>;
+  localIdRef: React.RefObject<number | null>;
   lastSeqRef: React.RefObject<number>;
   shouldConnectRef: React.RefObject<boolean>;
   catchupTimeoutRef: React.RefObject<number | null>;
@@ -56,6 +57,7 @@ export const useWebSocket = ({
   localUserJoinTimeRef,
   canvasHistoryRef,
   participantsRef,
+  localIdRef,
   lastSeqRef,
   shouldConnectRef,
   catchupTimeoutRef,
@@ -79,6 +81,10 @@ export const useWebSocket = ({
   // arrival order (the server's canonical order), even when handling involves
   // awaits like PNG decoding
   const processingChainRef = useRef<Promise<void>>(Promise.resolve());
+  // 1-byte session id -> display name (from LAYERS), for remote cursors
+  const idNamesRef = useRef<Map<number, string>>(new Map());
+  // uuid -> 1-byte session id, for presence events keyed by uuid
+  const uuidToIdRef = useRef<Map<string, number>>(new Map());
 
   // Keep handleResetRequest ref to avoid dependency issues
   const handleResetRequestRef = useRef(handleResetRequest);
@@ -165,6 +171,7 @@ export const useWebSocket = ({
       // scratch, so any local history state is stale
       canvasHistoryRef.current?.reset();
       lastSeqRef.current = 0;
+      localIdRef.current = null; // reassigned by WELCOME
 
       // Send initial join message to establish user presence
       try {
@@ -306,8 +313,7 @@ export const useWebSocket = ({
           // All canvas-affecting messages fold into the shared canonical
           // canvas history, which owns conflict resolution (local fork
           // reconciliation) and collaborative undo
-          case "drawLine":
-          case "drawPoint":
+          case "stroke":
           case "fill":
           case "snapshot":
           case "undoPoint":
@@ -318,18 +324,31 @@ export const useWebSocket = ({
 
             // Show remote users' cursors at their latest drawing position
             if (
-              "userId" in message &&
-              message.userId !== userIdRef.current &&
-              (message.type === "drawLine" ||
-                message.type === "drawPoint" ||
-                message.type === "fill")
+              message.userId !== localIdRef.current &&
+              (message.type === "stroke" || message.type === "fill")
             ) {
-              const participant = participantsRef.current?.get(message.userId);
-              const username = participant?.username || message.userId;
-              const x = message.type === "drawLine" ? message.toX : message.x;
-              const y = message.type === "drawLine" ? message.toY : message.y;
-              createOrUpdateCursor(message.userId, x, y, username);
+              const username =
+                idNamesRef.current.get(message.userId) || `#${message.userId}`;
+              const point =
+                message.type === "stroke"
+                  ? message.points[message.points.length - 1]
+                  : { x: message.x, y: message.y };
+              if (point) {
+                createOrUpdateCursor(
+                  String(message.userId),
+                  point.x,
+                  point.y,
+                  username
+                );
+              }
             }
+            break;
+          }
+
+          case "welcome": {
+            console.log("Assigned session user id:", message.sessionId);
+            localIdRef.current = message.sessionId;
+            canvasHistoryRef.current?.setLocalUserId(message.sessionId);
             break;
           }
 
@@ -340,8 +359,8 @@ export const useWebSocket = ({
 
           case "pointerup": {
             // Hide cursor for remote users when they stop drawing
-            if (message.userId !== userIdRef.current) {
-              hideCursor(message.userId);
+            if (message.userId !== localIdRef.current) {
+              hideCursor(String(message.userId));
             }
             break;
           }
@@ -374,7 +393,10 @@ export const useWebSocket = ({
             });
 
             // Hide cursor for the user (but keep participant in the list)
-            hideCursor(message.userId);
+            const sessionId = uuidToIdRef.current.get(message.userId);
+            if (sessionId !== undefined) {
+              hideCursor(String(sessionId));
+            }
             break;
           }
 
@@ -413,6 +435,16 @@ export const useWebSocket = ({
                 participant.username,
                 participant.joinTimestamp
               );
+              if (participant.sessionId > 0) {
+                idNamesRef.current.set(
+                  participant.sessionId,
+                  participant.username
+                );
+                uuidToIdRef.current.set(
+                  participant.userId,
+                  participant.sessionId
+                );
+              }
             }
             break;
           }
@@ -453,6 +485,7 @@ export const useWebSocket = ({
     getWebSocketUrl,
     canvasMeta,
     canvasHistoryRef,
+    localIdRef,
     lastSeqRef,
     setConnectionState,
     setIsCatchingUp,
