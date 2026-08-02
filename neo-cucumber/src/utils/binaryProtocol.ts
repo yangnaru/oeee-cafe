@@ -12,11 +12,16 @@ export const MSG_TYPE = {
   JOIN: 0x01,
   SNAPSHOT: 0x02,
   CHAT: 0x03,
-  SNAPSHOT_REQUEST: 0x05,
   LAYERS: 0x06,
   END_SESSION: 0x07,
   SESSION_EXPIRED: 0x08,
   LEAVE: 0x09,
+  // Wraps a history message with its canonical sequence number (server -> client)
+  SEQUENCED: 0x0a,
+  // Asks this client to upload a session reset (server -> client)
+  RESET_REQUEST: 0x0b,
+  // Announces a session reset upload: base seq + snapshot count (client -> server)
+  RESET_BEGIN: 0x0c,
 
   // Client messages (>= 0x10) - server just broadcasts
   DRAW_LINE: 0x10,
@@ -337,14 +342,34 @@ export function encodeChat(
 
 
 /**
- * Encode SNAPSHOT_REQUEST message (0x05)
- * Format: [0x05][timestamp:8]
+ * Encode RESET_BEGIN message (0x0C)
+ * Announces a session reset upload: the following `count` snapshot messages
+ * represent the full canvas state at canonical history position `lastSeq`.
+ * Format: [0x0C][lastSeq:8][count:2]
  */
-export function encodeSnapshotRequest(timestamp: number): ArrayBuffer {
-  const buffer = new Uint8Array(9);
-  buffer[0] = MSG_TYPE.SNAPSHOT_REQUEST;
-  writeUint64LE(buffer, 1, timestamp);
+export function encodeResetBegin(lastSeq: number, count: number): ArrayBuffer {
+  const buffer = new Uint8Array(11);
+  buffer[0] = MSG_TYPE.RESET_BEGIN;
+  writeUint64LE(buffer, 1, lastSeq);
+  writeUint16LE(buffer, 9, count);
   return buffer.buffer;
+}
+
+/**
+ * Unwrap a SEQUENCED envelope (0x0A): [0x0A][seq:8][payload]
+ * Returns null if the buffer is not a sequenced envelope.
+ */
+export function unwrapSequenced(
+  data: ArrayBuffer
+): { seq: number; payload: ArrayBuffer } | null {
+  const buffer = new Uint8Array(data);
+  if (buffer.length < 10 || buffer[0] !== MSG_TYPE.SEQUENCED) {
+    return null;
+  }
+  return {
+    seq: readUint64LE(buffer, 1),
+    payload: data.slice(9),
+  };
 }
 
 /**
@@ -455,8 +480,8 @@ export interface ChatMessage {
   message: string;
 }
 
-export interface SnapshotRequestMessage {
-  type: "snapshotRequest";
+export interface ResetRequestMessage {
+  type: "resetRequest";
   timestamp: number;
 }
 
@@ -492,7 +517,7 @@ export type DecodedMessage =
   | LayersMessage
   | SnapshotMessage
   | ChatMessage
-  | SnapshotRequestMessage
+  | ResetRequestMessage
   | DrawLineMessage
   | DrawPointMessage
   | FillMessage
@@ -600,10 +625,10 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       };
     }
 
-    case MSG_TYPE.SNAPSHOT_REQUEST:
+    case MSG_TYPE.RESET_REQUEST:
       if (buffer.length < 9) return null;
       return {
-        type: "snapshotRequest",
+        type: "resetRequest",
         timestamp: readUint64LE(buffer, 1),
       };
 

@@ -17,8 +17,22 @@ struct SessionContext<'a> {
     user_id: Uuid,
     room_uuid: Uuid,
     is_owner: bool,
+    owner_id: Uuid,
     db: &'a sqlx::Pool<sqlx::Postgres>,
     state: &'a AppState,
+}
+
+// Auto-reset threshold, in history messages: past this the server asks one
+// client to upload a session reset that replaces the accumulated history
+// (Drawpile's auto-reset). Keeps catch-up for late joiners fast.
+const RESET_THRESHOLD_MESSAGES: usize = 500;
+
+// An in-progress session reset upload from this connection: `count` snapshot
+// messages follow a RESET_BEGIN and replace all history up to `base_seq`.
+struct PendingReset {
+    base_seq: u64,
+    remaining: u16,
+    payloads: Vec<Vec<u8>>,
 }
 
 pub async fn websocket_collaborate_handler(
@@ -53,7 +67,7 @@ pub async fn handle_socket(
 
     let db = &state.db_pool;
 
-    let is_owner = match setup_connection(
+    let (is_owner, owner_id) = match setup_connection(
         db,
         room_uuid,
         user_id,
@@ -63,12 +77,68 @@ pub async fn handle_socket(
     )
     .await
     {
-        Ok(owner_status) => owner_status,
+        Ok(owner_info) => owner_info,
         Err(_) => return,
     };
 
-    // Send history to new connection
-    send_history_to_new_connection(&state, room_uuid, &mut sender, &connection_id).await;
+    // Subscribe to the room channel BEFORE replaying history so no message can
+    // fall into the gap between history replay and the live stream. Messages
+    // covered by both are deduplicated below via their sequence numbers.
+    let mut pubsub = match state
+        .redis_state
+        .create_room_subscriber(room_uuid, &state.config.redis_url)
+        .await
+    {
+        Ok(pubsub) => pubsub,
+        Err(e) => {
+            error!(
+                "Failed to create Redis subscriber for connection {}: {}",
+                connection_id, e
+            );
+            return;
+        }
+    };
+
+    let (redis_tx, mut redis_rx) = mpsc::unbounded_channel::<(Option<u64>, Vec<u8>)>();
+
+    let connection_id_clone = connection_id.clone();
+    let redis_task = tokio::spawn(async move {
+        loop {
+            match pubsub.on_message().next().await {
+                Some(msg) => {
+                    let payload: String = msg.get_payload().unwrap_or_default();
+                    match serde_json::from_str::<super::redis_state::RoomMessage>(&payload) {
+                        Ok(room_msg) => {
+                            if should_forward_to_connection(&room_msg, &connection_id_clone) {
+                                if redis_tx.send((room_msg.seq, room_msg.payload)).is_err() {
+                                    debug!(
+                                        "Redis message channel closed for connection {}",
+                                        connection_id_clone
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to deserialize Redis message: {}", e);
+                        }
+                    }
+                }
+                None => {
+                    debug!(
+                        "Redis Pub/Sub stream ended for connection {}",
+                        connection_id_clone
+                    );
+                    break;
+                }
+            }
+        }
+    });
+
+    // Send history to new connection, remembering the highest sequence number
+    // it contained so the live stream can skip messages history already covered
+    let max_history_seq =
+        send_history_to_new_connection(&state, room_uuid, &mut sender, &connection_id).await;
 
     info!(
         "User {} joined session {} as {}",
@@ -77,74 +147,15 @@ pub async fn handle_socket(
         if is_owner { "owner" } else { "participant" }
     );
 
-    // Create Redis Pub/Sub subscriber for this connection
-    let connection_id_clone = connection_id.clone();
-    let state_clone = state.clone();
-
-    // Create separate Redis subscriber task that will handle incoming Redis messages
-    // and send them through a channel to the main WebSocket sending loop
-    let (redis_tx, mut redis_rx) = mpsc::unbounded_channel::<Message>();
-
-    let redis_task = tokio::spawn(async move {
-        let redis_url = state_clone.config.redis_url.clone();
-        match state_clone
-            .redis_state
-            .create_room_subscriber(room_uuid, &redis_url)
-            .await
-        {
-            Ok(mut pubsub) => {
-                loop {
-                    match pubsub.on_message().next().await {
-                        Some(msg) => {
-                            let payload: String = msg.get_payload().unwrap_or_default();
-                            match serde_json::from_str::<super::redis_state::RoomMessage>(&payload)
-                            {
-                                Ok(room_msg) => {
-                                    // Allow chat messages to echo back to sender for confirmation
-                                    // Don't echo other message types back to sender (avoid duplicate drawing commands)
-                                    let should_send = room_msg.from_connection
-                                        != connection_id_clone
-                                        || (!room_msg.payload.is_empty()
-                                            && room_msg.payload[0] == 0x03); // Chat message type
-
-                                    if should_send {
-                                        let ws_message = Message::Binary(room_msg.payload);
-                                        if redis_tx.send(ws_message).is_err() {
-                                            debug!(
-                                                "Redis message channel closed for connection {}",
-                                                connection_id_clone
-                                            );
-                                            break;
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("Failed to deserialize Redis message: {}", e);
-                                }
-                            }
-                        }
-                        None => {
-                            debug!(
-                                "Redis Pub/Sub stream ended for connection {}",
-                                connection_id_clone
-                            );
-                            break;
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                error!(
-                    "Failed to create Redis subscriber for connection {}: {}",
-                    connection_id_clone, e
-                );
-            }
-        }
-    });
-
     // Handle outgoing messages (from Redis) in a separate task
     let outgoing_task = tokio::spawn(async move {
-        while let Some(msg) = redis_rx.recv().await {
+        while let Some((seq, payload)) = redis_rx.recv().await {
+            let msg = match seq {
+                // Skip sequenced messages already delivered via history replay
+                Some(s) if s <= max_history_seq => continue,
+                Some(s) => Message::Binary(wrap_sequenced(s, &payload)),
+                None => Message::Binary(payload),
+            };
             if sender.send(msg).await.is_err() {
                 debug!("WebSocket send failed");
                 break;
@@ -160,6 +171,7 @@ pub async fn handle_socket(
             user_id,
             room_uuid,
             is_owner,
+            owner_id,
             db,
             state: &state,
         },
@@ -187,7 +199,7 @@ async fn setup_connection(
     user_login_name: &str,
     connection_id: &str,
     state: &AppState,
-) -> Result<bool, ()> {
+) -> Result<(bool, Uuid), ()> {
     let session_info = match db::get_session_info(db, room_uuid).await {
         Ok(Some(info)) => info,
         Ok(None) => {
@@ -229,7 +241,7 @@ async fn setup_connection(
     // Atomically handle all connection management
     setup_connection_atomically(state, room_uuid, user_id, connection_id, user_login_name).await;
 
-    Ok(session_info.owner_id == user_id)
+    Ok((session_info.owner_id == user_id, session_info.owner_id))
 }
 
 async fn setup_connection_atomically(
@@ -281,29 +293,69 @@ async fn setup_connection_atomically(
     );
 }
 
+// Wraps a history message in the [0x0A][seq: 8 bytes LE][payload] envelope so
+// clients can track their position in the canonical history.
+fn wrap_sequenced(seq: u64, payload: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(9 + payload.len());
+    buf.push(messages::MessageType::Sequenced as u8);
+    buf.extend_from_slice(&seq.to_le_bytes());
+    buf.extend_from_slice(payload);
+    buf
+}
+
+fn should_forward_to_connection(
+    room_msg: &super::redis_state::RoomMessage,
+    connection_id: &str,
+) -> bool {
+    // Targeted messages (e.g. RESET_REQUEST) go to exactly one connection
+    if let Some(target) = &room_msg.target_connection {
+        return target == connection_id;
+    }
+    if room_msg.from_connection != connection_id {
+        return true;
+    }
+    // Echo the sender's own canvas-affecting messages (snapshot, draw, fill)
+    // back in canonical server order so the client can reconcile its local
+    // fork against them. Chat is echoed as delivery confirmation.
+    matches!(
+        room_msg.payload.first().copied(),
+        Some(0x02) | Some(0x03) | Some(0x10) | Some(0x11) | Some(0x12)
+    )
+}
+
+// Returns the highest sequence number contained in the replayed history,
+// or 0 if the history is empty or could not be retrieved.
 async fn send_history_to_new_connection(
     state: &AppState,
     room_uuid: Uuid,
     sender: &mut SplitSink<WebSocket, Message>,
     connection_id: &str,
-) {
+) -> u64 {
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
 
-    match redis_store.get_history(room_uuid).await {
+    let mut max_seq = 0;
+    match redis_store.get_history_with_seqs(room_uuid).await {
         Ok(history) => {
-            for stored_msg in history.iter() {
-                if sender.send(stored_msg.clone()).await.is_err() {
+            for (seq, stored_msg) in history.iter() {
+                let payload = match stored_msg {
+                    Message::Binary(data) => data.as_slice(),
+                    _ => continue,
+                };
+                let wrapped = Message::Binary(wrap_sequenced(*seq, payload));
+                if sender.send(wrapped).await.is_err() {
                     warn!(
                         "Failed to send stored message to new connection {}",
                         connection_id
                     );
                     break;
                 }
+                max_seq = max_seq.max(*seq);
             }
             debug!(
-                "Sent {} stored messages from Redis to new connection {}",
+                "Sent {} stored messages from Redis to new connection {} (max seq {})",
                 history.len(),
-                connection_id
+                connection_id,
+                max_seq
             );
         }
         Err(e) => {
@@ -313,12 +365,15 @@ async fn send_history_to_new_connection(
             );
         }
     }
+    max_seq
 }
 
 async fn handle_incoming_messages(
     receiver: &mut futures_util::stream::SplitStream<WebSocket>,
     ctx: SessionContext<'_>,
 ) {
+    let mut pending_reset: Option<PendingReset> = None;
+
     while let Some(msg) = receiver.next().await {
         let mut msg = match msg {
             Ok(msg) => msg,
@@ -336,6 +391,26 @@ async fn handle_incoming_messages(
         }
 
         if let Message::Binary(data) = &msg {
+            // Session reset upload: RESET_BEGIN announces the snapshots, then
+            // the snapshots are captured here — they replace history instead
+            // of being sequenced or broadcast (live clients already have this
+            // state; only late joiners replay the reset)
+            if let Some(reset) = pending_reset.as_mut() {
+                if data.first() == Some(&(messages::MessageType::Snapshot as u8)) {
+                    reset.payloads.push(data.clone());
+                    reset.remaining -= 1;
+                    if reset.remaining == 0 {
+                        let reset = pending_reset.take().expect("pending reset exists");
+                        finish_reset(&ctx, reset).await;
+                    }
+                    continue;
+                }
+            }
+            if data.first() == Some(&(messages::MessageType::ResetBegin as u8)) {
+                pending_reset = parse_reset_begin(data, &ctx);
+                continue;
+            }
+
             if !data.is_empty() {
                 let msg_type = data[0];
 
@@ -348,16 +423,179 @@ async fn handle_incoming_messages(
             }
         }
 
-        process_message_for_history_and_snapshots(
-            &msg,
-            ctx.room_uuid,
-            ctx.user_id,
-            ctx.connection_id,
-            ctx.state,
-        )
-        .await;
+        if messages::should_store_message(&msg) {
+            // History messages go through the atomic sequencer, which stores
+            // and broadcasts them in one step so every client observes the
+            // same canonical order (Drawpile-style server-side serialization)
+            if let Err(e) =
+                messages::sequence_and_broadcast(&msg, ctx.room_uuid, ctx.connection_id, ctx.state)
+                    .await
+            {
+                error!(
+                    "Failed to sequence message for room {}: {}",
+                    ctx.room_uuid, e
+                );
+                continue;
+            }
 
-        messages::broadcast_message(&msg, ctx.room_uuid, ctx.connection_id, ctx.state).await;
+            if let Err(e) = ctx.state.redis_state.update_room_activity(ctx.room_uuid).await {
+                error!("Failed to update room activity in Redis: {}", e);
+            }
+
+            maybe_request_reset(&ctx).await;
+        } else {
+            // Ephemeral messages (chat, join, leave) bypass the sequencer
+            messages::broadcast_message(&msg, ctx.room_uuid, ctx.connection_id, ctx.state).await;
+        }
+    }
+
+    // If this connection was mid-reset, release the flag so another client
+    // can be asked without waiting for the TTL
+    if pending_reset.is_some() {
+        if let Err(e) = ctx.state.redis_state.clear_reset_pending(ctx.room_uuid).await {
+            error!(
+                "Failed to clear reset-pending flag for room {}: {}",
+                ctx.room_uuid, e
+            );
+        }
+    }
+}
+
+fn parse_reset_begin(data: &[u8], ctx: &SessionContext<'_>) -> Option<PendingReset> {
+    if data.len() < 11 {
+        warn!(
+            "Malformed RESET_BEGIN from connection {} in room {}",
+            ctx.connection_id, ctx.room_uuid
+        );
+        return None;
+    }
+    let base_seq = utils::read_u64_le(data, 1);
+    let count = u16::from_le_bytes([data[9], data[10]]);
+    // 2 layers per participant; anything larger than this is malformed
+    if count == 0 || count > 64 {
+        warn!(
+            "Rejecting RESET_BEGIN with snapshot count {} from connection {} in room {}",
+            count, ctx.connection_id, ctx.room_uuid
+        );
+        return None;
+    }
+    info!(
+        "Session reset upload started for room {} at seq {} ({} snapshots)",
+        ctx.room_uuid, base_seq, count
+    );
+    Some(PendingReset {
+        base_seq,
+        remaining: count,
+        payloads: Vec::with_capacity(count as usize),
+    })
+}
+
+async fn finish_reset(ctx: &SessionContext<'_>, reset: PendingReset) {
+    let redis_store = redis_messages::RedisMessageStore::new(ctx.state.redis_pool.clone());
+    match redis_store
+        .apply_reset(ctx.room_uuid, reset.base_seq, &reset.payloads)
+        .await
+    {
+        Ok(()) => {
+            info!(
+                "Session reset applied for room {} at seq {} ({} snapshots)",
+                ctx.room_uuid,
+                reset.base_seq,
+                reset.payloads.len()
+            );
+        }
+        Err(e) => {
+            error!(
+                "Failed to apply session reset for room {}: {}",
+                ctx.room_uuid, e
+            );
+        }
+    }
+
+    if let Err(e) = ctx.state.redis_state.clear_reset_pending(ctx.room_uuid).await {
+        error!(
+            "Failed to clear reset-pending flag for room {}: {}",
+            ctx.room_uuid, e
+        );
+    }
+}
+
+async fn maybe_request_reset(ctx: &SessionContext<'_>) {
+    let redis_store = redis_messages::RedisMessageStore::new(ctx.state.redis_pool.clone());
+    let history_len = match redis_store.history_len(ctx.room_uuid).await {
+        Ok(len) => len,
+        Err(e) => {
+            error!(
+                "Failed to get history length for room {}: {}",
+                ctx.room_uuid, e
+            );
+            return;
+        }
+    };
+    if history_len < RESET_THRESHOLD_MESSAGES {
+        return;
+    }
+
+    match ctx
+        .state
+        .redis_state
+        .try_acquire_reset_pending(ctx.room_uuid)
+        .await
+    {
+        Ok(true) => {}
+        Ok(false) => return, // a reset is already in flight
+        Err(e) => {
+            error!(
+                "Failed to acquire reset-pending flag for room {}: {}",
+                ctx.room_uuid, e
+            );
+            return;
+        }
+    }
+
+    // Choose the reset client: prefer the session owner's connection, falling
+    // back to the earliest-connected one (Drawpile prefers operators)
+    let connections = ctx
+        .state
+        .redis_state
+        .get_room_connections(ctx.room_uuid)
+        .await
+        .unwrap_or_default();
+    let mut target: Option<String> = None;
+    let mut earliest: Option<(u64, String)> = None;
+    for conn_id in connections {
+        if let Ok(Some(info)) = ctx.state.redis_state.get_connection_info(&conn_id).await {
+            if info.user_id == ctx.owner_id {
+                target = Some(conn_id);
+                break;
+            }
+            if earliest
+                .as_ref()
+                .map_or(true, |(t, _)| info.connected_at < *t)
+            {
+                earliest = Some((info.connected_at, conn_id));
+            }
+        }
+    }
+    let target = target.or_else(|| earliest.map(|(_, conn_id)| conn_id));
+
+    match target {
+        Some(conn_id) => {
+            info!(
+                "History for room {} reached {} messages - requesting session reset",
+                ctx.room_uuid, history_len
+            );
+            messages::send_reset_request(ctx.room_uuid, &conn_id, ctx.state).await;
+        }
+        None => {
+            // No live connection can serve the reset; release the flag
+            if let Err(e) = ctx.state.redis_state.clear_reset_pending(ctx.room_uuid).await {
+                error!(
+                    "Failed to clear reset-pending flag for room {}: {}",
+                    ctx.room_uuid, e
+                );
+            }
+        }
     }
 }
 
@@ -388,10 +626,8 @@ async fn process_server_message(
             Some(msg.clone())
         }
         0x02 => {
-            if let Err(e) = messages::handle_snapshot_message(data, ctx.room_uuid, ctx.state).await
-            {
-                error!("Error handling snapshot message: {}", e);
-            }
+            // Snapshot (undo/redo sync): no server-side processing needed,
+            // it is sequenced and broadcast like any other history message
             Some(msg.clone())
         }
         0x03 => messages::handle_chat_message(data, ctx.user_id, ctx.user_login_name),
@@ -422,139 +658,6 @@ async fn process_server_message(
             Some(msg.clone())
         }
     }
-}
-
-async fn process_message_for_history_and_snapshots(
-    msg: &Message,
-    room_uuid: Uuid,
-    user_id: Uuid,
-    connection_id: &str,
-    state: &AppState,
-) {
-    let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
-
-    if messages::should_store_message(msg) {
-        debug!(
-            "Storing message to Redis for room {} (connection {}): message type = 0x{:02x}",
-            room_uuid,
-            connection_id,
-            if let Message::Binary(data) = msg {
-                if data.is_empty() {
-                    0x00
-                } else {
-                    data[0]
-                }
-            } else {
-                0xFF
-            }
-        );
-
-        // Store message in Redis
-        if let Err(e) = redis_store.store_message(room_uuid, msg).await {
-            error!(
-                "Failed to store message in Redis for room {}: {}",
-                room_uuid, e
-            );
-        } else {
-            debug!(
-                "Successfully stored message in Redis for room {}",
-                room_uuid
-            );
-
-            // Update last activity cache in Redis
-            if let Err(e) = state.redis_state.update_room_activity(room_uuid).await {
-                error!("Failed to update room activity in Redis: {}", e);
-            }
-
-            // Refresh TTL for the room
-            if let Err(e) = redis_store.refresh_ttl(room_uuid).await {
-                error!("Failed to refresh TTL in Redis: {}", e);
-            }
-        }
-    } else {
-        debug!(
-            "Skipping message storage for room {} (connection {}): message type = 0x{:02x} (filtered out)",
-            room_uuid, connection_id,
-            if let Message::Binary(data) = msg {
-                if data.is_empty() { 0x00 } else { data[0] }
-            } else { 0xFF }
-        );
-    }
-
-    // Get current history from Redis to count messages
-    let (history_count, history_bytes) = match redis_store.get_history(room_uuid).await {
-        Ok(history) => {
-            let total_bytes = history
-                .iter()
-                .map(|m| match m {
-                    Message::Text(text) => text.len(),
-                    Message::Binary(data) => data.len(),
-                    _ => 0,
-                })
-                .sum::<usize>();
-            (history.len(), total_bytes)
-        }
-        Err(e) => {
-            error!("Failed to get history from Redis: {}", e);
-            (0, 0)
-        }
-    };
-
-    // Count user messages from Redis history
-    let user_message_counts = match count_user_messages_from_redis(&redis_store, room_uuid).await {
-        Ok(counts) => counts,
-        Err(e) => {
-            error!("Failed to count user messages from Redis: {}", e);
-            std::collections::HashMap::new()
-        }
-    };
-
-    let history_mb = history_bytes as f64 / 1_048_576.0;
-    debug!(
-        "Received message from connection {} in room {} (Redis history: {} messages, {:.2} MB, user {}: {} messages)",
-        connection_id,
-        room_uuid,
-        history_count,
-        history_mb,
-        user_id,
-        user_message_counts.get(&user_id).unwrap_or(&0)
-    );
-
-    messages::handle_snapshot_requests(&user_message_counts, room_uuid, state).await;
-}
-
-async fn count_user_messages_from_redis(
-    redis_store: &redis_messages::RedisMessageStore,
-    room_uuid: Uuid,
-) -> Result<std::collections::HashMap<Uuid, usize>, Box<dyn std::error::Error + Send + Sync>> {
-    use std::collections::HashMap;
-
-    let history = redis_store.get_history(room_uuid).await?;
-    let mut user_message_counts: HashMap<Uuid, usize> = HashMap::new();
-
-    for stored_msg in history.iter() {
-        if let Message::Binary(stored_data) = stored_msg {
-            if stored_data.len() >= 17 {
-                let msg_type = stored_data[0];
-
-                // Count user messages for snapshot logic (exclude ephemeral and system messages)
-                if messages::is_client_message(msg_type)
-                    || (messages::is_server_message(msg_type)
-                        && msg_type != 0x01 // Join (ephemeral)
-                        && msg_type != 0x05 // SnapshotRequest
-                        && msg_type != 0x06 // Layers  
-                        && msg_type != 0x09)
-                // Leave (ephemeral)
-                {
-                    if let Ok(msg_user_id) = utils::bytes_to_uuid(&stored_data[1..17]) {
-                        *user_message_counts.entry(msg_user_id).or_insert(0) += 1;
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(user_message_counts)
 }
 
 async fn cleanup_connection(
@@ -632,22 +735,6 @@ async fn cleanup_connection(
                     // 1. Session is explicitly ended (END_SESSION)
                     // 2. Session is inactive for extended period (cleanup task)
                     // 3. Messages expire via TTL
-
-                    // Clean up Redis snapshot request trackers for this room
-                    match state.redis_state.cleanup_snapshot_requests(room_uuid).await {
-                        Ok(removed_count) => {
-                            debug!(
-                                "Cleaned up room {} and removed {} snapshot trackers from Redis",
-                                room_uuid, removed_count
-                            );
-                        }
-                        Err(e) => {
-                            error!(
-                                "Failed to cleanup snapshot requests for room {}: {}",
-                                room_uuid, e
-                            );
-                        }
-                    }
 
                     // Clean up room presence and activity
                     if let Err(e) = state.redis_state.cleanup_room_state(room_uuid).await {

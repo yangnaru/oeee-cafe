@@ -196,6 +196,8 @@ async fn cleanup_ended_sessions(
                     .duration_since(std::time::UNIX_EPOCH)
                     .expect("System time is before UNIX_EPOCH")
                     .as_secs(),
+                seq: None,
+                target_connection: None,
             };
 
             if let Err(e) = state
@@ -320,6 +322,8 @@ async fn cleanup_inactive_sessions(
                     .duration_since(std::time::UNIX_EPOCH)
                     .expect("System time is before UNIX_EPOCH")
                     .as_secs(),
+                seq: None,
+                target_connection: None,
             };
 
             if let Err(e) = state

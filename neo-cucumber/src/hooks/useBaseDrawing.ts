@@ -181,7 +181,10 @@ export const useBaseDrawing = (
 
     const targetLayer = drawingEngineRef.current.layers[currentDrawingStateRef.current.layerType];
 
+    // Callbacks run before the local apply so the collaboration layer can
+    // capture the pre-stroke state for rollback before the canvas mutates
     if (operation === "fill") {
+      callbacks?.onFill?.(Math.floor(coords.x), Math.floor(coords.y), r, g, b, effectiveOpacity);
       drawingEngineRef.current.doFloodFill(
         targetLayer,
         Math.floor(coords.x),
@@ -191,21 +194,7 @@ export const useBaseDrawing = (
         b,
         effectiveOpacity
       );
-      callbacks?.onFill?.(Math.floor(coords.x), Math.floor(coords.y), r, g, b, effectiveOpacity);
     } else if (operation === "point") {
-      drawingEngineRef.current.drawLine(
-        targetLayer,
-        coords.x,
-        coords.y,
-        coords.x,
-        coords.y,
-        currentDrawingStateRef.current.brushSize,
-        currentDrawingStateRef.current.brushType,
-        r,
-        g,
-        b,
-        effectiveOpacity
-      );
       callbacks?.onDrawPoint?.(
         coords.x,
         coords.y,
@@ -216,9 +205,21 @@ export const useBaseDrawing = (
         b,
         effectiveOpacity
       );
-    } else if (operation === "line" && coords.prevX !== undefined && coords.prevY !== undefined) {
       drawingEngineRef.current.drawLine(
         targetLayer,
+        coords.x,
+        coords.y,
+        coords.x,
+        coords.y,
+        currentDrawingStateRef.current.brushSize,
+        currentDrawingStateRef.current.brushType,
+        r,
+        g,
+        b,
+        effectiveOpacity
+      );
+    } else if (operation === "line" && coords.prevX !== undefined && coords.prevY !== undefined) {
+      callbacks?.onDrawLine?.(
         coords.prevX,
         coords.prevY,
         coords.x,
@@ -230,7 +231,8 @@ export const useBaseDrawing = (
         b,
         effectiveOpacity
       );
-      callbacks?.onDrawLine?.(
+      drawingEngineRef.current.drawLine(
+        targetLayer,
         coords.prevX,
         coords.prevY,
         coords.x,

@@ -2,7 +2,6 @@ use super::redis_messages;
 use crate::web::state::AppState;
 use axum::extract::ws::Message;
 use sqlx::{Pool, Postgres};
-use std::collections::HashMap;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -28,8 +27,6 @@ fn get_current_timestamp_ms() -> u64 {
         .as_millis() as u64
 }
 
-const MAX_USER_MESSAGES: usize = 100;
-
 // Message type constants matching neo-cucumber protocol
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,11 +34,16 @@ pub enum MessageType {
     Join = 0x01,
     Snapshot = 0x02,
     Chat = 0x03,
-    SnapshotRequest = 0x05,
     Layers = 0x06,
     EndSession = 0x07,
     SessionExpired = 0x08,
     Leave = 0x09,
+    // Wraps a history message with its canonical sequence number (server -> client)
+    Sequenced = 0x0A,
+    // Asks one chosen client to upload a session reset (server -> client)
+    ResetRequest = 0x0B,
+    // Announces a session reset upload: base seq + snapshot count (client -> server)
+    ResetBegin = 0x0C,
 }
 
 // Message structures
@@ -66,8 +68,7 @@ pub struct ChatMessage {
 }
 
 #[derive(Debug, Clone)]
-pub struct SnapshotRequestMessage {
-    pub user_id: Uuid,
+pub struct ResetRequestMessage {
     pub timestamp: u64,
 }
 
@@ -153,11 +154,10 @@ impl ChatMessage {
     }
 }
 
-impl SnapshotRequestMessage {
+impl ResetRequestMessage {
     pub fn serialize(&self) -> Vec<u8> {
-        let mut buffer = Vec::with_capacity(1 + 16 + 8);
-        buffer.push(MessageType::SnapshotRequest as u8);
-        buffer.extend_from_slice(self.user_id.as_bytes());
+        let mut buffer = Vec::with_capacity(1 + 8);
+        buffer.push(MessageType::ResetRequest as u8);
         buffer.extend_from_slice(&self.timestamp.to_le_bytes());
 
         buffer
@@ -190,11 +190,13 @@ pub fn parse_message_type(data: &[u8]) -> Option<MessageType> {
         0x01 => Some(MessageType::Join),
         0x02 => Some(MessageType::Snapshot),
         0x03 => Some(MessageType::Chat),
-        0x05 => Some(MessageType::SnapshotRequest),
         0x06 => Some(MessageType::Layers),
         0x07 => Some(MessageType::EndSession),
         0x08 => Some(MessageType::SessionExpired),
         0x09 => Some(MessageType::Leave),
+        0x0A => Some(MessageType::Sequenced),
+        0x0B => Some(MessageType::ResetRequest),
+        0x0C => Some(MessageType::ResetBegin),
         _ => None,
     }
 }
@@ -304,6 +306,8 @@ async fn broadcast_layers(_db: &Pool<Postgres>, room_uuid: Uuid, state: &AppStat
                     .duration_since(std::time::UNIX_EPOCH)
                     .expect("System time is before UNIX_EPOCH")
                     .as_secs(),
+                seq: None,
+                target_connection: None,
             };
 
             match state
@@ -341,40 +345,6 @@ async fn broadcast_layers(_db: &Pool<Postgres>, room_uuid: Uuid, state: &AppStat
 // Note: send_existing_participants_to_new_user function is not needed
 // JOIN and LEAVE messages are ephemeral (not stored in history)
 // Current participants are communicated via JOIN_RESPONSE messages
-
-pub async fn handle_snapshot_message(
-    data: &[u8],
-    room_uuid: Uuid,
-    state: &AppState,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    if data.len() < 22 {
-        return Ok(());
-    }
-
-    let snapshot_user = bytes_to_uuid(&data[1..17])?;
-    let snapshot_layer = data[17];
-
-    debug!(
-        "Processing snapshot from user {} for layer {} in room {}",
-        snapshot_user, snapshot_layer, room_uuid
-    );
-
-    // Use Redis to handle the message filtering
-    let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
-    redis_store
-        .remove_obsolete_messages(room_uuid, snapshot_user, snapshot_layer)
-        .await?;
-
-    if let Err(e) = state
-        .redis_state
-        .set_snapshot_requested(room_uuid, snapshot_user, false)
-        .await
-    {
-        error!("Failed to clear snapshot request in Redis: {}", e);
-    }
-
-    Ok(())
-}
 
 pub fn handle_chat_message(data: &[u8], user_id: Uuid, user_login_name: &str) -> Option<Message> {
     if data.len() < 27 {
@@ -461,6 +431,8 @@ pub async fn handle_end_session_message(data: &[u8], ctx: EndSessionContext<'_>)
                                 .duration_since(std::time::UNIX_EPOCH)
                                 .expect("System time is before UNIX_EPOCH")
                                 .as_secs(),
+                            seq: None,
+                            target_connection: None,
                         };
 
                         match ctx
@@ -513,55 +485,26 @@ pub fn should_store_message(msg: &Message) -> bool {
     }
 }
 
-// This function is now replaced by count_user_messages_from_redis in websocket.rs
-// but kept here for reference and potential fallback use
-
-pub async fn handle_snapshot_requests(
-    user_message_counts: &HashMap<Uuid, usize>,
-    room_uuid: Uuid,
-    state: &AppState,
-) {
-    for (user_id_to_request, &message_count) in user_message_counts.iter() {
-        if message_count > MAX_USER_MESSAGES {
-            let should_send_snapshot = !state
-                .redis_state
-                .is_snapshot_requested(room_uuid, *user_id_to_request)
-                .await
-                .unwrap_or(false);
-
-            if should_send_snapshot {
-                send_snapshot_request(room_uuid, state, user_id_to_request, message_count).await;
-                break;
-            }
-        }
-    }
-}
-
-async fn send_snapshot_request(
-    room_uuid: Uuid,
-    state: &AppState,
-    user_id_to_request: &Uuid,
-    message_count: usize,
-) {
-    let timestamp = get_current_timestamp_ms();
-
-    let snapshot_request = SnapshotRequestMessage {
-        user_id: *user_id_to_request,
-        timestamp,
+/// Sends a RESET_REQUEST to a single chosen connection, asking it to upload a
+/// session reset (Drawpile-style: one client provides the canvas state that
+/// replaces the accumulated history).
+pub async fn send_reset_request(room_uuid: Uuid, target_connection: &str, state: &AppState) {
+    let reset_request = ResetRequestMessage {
+        timestamp: get_current_timestamp_ms(),
     };
 
-    // Use Redis pub/sub to send snapshot request to all connections
-    // Only the connections owned by user_id_to_request will respond
     let room_message = super::redis_state::RoomMessage {
         from_connection: "system".to_string(),
-        user_id: *user_id_to_request,
+        user_id: Uuid::nil(),
         user_login_name: "system".to_string(),
-        message_type: "snapshot_request".to_string(),
-        payload: snapshot_request.serialize(),
+        message_type: "reset_request".to_string(),
+        payload: reset_request.serialize(),
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("System time is before UNIX_EPOCH")
             .as_secs(),
+        seq: None,
+        target_connection: Some(target_connection.to_string()),
     };
 
     match state
@@ -569,36 +512,23 @@ async fn send_snapshot_request(
         .publish_message(room_uuid, &room_message)
         .await
     {
-        Ok(subscriber_count) => {
-            if let Err(e) = state
-                .redis_state
-                .set_snapshot_requested(room_uuid, *user_id_to_request, true)
-                .await
-            {
-                error!("Failed to set snapshot request in Redis: {}", e);
-            }
-            debug!(
-                "Sent snapshot request to {} subscribers targeting user {} with {} messages in room {}",
-                subscriber_count, user_id_to_request, message_count, room_uuid
+        Ok(_) => {
+            info!(
+                "Sent reset request to connection {} in room {}",
+                target_connection, room_uuid
             );
         }
         Err(e) => {
             error!(
-                "Failed to publish snapshot request for room {}: {}",
+                "Failed to publish reset request for room {}: {}",
                 room_uuid, e
             );
         }
     }
 }
 
-pub async fn broadcast_message(
-    msg: &Message,
-    room_uuid: Uuid,
-    connection_id: &str,
-    state: &AppState,
-) {
-    // Convert WebSocket message to Redis room message
-    let room_message = super::redis_state::RoomMessage {
+fn to_room_message(msg: &Message, connection_id: &str) -> super::redis_state::RoomMessage {
+    super::redis_state::RoomMessage {
         from_connection: connection_id.to_string(),
         user_id: Uuid::nil(), // We'll get this from Redis connection info if needed
         user_login_name: String::new(), // We'll get this from Redis connection info if needed
@@ -612,7 +542,19 @@ pub async fn broadcast_message(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64,
-    };
+        seq: None,
+        target_connection: None,
+    }
+}
+
+/// Broadcasts an ephemeral (non-history) message via plain Pub/Sub.
+pub async fn broadcast_message(
+    msg: &Message,
+    room_uuid: Uuid,
+    connection_id: &str,
+    state: &AppState,
+) {
+    let room_message = to_room_message(msg, connection_id);
 
     // Publish to Redis Pub/Sub - this will reach all server instances
     match state
@@ -633,6 +575,31 @@ pub async fn broadcast_message(
             );
         }
     }
+}
+
+/// Atomically appends a history message to the room's canonical sequence and
+/// broadcasts it, so every client (including late joiners replaying history)
+/// observes the same server-authoritative message order.
+pub async fn sequence_and_broadcast(
+    msg: &Message,
+    room_uuid: Uuid,
+    connection_id: &str,
+    state: &AppState,
+) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+    let room_message = to_room_message(msg, connection_id);
+    let envelope_json = serde_json::to_string(&room_message)?;
+
+    let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
+    let channel = state.redis_state.get_room_channel(room_uuid);
+    let seq = redis_store
+        .sequence_and_publish(room_uuid, &room_message.payload, &envelope_json, &channel)
+        .await?;
+
+    debug!(
+        "Sequenced and broadcast message {} for room {}",
+        seq, room_uuid
+    );
+    Ok(seq)
 }
 
 // This function is now handled by Redis automatic limits and TTL
@@ -684,6 +651,8 @@ pub async fn send_leave_message(
             .duration_since(std::time::UNIX_EPOCH)
             .expect("System time is before UNIX_EPOCH")
             .as_secs(),
+        seq: None,
+        target_connection: None,
     };
 
     match state

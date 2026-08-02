@@ -8,6 +8,8 @@ import {
   encodeFill,
   encodePointerUp,
 } from "../utils/binaryProtocol";
+import { type LocalFork } from "../utils/localFork";
+import { type DrawingEngine } from "../DrawingEngine";
 
 export const useDrawing = (
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
@@ -22,13 +24,11 @@ export const useDrawing = (
   onDrawingChange?: () => void,
   isCatchingUp: boolean = false,
   connectionState: "connecting" | "connected" | "disconnected" = "connected",
-  containerRef?: React.RefObject<HTMLDivElement | null>
+  containerRef?: React.RefObject<HTMLDivElement | null>,
+  localForkRef?: React.RefObject<LocalFork | null>
 ) => {
   // WebSocket-specific state
   const outboundMessageQueue = useRef<ArrayBuffer[]>([]);
-  const isSnapshotInProgress = useRef(false);
-  const pendingSnapshotRequestRef = useRef(false);
-  const sendSnapshotRef = useRef<(() => Promise<void>) | undefined>(undefined);
   const isCatchingUpRef = useRef(isCatchingUp);
   const connectionStateRef = useRef(connectionState);
 
@@ -85,16 +85,12 @@ export const useDrawing = (
 
   const sendOrQueueMessage = useCallback((message: ArrayBuffer) => {
     console.log("sendOrQueueMessage called:", {
-      isSnapshotInProgress: isSnapshotInProgress.current,
       hasWsRef: !!wsRef?.current,
       wsReadyState: wsRef?.current?.readyState,
       queueLength: outboundMessageQueue.current.length,
     });
 
-    if (isSnapshotInProgress.current) {
-      console.log("Queuing message - snapshot in progress");
-      queueMessage(message);
-    } else if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
+    if (wsRef?.current && wsRef.current.readyState === WebSocket.OPEN) {
       console.log("Sending message immediately via WebSocket");
       try {
         wsRef.current.send(message);
@@ -108,6 +104,26 @@ export const useDrawing = (
       queueMessage(message);
     }
   }, [wsRef, queueMessage]);
+
+  // Engine ref for fork savepoint capture (populated after useBaseDrawing runs)
+  const forkEngineRef = useRef<DrawingEngine | null>(null);
+
+  // Queues a sent message in the local fork so it can be matched against the
+  // server's echo. Must be called BEFORE the message is applied to the local
+  // layers so the savepoint captures the pre-mutation state.
+  const pushToFork = useCallback(
+    (message: ArrayBuffer) => {
+      const fork = localForkRef?.current;
+      const engine = forkEngineRef.current;
+      if (!fork || !engine) return;
+      fork.beginLocalChange(() => ({
+        foreground: new Uint8ClampedArray(engine.layers.foreground),
+        background: new Uint8ClampedArray(engine.layers.background),
+      }));
+      fork.push(message);
+    },
+    [localForkRef]
+  );
 
   // WebSocket callbacks for drawing events
   const callbacks = {
@@ -144,12 +160,13 @@ export const useDrawing = (
             opacity,
             "mouse"
           );
+          pushToFork(binaryMessage);
           sendOrQueueMessage(binaryMessage);
         } catch (error) {
           console.error("Failed to encode/send drawLine event:", error);
         }
       }
-    }, [userIdRef, drawingState.layerType, sendOrQueueMessage]),
+    }, [userIdRef, drawingState.layerType, sendOrQueueMessage, pushToFork]),
 
     onDrawPoint: useCallback((
       x: number,
@@ -180,12 +197,13 @@ export const useDrawing = (
             opacity,
             "mouse"
           );
+          pushToFork(binaryMessage);
           sendOrQueueMessage(binaryMessage);
         } catch (error) {
           console.error("Failed to encode/send drawPoint event:", error);
         }
       }
-    }, [userIdRef, drawingState.layerType, sendOrQueueMessage]),
+    }, [userIdRef, drawingState.layerType, sendOrQueueMessage, pushToFork]),
 
     onFill: useCallback((
       x: number,
@@ -207,12 +225,13 @@ export const useDrawing = (
             b,
             opacity
           );
+          pushToFork(binaryMessage);
           sendOrQueueMessage(binaryMessage);
         } catch (error) {
           console.error("Failed to encode/send fill event:", error);
         }
       }
-    }, [userIdRef, drawingState.layerType, sendOrQueueMessage]),
+    }, [userIdRef, drawingState.layerType, sendOrQueueMessage, pushToFork]),
 
     onPointerUp: useCallback(() => {
       if (userIdRef?.current && wsRef?.current?.readyState === WebSocket.OPEN) {
@@ -222,12 +241,6 @@ export const useDrawing = (
         } catch (error) {
           console.error("Failed to encode/send pointerup event:", error);
         }
-      }
-
-      // Check for pending snapshot request
-      if (pendingSnapshotRequestRef.current && sendSnapshotRef.current) {
-        sendSnapshotRef.current();
-        pendingSnapshotRequestRef.current = false;
       }
     }, [userIdRef, wsRef, sendOrQueueMessage]),
   };
@@ -250,12 +263,49 @@ export const useDrawing = (
     callbacks
   );
 
-  // Enhanced undo with WebSocket sync
-  const handleUndo = useCallback(async () => {
-    const previousState = baseDrawing.history.undo();
-    if (previousState && baseDrawing.drawingEngine) {
-      baseDrawing.drawingEngine.layers.foreground.set(previousState.foreground);
-      baseDrawing.drawingEngine.layers.background.set(previousState.background);
+  // Keep the fork's engine reference in sync
+  useEffect(() => {
+    forkEngineRef.current = baseDrawing.drawingEngine;
+  }, [baseDrawing.drawingEngine]);
+
+  // Applies a history state to the layers and syncs it as snapshot messages.
+  // Snapshots are encoded first so that the savepoint capture, layer mutation,
+  // fork push, and send happen in one synchronous block with no message
+  // processing interleaved between them.
+  const applyHistoryState = useCallback(
+    async (state: { foreground: Uint8ClampedArray; background: Uint8ClampedArray }) => {
+      if (!baseDrawing.drawingEngine) return;
+
+      const canSync =
+        wsRef?.current &&
+        wsRef.current.readyState === WebSocket.OPEN &&
+        userIdRef?.current &&
+        canvasWidth &&
+        canvasHeight;
+
+      let fgMessage: ArrayBuffer | null = null;
+      let bgMessage: ArrayBuffer | null = null;
+      if (canSync) {
+        try {
+          const fgBlob = await layerToPngBlob(state.foreground, canvasWidth, canvasHeight);
+          const bgBlob = await layerToPngBlob(state.background, canvasWidth, canvasHeight);
+
+          fgMessage = await encodeSnapshot(userIdRef.current!, "foreground", fgBlob);
+          bgMessage = await encodeSnapshot(userIdRef.current!, "background", bgBlob);
+        } catch (error) {
+          console.error("Failed to encode undo/redo snapshots:", error);
+          fgMessage = null;
+          bgMessage = null;
+        }
+      }
+
+      if (fgMessage && bgMessage) {
+        pushToFork(fgMessage);
+        pushToFork(bgMessage);
+      }
+
+      baseDrawing.drawingEngine.layers.foreground.set(state.foreground);
+      baseDrawing.drawingEngine.layers.background.set(state.background);
 
       baseDrawing.drawingEngine.queueLayerUpdate("foreground");
       baseDrawing.drawingEngine.queueLayerUpdate("background");
@@ -263,108 +313,29 @@ export const useDrawing = (
       onDrawingChange?.();
       onHistoryChange?.(baseDrawing.history.canUndo(), baseDrawing.history.canRedo());
 
-      // Send snapshots over WebSocket
-      if (
-        wsRef?.current &&
-        wsRef.current.readyState === WebSocket.OPEN &&
-        userIdRef?.current &&
-        canvasWidth &&
-        canvasHeight
-      ) {
-        try {
-          const fgBlob = await layerToPngBlob(previousState.foreground, canvasWidth, canvasHeight);
-          const bgBlob = await layerToPngBlob(previousState.background, canvasWidth, canvasHeight);
-
-          const fgMessage = await encodeSnapshot(userIdRef.current, "foreground", fgBlob);
-          const bgMessage = await encodeSnapshot(userIdRef.current, "background", bgBlob);
-
-          sendOrQueueMessage(fgMessage);
-          sendOrQueueMessage(bgMessage);
-        } catch (error) {
-          console.error("Failed to send undo snapshots:", error);
-        }
+      if (fgMessage && bgMessage) {
+        sendOrQueueMessage(fgMessage);
+        sendOrQueueMessage(bgMessage);
       }
+    },
+    [baseDrawing, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange, onHistoryChange, sendOrQueueMessage, pushToFork]
+  );
+
+  // Enhanced undo with WebSocket sync
+  const handleUndo = useCallback(async () => {
+    const previousState = baseDrawing.history.undo();
+    if (previousState) {
+      await applyHistoryState(previousState);
     }
-  }, [baseDrawing, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange, onHistoryChange, sendOrQueueMessage]);
+  }, [baseDrawing.history, applyHistoryState]);
 
   // Enhanced redo with WebSocket sync
   const handleRedo = useCallback(async () => {
     const nextState = baseDrawing.history.redo();
-    if (nextState && baseDrawing.drawingEngine) {
-      baseDrawing.drawingEngine.layers.foreground.set(nextState.foreground);
-      baseDrawing.drawingEngine.layers.background.set(nextState.background);
-
-      baseDrawing.drawingEngine.queueLayerUpdate("foreground");
-      baseDrawing.drawingEngine.queueLayerUpdate("background");
-
-      onDrawingChange?.();
-      onHistoryChange?.(baseDrawing.history.canUndo(), baseDrawing.history.canRedo());
-
-      // Send snapshots over WebSocket
-      if (
-        wsRef?.current &&
-        wsRef.current.readyState === WebSocket.OPEN &&
-        userIdRef?.current &&
-        canvasWidth &&
-        canvasHeight
-      ) {
-        try {
-          const fgBlob = await layerToPngBlob(nextState.foreground, canvasWidth, canvasHeight);
-          const bgBlob = await layerToPngBlob(nextState.background, canvasWidth, canvasHeight);
-
-          const fgMessage = await encodeSnapshot(userIdRef.current, "foreground", fgBlob);
-          const bgMessage = await encodeSnapshot(userIdRef.current, "background", bgBlob);
-
-          sendOrQueueMessage(fgMessage);
-          sendOrQueueMessage(bgMessage);
-        } catch (error) {
-          console.error("Failed to send redo snapshots:", error);
-        }
-      }
+    if (nextState) {
+      await applyHistoryState(nextState);
     }
-  }, [baseDrawing, canvasWidth, canvasHeight, wsRef, userIdRef, onDrawingChange, onHistoryChange, sendOrQueueMessage]);
-
-  // Send snapshot functionality
-  const sendSnapshot = useCallback(async () => {
-    const engine = baseDrawing.drawingEngine;
-    const ws = wsRef?.current;
-    const userId = userIdRef?.current;
-
-    if (!engine || !ws || ws.readyState !== WebSocket.OPEN || !userId || !canvasWidth || !canvasHeight) {
-      return;
-    }
-
-    try {
-      isSnapshotInProgress.current = true;
-
-      const fgPngBlob = await layerToPngBlob(engine.layers.foreground, canvasWidth, canvasHeight);
-      const fgSnapshot = await encodeSnapshot(userId, "foreground", fgPngBlob);
-      ws.send(fgSnapshot);
-
-      const bgPngBlob = await layerToPngBlob(engine.layers.background, canvasWidth, canvasHeight);
-      const bgSnapshot = await encodeSnapshot(userId, "background", bgPngBlob);
-      ws.send(bgSnapshot);
-
-      console.log("Sent both snapshots, now flushing queued messages");
-    } catch (error) {
-      console.error("Failed to send snapshots:", error);
-    } finally {
-      isSnapshotInProgress.current = false;
-      flushOutboundQueue();
-    }
-  }, [baseDrawing.drawingEngine, canvasWidth, canvasHeight, wsRef, userIdRef, flushOutboundQueue]);
-
-  useEffect(() => {
-    sendSnapshotRef.current = sendSnapshot;
-  }, [sendSnapshot]);
-
-  const handleSnapshotRequest = useCallback(() => {
-    if (baseDrawing.isDrawingRef.current) {
-      pendingSnapshotRequestRef.current = true;
-    } else {
-      sendSnapshot();
-    }
-  }, [baseDrawing.isDrawingRef, sendSnapshot]);
+  }, [baseDrawing.history, applyHistoryState]);
 
   // Function to add snapshot to history (for WebSocket snapshots)
   const addSnapshotToHistory = useCallback(
@@ -390,6 +361,5 @@ export const useDrawing = (
     redo: handleRedo,
     addSnapshotToHistory,
     markDrawingComplete,
-    handleSnapshotRequest,
   };
 };

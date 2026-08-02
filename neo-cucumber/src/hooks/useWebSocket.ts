@@ -2,10 +2,13 @@ import { useCallback, useRef, useEffect } from "react";
 import {
   decodeMessage,
   encodeJoin,
+  unwrapSequenced,
   type DecodedMessage,
 } from "../utils/binaryProtocol";
 import { type CollaborationMeta } from "../types/collaboration";
 import { DrawingEngine } from "../DrawingEngine";
+import { pngDataToLayer } from "../utils/canvasSnapshot";
+import { type LocalFork } from "../utils/localFork";
 
 export type ConnectionState = "disconnected" | "connecting" | "connected";
 
@@ -28,6 +31,8 @@ interface WebSocketHookParams {
     >
   >;
   participantsRef: React.RefObject<Map<string, Participant>>;
+  localForkRef: React.RefObject<LocalFork | null>;
+  lastSeqRef: React.RefObject<number>;
   shouldConnectRef: React.RefObject<boolean>;
   catchupTimeoutRef: React.RefObject<number | null>;
   processingMessageRef: React.RefObject<boolean>;
@@ -58,7 +63,7 @@ interface WebSocketHookParams {
     message: string;
     timestamp: number;
   }) => void;
-  handleSnapshotRequest: () => void;
+  handleResetRequest: () => void;
 }
 
 export const useWebSocket = ({
@@ -68,6 +73,8 @@ export const useWebSocket = ({
   drawingEngineRef,
   userEnginesRef,
   participantsRef,
+  localForkRef,
+  lastSeqRef,
   shouldConnectRef,
   catchupTimeoutRef,
   processingMessageRef,
@@ -83,17 +90,23 @@ export const useWebSocket = ({
   addParticipant,
   clearParticipants,
   addChatMessage,
-  handleSnapshotRequest,
+  handleResetRequest,
 }: WebSocketHookParams) => {
   const wsRef = useRef<WebSocket | null>(null);
-  const messageQueueRef = useRef<DecodedMessage[]>([]);
+  const messageQueueRef = useRef<
+    { message: DecodedMessage; raw: Uint8Array; seq?: number }[]
+  >([]);
   const isConnectingRef = useRef(false);
+  // Serializes async message processing so messages are always applied in
+  // arrival order (the server's canonical order), even when handling involves
+  // awaits like PNG decoding
+  const processingChainRef = useRef<Promise<void>>(Promise.resolve());
 
-  // Keep handleSnapshotRequest ref to avoid dependency issues
-  const handleSnapshotRequestRef = useRef(handleSnapshotRequest);
+  // Keep handleResetRequest ref to avoid dependency issues
+  const handleResetRequestRef = useRef(handleResetRequest);
   useEffect(() => {
-    handleSnapshotRequestRef.current = handleSnapshotRequest;
-  }, [handleSnapshotRequest]);
+    handleResetRequestRef.current = handleResetRequest;
+  }, [handleResetRequest]);
 
   // Function to get WebSocket URL dynamically
   const getWebSocketUrl = useCallback(() => {
@@ -211,6 +224,11 @@ export const useWebSocket = ({
       setConnectionState("connected");
       isConnectingRef.current = false;
 
+      // Fresh connection: any unconfirmed local fork state is stale since the
+      // server will replay the canonical history from scratch
+      localForkRef.current?.clear();
+      lastSeqRef.current = 0;
+
       // Don't add current user here - wait for server LAYERS message
       // This ensures all clients get consistent participant order from server
 
@@ -243,68 +261,62 @@ export const useWebSocket = ({
       }, 100); // 100ms should be enough for stored messages
     };
 
-    ws.onmessage = async (event) => {
-      try {
-        // Clear any existing catch-up timeout since we now end catch-up when queue is empty
-        if (catchupTimeoutRef.current) {
-          clearTimeout(catchupTimeoutRef.current);
-          catchupTimeoutRef.current = null;
-        }
-
-        // Handle binary messages (can be ArrayBuffer or Blob)
-        if (event.data instanceof ArrayBuffer) {
-          const message = decodeMessage(event.data);
-          if (!message) {
-            return;
-          }
-
-          if (isCatchingUpRef.current) {
-            // During catch-up, queue messages for sequential processing
-            messageQueueRef.current.push(message);
-            console.log(`📥 Queued message during catch-up (queue size: ${messageQueueRef.current.length})`);
-            // Process queue immediately if not already processing
-            processMessageQueue();
-          } else {
-            // During normal operation, process immediately
-            // Create drawing engine for new user if they don't exist (skip for messages without userId)
-            if ("userId" in message && message.userId) {
-              const username =
-                "username" in message ? message.username : message.userId;
-              createUserEngine(message.userId, username);
-            }
-
-            // Handle message types
-            await handleBinaryMessage(message);
-          }
-        } else if (event.data instanceof Blob) {
-          const arrayBuffer = await event.data.arrayBuffer();
-          const message = decodeMessage(arrayBuffer);
-          if (!message) {
-            return;
-          }
-
-          if (isCatchingUpRef.current) {
-            // During catch-up, queue messages for sequential processing
-            messageQueueRef.current.push(message);
-            console.log(`📥 Queued message during catch-up (queue size: ${messageQueueRef.current.length})`);
-            // Process queue immediately if not already processing
-            processMessageQueue();
-          } else {
-            // During normal operation, process immediately
-            // Create drawing engine for new user if they don't exist (skip for messages without userId)
-            if ("userId" in message && message.userId) {
-              const username =
-                "username" in message ? message.username : message.userId;
-              createUserEngine(message.userId, username);
-            }
-
-            // Handle message types
-            await handleBinaryMessage(message);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to decode WebSocket message:", error);
+    const processIncomingData = async (data: ArrayBuffer | Blob) => {
+      // Clear any existing catch-up timeout since we now end catch-up when queue is empty
+      if (catchupTimeoutRef.current) {
+        clearTimeout(catchupTimeoutRef.current);
+        catchupTimeoutRef.current = null;
       }
+
+      let arrayBuffer =
+        data instanceof ArrayBuffer ? data : await data.arrayBuffer();
+
+      // History messages arrive wrapped in a SEQUENCED envelope carrying their
+      // canonical position; the position is recorded only after the message
+      // has been fully applied so lastSeq always describes the canvas state
+      const sequenced = unwrapSequenced(arrayBuffer);
+      if (sequenced) {
+        arrayBuffer = sequenced.payload;
+      }
+
+      const message = decodeMessage(arrayBuffer);
+      if (!message) {
+        return;
+      }
+      const raw = new Uint8Array(arrayBuffer);
+
+      if (isCatchingUpRef.current) {
+        // During catch-up, queue messages for sequential processing
+        messageQueueRef.current.push({ message, raw, seq: sequenced?.seq });
+        console.log(`📥 Queued message during catch-up (queue size: ${messageQueueRef.current.length})`);
+        // Process queue immediately if not already processing
+        await processMessageQueue();
+      } else {
+        // During normal operation, process immediately
+        // Create drawing engine for new user if they don't exist (skip for messages without userId)
+        if ("userId" in message && message.userId) {
+          const username =
+            "username" in message ? message.username : message.userId;
+          createUserEngine(message.userId, username);
+        }
+
+        // Handle message types
+        await handleBinaryMessage(message, raw);
+
+        if (sequenced) {
+          lastSeqRef.current = Math.max(lastSeqRef.current, sequenced.seq);
+        }
+      }
+    };
+
+    ws.onmessage = (event) => {
+      // Chain message handling so messages are applied strictly in arrival
+      // order even when processing involves awaits (e.g. PNG decoding)
+      processingChainRef.current = processingChainRef.current
+        .then(() => processIncomingData(event.data))
+        .catch((error) => {
+          console.error("Failed to process WebSocket message:", error);
+        });
     };
 
     ws.onerror = (event) => {
@@ -352,7 +364,7 @@ export const useWebSocket = ({
 
       // Process all messages immediately without artificial delays
       while (messageQueueRef.current.length > 0) {
-        const message = messageQueueRef.current.shift()!;
+        const { message, raw, seq } = messageQueueRef.current.shift()!;
 
         // Create drawing engine for new user if they don't exist
         if ("userId" in message && message.userId) {
@@ -360,7 +372,11 @@ export const useWebSocket = ({
         }
 
         // Handle message types
-        await handleBinaryMessage(message);
+        await handleBinaryMessage(message, raw);
+
+        if (seq !== undefined) {
+          lastSeqRef.current = Math.max(lastSeqRef.current, seq);
+        }
       }
 
       processingMessageRef.current = false;
@@ -371,8 +387,108 @@ export const useWebSocket = ({
       console.log("🎯 Catch-up phase completed - queue is empty");
     };
 
+    // Applies a canvas-affecting message to the local user's engine. Used to
+    // replay messages after a fork rollback.
+    const applyMessageToLocalEngine = async (
+      engine: DrawingEngine,
+      m: DecodedMessage
+    ) => {
+      switch (m.type) {
+        case "drawLine":
+          engine.drawLine(
+            engine.layers[m.layer],
+            m.fromX,
+            m.fromY,
+            m.toX,
+            m.toY,
+            m.brushSize,
+            m.brushType,
+            m.color.r,
+            m.color.g,
+            m.color.b,
+            m.color.a
+          );
+          break;
+        case "drawPoint":
+          engine.drawLine(
+            engine.layers[m.layer],
+            m.x,
+            m.y,
+            m.x,
+            m.y,
+            m.brushSize,
+            m.brushType,
+            m.color.r,
+            m.color.g,
+            m.color.b,
+            m.color.a
+          );
+          break;
+        case "fill":
+          engine.doFloodFill(
+            engine.layers[m.layer],
+            m.x,
+            m.y,
+            m.color.r,
+            m.color.g,
+            m.color.b,
+            m.color.a
+          );
+          break;
+        case "snapshot": {
+          if (canvasMeta?.width && canvasMeta?.height) {
+            const layerData = await pngDataToLayer(
+              m.pngData,
+              canvasMeta.width,
+              canvasMeta.height
+            );
+            engine.layers[m.layer].set(layerData);
+          }
+          break;
+        }
+      }
+    };
+
+    // Reconciles an echoed local-user message against the local fork
+    // (Drawpile's local fork model): if the echo matches the fork head the
+    // message is already on the canvas; if the server's order diverged, roll
+    // the layers back to the savepoint and replay the confirmed messages.
+    // Returns "handled" when the caller must not apply the message again.
+    const reconcileLocalEcho = async (
+      message: DecodedMessage,
+      raw: Uint8Array | undefined
+    ): Promise<"handled" | "apply"> => {
+      const fork = localForkRef.current;
+      const engine = drawingEngineRef.current;
+      if (!fork || !engine || !raw) return "apply";
+
+      const result = fork.reconcile(raw, message);
+      if (result.action === "already-done") {
+        return "handled";
+      }
+      if (result.action === "rollback") {
+        console.warn(
+          "Local fork rollback - server order diverged from local drawing"
+        );
+        engine.layers.foreground.set(result.savepoint.foreground);
+        engine.layers.background.set(result.savepoint.background);
+        for (const confirmedMsg of result.confirmed) {
+          await applyMessageToLocalEngine(engine, confirmedMsg);
+        }
+        await applyMessageToLocalEngine(engine, message);
+        engine.queueLayerUpdate("foreground");
+        engine.queueLayerUpdate("background");
+        handleLocalDrawingChange();
+        return "handled";
+      }
+      return "apply";
+    };
+
     // Helper function to handle decoded binary messages (moved inside connectWebSocket)
-    const handleBinaryMessage = async (message: DecodedMessage) => {
+    const handleBinaryMessage = async (
+      message: DecodedMessage,
+      raw?: Uint8Array
+    ) => {
       try {
         // Handle different message types
         switch (message.type) {
@@ -383,6 +499,9 @@ export const useWebSocket = ({
               message.userId === userIdRef.current &&
               drawingEngineRef.current
             ) {
+              if ((await reconcileLocalEcho(message, raw)) === "handled") {
+                break;
+              }
               const targetLayer =
                 message.layer === "foreground"
                   ? drawingEngineRef.current.layers.foreground
@@ -473,6 +592,9 @@ export const useWebSocket = ({
               message.userId === userIdRef.current &&
               drawingEngineRef.current
             ) {
+              if ((await reconcileLocalEcho(message, raw)) === "handled") {
+                break;
+              }
               const targetLayer =
                 message.layer === "foreground"
                   ? drawingEngineRef.current.layers.foreground
@@ -561,6 +683,9 @@ export const useWebSocket = ({
               message.userId === userIdRef.current &&
               drawingEngineRef.current
             ) {
+              if ((await reconcileLocalEcho(message, raw)) === "handled") {
+                break;
+              }
               const targetLayer =
                 message.layer === "foreground"
                   ? drawingEngineRef.current.layers.foreground
@@ -714,84 +839,60 @@ export const useWebSocket = ({
               break;
             }
 
-            // Decode PNG data to ImageData
             try {
-              const blob = new Blob([new Uint8Array(message.pngData)], { type: "image/png" });
-              const img = new Image();
-              const canvas = document.createElement("canvas");
-              canvas.width = canvasMeta.width;
-              canvas.height = canvasMeta.height;
-              const ctx = canvas.getContext("2d");
-
-              if (!ctx) {
-                console.error("Failed to get 2D context for PNG decoding");
-              } else {
-                // Load PNG asynchronously and update canvases when ready
-                const url = URL.createObjectURL(blob);
-                img.onload = () => {
-                  ctx.clearRect(0, 0, canvasMeta.width, canvasMeta.height);
-                  ctx.drawImage(img, 0, 0);
-                  const imageData = ctx.getImageData(
-                    0,
-                    0,
+              if (message.userId === userIdRef.current) {
+                // Local user's snapshot (undo/redo or snapshot response echo)
+                if ((await reconcileLocalEcho(message, raw)) === "handled") {
+                  break;
+                }
+                if (drawingEngineRef.current) {
+                  const layerData = await pngDataToLayer(
+                    message.pngData,
                     canvasMeta.width,
                     canvasMeta.height
                   );
-                  URL.revokeObjectURL(url);
+                  const targetLayer =
+                    message.layer === "foreground"
+                      ? drawingEngineRef.current.layers.foreground
+                      : drawingEngineRef.current.layers.background;
 
-                  // Apply the decoded data to the appropriate canvas
-                  if (message.userId === userIdRef.current) {
-                    // Apply to local user's canvas
-                    if (drawingEngineRef.current) {
-                      const targetLayer =
-                        message.layer === "foreground"
-                          ? drawingEngineRef.current.layers.foreground
-                          : drawingEngineRef.current.layers.background;
+                  targetLayer.set(layerData);
+                  drawingEngineRef.current.queueLayerUpdate(
+                    message.layer as "foreground" | "background"
+                  );
 
-                      targetLayer.set(imageData.data);
-                      drawingEngineRef.current.queueLayerUpdate(
-                        message.layer as "foreground" | "background"
-                      );
+                  // Add to history for undo/redo
+                  addSnapshotToHistory(
+                    message.layer as "foreground" | "background",
+                    layerData
+                  );
+                }
+              } else {
+                // Apply to remote user's canvas
+                const userEngine = userEnginesRef.current?.get(message.userId);
+                if (userEngine) {
+                  const layerData = await pngDataToLayer(
+                    message.pngData,
+                    canvasMeta.width,
+                    canvasMeta.height
+                  );
+                  const engine = userEngine.engine;
+                  const targetLayer =
+                    message.layer === "foreground"
+                      ? engine.layers.foreground
+                      : engine.layers.background;
 
-                      // Add to history for undo/redo
-                      addSnapshotToHistory(
-                        message.layer as "foreground" | "background",
-                        imageData.data
-                      );
-                    }
-                  } else {
-                    // Apply to remote user's canvas AND add to their history
-                    const userEngine = userEnginesRef.current?.get(
-                      message.userId
-                    );
-                    if (userEngine) {
-                      const engine = userEngine.engine;
-                      const targetLayer =
-                        message.layer === "foreground"
-                          ? engine.layers.foreground
-                          : engine.layers.background;
+                  targetLayer.set(layerData);
+                  engine.queueLayerUpdate(
+                    message.layer as "foreground" | "background"
+                  );
 
-                      targetLayer.set(imageData.data);
-                      engine.queueLayerUpdate(
-                        message.layer as "foreground" | "background"
-                      );
-
-                      // Note: Remote canvases don't need undo/redo history
-                    }
-                  }
-                };
-                img.onerror = () => {
-                  console.error("Failed to load PNG data for snapshot");
-                  URL.revokeObjectURL(url);
-                };
-                img.src = url;
+                  // Note: Remote canvases don't need undo/redo history
+                }
               }
             } catch (error) {
               console.error("Failed to decode PNG snapshot data:", error);
             }
-
-            // Note: Canvas updates and history are now handled asynchronously
-            // in the img.onload callback above after PNG decoding is complete
             break;
           }
 
@@ -841,13 +942,13 @@ export const useWebSocket = ({
             break;
           }
 
-          case "snapshotRequest": {
-            console.log("Snapshot request received:", {
+          case "resetRequest": {
+            console.log("Session reset request received:", {
               timestamp: message.timestamp,
             });
 
-            // Call the provided snapshot request handler
-            handleSnapshotRequestRef.current();
+            // The server chose this client to upload a session reset
+            handleResetRequestRef.current();
             break;
           }
 
@@ -878,6 +979,8 @@ export const useWebSocket = ({
   }, [
     getWebSocketUrl,
     canvasMeta,
+    localForkRef,
+    lastSeqRef,
     setConnectionState,
     setIsCatchingUp,
     createUserEngine,

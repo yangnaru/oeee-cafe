@@ -21,7 +21,13 @@ import { useZoomControls } from "./hooks/useZoomControls";
 import { useCanvas } from "./hooks/useCanvas";
 import { useWebSocket, type ConnectionState } from "./hooks/useWebSocket";
 import { useCursor } from "./hooks/useCursor";
-import { encodeEndSession } from "./utils/binaryProtocol";
+import {
+  encodeEndSession,
+  encodeResetBegin,
+  encodeSnapshot,
+} from "./utils/binaryProtocol";
+import { LocalFork } from "./utils/localFork";
+import { layerToPngBlob } from "./utils/canvasSnapshot";
 
 // Function to get session ID from URL
 const getSessionId = (): string => {
@@ -227,6 +233,15 @@ function App() {
   // Create a stable wsRef that will be populated by useWebSocket
   const drawingWsRef = useRef<WebSocket | null>(null);
 
+  // Local fork for optimistic drawing with server reconciliation
+  const localForkRef = useRef<LocalFork | null>(null);
+  if (localForkRef.current === null) {
+    localForkRef.current = new LocalFork();
+  }
+
+  // Highest canonical history position fully applied to the canvases
+  const lastSeqRef = useRef<number>(0);
+
   // Use the drawing hook with stable wsRef
   const {
     undo,
@@ -234,7 +249,7 @@ function App() {
     drawingEngine,
     addSnapshotToHistory,
     markDrawingComplete,
-    handleSnapshotRequest,
+    isDrawingRef,
   } = useDrawing(
     tempLocalUserCanvasRef,
     appRef,
@@ -248,7 +263,8 @@ function App() {
     handleLocalDrawingChange,
     isCatchingUp,
     connectionState,
-    tempCanvasContainerRef
+    tempCanvasContainerRef,
+    localForkRef
   );
 
   // Zoom controls
@@ -288,6 +304,92 @@ function App() {
     userIdRef,
   });
 
+  // Responds to a server session-reset request (Drawpile-style auto-reset):
+  // uploads snapshots of every participant's layers representing the exact
+  // canonical state at lastSeq, so the server can replace the accumulated
+  // history with them. Deferred while local strokes are unconfirmed or a
+  // stroke is in progress, since the canvas must match the canonical state.
+  const handleResetRequest = useCallback(() => {
+    const RETRY_MS = 300;
+    const MAX_RETRIES = 40;
+    let retries = 0;
+
+    const attempt = async () => {
+      const ws = drawingWsRef.current;
+      const engine = drawingEngineRef.current;
+      if (
+        !ws ||
+        ws.readyState !== WebSocket.OPEN ||
+        !engine ||
+        !canvasMeta?.width ||
+        !canvasMeta?.height ||
+        !userIdRef.current
+      ) {
+        return;
+      }
+
+      const fork = localForkRef.current;
+      if ((fork && fork.size > 0) || isDrawingRef.current) {
+        if (retries++ < MAX_RETRIES) {
+          setTimeout(attempt, RETRY_MS);
+        }
+        return;
+      }
+
+      // Capture all layers and the history position in one synchronous block
+      // so every snapshot describes the same canonical state
+      const baseSeq = lastSeqRef.current;
+      const captures: {
+        userId: string;
+        layer: "foreground" | "background";
+        data: Uint8ClampedArray;
+      }[] = [];
+      for (const layer of ["foreground", "background"] as const) {
+        captures.push({
+          userId: userIdRef.current,
+          layer,
+          data: new Uint8ClampedArray(engine.layers[layer]),
+        });
+      }
+      for (const [userId, userEngine] of userEnginesRef.current) {
+        if (userId === userIdRef.current) continue;
+        for (const layer of ["foreground", "background"] as const) {
+          captures.push({
+            userId,
+            layer,
+            data: new Uint8ClampedArray(userEngine.engine.layers[layer]),
+          });
+        }
+      }
+
+      try {
+        const snapshots: ArrayBuffer[] = [];
+        for (const capture of captures) {
+          const blob = await layerToPngBlob(
+            capture.data,
+            canvasMeta.width,
+            canvasMeta.height
+          );
+          snapshots.push(
+            await encodeSnapshot(capture.userId, capture.layer, blob)
+          );
+        }
+
+        ws.send(encodeResetBegin(baseSeq, snapshots.length));
+        for (const snapshot of snapshots) {
+          ws.send(snapshot);
+        }
+        console.log(
+          `Uploaded session reset at seq ${baseSeq} (${snapshots.length} snapshots)`
+        );
+      } catch (error) {
+        console.error("Failed to upload session reset:", error);
+      }
+    };
+
+    attempt();
+  }, [canvasMeta, isDrawingRef]);
+
   // WebSocket management
   const { wsRef, connectWebSocket } = useWebSocket({
     canvasMeta,
@@ -297,6 +399,8 @@ function App() {
     drawingEngineRef,
     userEnginesRef,
     participantsRef,
+    localForkRef,
+    lastSeqRef,
     shouldConnectRef,
     catchupTimeoutRef,
     processingMessageRef,
@@ -316,7 +420,7 @@ function App() {
         chatAddMessageRef.current(message);
       }
     },
-    handleSnapshotRequest,
+    handleResetRequest,
   });
 
   // Keep connectWebSocket ref stable to avoid reconnection loops
@@ -350,12 +454,6 @@ function App() {
       }, 0);
     }
   }, [drawingEngine]);
-
-  // Keep handleSnapshotRequest ref in sync to avoid circular dependencies
-  const handleSnapshotRequestRef = useRef(handleSnapshotRequest);
-  useEffect(() => {
-    handleSnapshotRequestRef.current = handleSnapshotRequest;
-  }, [handleSnapshotRequest]);
 
   // Keep connectWebSocket ref to avoid circular dependencies in useEffect (defined after connectWebSocket)
 

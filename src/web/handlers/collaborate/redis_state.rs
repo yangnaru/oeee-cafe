@@ -8,14 +8,14 @@ use crate::redis::RedisPool;
 
 // Redis key prefixes
 const ACTIVITY_PREFIX: &str = "oeee:activity:";
-const SNAPSHOT_REQ_PREFIX: &str = "oeee:snapshot_req:";
+const RESET_PENDING_PREFIX: &str = "oeee:reset_pending:";
 const CONNECTION_PREFIX: &str = "oeee:connection:";
 const ROOM_PREFIX: &str = "oeee:room:";
 const PUBSUB_PREFIX: &str = "oeee:pubsub:";
 
 // TTL constants
 const ACTIVITY_TTL: u64 = 3600; // 1 hour
-const SNAPSHOT_REQ_TTL: u64 = 300; // 5 minutes
+const RESET_PENDING_TTL: u64 = 120; // retry window if the reset client stalls
 const CONNECTION_TTL: u64 = 30; // 30 seconds (with heartbeat)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,6 +37,14 @@ pub struct RoomMessage {
     pub message_type: String, // "websocket" | "join" | "leave" | "end_session"
     pub payload: Vec<u8>,
     pub timestamp: u64,
+    // Canonical sequence number assigned by the atomic sequencer for messages
+    // that are part of session history; None for ephemeral messages.
+    #[serde(default)]
+    pub seq: Option<u64>,
+    // When set, the message is delivered only to this connection (e.g. a
+    // RESET_REQUEST addressed to the client chosen to upload a session reset).
+    #[serde(default)]
+    pub target_connection: Option<String>,
 }
 
 #[derive(Clone)]
@@ -101,61 +109,42 @@ impl RedisStateManager {
         Ok(())
     }
 
-    // Snapshot Request Tracking
-    pub async fn set_snapshot_requested(
+    // Session Reset Tracking
+    //
+    // At most one session reset is requested at a time per room; the flag
+    // expires so a stalled or disconnected reset client only delays the next
+    // attempt instead of blocking resets forever.
+    pub async fn try_acquire_reset_pending(
         &self,
         room_uuid: Uuid,
-        user_id: Uuid,
-        requested: bool,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut conn = self.pool.get().await?;
-        let key = format!("{}{}:{}", SNAPSHOT_REQ_PREFIX, room_uuid, user_id);
-
-        if requested {
-            conn.set::<_, _, ()>(&key, 1u8).await?;
-        } else {
-            conn.set::<_, _, ()>(&key, 0u8).await?;
-        }
-        conn.expire::<_, ()>(&key, SNAPSHOT_REQ_TTL as i64).await?;
-
-        debug!(
-            "Set snapshot request for user {} in room {} to {}",
-            user_id, room_uuid, requested
-        );
-        Ok(())
-    }
-
-    pub async fn is_snapshot_requested(
-        &self,
-        room_uuid: Uuid,
-        user_id: Uuid,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
-        let key = format!("{}{}:{}", SNAPSHOT_REQ_PREFIX, room_uuid, user_id);
+        let key = format!("{}{}", RESET_PENDING_PREFIX, room_uuid);
 
-        let value = conn.get::<_, Option<u8>>(&key).await?;
-        Ok(value.unwrap_or(0) != 0)
+        let acquired: bool = redis::cmd("SET")
+            .arg(&key)
+            .arg(1u8)
+            .arg("NX")
+            .arg("EX")
+            .arg(RESET_PENDING_TTL)
+            .query_async::<Option<String>>(&mut *conn)
+            .await?
+            .is_some();
+
+        if acquired {
+            debug!("Acquired reset-pending flag for room {}", room_uuid);
+        }
+        Ok(acquired)
     }
 
-    pub async fn cleanup_snapshot_requests(
+    pub async fn clear_reset_pending(
         &self,
         room_uuid: Uuid,
-    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
-        let pattern = format!("{}{}:*", SNAPSHOT_REQ_PREFIX, room_uuid);
-
-        let keys = conn.keys::<_, Vec<String>>(&pattern).await?;
-        let count = keys.len();
-
-        if count > 0 {
-            let deleted: usize = conn.del(&keys).await?;
-            debug!(
-                "Cleaned up {} snapshot request trackers for room {}",
-                deleted, room_uuid
-            );
-        }
-
-        Ok(count)
+        let key = format!("{}{}", RESET_PENDING_PREFIX, room_uuid);
+        conn.del::<_, ()>(&key).await?;
+        Ok(())
     }
 
     // Connection Registry
@@ -320,7 +309,7 @@ impl RedisStateManager {
         let patterns = [
             format!("{}{}:*", ROOM_PREFIX, room_uuid),
             format!("{}{}", ACTIVITY_PREFIX, room_uuid),
-            format!("{}{}:*", SNAPSHOT_REQ_PREFIX, room_uuid),
+            format!("{}{}", RESET_PENDING_PREFIX, room_uuid),
         ];
 
         let mut total_deleted = 0;
