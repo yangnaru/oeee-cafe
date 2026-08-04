@@ -120,11 +120,11 @@ pub async fn collaborate_lobby(
             COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) as participant_count
         FROM collaborative_sessions cs
         JOIN users u ON cs.owner_id = u.id
-        JOIN communities c ON cs.community_id = c.id
+        LEFT JOIN communities c ON cs.community_id = c.id
         LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
         WHERE cs.is_public = true
           AND cs.ended_at IS NULL
-          AND c.visibility = 'public'
+          AND (cs.community_id IS NULL OR c.visibility = 'public')
         GROUP BY cs.id, u.login_name, cs.max_participants
         HAVING COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) < cs.max_participants
         ORDER BY cs.last_activity DESC
@@ -278,11 +278,11 @@ pub async fn get_active_sessions_json(
             COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) as participant_count
         FROM collaborative_sessions cs
         JOIN users u ON cs.owner_id = u.id
-        JOIN communities c ON cs.community_id = c.id
+        LEFT JOIN communities c ON cs.community_id = c.id
         LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
         WHERE cs.is_public = true
           AND cs.ended_at IS NULL
-          AND c.visibility = 'public'
+          AND (cs.community_id IS NULL OR c.visibility = 'public')
         GROUP BY cs.id, u.login_name, cs.max_participants
         HAVING COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) < cs.max_participants
         ORDER BY cs.last_activity DESC
