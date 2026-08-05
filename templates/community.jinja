@@ -22,6 +22,20 @@
             {% if current_user.id == community.owner_id %}
               <button hx-get="/communities/{{ community_id }}/edit">{{ ftl_get_message("edit") }}</button>
             {% endif %}
+            {# Opens the lobby with this community preselected, so the session's
+               saved drawing lands here. Goes through the lobby rather than
+               creating a session outright so the canvas size, title and
+               participant limit can still be chosen.
+
+               Hidden for two-tone communities: they are excluded from the
+               postable set, so the option would not exist to be preselected
+               and the session would silently save with no community. They have
+               their own drawing card below. #}
+            {% if not community.background_color %}
+              <a href="/collaborate?community={{ community.slug }}" class="btn">
+                {{ ftl_get_message("community-draw-together") }}
+              </a>
+            {% endif %}
             {% if community.visibility == "private" %}
               <a href="/communities/@{{ community.slug }}/members" class="btn">{{ ftl_get_message("community-members") }}</a>
             {% endif %}

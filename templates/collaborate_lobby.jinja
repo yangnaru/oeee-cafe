@@ -41,6 +41,20 @@
           </label>
         </p>
         <small>{{ ftl_get_message("collaborate-public-session-description") }}</small>
+        {% if postable_communities %}
+          <p>
+            <label for="session-community">{{ ftl_get_message("collaborate-community-label") }}:</label>
+            <select id="session-community" name="community_id">
+              <option value="">{{ ftl_get_message("collaborate-community-none") }}</option>
+              {% for community in postable_communities %}
+                <option value="{{ community.id }}"
+                        {% if community.slug == selected_community_slug %}selected{% endif %}>
+                  {{ community.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </p>
+        {% endif %}
         <input type="submit" value="{{ ftl_get_message("collaborate-create-button") }}">
       </form>
       </div>
@@ -224,7 +238,10 @@
         width: width,
         height: height,
         is_public: formData.get('is_public') === 'on',
-        max_participants: parseInt(formData.get('max_participants'))
+        max_participants: parseInt(formData.get('max_participants')),
+        // Empty means a personal session; the server treats "" as None. A
+        // saved session becomes a post in whichever community is chosen here.
+        community_id: formData.get('community_id') || null
       };
       
       try {

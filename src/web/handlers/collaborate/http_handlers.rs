@@ -4,9 +4,9 @@ use crate::web::context::CommonContext;
 use crate::web::handlers::{ExtractAcceptLanguage, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::{Html, IntoResponse, Json, Redirect, Response};
+use axum::response::{Html, IntoResponse, Json, Response};
 use minijinja::context;
 use uuid::Uuid;
 
@@ -92,10 +92,18 @@ pub async fn get_collaboration_meta(
     }))
 }
 
+#[derive(serde::Deserialize)]
+pub struct LobbyQuery {
+    /// Slug to preselect, so a community page can link straight into the
+    /// create form with its own community chosen.
+    pub community: Option<String>,
+}
+
 pub async fn collaborate_lobby(
     auth_session: AuthSession,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
+    Query(query): Query<LobbyQuery>,
 ) -> Result<impl IntoResponse, AppError> {
     // Viewable signed out: the lobby doubles as a public gallery. Creating a
     // session still needs an account, which the template gates.
@@ -187,6 +195,26 @@ pub async fn collaborate_lobby(
     })
     .collect::<Vec<_>>();
 
+    // Communities this user may post into. Reuses the rule the "move post"
+    // feature already applies — public, unlisted where they have posted,
+    // private where they are a member — rather than inventing a second one.
+    let postable_communities: Vec<serde_json::Value> = match viewer_user_id {
+        Some(user_id) => {
+            crate::models::post::get_movable_communities(&mut tx, user_id)
+                .await?
+                .into_iter()
+                .map(|(id, name, slug, ..)| {
+                    serde_json::json!({
+                        "id": id.to_string(),
+                        "name": name,
+                        "slug": slug,
+                    })
+                })
+                .collect()
+        }
+        None => Vec::new(),
+    };
+
     tx.commit().await?;
 
     let template = state.env.get_template("collaborate_lobby.jinja")?;
@@ -195,6 +223,8 @@ pub async fn collaborate_lobby(
         current_user => user,
         active_sessions => active_sessions,
         posts => collaborative_posts,
+        postable_communities => postable_communities,
+        selected_community_slug => query.community,
         // The shared card template renders a sentinel when this is true; the
         // gallery is small enough not to paginate.
         has_more => false,
@@ -227,7 +257,22 @@ pub async fn create_collaborative_session(
     let community_id = request
         .community_id
         .as_ref()
+        .filter(|id| !id.is_empty())
         .and_then(|id| id.parse::<Uuid>().ok());
+
+    // A saved session becomes a post in this community, so the same rule that
+    // governs posting has to apply here. Without this any id was accepted,
+    // which would put a drawing into a private community the caller is not a
+    // member of.
+    if let Some(community_id) = community_id {
+        let allowed = crate::models::post::get_movable_communities(&mut tx, user.id)
+            .await?
+            .into_iter()
+            .any(|(id, ..)| id == community_id);
+        if !allowed {
+            return Err(AppError::Forbidden);
+        }
+    }
 
     let session_id = Uuid::new_v4();
     sqlx::query!(
@@ -362,6 +407,14 @@ mod tests {
     use minijinja::context;
     use serde_json::json;
 
+    fn sample_community() -> serde_json::Value {
+        json!({
+            "id": "00000000-0000-0000-0000-000000000003",
+            "name": "Open Studio",
+            "slug": "open",
+        })
+    }
+
     fn lobby_context(signed_in: bool, posts: Vec<serde_json::Value>) -> minijinja::Value {
         context! {
             current_user => if signed_in {
@@ -373,6 +426,8 @@ mod tests {
             posts => posts,
             has_more => false,
             canvas_sizes => vec![("300x300", "300x300")],
+            postable_communities => if signed_in { vec![sample_community()] } else { vec![] },
+            selected_community_slug => "open",
             draft_post_count => 0,
             unread_notification_count => 0,
             ftl_lang => "en",
@@ -406,6 +461,26 @@ mod tests {
         assert!(rendered.contains("collaborate-sign-in-to-create"));
         // The gallery is the reason signed-out visitors can reach this page.
         assert!(rendered.contains("posts-grid-item"));
+    }
+
+    #[test]
+    fn create_form_preselects_the_linked_community() {
+        // A community page links here with ?community=<slug>; the option for
+        // that community must come back selected, or the saved drawing would
+        // land nowhere.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context(true, vec![]))
+            .expect("renders signed in");
+        assert!(rendered.contains("name=\"community_id\""));
+        assert!(rendered.contains("collaborate-community-none"));
+        assert!(
+            rendered.contains("selected"),
+            "linked community was not preselected"
+        );
     }
 
     #[test]
