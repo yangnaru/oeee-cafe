@@ -1,0 +1,96 @@
+{% extends "admin/base.jinja" %}
+{% block admin_content %}
+  <h2>
+    All posts
+    {%- if filter_author %} by @{{ filter_author }}{% endif -%}
+    {%- if filter_community %} in @{{ filter_community }}{% endif %}
+  </h2>
+  <p class="muted">{{ total }} post(s) across every user and community.</p>
+
+  <form class="admin-filters" method="get" action="/admin/posts">
+    <label>
+      Author
+      <input type="text"
+             name="author"
+             placeholder="login name"
+             value="{{ filter_author or '' }}" />
+    </label>
+    <label>
+      Community
+      <select name="community">
+        <option value="">All communities</option>
+        {% for community in communities %}
+          <option value="{{ community.slug }}"
+                  {% if community.slug == filter_community %}selected{% endif %}>
+            {{ community.name }} ({{ community.visibility }})
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      <input type="checkbox"
+             name="drafts"
+             {% if include_drafts %}checked{% endif %} />
+      Include drafts
+    </label>
+    <label>
+      <input type="checkbox"
+             name="deleted"
+             {% if include_deleted %}checked{% endif %} />
+      Include deleted
+    </label>
+    <input type="submit" value="Filter" />
+  </form>
+
+  {% if posts %}
+    <div class="admin-grid">
+      {% for post in posts %}
+        <div class="admin-card {% if post.deleted_at %}deleted{% endif %}">
+          <a href="/admin/posts/{{ post.id }}">
+            <img width="{{ post.image_width }}"
+                 height="{{ post.image_height }}"
+                 alt="{{ post.title or 'Untitled' }}"
+                 loading="lazy"
+                 src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+          </a>
+          <div>
+            {% if not post.published_at %}<span class="admin-tag draft">draft</span>{% endif %}
+            {% if post.deleted_at %}
+              <span class="admin-tag deleted">deleted{% if post.deletion_reason %}: {{ post.deletion_reason }}{% endif %}</span>
+            {% endif %}
+            {% if post.is_sensitive %}<span class="admin-tag sensitive">sensitive</span>{% endif %}
+            {% if post.community_visibility and post.community_visibility != "public" %}
+              <span class="admin-tag {{ post.community_visibility }}">{{ post.community_visibility }}</span>
+            {% endif %}
+          </div>
+          <div>{{ post.title or "(untitled)" }}</div>
+          <div>
+            <a href="/admin/users/{{ post.author_login_name }}/posts">@{{ post.author_login_name }}</a>
+          </div>
+          <div>
+            {% if post.community_slug %}
+              <a href="/admin/communities/{{ post.community_slug }}/posts">{{ post.community_name }}</a>
+            {% else %}
+              <span class="muted">no community</span>
+            {% endif %}
+          </div>
+          <div class="muted">
+            {{ (post.published_at or post.created_at)|datetimeformat(format="short", tz="Asia/Seoul") }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="admin-pager">
+      {% if page > 1 %}
+        <a href="?author={{ filter_author or '' }}&community={{ filter_community or '' }}{% if include_drafts %}&drafts=on{% endif %}{% if include_deleted %}&deleted=on{% endif %}&page={{ page - 1 }}">← Previous</a>
+      {% endif %}
+      <span>Page {{ page }} of {{ total_pages }}</span>
+      {% if page < total_pages %}
+        <a href="?author={{ filter_author or '' }}&community={{ filter_community or '' }}{% if include_drafts %}&drafts=on{% endif %}{% if include_deleted %}&deleted=on{% endif %}&page={{ page + 1 }}">Next →</a>
+      {% endif %}
+    </div>
+  {% else %}
+    <p>No posts match this filter.</p>
+  {% endif %}
+{% endblock admin_content %}

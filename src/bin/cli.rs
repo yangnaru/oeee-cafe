@@ -1,11 +1,13 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use oeee_cafe::{
     models::{
         actor::{backfill_actors_for_existing_communities, backfill_actors_for_existing_users},
         community::get_communities,
         device::get_user_devices,
-        user::{find_user_by_id, find_user_by_login_name, update_password},
+        user::{
+            find_user_by_id, find_user_by_login_name, update_password, update_user_role, UserRole,
+        },
     },
     push::PushService,
     AppConfig,
@@ -39,6 +41,25 @@ enum Commands {
     BackfillCommunityActors,
     /// Send a test push notification to a user
     SendTestPush { login_name: String },
+    /// Grant or revoke site-wide staff access (user, moderator, admin)
+    SetRole { login_name: String, role: RoleArg },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum RoleArg {
+    User,
+    Moderator,
+    Admin,
+}
+
+impl From<RoleArg> for UserRole {
+    fn from(role: RoleArg) -> Self {
+        match role {
+            RoleArg::User => UserRole::User,
+            RoleArg::Moderator => UserRole::Moderator,
+            RoleArg::Admin => UserRole::Admin,
+        }
+    }
 }
 
 #[tokio::main]
@@ -143,6 +164,24 @@ async fn main() -> Result<()> {
                 "✅ Created {} actors for existing communities",
                 created_count
             );
+        }
+        Commands::SetRole { login_name, role } => {
+            let user = find_user_by_login_name(&mut tx, login_name).await?;
+            match user {
+                Some(user) => {
+                    let previous = user.role;
+                    let updated = update_user_role(&mut tx, user.id, (*role).into()).await?;
+                    tx.commit().await?;
+                    println!(
+                        "✅ @{}: {:?} -> {:?}",
+                        updated.login_name, previous, updated.role
+                    );
+                }
+                None => {
+                    eprintln!("User '{}' not found", login_name);
+                    exit(1);
+                }
+            }
         }
         Commands::SendTestPush { login_name } => {
             println!("Looking up user '{}'...", login_name);

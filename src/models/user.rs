@@ -50,6 +50,15 @@ pub enum Language {
     Zh,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Type)]
+#[sqlx(type_name = "user_role", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum UserRole {
+    User,
+    Moderator,
+    Admin,
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct User {
     pub id: Uuid,
@@ -65,6 +74,7 @@ pub struct User {
     pub preferred_language: Option<Language>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub show_sensitive_content: bool,
+    pub role: UserRole,
 }
 
 impl User {
@@ -73,6 +83,11 @@ impl User {
         let pwstr = PasswordHashString::new(&self.password_hash)?;
         let password_hash = pwstr.password_hash();
         argon2.verify_password(password.as_bytes(), &password_hash)
+    }
+
+    /// Site-wide staff. Gates everything under `/admin`.
+    pub fn is_admin(&self) -> bool {
+        matches!(self.role, UserRole::Admin)
     }
 }
 
@@ -99,7 +114,8 @@ pub async fn update_user_preferred_language(
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                role AS "role: _"
         "#,
         preferred_language as _,
         id,
@@ -119,7 +135,43 @@ pub async fn update_user_preferred_language(
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
         show_sensitive_content: result.show_sensitive_content,
+        role: result.role,
     })
+}
+
+/// Grants or revokes site-wide staff access. Deliberately has no HTTP handler —
+/// roles are changed from the CLI only, so a compromised admin session cannot
+/// mint more admins.
+pub async fn update_user_role(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+    role: UserRole,
+) -> Result<User> {
+    let q = query_as!(
+        User,
+        r#"
+            UPDATE users
+            SET role = $1, updated_at = now()
+            WHERE id = $2
+            RETURNING
+                id,
+                login_name,
+                password_hash,
+                display_name,
+                email,
+                email_verified_at,
+                created_at,
+                updated_at,
+                banner_id,
+                preferred_language AS "preferred_language: _",
+                deleted_at,
+                show_sensitive_content,
+                role AS "role: _"
+        "#,
+        role as UserRole,
+        id,
+    );
+    Ok(q.fetch_one(&mut **tx).await?)
 }
 
 pub async fn update_user_show_sensitive_content(
@@ -145,7 +197,8 @@ pub async fn update_user_show_sensitive_content(
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                role AS "role: _"
         "#,
         show_sensitive_content,
         id,
@@ -165,6 +218,7 @@ pub async fn update_user_show_sensitive_content(
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
         show_sensitive_content: result.show_sensitive_content,
+        role: result.role,
     })
 }
 
@@ -192,7 +246,8 @@ pub async fn update_user_email_verified_at(
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                role AS "role: _"
         "#,
         email,
         email_verified_at,
@@ -213,6 +268,7 @@ pub async fn update_user_email_verified_at(
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
         show_sensitive_content: result.show_sensitive_content,
+        role: result.role,
     })
 }
 
@@ -246,7 +302,8 @@ pub async fn update_password(
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                role AS "role: _"
         "#,
         password_hash,
         id,
@@ -266,6 +323,7 @@ pub async fn update_password(
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
         show_sensitive_content: result.show_sensitive_content,
+        role: result.role,
     })
 }
 
@@ -293,7 +351,8 @@ pub async fn update_user(
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                role AS "role: _"
         "#,
         login_name,
         display_name,
@@ -314,6 +373,7 @@ pub async fn update_user(
         preferred_language: result.preferred_language,
         deleted_at: result.deleted_at,
         show_sensitive_content: result.show_sensitive_content,
+        role: result.role,
     })
 }
 
@@ -395,6 +455,7 @@ pub async fn create_user(
         preferred_language: None,
         deleted_at: None,
         show_sensitive_content: false,
+        role: UserRole::User,
     };
 
     // Create actor for the user
@@ -419,7 +480,8 @@ pub async fn find_user_by_id(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Re
             banner_id,
             preferred_language AS "preferred_language: _",
             deleted_at,
-            show_sensitive_content
+            show_sensitive_content,
+            role AS "role: _"
         FROM users
         WHERE id = $1"#,
         id
@@ -446,7 +508,8 @@ pub async fn find_user_by_login_name(
             banner_id,
             preferred_language AS "preferred_language: _",
             deleted_at,
-            show_sensitive_content
+            show_sensitive_content,
+            role AS "role: _"
         FROM users
         WHERE login_name = $1"#,
         login_name
@@ -473,7 +536,8 @@ pub async fn find_user_by_email(
             banner_id,
             preferred_language AS "preferred_language: _",
             deleted_at,
-            show_sensitive_content
+            show_sensitive_content,
+            role AS "role: _"
         FROM users
         WHERE email = $1"#,
         email
@@ -687,7 +751,8 @@ impl AuthnBackend for Backend {
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                role AS "role: _"
             FROM users
             WHERE login_name = $1"#,
             creds.login_name
@@ -714,7 +779,8 @@ impl AuthnBackend for Backend {
                 banner_id,
                 preferred_language AS "preferred_language: _",
                 deleted_at,
-                show_sensitive_content
+                show_sensitive_content,
+                role AS "role: _"
             FROM users
             WHERE id = $1"#,
             user_id

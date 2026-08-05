@@ -1,0 +1,41 @@
+{% extends "admin/base.jinja" %}
+{% block admin_content %}
+  <h2>Communities</h2>
+  <p class="muted">Includes unlisted and private communities.</p>
+  <table class="admin-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Slug</th>
+        <th>Visibility</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for community in communities %}
+        <tr>
+          <td>{{ community.name }}</td>
+          <td>@{{ community.slug }}</td>
+          <td>
+            {% if community.visibility != "public" %}
+              <span class="admin-tag {{ community.visibility }}">{{ community.visibility }}</span>
+            {% else %}
+              {{ community.visibility }}
+            {% endif %}
+          </td>
+          <td>
+            {% if community.deleted_at %}
+              <span class="admin-tag deleted">deleted</span>
+            {% else %}
+              active
+            {% endif %}
+          </td>
+          <td>
+            <a href="/admin/communities/{{ community.slug }}/posts">posts →</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock admin_content %}

@@ -6,6 +6,10 @@ use crate::web::handlers::account::{
     request_email_verification_code, request_email_verification_json, save_language,
     save_show_sensitive_content, verify_email_code_json, verify_email_verification_code,
 };
+use crate::web::handlers::admin::{
+    admin_communities, admin_community_posts, admin_post_detail, admin_posts, admin_user_posts,
+    admin_users,
+};
 use crate::web::handlers::activitypub::{
     activitypub_get_community, activitypub_get_post, activitypub_get_user,
     activitypub_post_community_inbox, activitypub_post_shared_inbox,
@@ -79,6 +83,7 @@ use crate::web::handlers::well_known::{android_assetlinks, apple_app_site_associ
 use activitypub_federation::config::{FederationConfig, FederationMiddleware};
 use anyhow::Result;
 use axum::extract::DefaultBodyLimit;
+use axum::response::Redirect;
 use axum::routing::{delete, get, post, put};
 use axum::Router;
 use axum_login::{login_required, AuthManagerLayerBuilder};
@@ -234,6 +239,16 @@ impl App {
             )
             .route("/api/v1/devices", post(register_device_handler))
             .route("/api/v1/devices", get(list_devices_handler))
+            // Staff-only. These live inside the login-gated router so signed-out
+            // visitors are redirected to /login; the AdminUser extractor on each
+            // handler is what rejects signed-in non-admins with a 403.
+            .route("/admin", get(|| async { Redirect::to("/admin/posts") }))
+            .route("/admin/posts", get(admin_posts))
+            .route("/admin/posts/:post_id", get(admin_post_detail))
+            .route("/admin/users", get(admin_users))
+            .route("/admin/users/:login_name/posts", get(admin_user_posts))
+            .route("/admin/communities", get(admin_communities))
+            .route("/admin/communities/:slug/posts", get(admin_community_posts))
             .route_layer(login_required!(Backend, login_url = "/login"));
 
         let state = self.state.clone();

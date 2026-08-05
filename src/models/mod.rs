@@ -1,4 +1,5 @@
 pub mod actor;
+pub mod admin;
 pub mod banner;
 pub mod comment;
 pub mod community;

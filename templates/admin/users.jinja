@@ -1,0 +1,46 @@
+{% extends "admin/base.jinja" %}
+{% block admin_content %}
+  <h2>Users</h2>
+  <table class="admin-table">
+    <thead>
+      <tr>
+        <th>Login name</th>
+        <th>Display name</th>
+        <th>Role</th>
+        <th>Posts</th>
+        <th>Joined</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in users %}
+        <tr>
+          <td>@{{ user.login_name }}</td>
+          <td>{{ user.display_name }}</td>
+          <td>
+            {% if user.role != "user" %}<strong>{{ user.role }}</strong>{% else %}{{ user.role }}{% endif %}
+          </td>
+          <td>{{ user.post_count }}</td>
+          <td>{{ user.created_at|dateformat(format="short", tz="Asia/Seoul") }}</td>
+          <td>
+            {% if user.deleted_at %}
+              <span class="admin-tag deleted">deleted</span>
+            {% else %}
+              active
+            {% endif %}
+          </td>
+          <td>
+            <a href="/admin/users/{{ user.login_name }}/posts">posts →</a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="admin-pager">
+    {% if page > 1 %}<a href="?page={{ page - 1 }}">← Previous</a>{% endif %}
+    <span>Page {{ page }}</span>
+    {% if has_next %}<a href="?page={{ page + 1 }}">Next →</a>{% endif %}
+  </div>
+{% endblock admin_content %}

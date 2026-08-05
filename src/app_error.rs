@@ -55,6 +55,7 @@ pub enum AppError {
     InvalidUuid(String),
     InvalidCommunityId(String),
     Unauthorized,
+    Forbidden,
     NotFound(String),
     DatabaseError(String),
 }
@@ -121,6 +122,12 @@ impl IntoResponse for AppError {
                 "Unauthorized".to_string(),
                 true,
             ),
+            AppError::Forbidden => (
+                StatusCode::FORBIDDEN,
+                error_codes::FORBIDDEN,
+                "Forbidden".to_string(),
+                true,
+            ),
             AppError::NotFound(resource) => (
                 StatusCode::NOT_FOUND,
                 error_codes::NOT_FOUND,
@@ -163,6 +170,7 @@ impl fmt::Display for AppError {
             AppError::InvalidUuid(msg) => write!(f, "Invalid UUID: {}", msg),
             AppError::InvalidCommunityId(msg) => write!(f, "Invalid community ID: {}", msg),
             AppError::Unauthorized => write!(f, "Unauthorized"),
+            AppError::Forbidden => write!(f, "Forbidden"),
             AppError::NotFound(resource) => write!(f, "{} not found", resource),
             AppError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
         }

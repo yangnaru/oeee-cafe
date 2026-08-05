@@ -1,6 +1,6 @@
 use crate::app_error::AppError;
 use crate::locale::LOCALES;
-use crate::models::user::{AuthSession, Language};
+use crate::models::user::{AuthSession, Language, User};
 use crate::web::context::CommonContext;
 use anyhow;
 use anyhow::Result;
@@ -32,6 +32,7 @@ use super::state::AppState;
 pub mod about;
 pub mod account;
 pub mod activitypub;
+pub mod admin;
 pub mod auth;
 pub mod collaborate;
 pub mod collaborate_cleanup;
@@ -178,6 +179,35 @@ where
             .unwrap_or_else(|| "en".to_string());
 
         Ok(ExtractFtlLang(ftl_lang))
+    }
+}
+
+/// Extractor that admits only site-wide admins.
+///
+/// Every handler that reads through the normal visibility rules (private
+/// communities, drafts, soft-deleted posts) takes this, so the unfiltered
+/// queries in `models::admin` are unreachable without it.
+pub struct AdminUser(pub User);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for AdminUser
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth_session = AuthSession::from_request_parts(parts, state)
+            .await
+            .map_err(|_| AppError::Anyhow(anyhow::anyhow!("Failed to extract auth session")))?;
+
+        let user = auth_session.user.ok_or(AppError::Unauthorized)?;
+
+        if !user.is_admin() {
+            return Err(AppError::Forbidden);
+        }
+
+        Ok(AdminUser(user))
     }
 }
 
