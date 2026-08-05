@@ -233,7 +233,6 @@ my-communities = 我的社区
 my-communities-nil = 您还没有创建任何社区
 
 latest-active-communities = 最近活跃的社区
-posts-from-public-communities = 公开社区的作品
 official-communities = 官方社区
 official-communities-nil = 暂无官方社区
 active-communities-nil = 暂无活跃的公开社区

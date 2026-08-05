@@ -46,7 +46,10 @@
        that used to live here is how the sentinel batch size drifted before. #}
     {% if posts and posts|length > 0 %}
       <section role="region" aria-labelledby="public-posts-heading">
-        <h2 id="public-posts-heading" class="home-section-title">{{ ftl_get_message("posts-from-public-communities") }}</h2>
+        {# Short view label rather than naming the visibility rule the query
+           uses. Reuses the key the hashtag and community pages already put
+           above their drawing grids. #}
+        <h2 id="public-posts-heading" class="home-section-title">{{ ftl_get_message("recent-drawings") }}</h2>
         <div class="thumbnail-size">
           <label for="post-cols">{{ ftl_get_message("home-thumbnail-size") }}</label>
           <input type="range" id="post-cols" min="1" step="1" />

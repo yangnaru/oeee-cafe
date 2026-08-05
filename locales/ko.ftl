@@ -233,7 +233,6 @@ my-communities = 내 커뮤니티
 my-communities-nil = 내가 만든 커뮤니티가 없습니다.
 
 latest-active-communities = 최근 활동 커뮤니티
-posts-from-public-communities = 공개 커뮤니티 그림들
 official-communities = 공식 커뮤니티
 official-communities-nil = 공식 커뮤니티가 없습니다.
 active-communities-nil = 활동 중인 공개 커뮤니티가 없습니다.
