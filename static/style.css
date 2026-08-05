@@ -1214,6 +1214,17 @@ nav a:visited,
   grid-template-columns: repeat(var(--home-cols), minmax(0, 1fr));
 }
 
+/* Phones get a fixed three columns and no control. The useful range there was
+   only 1-4 to begin with, so a slider bought almost nothing in exchange for
+   occupying a row and being fiddly to drag. Repeats the [data-cols] selector so
+   it also overrides a count stored from a wider screen. */
+@media (max-width: 600px) {
+  .posts-grid,
+  :root[data-cols] .posts-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .community-badges {
   grid-template-columns: repeat(2, 1fr);
 }
