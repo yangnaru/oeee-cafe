@@ -2,24 +2,24 @@
 {% block title %}
   {{ super() }} | {{ ftl_get_message("timeline") }}
 {% endblock title %}
+{% block head %}
+  {% include "post_feed_head.jinja" %}
+{% endblock head %}
 {% block content %}
   <div class="center">
-    <h2>{{ ftl_get_message("timeline-my") }}</h2>
-    {% if posts|length > 0 %}
-      <div class="posts-grid">
-        {% for post in posts %}
-          <div class="posts-grid-item">
-            <a href="/@{{ post.community_slug if post.community_slug else post.user_login_name }}/{{ post.id }}">
-              <img width="{{ post.image_width }}"
-                   height="{{ post.image_height }}"
-                   alt="{{ post.title }}"
-                   src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
-            </a>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p>{{ ftl_get_message("timeline-empty")|safe }}</p>
-    {% endif %}
+    {# Same chrome as /: shared head, controls, grid and card fragment. The two
+       feeds differ only in which query fills them and where the sentinel
+       points, both of which come from the `feed` object. #}
+    <section role="region" aria-labelledby="post-feed-heading">
+      <h2 id="post-feed-heading" class="home-section-title">{{ ftl_get_message("timeline-my") }}</h2>
+      {% if feed.posts and feed.posts|length > 0 %}
+        {% include "post_feed_controls.jinja" %}
+        <div class="posts-grid" id="post-feed-grid">
+          {% include "post_feed_fragment.jinja" %}
+        </div>
+      {% else %}
+        <p>{{ ftl_get_message("timeline-empty")|safe }}</p>
+      {% endif %}
+    </section>
   </div>
 {% endblock content %}

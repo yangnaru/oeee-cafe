@@ -1,8 +1,10 @@
 {# One batch of post cards plus the sentinel that pulls the next batch.
-   Rendered inline by home.jinja for the first batch and standalone by
-   /api/home/posts for the rest, so it must not depend on anything the
-   load-more handler does not pass. #}
-{% for post in posts %}
+   Shared by / and /home: both pass a `feed` object built by feed_context() in
+   handlers/home.rs, so the sentinel points at whichever load-more endpoint
+   that feed uses. Rendered inline for the first batch and standalone by the
+   load-more handlers for the rest, so it must not depend on anything those
+   handlers do not pass. #}
+{% for post in feed.posts %}
   <div class="posts-grid-item">
     <a href="/@{{ post.community_slug if post.community_slug else post.user_login_name }}/{{ post.id }}"
        aria-label="{{ post.title }} by {{ post.user_login_name }}">
@@ -26,9 +28,9 @@
   </div>
 {% endfor %}
 
-{% if has_more %}
+{% if feed.has_more %}
   <div class="infinite-scroll-sentinel"
-       hx-get="/api/home/posts?offset={{ offset }}&limit={{ limit }}"
+       hx-get="{{ feed.next_url }}"
        hx-trigger="revealed"
        hx-swap="outerHTML">
     <span class="loading-indicator">{{ ftl_get_message("loading-more-posts") }}</span>

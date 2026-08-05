@@ -1445,11 +1445,16 @@ pub async fn find_public_posts(
         .collect())
 }
 
+/// Posts from people the viewer follows. Returns the same shape as
+/// `find_public_posts` so the timeline renders through the shared feed card,
+/// community label and all.
 pub async fn find_following_posts_by_user_id(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
     viewer_show_sensitive: bool,
-) -> Result<Vec<SerializablePost>> {
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<SerializablePostForHome>> {
     let q = query!(
         "
             SELECT
@@ -1465,6 +1470,8 @@ pub async fn find_following_posts_by_user_id(
                 images.replay_filename,
                 posts.viewer_count,
                 (posts.is_sensitive OR posts.is_explicit) AS \"is_sensitive!\",
+                communities.slug AS \"community_slug?\",
+                communities.name AS \"community_name?\",
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at
@@ -1481,18 +1488,21 @@ pub async fn find_following_posts_by_user_id(
             AND posts.deleted_at IS NULL
             AND ((posts.is_sensitive = false AND posts.is_explicit = false) OR $2 = true OR posts.author_id = $1)
             ORDER BY posts.published_at DESC
+            LIMIT $3 OFFSET $4
         ",
         user_id,
-        viewer_show_sensitive
+        viewer_show_sensitive,
+        limit,
+        offset
     );
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result
         .into_iter()
-        .map(|row| SerializablePost {
+        .map(|row| SerializablePostForHome {
             id: row.id,
             title: row.title,
             author_id: row.author_id,
-            user_login_name: Some(row.login_name),
+            user_login_name: row.login_name,
             paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
             image_filename: row.image_filename,
@@ -1500,6 +1510,8 @@ pub async fn find_following_posts_by_user_id(
             image_height: row.height,
             replay_filename: row.replay_filename,
             is_sensitive: row.is_sensitive,
+            community_slug: row.community_slug,
+            community_name: row.community_name,
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,

@@ -47,6 +47,7 @@ use crate::web::handlers::home::{
     add_reaction_api, create_comment_api, delete_comment_api, delete_post_api, edit_post_api,
     get_active_communities_json, get_latest_comments_json, get_post_comments_api,
     get_post_details_json, get_post_reactions_by_emoji_json, home, load_more_public_posts,
+    load_more_timeline_posts,
     load_more_public_posts_json, my_timeline, remove_reaction_api,
 };
 use crate::web::handlers::notifications::{
@@ -150,6 +151,7 @@ impl App {
 
         let protected_router = Router::new()
             .route("/home", get(my_timeline))
+            .route("/api/timeline/posts", get(load_more_timeline_posts))
             .route("/notifications", get(list_notifications))
             .route(
                 "/notifications/unread-count",

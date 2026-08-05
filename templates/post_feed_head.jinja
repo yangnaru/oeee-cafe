@@ -1,0 +1,37 @@
+{# Head fragment shared by the / and /home feeds: page width, control styling,
+   and the pre-paint column restore. Included from each page's {% block head %}
+   so the two feeds cannot drift apart. #}
+<style>
+  /* Wider than the 829px default so the grid has room to breathe, capped so it
+     does not sprawl on an ultrawide monitor. The nav bar reads the same
+     variable and follows automatically. */
+  :root { --page-width: 1600px; }
+  .thumbnail-size {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .5rem;
+    margin: 8px 0;
+    font-size: .85rem;
+  }
+  .thumbnail-size input[type="range"] { max-width: 200px; }
+  .thumbnail-size output {
+    min-width: 1.5em;
+    text-align: right;
+    font-weight: bold;
+  }
+  /* Phones use a fixed three-column grid, so the control has nothing to do. */
+  @media (max-width: 600px) {
+    .thumbnail-size { display: none; }
+  }
+</style>
+{# Applied before first paint so the grid does not flash at another width. #}
+<script>
+  (function () {
+    var saved = parseInt(localStorage.getItem("homeCols"), 10);
+    if (saved > 0) {
+      document.documentElement.style.setProperty("--home-cols", saved);
+      document.documentElement.setAttribute("data-cols", "");
+    }
+  })();
+</script>

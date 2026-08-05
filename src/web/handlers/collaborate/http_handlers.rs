@@ -423,8 +423,11 @@ mod tests {
                 json!(null)
             },
             active_sessions => Vec::<serde_json::Value>::new(),
-            posts => posts,
-            has_more => false,
+            feed => context! {
+                posts => posts,
+                has_more => false,
+                next_url => "",
+            },
             canvas_sizes => vec![("300x300", "300x300")],
             postable_communities => if signed_in { vec![sample_community()] } else { vec![] },
             selected_community_slug => "open",

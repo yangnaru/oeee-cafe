@@ -51,6 +51,26 @@ use minijinja::context;
 /// case to a single extra fetch rather than eliminating it.
 const HOME_POSTS_PER_BATCH: i64 = 60;
 
+/// Context both post feeds hand to the shared card fragment. `/` and `/home`
+/// differ only in which query fills `posts` and where the sentinel points, so
+/// everything else lives here rather than being written twice.
+fn feed_context(
+    posts: Vec<crate::models::post::SerializablePostForHome>,
+    fragment_path: &str,
+    offset: i64,
+) -> minijinja::Value {
+    let has_more = posts.len() as i64 == HOME_POSTS_PER_BATCH;
+    let next_offset = offset + HOME_POSTS_PER_BATCH;
+    context! {
+        posts,
+        has_more,
+        next_url => format!(
+            "{}?offset={}&limit={}",
+            fragment_path, next_offset, HOME_POSTS_PER_BATCH
+        ),
+    }
+}
+
 pub async fn home(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -78,12 +98,7 @@ pub async fn home(
     let rendered = template.render(context! {
         current_user => auth_session.user,
         messages => messages.into_iter().collect::<Vec<_>>(),
-        // Same key names the fragment uses, so the first batch and every
-        // scrolled batch render through one template.
-        limit => HOME_POSTS_PER_BATCH,
-        offset => HOME_POSTS_PER_BATCH,
-        has_more => posts.len() as i64 == HOME_POSTS_PER_BATCH,
-        posts,
+        feed => feed_context(posts, "/api/home/posts", 0),
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
@@ -109,14 +124,20 @@ pub async fn my_timeline(
         .as_ref()
         .ok_or(AppError::Unauthorized)?
         .clone();
-    let posts =
-        find_following_posts_by_user_id(&mut tx, user.id, user.show_sensitive_content).await?;
+    let posts = find_following_posts_by_user_id(
+        &mut tx,
+        user.id,
+        user.show_sensitive_content,
+        HOME_POSTS_PER_BATCH,
+        0,
+    )
+    .await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("timeline.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         messages => messages.into_iter().collect::<Vec<_>>(),
-        posts,
+        feed => feed_context(posts, "/api/timeline/posts", 0),
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
@@ -175,13 +196,41 @@ pub async fn load_more_public_posts(
     tx.commit().await?;
 
     let template: minijinja::Template<'_, '_> =
-        state.env.get_template("home_posts_fragment.jinja")?;
+        state.env.get_template("post_feed_fragment.jinja")?;
     let rendered = template.render(context! {
-        posts,
+        feed => feed_context(posts, "/api/home/posts", query.offset),
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        offset => query.offset + query.limit,
-        limit => query.limit,
-        has_more => posts.len() as i64 == query.limit,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+/// GET /api/timeline/posts — one batch of following-feed cards plus the next
+/// sentinel. Same shape as load_more_public_posts; only the query differs.
+pub async fn load_more_timeline_posts(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Query(query): Query<LoadMoreQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+    let posts = find_following_posts_by_user_id(
+        &mut tx,
+        user.id,
+        user.show_sensitive_content,
+        query.limit,
+        query.offset,
+    )
+    .await?;
+    tx.commit().await?;
+
+    let template: minijinja::Template<'_, '_> =
+        state.env.get_template("post_feed_fragment.jinja")?;
+    let rendered = template.render(context! {
+        feed => feed_context(posts, "/api/timeline/posts", query.offset),
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
     })?;
 
     Ok(Html(rendered).into_response())
@@ -1306,12 +1355,17 @@ mod tests {
 
     fn home_context(posts: Vec<serde_json::Value>, has_more: bool) -> minijinja::Value {
         context! {
+            feed => context! {
+                posts => posts.clone(),
+                has_more => has_more,
+                next_url => format!(
+                    "/api/home/posts?offset={}&limit={}",
+                    super::HOME_POSTS_PER_BATCH,
+                    super::HOME_POSTS_PER_BATCH
+                ),
+            },
             current_user => json!(null),
             messages => Vec::<serde_json::Value>::new(),
-            posts => posts,
-            limit => super::HOME_POSTS_PER_BATCH,
-            offset => super::HOME_POSTS_PER_BATCH,
-            has_more => has_more,
             draft_post_count => 0,
             unread_notification_count => 0,
             ftl_lang => "en",
@@ -1342,10 +1396,11 @@ mod tests {
         let rendered = template
             .render(home_context(vec![sample_post()], true))
             .expect("renders");
-        // The `&` is literal template text, not interpolated, so autoescaping
-        // leaves it raw — unlike a URL built in Rust and passed through {{ }}.
+        // next_url is built in Rust and passed through {{ }}, so autoescaping
+        // encodes `/` and `&`. That is correct HTML — the parser decodes them
+        // before htmx reads the attribute. Pinned so double-escaping is caught.
         let expected = format!(
-            "/api/home/posts?offset={}&limit={}",
+            "&#x2f;api&#x2f;home&#x2f;posts?offset={}&amp;limit={}",
             super::HOME_POSTS_PER_BATCH,
             super::HOME_POSTS_PER_BATCH
         );
@@ -1391,20 +1446,72 @@ mod tests {
     }
 
     #[test]
+    fn timeline_matches_the_home_feed_chrome() {
+        // /home and / share the head, controls, grid id and card fragment; the
+        // only difference is where the sentinel points.
+        let env = test_support::env();
+        let template = env.get_template("timeline.jinja").expect("template loads");
+        let rendered = template
+            .render(context! {
+                current_user => json!({"login_name": "someone"}),
+                messages => Vec::<serde_json::Value>::new(),
+                feed => context! {
+                    posts => vec![sample_post()],
+                    has_more => true,
+                    next_url => "/api/timeline/posts?offset=60&limit=60",
+                },
+                draft_post_count => 0,
+                unread_notification_count => 0,
+                ftl_lang => "en",
+            })
+            .expect("timeline.jinja renders");
+        assert!(rendered.contains("--page-width: 1600px"));
+        assert!(rendered.contains("id=\"post-cols\""));
+        assert!(rendered.contains("id=\"post-feed-grid\""));
+        assert!(rendered.contains("post-card-community"));
+        // Sentinel must target the timeline endpoint, not the public feed.
+        assert!(rendered.contains("&#x2f;api&#x2f;timeline&#x2f;posts"));
+        assert!(!rendered.contains("api&#x2f;home&#x2f;posts"));
+    }
+
+    #[test]
+    fn timeline_shows_the_empty_state_without_the_control() {
+        let env = test_support::env();
+        let template = env.get_template("timeline.jinja").expect("template loads");
+        let rendered = template
+            .render(context! {
+                current_user => json!({"login_name": "someone"}),
+                messages => Vec::<serde_json::Value>::new(),
+                feed => context! {
+                    posts => Vec::<serde_json::Value>::new(),
+                    has_more => false,
+                    next_url => "",
+                },
+                draft_post_count => 0,
+                unread_notification_count => 0,
+                ftl_lang => "en",
+            })
+            .expect("renders");
+        assert!(rendered.contains("timeline-empty"));
+        assert!(!rendered.contains("id=\"post-cols\""));
+    }
+
+    #[test]
     fn fragment_sentinel_carries_the_limit_through() {
         let env = test_support::env();
         let template = env
-            .get_template("home_posts_fragment.jinja")
+            .get_template("post_feed_fragment.jinja")
             .expect("template loads");
         let rendered = template
             .render(context! {
-                posts => vec![sample_post()],
-                offset => 120,
-                limit => 60,
-                has_more => true,
+                feed => context! {
+                    posts => vec![sample_post()],
+                    has_more => true,
+                    next_url => "/api/home/posts?offset=120&limit=60",
+                },
                 r2_public_endpoint_url => "https://example.test",
             })
             .expect("renders");
-        assert!(rendered.contains("/api/home/posts?offset=120&limit=60"));
+        assert!(rendered.contains("&#x2f;api&#x2f;home&#x2f;posts?offset=120&amp;limit=60"));
     }
 }

@@ -104,11 +104,11 @@
     {% endif %}
     {# Finished collaborative drawings, through the same card template as the
        home grid so they carry the community label and sensitive handling. #}
-    {% if posts and posts|length > 0 %}
+    {% if feed.posts and feed.posts|length > 0 %}
       <section role="region" aria-labelledby="collab-gallery-heading">
         <h3 id="collab-gallery-heading">{{ ftl_get_message("collaborate-finished-drawings") }}</h3>
         <div class="posts-grid">
-          {% include "home_posts_fragment.jinja" %}
+          {% include "post_feed_fragment.jinja" %}
         </div>
       </section>
     {% endif %}
