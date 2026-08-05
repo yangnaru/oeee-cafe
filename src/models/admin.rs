@@ -184,6 +184,31 @@ pub async fn find_post_by_id(
     Ok(row.fetch_optional(&mut **tx).await?)
 }
 
+/// Ordering for the user and community lists.
+///
+/// Passed into SQL as a string and matched inside `CASE` expressions rather
+/// than interpolated, so the ORDER BY stays compile-time checked.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AdminSort {
+    /// Most recently active first. The default: on a moderation surface, who
+    /// did something lately is the more useful question than who signed up.
+    #[default]
+    Active,
+    Created,
+    Name,
+}
+
+impl AdminSort {
+    fn as_sql(self) -> &'static str {
+        match self {
+            AdminSort::Active => "active",
+            AdminSort::Created => "created",
+            AdminSort::Name => "name",
+        }
+    }
+}
+
 /// Community summary for the filter dropdown and the per-community header.
 /// Includes private and unlisted communities.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -235,6 +260,182 @@ pub async fn find_community_by_slug(
     Ok(row.fetch_optional(&mut **tx).await?)
 }
 
+/// Community list with activity, for the communities page. Kept separate from
+/// `find_all_communities` because that one feeds the filter dropdown on every
+/// `/admin/posts` render and does not need the correlated subqueries.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AdminCommunityActivity {
+    pub id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub visibility: CommunityVisibility,
+    pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub post_count: i64,
+    /// Most recent post in the community. `None` means nothing was ever posted.
+    /// Live collaborative sessions are not counted.
+    pub last_active_at: Option<DateTime<Utc>>,
+}
+
+pub async fn find_all_communities_with_activity(
+    tx: &mut Transaction<'_, Postgres>,
+    sort: AdminSort,
+) -> Result<Vec<AdminCommunityActivity>> {
+    let rows = query_as!(
+        AdminCommunityActivity,
+        r#"
+        SELECT
+            id AS "id!",
+            slug AS "slug!",
+            name AS "name!",
+            visibility AS "visibility!: CommunityVisibility",
+            created_at AS "created_at!",
+            deleted_at,
+            post_count AS "post_count!",
+            last_active_at
+        FROM (
+            SELECT
+                c.id,
+                c.slug,
+                c.name,
+                c.visibility,
+                c.deleted_at,
+                c.created_at,
+                (
+                    SELECT COUNT(*)
+                    FROM posts p
+                    WHERE p.community_id = c.id AND p.deleted_at IS NULL
+                ) AS post_count,
+                (
+                    SELECT MAX(COALESCE(p.published_at, p.created_at))
+                    FROM posts p
+                    WHERE p.community_id = c.id AND p.deleted_at IS NULL
+                ) AS last_active_at
+            FROM communities c
+        ) c
+        ORDER BY
+            CASE WHEN $1 = 'created' THEN c.created_at END DESC,
+            CASE WHEN $1 = 'name' THEN c.name END ASC,
+            c.last_active_at DESC NULLS LAST
+        "#,
+        sort.as_sql(),
+    );
+    Ok(rows.fetch_all(&mut **tx).await?)
+}
+
+/// A banner as the review queue shows it.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AdminBanner {
+    pub id: Uuid,
+    pub author_id: Uuid,
+    pub author_login_name: String,
+    pub image_filename: String,
+    pub image_width: i32,
+    pub image_height: i32,
+    pub is_explicit: bool,
+    pub flagged_at: Option<DateTime<Utc>>,
+    pub flagged_by_login_name: Option<String>,
+    /// True when this is the banner the author currently displays, which is the
+    /// one /about would surface.
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Banners for review, newest first. Excludes deleted ones — there is nothing
+/// to moderate about a banner nobody can see.
+pub async fn find_all_banners(
+    tx: &mut Transaction<'_, Postgres>,
+    only_explicit: bool,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<AdminBanner>> {
+    let rows = query_as!(
+        AdminBanner,
+        r#"
+        SELECT
+            b.id,
+            b.author_id,
+            author.login_name AS author_login_name,
+            i.image_filename,
+            i.width AS image_width,
+            i.height AS image_height,
+            b.is_explicit,
+            b.flagged_at,
+            flagger.login_name AS "flagged_by_login_name?",
+            (author.banner_id = b.id) AS "is_active!",
+            b.created_at
+        FROM banners b
+        JOIN users author ON b.author_id = author.id
+        JOIN images i ON b.image_id = i.id
+        LEFT JOIN users flagger ON b.flagged_by = flagger.id
+        WHERE b.deleted_at IS NULL
+          AND ($1 = false OR b.is_explicit)
+        ORDER BY b.created_at DESC
+        LIMIT $2 OFFSET $3
+        "#,
+        only_explicit,
+        limit,
+        offset,
+    );
+    Ok(rows.fetch_all(&mut **tx).await?)
+}
+
+/// Single banner, for re-rendering a card after a flag change.
+pub async fn find_banner_by_id(
+    tx: &mut Transaction<'_, Postgres>,
+    banner_id: Uuid,
+) -> Result<Option<AdminBanner>> {
+    let row = query_as!(
+        AdminBanner,
+        r#"
+        SELECT
+            b.id,
+            b.author_id,
+            author.login_name AS author_login_name,
+            i.image_filename,
+            i.width AS image_width,
+            i.height AS image_height,
+            b.is_explicit,
+            b.flagged_at,
+            flagger.login_name AS "flagged_by_login_name?",
+            (author.banner_id = b.id) AS "is_active!",
+            b.created_at
+        FROM banners b
+        JOIN users author ON b.author_id = author.id
+        JOIN images i ON b.image_id = i.id
+        LEFT JOIN users flagger ON b.flagged_by = flagger.id
+        WHERE b.id = $1
+        "#,
+        banner_id,
+    );
+    Ok(row.fetch_optional(&mut **tx).await?)
+}
+
+/// Sets or clears the explicit flag. Takes the desired state rather than
+/// toggling so a double-submit cannot flip it back.
+pub async fn set_banner_explicit(
+    tx: &mut Transaction<'_, Postgres>,
+    banner_id: Uuid,
+    is_explicit: bool,
+    flagged_by: Uuid,
+) -> Result<()> {
+    query!(
+        r#"
+        UPDATE banners
+        SET is_explicit = $2,
+            flagged_at = CASE WHEN $2 THEN now() ELSE NULL END,
+            flagged_by = CASE WHEN $2 THEN $3::uuid ELSE NULL END
+        WHERE id = $1
+        "#,
+        banner_id,
+        is_explicit,
+        flagged_by,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
 /// User summary for the admin user list, including deleted accounts.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AdminUserSummary {
@@ -245,10 +446,16 @@ pub struct AdminUserSummary {
     pub post_count: i64,
     pub created_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
+    /// Latest content the account produced: a post, a comment or a guestbook
+    /// entry. Reactions and passive browsing are not counted, so this reads as
+    /// "last contributed" rather than "last signed in" — there is no session
+    /// timestamp on `users` to derive the latter from.
+    pub last_active_at: Option<DateTime<Utc>>,
 }
 
 pub async fn find_all_users(
     tx: &mut Transaction<'_, Postgres>,
+    sort: AdminSort,
     limit: i64,
     offset: i64,
 ) -> Result<Vec<AdminUserSummary>> {
@@ -256,19 +463,56 @@ pub async fn find_all_users(
         AdminUserSummary,
         r#"
         SELECT
-            users.id,
-            users.login_name,
-            users.display_name,
-            users.role AS "role: UserRole",
-            users.created_at,
-            users.deleted_at,
-            COUNT(posts.id) AS "post_count!"
-        FROM users
-        LEFT JOIN posts ON posts.author_id = users.id AND posts.deleted_at IS NULL
-        GROUP BY users.id
-        ORDER BY users.created_at DESC
-        LIMIT $1 OFFSET $2
+            id AS "id!",
+            login_name AS "login_name!",
+            display_name AS "display_name!",
+            role AS "role!: UserRole",
+            created_at AS "created_at!",
+            deleted_at,
+            post_count AS "post_count!",
+            last_active_at
+        FROM (
+            SELECT
+                u.id,
+                u.login_name,
+                u.display_name,
+                u.role,
+                u.created_at,
+                u.deleted_at,
+                (
+                    SELECT COUNT(*)
+                    FROM posts p
+                    WHERE p.author_id = u.id AND p.deleted_at IS NULL
+                ) AS post_count,
+                -- GREATEST ignores NULLs, so an account that has only ever
+                -- commented still gets a timestamp.
+                GREATEST(
+                    (
+                        SELECT MAX(COALESCE(p.published_at, p.created_at))
+                        FROM posts p
+                        WHERE p.author_id = u.id AND p.deleted_at IS NULL
+                    ),
+                    (
+                        SELECT MAX(cm.created_at)
+                        FROM comments cm
+                        JOIN actors a ON cm.actor_id = a.id
+                        WHERE a.user_id = u.id AND cm.deleted_at IS NULL
+                    ),
+                    (
+                        SELECT MAX(g.created_at)
+                        FROM guestbook_entries g
+                        WHERE g.author_id = u.id
+                    )
+                ) AS last_active_at
+            FROM users u
+        ) u
+        ORDER BY
+            CASE WHEN $1 = 'created' THEN u.created_at END DESC,
+            CASE WHEN $1 = 'name' THEN u.login_name END ASC,
+            u.last_active_at DESC NULLS LAST
+        LIMIT $2 OFFSET $3
         "#,
+        sort.as_sql(),
         limit,
         offset,
     );

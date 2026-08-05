@@ -569,6 +569,9 @@ pub async fn find_users_with_public_posts_and_banner(
         JOIN images i ON b.image_id = i.id
         WHERE p.published_at IS NOT NULL
         AND c.visibility = 'public'
+        -- Staff-flagged banners are withheld from the public /about page.
+        AND b.is_explicit = false
+        AND b.deleted_at IS NULL
         GROUP BY u.id, banner_image_filename
         ORDER BY count(p.id) DESC
         "#,

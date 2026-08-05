@@ -1,14 +1,24 @@
 {% extends "admin/base.jinja" %}
+{% macro sort_link(key, label) %}
+  <a href="?sort={{ key }}" {% if sort == key %}class="admin-sort-active"{% endif %}>
+    {{ label }}{% if sort == key %} ▾{% endif %}
+  </a>
+{% endmacro %}
 {% block admin_content %}
   <h2>Users</h2>
+  <p class="muted">
+    "Last active" is the most recent post, comment or guestbook entry the
+    account produced. Passive browsing is not tracked.
+  </p>
   <table class="admin-table">
     <thead>
       <tr>
-        <th>Login name</th>
+        <th>{{ sort_link("name", "Login name") }}</th>
         <th>Display name</th>
         <th>Role</th>
         <th>Posts</th>
-        <th>Joined</th>
+        <th>{{ sort_link("active", "Last active") }}</th>
+        <th>{{ sort_link("created", "Joined") }}</th>
         <th>Status</th>
         <th></th>
       </tr>
@@ -22,6 +32,13 @@
             {% if user.role != "user" %}<strong>{{ user.role }}</strong>{% else %}{{ user.role }}{% endif %}
           </td>
           <td>{{ user.post_count }}</td>
+          <td>
+            {% if user.last_active_at %}
+              {{ user.last_active_at|datetimeformat(format="short", tz="Asia/Seoul") }}
+            {% else %}
+              <span class="muted">never</span>
+            {% endif %}
+          </td>
           <td>{{ user.created_at|dateformat(format="short", tz="Asia/Seoul") }}</td>
           <td>
             {% if user.deleted_at %}
@@ -39,8 +56,8 @@
   </table>
 
   <div class="admin-pager">
-    {% if page > 1 %}<a href="?page={{ page - 1 }}">← Previous</a>{% endif %}
+    {% if page > 1 %}<a href="?sort={{ sort }}&page={{ page - 1 }}">← Previous</a>{% endif %}
     <span>Page {{ page }}</span>
-    {% if has_next %}<a href="?page={{ page + 1 }}">Next →</a>{% endif %}
+    {% if has_next %}<a href="?sort={{ sort }}&page={{ page + 1 }}">Next →</a>{% endif %}
   </div>
 {% endblock admin_content %}

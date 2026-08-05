@@ -1,0 +1,38 @@
+{% extends "admin/base.jinja" %}
+{% block admin_content %}
+  <h2>Banners</h2>
+  <p class="muted">
+    Flagging a banner as explicit withholds it from the public /about page.
+    The author is not told, and cannot clear the flag themselves.
+  </p>
+
+  <form class="admin-filters" method="get" action="/admin/banners">
+    <label>
+      <input type="checkbox"
+             name="explicit"
+             {% if only_explicit %}checked{% endif %} />
+      Show only flagged
+    </label>
+    <input type="submit" value="Filter" />
+  </form>
+
+  {% if banners %}
+    <div class="admin-grid">
+      {% for banner in banners %}
+        {% include "admin/banner_card.jinja" %}
+      {% endfor %}
+    </div>
+
+    <div class="admin-pager">
+      {% if page > 1 %}
+        <a href="?{% if only_explicit %}explicit=on&{% endif %}page={{ page - 1 }}">← Previous</a>
+      {% endif %}
+      <span>Page {{ page }}</span>
+      {% if has_next %}
+        <a href="?{% if only_explicit %}explicit=on&{% endif %}page={{ page + 1 }}">Next →</a>
+      {% endif %}
+    </div>
+  {% else %}
+    <p>No banners{% if only_explicit %} have been flagged{% endif %}.</p>
+  {% endif %}
+{% endblock admin_content %}

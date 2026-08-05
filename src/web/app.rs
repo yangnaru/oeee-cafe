@@ -7,8 +7,8 @@ use crate::web::handlers::account::{
     save_show_sensitive_content, verify_email_code_json, verify_email_verification_code,
 };
 use crate::web::handlers::admin::{
-    admin_communities, admin_community_posts, admin_post_detail, admin_posts, admin_user_posts,
-    admin_users,
+    admin_banners, admin_communities, admin_community_posts, admin_flag_banner, admin_post_detail,
+    admin_posts, admin_posts_fragment, admin_user_posts, admin_users,
 };
 use crate::web::handlers::activitypub::{
     activitypub_get_community, activitypub_get_post, activitypub_get_user,
@@ -244,11 +244,14 @@ impl App {
             // handler is what rejects signed-in non-admins with a 403.
             .route("/admin", get(|| async { Redirect::to("/admin/posts") }))
             .route("/admin/posts", get(admin_posts))
+            .route("/admin/posts-fragment", get(admin_posts_fragment))
             .route("/admin/posts/:post_id", get(admin_post_detail))
             .route("/admin/users", get(admin_users))
             .route("/admin/users/:login_name/posts", get(admin_user_posts))
             .route("/admin/communities", get(admin_communities))
             .route("/admin/communities/:slug/posts", get(admin_community_posts))
+            .route("/admin/banners", get(admin_banners))
+            .route("/admin/banners/:banner_id/explicit", post(admin_flag_banner))
             .route_layer(login_required!(Backend, login_url = "/login"));
 
         let state = self.state.clone();

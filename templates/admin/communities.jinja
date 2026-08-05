@@ -1,13 +1,24 @@
 {% extends "admin/base.jinja" %}
+{% macro sort_link(key, label) %}
+  <a href="?sort={{ key }}" {% if sort == key %}class="admin-sort-active"{% endif %}>
+    {{ label }}{% if sort == key %} ▾{% endif %}
+  </a>
+{% endmacro %}
 {% block admin_content %}
   <h2>Communities</h2>
-  <p class="muted">Includes unlisted and private communities.</p>
+  <p class="muted">
+    Includes unlisted and private communities. "Last active" is the most recent
+    post; live collaborative sessions are not counted.
+  </p>
   <table class="admin-table">
     <thead>
       <tr>
-        <th>Name</th>
+        <th>{{ sort_link("name", "Name") }}</th>
         <th>Slug</th>
         <th>Visibility</th>
+        <th>Posts</th>
+        <th>{{ sort_link("active", "Last active") }}</th>
+        <th>{{ sort_link("created", "Created") }}</th>
         <th>Status</th>
         <th></th>
       </tr>
@@ -24,6 +35,15 @@
               {{ community.visibility }}
             {% endif %}
           </td>
+          <td>{{ community.post_count }}</td>
+          <td>
+            {% if community.last_active_at %}
+              {{ community.last_active_at|datetimeformat(format="short", tz="Asia/Seoul") }}
+            {% else %}
+              <span class="muted">never</span>
+            {% endif %}
+          </td>
+          <td>{{ community.created_at|dateformat(format="short", tz="Asia/Seoul") }}</td>
           <td>
             {% if community.deleted_at %}
               <span class="admin-tag deleted">deleted</span>

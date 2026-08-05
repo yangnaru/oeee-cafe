@@ -19,6 +19,8 @@
     .admin-card { width: 160px; font-size: .85rem; }
     .admin-card img { width: 100%; height: auto; display: block; border: 1px solid #ccc; }
     .admin-card.deleted img { opacity: .4; }
+    .banner-card { width: 260px; }
+    .banner-card.flagged img { opacity: .35; outline: 2px solid #7a1020; }
     .admin-table { width: 100%; border-collapse: collapse; }
     .admin-table th, .admin-table td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #ddd; }
     .admin-tag { font-size: .7rem; padding: .1rem .3rem; border-radius: 3px; border: 1px solid currentColor; }
@@ -28,6 +30,10 @@
     .admin-tag.unlisted { color: #2a5a7a; }
     .admin-tag.sensitive { color: #7a1020; }
     .admin-pager { margin-top: 1rem; display: flex; gap: 1rem; }
+    .admin-sort-active { font-weight: bold; }
+    /* Full-width so it always enters the viewport and fires hx-trigger="revealed",
+       even when the last row of cards does not fill the grid. */
+    .admin-sentinel { width: 100%; padding: 1rem; text-align: center; }
   </style>
 {% endblock head %}
 {% block content %}
@@ -38,6 +44,7 @@
     <a href="/admin/posts">All posts</a>
     <a href="/admin/users">Users</a>
     <a href="/admin/communities">Communities</a>
+    <a href="/admin/banners">Banners</a>
     <a href="/">← Back to site</a>
   </nav>
   {% block admin_content %}

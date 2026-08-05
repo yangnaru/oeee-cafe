@@ -6,8 +6,9 @@
 
 use crate::app_error::AppError;
 use crate::models::admin::{
-    count_all_posts, find_all_communities, find_all_posts, find_all_users, find_community_by_slug,
-    find_post_by_id, AdminCommunity, AdminPostFilter,
+    count_all_posts, find_all_banners, find_all_communities, find_all_communities_with_activity,
+    find_all_posts, find_all_users, find_banner_by_id, find_community_by_slug, find_post_by_id,
+    set_banner_explicit, AdminCommunity, AdminPostFilter, AdminSort,
 };
 use crate::models::user::find_user_by_login_name;
 use crate::web::context::CommonContext;
@@ -15,6 +16,7 @@ use crate::web::handlers::{AdminUser, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::extract::{Path, Query, State};
 use axum::response::Html;
+use axum::Form;
 use minijinja::context;
 use serde::Deserialize;
 use sqlx::{Postgres, Transaction};
@@ -22,6 +24,7 @@ use uuid::Uuid;
 
 const POSTS_PER_PAGE: i64 = 60;
 const USERS_PER_PAGE: i64 = 100;
+const BANNERS_PER_PAGE: i64 = 60;
 
 /// Filters for the global post list. `author` and `community` are the
 /// human-readable identifiers so the URLs stay hand-editable.
@@ -35,7 +38,8 @@ pub struct AdminPostsQuery {
     pub community: Option<String>,
     pub drafts: Option<String>,
     pub deleted: Option<String>,
-    pub page: Option<i64>,
+    /// Row offset for the infinite-scroll sentinel. The first page omits it.
+    pub offset: Option<i64>,
 }
 
 struct ResolvedFilter {
@@ -81,6 +85,42 @@ async fn resolve_filter(
     })
 }
 
+/// URL the infinite-scroll sentinel fetches next. Built here rather than in the
+/// template so author names and slugs get percent-encoded properly.
+fn fragment_url(resolved: &ResolvedFilter, next_offset: i64) -> String {
+    let mut url = format!("/admin/posts-fragment?offset={}", next_offset);
+    if let Some(author) = &resolved.author_login_name {
+        url.push_str(&format!("&author={}", urlencoding::encode(author)));
+    }
+    if let Some(slug) = &resolved.community_slug {
+        url.push_str(&format!("&community={}", urlencoding::encode(slug)));
+    }
+    if resolved.filter.include_drafts {
+        url.push_str("&drafts=on");
+    }
+    if resolved.filter.include_deleted {
+        url.push_str("&deleted=on");
+    }
+    url
+}
+
+/// Loads one batch and builds the context the fragment template needs. Shared
+/// by the full page and the infinite-scroll fragment so both stay in step.
+async fn load_batch(
+    tx: &mut Transaction<'_, Postgres>,
+    query: &AdminPostsQuery,
+    resolved: &ResolvedFilter,
+) -> Result<(Vec<crate::models::admin::AdminPost>, bool, String), AppError> {
+    let offset = query.offset.unwrap_or(0).max(0);
+    let posts = find_all_posts(tx, resolved.filter, POSTS_PER_PAGE, offset).await?;
+    // A full batch means there is probably more; a short one is definitively
+    // the end. Costs one wasted request at an exact multiple, which beats
+    // counting on every scroll.
+    let has_more = posts.len() as i64 == POSTS_PER_PAGE;
+    let next_url = fragment_url(resolved, offset + POSTS_PER_PAGE);
+    Ok((posts, has_more, next_url))
+}
+
 /// Shared renderer for the global list and its pre-filtered variants.
 async fn render_posts(
     admin: AdminUser,
@@ -91,16 +131,11 @@ async fn render_posts(
     communities: Vec<AdminCommunity>,
     mut tx: Transaction<'_, Postgres>,
 ) -> Result<Html<String>, AppError> {
-    let page = query.page.unwrap_or(1).max(1);
-    let offset = (page - 1) * POSTS_PER_PAGE;
-
-    let posts = find_all_posts(&mut tx, resolved.filter, POSTS_PER_PAGE, offset).await?;
+    let (posts, has_more, next_url) = load_batch(&mut tx, &query, &resolved).await?;
     let total = count_all_posts(&mut tx, resolved.filter).await?;
 
     let common_ctx = CommonContext::build(&mut tx, Some(admin.0.id)).await?;
     tx.commit().await?;
-
-    let total_pages = (total + POSTS_PER_PAGE - 1) / POSTS_PER_PAGE;
 
     let template = state.env.get_template("admin/posts.jinja")?;
     let rendered = template.render(context! {
@@ -108,8 +143,8 @@ async fn render_posts(
         posts => posts,
         communities => communities,
         total => total,
-        page => page,
-        total_pages => total_pages,
+        has_more => has_more,
+        next_url => next_url,
         filter_author => resolved.author_login_name,
         filter_community => resolved.community_slug,
         include_drafts => resolved.filter.include_drafts,
@@ -118,6 +153,30 @@ async fn render_posts(
         unread_notification_count => common_ctx.unread_notification_count,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ftl_lang,
+    })?;
+
+    Ok(Html(rendered))
+}
+
+/// GET /admin/posts-fragment — one batch of cards plus the next sentinel, for
+/// htmx to swap in. Distinct path rather than `/admin/posts/fragment` so it
+/// cannot be confused with the `:post_id` detail route.
+pub async fn admin_posts_fragment(
+    _admin: AdminUser,
+    State(state): State<AppState>,
+    Query(query): Query<AdminPostsQuery>,
+) -> Result<Html<String>, AppError> {
+    let mut tx = state.db_pool.begin().await?;
+    let resolved = resolve_filter(&mut tx, &query).await?;
+    let (posts, has_more, next_url) = load_batch(&mut tx, &query, &resolved).await?;
+    tx.commit().await?;
+
+    let template = state.env.get_template("admin/posts_fragment.jinja")?;
+    let rendered = template.render(context! {
+        posts => posts,
+        has_more => has_more,
+        next_url => next_url,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
     })?;
 
     Ok(Html(rendered))
@@ -213,31 +272,111 @@ pub async fn admin_post_detail(
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AdminUsersQuery {
+pub struct AdminBannersQuery {
     pub page: Option<i64>,
+    /// `?explicit=on` narrows to already-flagged banners, for reviewing past
+    /// decisions.
+    pub explicit: Option<String>,
 }
 
-/// GET /admin/users — every account, deleted ones included.
+/// GET /admin/banners — banner review queue. Flagged banners are withheld from
+/// the public /about page.
+pub async fn admin_banners(
+    admin: AdminUser,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
+    State(state): State<AppState>,
+    Query(query): Query<AdminBannersQuery>,
+) -> Result<Html<String>, AppError> {
+    let page = query.page.unwrap_or(1).max(1);
+    let offset = (page - 1) * BANNERS_PER_PAGE;
+    let only_explicit = query.explicit.is_some();
+
+    let mut tx = state.db_pool.begin().await?;
+    let banners = find_all_banners(&mut tx, only_explicit, BANNERS_PER_PAGE, offset).await?;
+    let common_ctx = CommonContext::build(&mut tx, Some(admin.0.id)).await?;
+    tx.commit().await?;
+
+    let has_next = banners.len() as i64 == BANNERS_PER_PAGE;
+    let template = state.env.get_template("admin/banners.jinja")?;
+    let rendered = template.render(context! {
+        current_user => admin.0,
+        banners => banners,
+        page => page,
+        only_explicit => only_explicit,
+        has_next => has_next,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+        ftl_lang,
+    })?;
+
+    Ok(Html(rendered))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FlagBannerForm {
+    /// Desired end state, not a toggle, so a double-submit is idempotent.
+    pub is_explicit: bool,
+}
+
+/// POST /admin/banners/:banner_id/explicit — flag or unflag a banner. Returns
+/// the replacement card for htmx to swap in place.
+pub async fn admin_flag_banner(
+    admin: AdminUser,
+    State(state): State<AppState>,
+    Path(banner_id): Path<Uuid>,
+    Form(form): Form<FlagBannerForm>,
+) -> Result<Html<String>, AppError> {
+    let mut tx = state.db_pool.begin().await?;
+    set_banner_explicit(&mut tx, banner_id, form.is_explicit, admin.0.id).await?;
+
+    // Re-read so the card reflects what actually landed, including flagged_at.
+    let banner = find_banner_by_id(&mut tx, banner_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Banner".to_string()))?;
+    tx.commit().await?;
+
+    let template = state.env.get_template("admin/banner_card.jinja")?;
+    let rendered = template.render(context! {
+        banner => banner,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+    })?;
+
+    Ok(Html(rendered))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminListQuery {
+    pub page: Option<i64>,
+    /// Missing or unrecognised sorts fall back to last-active.
+    #[serde(default)]
+    pub sort: AdminSort,
+}
+
+/// GET /admin/users — every account, deleted ones included. Sorted by last
+/// activity by default.
 pub async fn admin_users(
     admin: AdminUser,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
-    Query(query): Query<AdminUsersQuery>,
+    Query(query): Query<AdminListQuery>,
 ) -> Result<Html<String>, AppError> {
     let page = query.page.unwrap_or(1).max(1);
     let offset = (page - 1) * USERS_PER_PAGE;
 
     let mut tx = state.db_pool.begin().await?;
-    let users = find_all_users(&mut tx, USERS_PER_PAGE, offset).await?;
+    let users = find_all_users(&mut tx, query.sort, USERS_PER_PAGE, offset).await?;
     let common_ctx = CommonContext::build(&mut tx, Some(admin.0.id)).await?;
     tx.commit().await?;
 
+    let has_next = users.len() as i64 == USERS_PER_PAGE;
     let template = state.env.get_template("admin/users.jinja")?;
     let rendered = template.render(context! {
         current_user => admin.0,
         users => users,
         page => page,
-        has_next => users_len_is_full(&users),
+        sort => query.sort,
+        has_next => has_next,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang,
@@ -246,18 +385,16 @@ pub async fn admin_users(
     Ok(Html(rendered))
 }
 
-fn users_len_is_full<T>(users: &[T]) -> bool {
-    users.len() as i64 == USERS_PER_PAGE
-}
-
 /// GET /admin/communities — every community, private and unlisted included.
+/// Sorted by last activity by default.
 pub async fn admin_communities(
     admin: AdminUser,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
+    Query(query): Query<AdminListQuery>,
 ) -> Result<Html<String>, AppError> {
     let mut tx = state.db_pool.begin().await?;
-    let communities = find_all_communities(&mut tx).await?;
+    let communities = find_all_communities_with_activity(&mut tx, query.sort).await?;
     let common_ctx = CommonContext::build(&mut tx, Some(admin.0.id)).await?;
     tx.commit().await?;
 
@@ -265,6 +402,7 @@ pub async fn admin_communities(
     let rendered = template.render(context! {
         current_user => admin.0,
         communities => communities,
+        sort => query.sort,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang,
@@ -325,7 +463,10 @@ mod tests {
             "slug": "secret",
             "name": "Secret Club",
             "visibility": "private",
+            "created_at": "2026-01-01T00:00:00Z",
             "deleted_at": null,
+            "post_count": 7,
+            "last_active_at": "2026-03-01T00:00:00Z",
         }])
     }
 
@@ -349,8 +490,8 @@ mod tests {
                 posts => vec![sample_post()],
                 communities => sample_communities(),
                 total => 1,
-                page => 1,
-                total_pages => 1,
+                has_more => true,
+                next_url => "/admin/posts-fragment?offset=60",
                 filter_author => "someone",
                 filter_community => "secret",
                 include_drafts => true,
@@ -372,8 +513,8 @@ mod tests {
                 posts => Vec::<serde_json::Value>::new(),
                 communities => sample_communities(),
                 total => 0,
-                page => 1,
-                total_pages => 0,
+                has_more => false,
+                next_url => "/admin/posts-fragment?offset=60",
                 filter_author => None::<String>,
                 filter_community => None::<String>,
                 include_drafts => false,
@@ -384,6 +525,43 @@ mod tests {
             })
             .expect("posts.jinja renders with no results");
         assert!(rendered.contains("No posts match this filter."));
+    }
+
+    #[test]
+    fn renders_posts_fragment_standalone() {
+        // The fragment handler passes a strictly smaller context than the full
+        // page, so render it with only those keys.
+        let env = test_env();
+        let template = env
+            .get_template("admin/posts_fragment.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                posts => vec![sample_post()],
+                has_more => true,
+                next_url => "/admin/posts-fragment?offset=60&author=some%20one",
+                r2_public_endpoint_url => "https://example.test",
+            })
+            .expect("posts_fragment.jinja renders standalone");
+        assert!(rendered.contains("hx-trigger=\"revealed\""));
+        assert!(rendered.contains("/admin/posts-fragment?offset=60&author=some%20one"));
+    }
+
+    #[test]
+    fn fragment_omits_sentinel_on_last_batch() {
+        let env = test_env();
+        let template = env
+            .get_template("admin/posts_fragment.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                posts => vec![sample_post()],
+                has_more => false,
+                next_url => "",
+                r2_public_endpoint_url => "https://example.test",
+            })
+            .expect("posts_fragment.jinja renders");
+        assert!(!rendered.contains("hx-trigger"));
     }
 
     #[test]
@@ -403,6 +581,63 @@ mod tests {
             .expect("post_detail.jinja renders");
     }
 
+    fn sample_banner(is_explicit: bool) -> serde_json::Value {
+        json!({
+            "id": "00000000-0000-0000-0000-00000000000b",
+            "author_id": "00000000-0000-0000-0000-000000000002",
+            "author_login_name": "someone",
+            "image_filename": "bannerfile.png",
+            "image_width": 300,
+            "image_height": 100,
+            "is_explicit": is_explicit,
+            "flagged_at": if is_explicit { Some("2026-05-01T00:00:00Z") } else { None },
+            "flagged_by_login_name": if is_explicit { Some("admin") } else { None },
+            "is_active": true,
+            "created_at": "2026-01-01T00:00:00Z",
+        })
+    }
+
+    #[test]
+    fn renders_banner_queue() {
+        let env = test_env();
+        let template = env
+            .get_template("admin/banners.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                current_user => current_user(),
+                banners => vec![sample_banner(false), sample_banner(true)],
+                page => 1,
+                only_explicit => false,
+                has_next => false,
+                draft_post_count => 0,
+                unread_notification_count => 0,
+                ftl_lang => "en",
+            })
+            .expect("banners.jinja renders");
+        assert!(rendered.contains("Flag as explicit"));
+        assert!(rendered.contains("Unflag"));
+    }
+
+    #[test]
+    fn banner_card_renders_standalone_for_htmx_swap() {
+        // The flag endpoint returns this template alone, so it must not depend
+        // on anything the queue page supplies.
+        let env = test_env();
+        let template = env
+            .get_template("admin/banner_card.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                banner => sample_banner(true),
+                r2_public_endpoint_url => "https://example.test",
+            })
+            .expect("banner_card.jinja renders standalone");
+        assert!(rendered.contains("hidden from /about"));
+        // Flipping back must post the opposite state, not a blind toggle.
+        assert!(rendered.contains("value=\"false\""));
+    }
+
     #[test]
     fn renders_users_list() {
         let env = test_env();
@@ -418,8 +653,10 @@ mod tests {
                     "post_count": 4,
                     "created_at": "2026-01-01T00:00:00Z",
                     "deleted_at": null,
+                    "last_active_at": "2026-04-01T00:00:00Z",
                 }]),
                 page => 1,
+                sort => "active",
                 has_next => false,
                 draft_post_count => 0,
                 unread_notification_count => 0,
@@ -438,6 +675,7 @@ mod tests {
             .render(context! {
                 current_user => current_user(),
                 communities => sample_communities(),
+                sort => "active",
                 draft_post_count => 0,
                 unread_notification_count => 0,
                 ftl_lang => "en",

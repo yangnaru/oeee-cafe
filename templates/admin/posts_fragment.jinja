@@ -1,0 +1,49 @@
+{# One batch of post cards plus the sentinel that pulls the next batch.
+   Rendered both inside admin/posts.jinja (first batch) and standalone by
+   /admin/posts-fragment (subsequent batches), so it must not depend on
+   anything the fragment handler does not pass. #}
+{% for post in posts %}
+  <div class="admin-card {% if post.deleted_at %}deleted{% endif %}">
+    <a href="/admin/posts/{{ post.id }}">
+      <img width="{{ post.image_width }}"
+           height="{{ post.image_height }}"
+           alt="{{ post.title or 'Untitled' }}"
+           loading="lazy"
+           decoding="async"
+           src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
+    </a>
+    <div>
+      {% if not post.published_at %}<span class="admin-tag draft">draft</span>{% endif %}
+      {% if post.deleted_at %}
+        <span class="admin-tag deleted">deleted{% if post.deletion_reason %}: {{ post.deletion_reason }}{% endif %}</span>
+      {% endif %}
+      {% if post.is_sensitive %}<span class="admin-tag sensitive">sensitive</span>{% endif %}
+      {% if post.community_visibility and post.community_visibility != "public" %}
+        <span class="admin-tag {{ post.community_visibility }}">{{ post.community_visibility }}</span>
+      {% endif %}
+    </div>
+    <div>{{ post.title or "(untitled)" }}</div>
+    <div>
+      <a href="/admin/users/{{ post.author_login_name }}/posts">@{{ post.author_login_name }}</a>
+    </div>
+    <div>
+      {% if post.community_slug %}
+        <a href="/admin/communities/{{ post.community_slug }}/posts">{{ post.community_name }}</a>
+      {% else %}
+        <span class="muted">no community</span>
+      {% endif %}
+    </div>
+    <div class="muted">
+      {{ (post.published_at or post.created_at)|datetimeformat(format="short", tz="Asia/Seoul") }}
+    </div>
+  </div>
+{% endfor %}
+
+{% if has_more %}
+  <div class="admin-sentinel"
+       hx-get="{{ next_url }}"
+       hx-trigger="revealed"
+       hx-swap="outerHTML">
+    <span class="muted">Loading more…</span>
+  </div>
+{% endif %}
