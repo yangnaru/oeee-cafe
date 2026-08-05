@@ -660,7 +660,9 @@ pub async fn communities(
         has_more => public_has_more,
         next_url => communities_fragment_url(sort, None, COMMUNITIES_PER_BATCH),
         official_communities,
-        public_communities,
+        // Key name must match community_cards_fragment.jinja's loop variable;
+        // the page includes that template with this context.
+        communities => public_communities,
         participating_communities,
         own_communities,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
@@ -3147,6 +3149,39 @@ mod tests {
     fn blank_search_is_not_carried_into_the_sentinel() {
         let url = communities_fragment_url(CommunitySort::Active, Some("   "), 20);
         assert_eq!(url, "/api/communities/cards?offset=20&sort=active");
+    }
+
+    #[test]
+    fn directory_page_renders_its_first_batch() {
+        // Regression: the page passed `public_communities` while the included
+        // fragment looped over `communities`, so the first batch silently
+        // rendered empty and the sentinel skipped straight to offset=20.
+        let env = test_support::env();
+        let template = env
+            .get_template("communities.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                current_user => json!(null),
+                messages => Vec::<serde_json::Value>::new(),
+                own_communities => Vec::<serde_json::Value>::new(),
+                participating_communities => Vec::<serde_json::Value>::new(),
+                official_communities => Vec::<serde_json::Value>::new(),
+                communities => vec![sample_community()],
+                sort => "active",
+                has_more => true,
+                next_url => "/api/communities/cards?offset=20&sort=active",
+                draft_post_count => 0,
+                unread_notification_count => 0,
+                ftl_lang => "en",
+            })
+            .expect("communities.jinja renders");
+        assert!(
+            rendered.contains("class=\"community-move-card\""),
+            "first batch did not render inside the page"
+        );
+        assert!(rendered.contains("Open Studio"));
+        assert!(rendered.contains("infinite-scroll-sentinel"));
     }
 
     #[test]
