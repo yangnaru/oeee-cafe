@@ -1,20 +1,4 @@
 {% extends "base.jinja" %}
-{# Macro for rendering post grid items #}
-{% macro post_grid_item(post, r2_public_endpoint_url) %}
-  <div class="posts-grid-item">
-    <a href="/@{{ post.community_slug if post.community_slug else post.user_login_name }}/{{ post.id }}"
-       aria-label="{{ post.title }} by {{ post.user_login_name }}">
-      <img width="{{ post.image_width }}"
-           height="{{ post.image_height }}"
-           alt="{{ post.title }}"
-           src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-           loading="lazy"
-           decoding="async"
-           class="{% if post.is_sensitive %}sensitive{% endif %}"
-           {% if post.is_sensitive %}aria-label="Sensitive content: {{ post.title }}"{% endif %} />
-    </a>
-  </div>
-{% endmacro %}
 {% block title %}
   {{ ftl_get_message("brand") }}
 {% endblock title %}
@@ -43,9 +27,11 @@
 {% endblock head %}
 {% block content %}
   <div class="center">
-    {# The public post grid is the whole page: communities and recent
-       comments moved off home. #}
-    {% if non_official_public_community_posts and non_official_public_community_posts|length > 0 %}
+    {# The public post grid is the whole page: communities and recent comments
+       moved off home. Cards come from home_posts_fragment.jinja so the first
+       batch and every scrolled batch share one definition — the duplicate copy
+       that used to live here is how the sentinel batch size drifted before. #}
+    {% if posts and posts|length > 0 %}
       <section role="region" aria-labelledby="public-posts-heading">
         <h2 id="public-posts-heading" class="home-section-title">{{ ftl_get_message("posts-from-public-communities") }}</h2>
         <div class="thumbnail-size">
@@ -57,17 +43,7 @@
                  step="20" />
         </div>
         <div class="posts-grid" id="public-posts-grid">
-          {% for post in non_official_public_community_posts %}{{ post_grid_item(post, r2_public_endpoint_url) }}{% endfor %}
-          {# Infinite scroll sentinel - triggers when scrolled into view. Batch
-             size comes from the handler so it cannot drift from the query. #}
-          {% if posts_has_more %}
-            <div class="infinite-scroll-sentinel"
-                 hx-get="/api/home/posts?offset={{ posts_limit }}&limit={{ posts_limit }}"
-                 hx-trigger="revealed"
-                 hx-swap="outerHTML">
-              <span class="loading-indicator">{{ ftl_get_message("loading-more-posts") }}</span>
-            </div>
-          {% endif %}
+          {% include "home_posts_fragment.jinja" %}
         </div>
       </section>
     {% endif %}

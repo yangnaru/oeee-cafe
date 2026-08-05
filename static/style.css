@@ -111,6 +111,46 @@ nav a:visited,
 .posts-grid-item {
   overflow: hidden;
   border: 1px solid var(--main-border-color);
+  position: relative;
+}
+
+/* Community attribution on the post card: discovery in context, so liking a
+   drawing is a route into the community it came from. */
+.post-card-community {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+  line-height: 1.3;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.posts-grid-item:hover .post-card-community,
+.posts-grid-item:focus-within .post-card-community {
+  opacity: 1;
+}
+
+.post-card-community:hover,
+.post-card-community:focus {
+  text-decoration: underline;
+}
+
+/* Touch devices have no hover, so the label would be unreachable. Show it
+   permanently there instead of hiding discovery behind an interaction that
+   cannot happen. */
+@media (hover: none) {
+  .post-card-community {
+    opacity: 1;
+  }
 }
 
 .posts-grid-item:hover {

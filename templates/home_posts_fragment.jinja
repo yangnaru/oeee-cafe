@@ -1,4 +1,7 @@
-{# Fragment template for infinite scroll - renders post grid items #}
+{# One batch of post cards plus the sentinel that pulls the next batch.
+   Rendered inline by home.jinja for the first batch and standalone by
+   /api/home/posts for the rest, so it must not depend on anything the
+   load-more handler does not pass. #}
 {% for post in posts %}
   <div class="posts-grid-item">
     <a href="/@{{ post.community_slug if post.community_slug else post.user_login_name }}/{{ post.id }}"
@@ -12,10 +15,17 @@
            class="{% if post.is_sensitive %}sensitive{% endif %}"
            {% if post.is_sensitive %}aria-label="Sensitive content: {{ post.title }}"{% endif %} />
     </a>
+    {# Sibling of the post link rather than nested inside it: an <a> cannot
+       contain another <a>, and this has to be separately clickable to work as
+       a way into the community. #}
+    {% if post.community_slug %}
+      <a class="post-card-community"
+         href="/communities/@{{ post.community_slug }}"
+         title="{{ post.community_name }}">{{ post.community_name }}</a>
+    {% endif %}
   </div>
 {% endfor %}
 
-{# Sentinel element for infinite scroll - triggers when scrolled into view #}
 {% if has_more %}
   <div class="infinite-scroll-sentinel"
        hx-get="/api/home/posts?offset={{ offset }}&limit={{ limit }}"

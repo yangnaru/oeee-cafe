@@ -97,6 +97,10 @@ pub struct SerializablePostForHome {
     pub image_height: i32,
     pub replay_filename: Option<String>,
     pub is_sensitive: bool,
+    /// None for posts that belong to no community. Drives the community label
+    /// on the home grid, so a card can link back to where the drawing lives.
+    pub community_slug: Option<String>,
+    pub community_name: Option<String>,
     pub published_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -1393,6 +1397,8 @@ pub async fn find_public_posts(
                 images.replay_filename,
                 posts.viewer_count,
                 (posts.is_sensitive OR posts.is_explicit) AS \"is_sensitive!\",
+                communities.slug AS \"community_slug?\",
+                communities.name AS \"community_name?\",
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at
@@ -1429,6 +1435,8 @@ pub async fn find_public_posts(
             image_height: row.height,
             replay_filename: row.replay_filename,
             is_sensitive: row.is_sensitive,
+            community_slug: row.community_slug,
+            community_name: row.community_name,
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,

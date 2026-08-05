@@ -69,7 +69,7 @@ pub async fn home(
         (None, false)
     };
 
-    let non_official_public_community_posts =
+    let posts =
         find_public_posts(&mut tx, HOME_POSTS_PER_BATCH, 0, viewer_user_id, viewer_show_sensitive)
             .await?;
     tx.commit().await?;
@@ -78,9 +78,12 @@ pub async fn home(
     let rendered = template.render(context! {
         current_user => auth_session.user,
         messages => messages.into_iter().collect::<Vec<_>>(),
-        posts_limit => HOME_POSTS_PER_BATCH,
-        posts_has_more => non_official_public_community_posts.len() as i64 == HOME_POSTS_PER_BATCH,
-        non_official_public_community_posts,
+        // Same key names the fragment uses, so the first batch and every
+        // scrolled batch render through one template.
+        limit => HOME_POSTS_PER_BATCH,
+        offset => HOME_POSTS_PER_BATCH,
+        has_more => posts.len() as i64 == HOME_POSTS_PER_BATCH,
+        posts,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
@@ -1297,6 +1300,7 @@ mod tests {
             "image_width": 300,
             "image_height": 300,
             "is_sensitive": false,
+            "community_name": "Open Studio",
         })
     }
 
@@ -1304,9 +1308,10 @@ mod tests {
         context! {
             current_user => json!(null),
             messages => Vec::<serde_json::Value>::new(),
-            non_official_public_community_posts => posts,
-            posts_limit => super::HOME_POSTS_PER_BATCH,
-            posts_has_more => has_more,
+            posts => posts,
+            limit => super::HOME_POSTS_PER_BATCH,
+            offset => super::HOME_POSTS_PER_BATCH,
+            has_more => has_more,
             draft_post_count => 0,
             unread_notification_count => 0,
             ftl_lang => "en",
@@ -1354,6 +1359,34 @@ mod tests {
             .render(home_context(vec![sample_post()], false))
             .expect("renders");
         assert!(!rendered.contains("infinite-scroll-sentinel"));
+    }
+
+    #[test]
+    fn cards_link_to_their_community() {
+        let env = test_support::env();
+        let template = env.get_template("home.jinja").expect("template loads");
+        let rendered = template
+            .render(home_context(vec![sample_post()], false))
+            .expect("renders");
+        assert!(rendered.contains("/communities/@open"));
+        assert!(rendered.contains("Open Studio"));
+    }
+
+    #[test]
+    fn cards_without_a_community_get_no_label() {
+        // Posts can have no community at all; the label must not render an
+        // empty link in that case.
+        let env = test_support::env();
+        let template = env.get_template("home.jinja").expect("template loads");
+        let mut post = sample_post();
+        post["community_slug"] = json!(null);
+        post["community_name"] = json!(null);
+        let rendered = template
+            .render(home_context(vec![post], false))
+            .expect("renders");
+        assert!(!rendered.contains("post-card-community"));
+        // ...and the post link falls back to the author handle.
+        assert!(rendered.contains("/@someone/"));
     }
 
     #[test]
