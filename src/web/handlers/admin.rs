@@ -464,6 +464,9 @@ mod tests {
 
     fn test_env() -> Environment<'static> {
         let mut env = Environment::new();
+        // Must mirror main.rs, or these tests would pass while production
+        // renders unescaped.
+        env.set_auto_escape_callback(|_| minijinja::AutoEscape::Html);
         minijinja_contrib::add_to_environment(&mut env);
         env.add_filter("cachebuster", |value: String| value);
         env.add_filter("markdown", |value: String| value);
@@ -569,6 +572,33 @@ mod tests {
     }
 
     #[test]
+    fn post_titles_are_html_escaped() {
+        // Regression: a real post titled `><//` unbalanced the card markup
+        // because .jinja templates were not autoescaped, and a title carrying a
+        // quote could break out of the alt attribute entirely.
+        let env = test_env();
+        let template = env
+            .get_template("admin/posts_fragment.jinja")
+            .expect("template loads");
+        let mut post = sample_post();
+        post["title"] = json!(r#"><//" onerror="alert(1)"#);
+        let rendered = template
+            .render(context! {
+                posts => vec![post],
+                has_more => false,
+                next_url => "",
+                r2_public_endpoint_url => "https://example.test",
+            })
+            .expect("renders");
+
+        // The raw title must not survive anywhere in the output.
+        assert!(!rendered.contains(r#"><//" onerror="#));
+        assert!(!rendered.contains("onerror=\"alert"));
+        // ...and the div holding it must still close, so cards do not nest.
+        assert_eq!(rendered.matches("<div").count(), rendered.matches("</div>").count());
+    }
+
+    #[test]
     fn renders_posts_fragment_standalone() {
         // The fragment handler passes a strictly smaller context than the full
         // page, so render it with only those keys.
@@ -585,7 +615,14 @@ mod tests {
             })
             .expect("posts_fragment.jinja renders standalone");
         assert!(rendered.contains("hx-trigger=\"revealed\""));
-        assert!(rendered.contains("/admin/posts-fragment?offset=60&author=some%20one"));
+        // `&` is entity-encoded in the attribute now that escaping is on. That
+        // is correct HTML: the parser decodes it, so getAttribute() hands htmx
+        // back a plain `&`. Pinned so double-escaping would be caught.
+        // Escaping encodes `/` and `&` as entities. Harmless in an attribute —
+        // the HTML parser decodes them, so getAttribute() hands htmx back the
+        // plain URL. Pinned so double-escaping would be caught.
+        assert!(rendered
+            .contains("&#x2f;admin&#x2f;posts-fragment?offset=60&amp;author=some%20one"));
     }
 
     #[test]
@@ -675,7 +712,8 @@ mod tests {
             })
             .expect("banners_fragment.jinja renders standalone");
         assert!(rendered.contains("hx-trigger=\"revealed\""));
-        assert!(rendered.contains("/admin/banners-fragment?offset=60&explicit=on"));
+        assert!(rendered
+            .contains("&#x2f;admin&#x2f;banners-fragment?offset=60&amp;explicit=on"));
         // The nested card must still render inside the fragment.
         assert!(rendered.contains("Flag as explicit"));
     }

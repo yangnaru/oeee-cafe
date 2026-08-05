@@ -1,6 +1,6 @@
 use fluent::bundle::FluentBundle;
 use fluent::{FluentArgs, FluentValue};
-use minijinja::{path_loader, Environment, State};
+use minijinja::{path_loader, AutoEscape, Environment, State};
 use oeee_cafe::locale::LOCALES;
 use oeee_cafe::push::PushService;
 use oeee_cafe::web::app::App;
@@ -54,6 +54,13 @@ fn main() {
 
             let template_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates");
             let mut env = Environment::new();
+            // minijinja picks escaping from the file extension by default, and
+            // only .html/.htm/.xml get it — every template here is .jinja, so
+            // without this nothing was ever escaped and any user-supplied `<`
+            // or `"` was injected raw into the page. Force HTML escaping for all
+            // templates; the places that intentionally emit markup (markdown
+            // output, *_html columns, asset URLs) already say `| safe`.
+            env.set_auto_escape_callback(|_| AutoEscape::Html);
             minijinja_contrib::add_to_environment(&mut env);
 
             fn cachebuster(value: String) -> String {
