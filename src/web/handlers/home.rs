@@ -1350,6 +1350,7 @@ mod tests {
             "image_height": 300,
             "is_sensitive": false,
             "community_name": "Open Studio",
+            "published_at": "2026-01-02T03:04:05Z",
         })
     }
 
@@ -1428,6 +1429,11 @@ mod tests {
             .expect("renders");
         assert!(rendered.contains("/communities/@open"));
         assert!(rendered.contains("Open Studio"));
+        // Title, author handle and timestamp are credited too, not just the
+        // community — the point is that attribution is visible, not implied.
+        assert!(rendered.contains("A drawing"));
+        assert!(rendered.contains("@someone"));
+        assert!(rendered.contains("post-card-date"));
     }
 
     #[test]
@@ -1442,7 +1448,10 @@ mod tests {
         let rendered = template
             .render(home_context(vec![post], false))
             .expect("renders");
-        assert!(!rendered.contains("post-card-community"));
+        // The author is always credited, so the byline still renders — only the
+        // community link inside it is conditional.
+        assert!(rendered.contains("post-card-byline"));
+        assert!(!rendered.contains("/communities/@"));
         // ...and the post link falls back to the author handle.
         assert!(rendered.contains("/@someone/"));
     }
@@ -1475,7 +1484,7 @@ mod tests {
         // The control partial renders above the grid it drives, so its script
         // must wait for parse; running inline it finds no grid and dies quietly.
         assert!(rendered.contains("DOMContentLoaded"));
-        assert!(rendered.contains("post-card-community"));
+        assert!(rendered.contains("post-card-byline"));
         // Sentinel must target the timeline endpoint, not the public feed.
         assert!(rendered.contains("&#x2f;api&#x2f;timeline&#x2f;posts"));
         assert!(!rendered.contains("api&#x2f;home&#x2f;posts"));

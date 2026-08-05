@@ -240,6 +240,7 @@ no-active-communities = 현재 활동 중인 커뮤니티가 없습니다.
 no-posts-in-community = 아직 이 커뮤니티에 게시된 그림이 없습니다.
 loading-more-posts = 더 많은 그림 불러오는 중...
 feed-columns = 한 줄에
+post-untitled = 제목 없음
 community-sort = 정렬
 community-sort-active = 최근 활동순
 community-sort-posts = 그림 많은순

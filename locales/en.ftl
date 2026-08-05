@@ -238,6 +238,7 @@ no-active-communities = No active communities at the moment.
 no-posts-in-community = No posts in this community yet.
 loading-more-posts = Loading more posts...
 feed-columns = Per row
+post-untitled = Untitled
 community-sort = Sort
 community-sort-active = Recently active
 community-sort-posts = Most posts

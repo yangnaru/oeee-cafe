@@ -159,7 +159,8 @@ pub async fn collaborate_lobby(
             i.image_filename,
             i.width AS image_width,
             i.height AS image_height,
-            (p.is_sensitive OR p.is_explicit) AS "is_sensitive!"
+            (p.is_sensitive OR p.is_explicit) AS "is_sensitive!",
+            p.published_at
         FROM collaborative_sessions cs
         JOIN posts p ON cs.saved_post_id = p.id
         JOIN users u ON p.author_id = u.id
@@ -191,6 +192,7 @@ pub async fn collaborate_lobby(
             "image_width": row.image_width,
             "image_height": row.image_height,
             "is_sensitive": row.is_sensitive,
+            "published_at": row.published_at,
         })
     })
     .collect::<Vec<_>>();
@@ -452,6 +454,7 @@ mod tests {
             "image_width": 300,
             "image_height": 300,
             "is_sensitive": false,
+            "published_at": "2026-01-02T03:04:05Z",
         })
     }
 
@@ -530,7 +533,7 @@ mod tests {
         let rendered = template
             .render(lobby_context(false, vec![sample_post()]))
             .expect("renders");
-        assert!(rendered.contains("post-card-community"));
+        assert!(rendered.contains("post-card-byline"));
         assert!(!rendered.contains("infinite-scroll-sentinel"));
     }
 }

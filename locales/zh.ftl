@@ -240,6 +240,7 @@ no-active-communities = 目前没有活跃的社区。
 no-posts-in-community = 该社区暂无作品。
 loading-more-posts = 加载更多作品...
 feed-columns = 每行
+post-untitled = 无标题
 community-sort = 排序
 community-sort-active = 最近活跃
 community-sort-posts = 作品最多

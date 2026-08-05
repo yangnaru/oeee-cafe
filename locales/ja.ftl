@@ -240,6 +240,7 @@ no-active-communities = 現在アクティブなコミュニティはありま�
 no-posts-in-community = まだこのコミュニティに投稿された絵はありません。
 loading-more-posts = さらに読み込み中...
 feed-columns = 1行あたり
+post-untitled = 無題
 community-sort = 並び替え
 community-sort-active = 最近の活動順
 community-sort-posts = 投稿数順
