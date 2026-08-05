@@ -15,8 +15,10 @@
         {# Short view label rather than naming the visibility rule the query
            uses. Reuses the key the hashtag and community pages already put
            above their drawing grids. #}
-        <h2 id="post-feed-heading" class="home-section-title">{{ ftl_get_message("recent-drawings") }}</h2>
-        {% include "post_feed_controls.jinja" %}
+        <div class="feed-header">
+          <h2 id="post-feed-heading" class="home-section-title">{{ ftl_get_message("recent-drawings") }}</h2>
+          {% include "post_feed_controls.jinja" %}
+        </div>
         <div class="posts-grid" id="post-feed-grid">
           {% include "post_feed_fragment.jinja" %}
         </div>

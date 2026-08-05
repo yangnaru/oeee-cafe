@@ -808,13 +808,20 @@ nav a:visited,
   filter: blur(1rem);
 }
 
-.home-section-title {
-  padding: 12px 16px;
-  background-color: var(--main-nav-bg-color);
-  border-width: 1px;
-  border-color: var(--main-border-color);
-  border-style: solid;
+/* Heading and density control share one line. The heading lost its box: a
+   bordered, filled heading sitting next to a bare control read as two
+   unrelated elements. Only the two feed pages use this class. */
+.feed-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
   margin: 24px 0 12px 0;
+}
+
+.home-section-title {
+  margin: 0;
   font-size: 1.2em;
   font-weight: 600;
   line-height: 1.4;
@@ -1193,10 +1200,6 @@ nav a:visited,
 
 .trending-hashtags-section {
   margin-bottom: 24px;
-}
-
-.trending-hashtags .home-section-title {
-  margin-top: 0;
 }
 
 /* Grid Layout */

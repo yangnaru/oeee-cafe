@@ -1383,6 +1383,8 @@ mod tests {
         // The readout is what tells the user the slider did something; without
         // it a step that cannot change the layout looks like a broken control.
         assert!(rendered.contains("id=\"post-cols-value\""));
+        assert!(rendered.contains("class=\"feed-header\""));
+        assert!(rendered.contains("DOMContentLoaded"));
         assert!(rendered.contains("--page-width: 1600px"));
     }
 
@@ -1468,6 +1470,11 @@ mod tests {
         assert!(rendered.contains("--page-width: 1600px"));
         assert!(rendered.contains("id=\"post-cols\""));
         assert!(rendered.contains("id=\"post-feed-grid\""));
+        // Heading and control share one row.
+        assert!(rendered.contains("class=\"feed-header\""));
+        // The control partial renders above the grid it drives, so its script
+        // must wait for parse; running inline it finds no grid and dies quietly.
+        assert!(rendered.contains("DOMContentLoaded"));
         assert!(rendered.contains("post-card-community"));
         // Sentinel must target the timeline endpoint, not the public feed.
         assert!(rendered.contains("&#x2f;api&#x2f;timeline&#x2f;posts"));
