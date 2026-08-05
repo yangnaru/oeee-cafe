@@ -273,10 +273,34 @@ pub async fn admin_post_detail(
 
 #[derive(Debug, Deserialize)]
 pub struct AdminBannersQuery {
-    pub page: Option<i64>,
+    /// Row offset for the infinite-scroll sentinel. The first page omits it.
+    pub offset: Option<i64>,
     /// `?explicit=on` narrows to already-flagged banners, for reviewing past
     /// decisions.
     pub explicit: Option<String>,
+}
+
+/// Loads one batch of banners plus the sentinel URL for the next. Shared by the
+/// full page and the fragment so both stay in step.
+async fn load_banner_batch(
+    tx: &mut Transaction<'_, Postgres>,
+    query: &AdminBannersQuery,
+) -> Result<(Vec<crate::models::admin::AdminBanner>, bool, String), AppError> {
+    let offset = query.offset.unwrap_or(0).max(0);
+    let only_explicit = query.explicit.is_some();
+
+    let banners = find_all_banners(tx, only_explicit, BANNERS_PER_PAGE, offset).await?;
+    let has_more = banners.len() as i64 == BANNERS_PER_PAGE;
+
+    let mut next_url = format!(
+        "/admin/banners-fragment?offset={}",
+        offset + BANNERS_PER_PAGE
+    );
+    if only_explicit {
+        next_url.push_str("&explicit=on");
+    }
+
+    Ok((banners, has_more, next_url))
 }
 
 /// GET /admin/banners — banner review queue. Flagged banners are withheld from
@@ -287,27 +311,44 @@ pub async fn admin_banners(
     State(state): State<AppState>,
     Query(query): Query<AdminBannersQuery>,
 ) -> Result<Html<String>, AppError> {
-    let page = query.page.unwrap_or(1).max(1);
-    let offset = (page - 1) * BANNERS_PER_PAGE;
-    let only_explicit = query.explicit.is_some();
-
     let mut tx = state.db_pool.begin().await?;
-    let banners = find_all_banners(&mut tx, only_explicit, BANNERS_PER_PAGE, offset).await?;
+    let (banners, has_more, next_url) = load_banner_batch(&mut tx, &query).await?;
     let common_ctx = CommonContext::build(&mut tx, Some(admin.0.id)).await?;
     tx.commit().await?;
 
-    let has_next = banners.len() as i64 == BANNERS_PER_PAGE;
     let template = state.env.get_template("admin/banners.jinja")?;
     let rendered = template.render(context! {
         current_user => admin.0,
         banners => banners,
-        page => page,
-        only_explicit => only_explicit,
-        has_next => has_next,
+        only_explicit => query.explicit.is_some(),
+        has_more => has_more,
+        next_url => next_url,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ftl_lang,
+    })?;
+
+    Ok(Html(rendered))
+}
+
+/// GET /admin/banners-fragment — one batch of banner cards plus the next
+/// sentinel, for htmx to swap in.
+pub async fn admin_banners_fragment(
+    _admin: AdminUser,
+    State(state): State<AppState>,
+    Query(query): Query<AdminBannersQuery>,
+) -> Result<Html<String>, AppError> {
+    let mut tx = state.db_pool.begin().await?;
+    let (banners, has_more, next_url) = load_banner_batch(&mut tx, &query).await?;
+    tx.commit().await?;
+
+    let template = state.env.get_template("admin/banners_fragment.jinja")?;
+    let rendered = template.render(context! {
+        banners => banners,
+        has_more => has_more,
+        next_url => next_url,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
     })?;
 
     Ok(Html(rendered))
@@ -607,9 +648,9 @@ mod tests {
             .render(context! {
                 current_user => current_user(),
                 banners => vec![sample_banner(false), sample_banner(true)],
-                page => 1,
                 only_explicit => false,
-                has_next => false,
+                has_more => true,
+                next_url => "/admin/banners-fragment?offset=60",
                 draft_post_count => 0,
                 unread_notification_count => 0,
                 ftl_lang => "en",
@@ -617,6 +658,26 @@ mod tests {
             .expect("banners.jinja renders");
         assert!(rendered.contains("Flag as explicit"));
         assert!(rendered.contains("Unflag"));
+    }
+
+    #[test]
+    fn renders_banners_fragment_standalone() {
+        let env = test_env();
+        let template = env
+            .get_template("admin/banners_fragment.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                banners => vec![sample_banner(false)],
+                has_more => true,
+                next_url => "/admin/banners-fragment?offset=60&explicit=on",
+                r2_public_endpoint_url => "https://example.test",
+            })
+            .expect("banners_fragment.jinja renders standalone");
+        assert!(rendered.contains("hx-trigger=\"revealed\""));
+        assert!(rendered.contains("/admin/banners-fragment?offset=60&explicit=on"));
+        // The nested card must still render inside the fragment.
+        assert!(rendered.contains("Flag as explicit"));
     }
 
     #[test]

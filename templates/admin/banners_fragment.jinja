@@ -1,0 +1,16 @@
+{# One batch of banner cards plus the sentinel that pulls the next batch.
+   Rendered both inside admin/banners.jinja (first batch) and standalone by
+   /admin/banners-fragment, so it must not depend on anything the fragment
+   handler does not pass. #}
+{% for banner in banners %}
+  {% include "admin/banner_card.jinja" %}
+{% endfor %}
+
+{% if has_more %}
+  <div class="admin-sentinel"
+       hx-get="{{ next_url }}"
+       hx-trigger="revealed"
+       hx-swap="outerHTML">
+    <span class="muted">Loading more…</span>
+  </div>
+{% endif %}

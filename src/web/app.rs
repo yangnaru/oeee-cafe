@@ -7,8 +7,9 @@ use crate::web::handlers::account::{
     save_show_sensitive_content, verify_email_code_json, verify_email_verification_code,
 };
 use crate::web::handlers::admin::{
-    admin_banners, admin_communities, admin_community_posts, admin_flag_banner, admin_post_detail,
-    admin_posts, admin_posts_fragment, admin_user_posts, admin_users,
+    admin_banners, admin_banners_fragment, admin_communities, admin_community_posts,
+    admin_flag_banner, admin_post_detail, admin_posts, admin_posts_fragment, admin_user_posts,
+    admin_users,
 };
 use crate::web::handlers::activitypub::{
     activitypub_get_community, activitypub_get_post, activitypub_get_user,
@@ -251,6 +252,7 @@ impl App {
             .route("/admin/communities", get(admin_communities))
             .route("/admin/communities/:slug/posts", get(admin_community_posts))
             .route("/admin/banners", get(admin_banners))
+            .route("/admin/banners-fragment", get(admin_banners_fragment))
             .route("/admin/banners/:banner_id/explicit", post(admin_flag_banner))
             .route_layer(login_required!(Backend, login_url = "/login"));
 

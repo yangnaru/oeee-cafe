@@ -17,20 +17,10 @@
   </form>
 
   {% if banners %}
+    {# The grid is the htmx swap target: the sentinel replaces itself with the
+       next batch, which ends with a fresh sentinel. #}
     <div class="admin-grid">
-      {% for banner in banners %}
-        {% include "admin/banner_card.jinja" %}
-      {% endfor %}
-    </div>
-
-    <div class="admin-pager">
-      {% if page > 1 %}
-        <a href="?{% if only_explicit %}explicit=on&{% endif %}page={{ page - 1 }}">← Previous</a>
-      {% endif %}
-      <span>Page {{ page }}</span>
-      {% if has_next %}
-        <a href="?{% if only_explicit %}explicit=on&{% endif %}page={{ page + 1 }}">Next →</a>
-      {% endif %}
+      {% include "admin/banners_fragment.jinja" %}
     </div>
   {% else %}
     <p>No banners{% if only_explicit %} have been flagged{% endif %}.</p>
