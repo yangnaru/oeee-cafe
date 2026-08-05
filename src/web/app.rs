@@ -26,7 +26,8 @@ use crate::web::handlers::collaborate::{
 };
 use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
-    communities, community, community_comments, community_detail_json, community_iframe,
+    communities, communities_fragment, community, community_comments, community_detail_json,
+    community_iframe,
     create_community_form, create_community_json, delete_community_json, do_accept_invitation,
     do_create_community, do_leave_community, do_reject_invitation, get_communities_list_json,
     get_community_invitations_json, get_community_members_json, get_members,
@@ -299,6 +300,7 @@ impl App {
                 get(android_assetlinks),
             )
             .route("/api/home/posts", get(load_more_public_posts))
+            .route("/api/communities/cards", get(communities_fragment))
             .route("/api/v1/posts/public", get(load_more_public_posts_json))
             .route("/api/v1/posts/drafts", get(draft_posts_api))
             .route("/api/v1/posts/:post_id", get(get_post_details_json))

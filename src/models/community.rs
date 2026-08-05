@@ -162,12 +162,47 @@ pub async fn get_public_communities(
     Ok(q.fetch_all(&mut **tx).await?)
 }
 
+/// Ordering for the public community directory.
+///
+/// Passed into SQL as a string and matched inside `CASE` expressions rather
+/// than interpolated, so the ORDER BY stays compile-time checked.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CommunitySort {
+    /// Most recently posted-in first. The default: a directory of 90-odd
+    /// communities is only browsable if the live ones surface.
+    #[default]
+    Active,
+    Posts,
+    Newest,
+    Name,
+}
+
+impl CommunitySort {
+    /// Value used both as the SQL discriminator and the URL query parameter,
+    /// so a sentinel URL round-trips back to the same ordering.
+    pub fn as_param(self) -> &'static str {
+        self.as_sql()
+    }
+
+    fn as_sql(self) -> &'static str {
+        match self {
+            CommunitySort::Active => "active",
+            CommunitySort::Posts => "posts",
+            CommunitySort::Newest => "newest",
+            CommunitySort::Name => "name",
+        }
+    }
+}
+
 pub async fn get_public_communities_paginated(
     tx: &mut Transaction<'_, Postgres>,
+    sort: CommunitySort,
     limit: i64,
     offset: i64,
 ) -> Result<Vec<PublicCommunity>> {
-    // Select communities ordered by latest published post with pagination
+    // Every branch falls through to MAX(published_at) so the ordering is total
+    // and pagination cannot repeat or skip a community across batches.
     let q = query_as!(
         PublicCommunity,
         r#"
@@ -178,9 +213,14 @@ pub async fn get_public_communities_paginated(
             WHERE communities.visibility = 'public' AND communities.deleted_at IS NULL
             GROUP BY communities.id, users.login_name
             HAVING MAX(posts.published_at) IS NOT NULL
-            ORDER BY MAX(posts.published_at) DESC
-            LIMIT $1 OFFSET $2
+            ORDER BY
+                CASE WHEN $1 = 'posts' THEN COUNT(posts.id) END DESC,
+                CASE WHEN $1 = 'newest' THEN communities.created_at END DESC,
+                CASE WHEN $1 = 'name' THEN communities.name END ASC,
+                MAX(posts.published_at) DESC
+            LIMIT $2 OFFSET $3
         "#,
+        sort.as_sql(),
         limit,
         offset
     );

@@ -5,6 +5,7 @@ use crate::models::community::{
     accept_invitation, add_community_member, count_public_communities,
     count_search_public_communities, create_community, create_invitation, find_community_by_id,
     find_community_by_slug, get_communities_members_count, get_community_members_with_details,
+    CommunitySort,
     get_community_stats, get_invitation_by_id, get_own_communities, get_participating_communities,
     get_pending_invitations_with_details_for_user,
     get_pending_invitations_with_invitee_details_for_community, get_public_communities,
@@ -291,12 +292,144 @@ pub async fn community_iframe(
     Ok(Html(rendered).into_response())
 }
 
+/// Attaches the per-community extras the cards render: three recent posts and
+/// the contributor count. Shared by the directory page and the infinite-scroll
+/// fragment so a card looks the same however it arrived.
+async fn enrich_public_communities(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    communities: &[crate::models::community::PublicCommunity],
+    viewer_user_id: Option<Uuid>,
+    viewer_show_sensitive: bool,
+) -> Result<Vec<serde_json::Value>, AppError> {
+    if communities.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let ids: Vec<Uuid> = communities.iter().map(|c| c.id).collect();
+    let recent_posts =
+        find_recent_posts_by_communities(tx, &ids, 3, viewer_user_id, viewer_show_sensitive).await?;
+    let members_stats = get_communities_members_count(tx, &ids).await?;
+
+    let mut posts_by: std::collections::HashMap<Uuid, Vec<serde_json::Value>> =
+        std::collections::HashMap::new();
+    for post in recent_posts {
+        if let Some(community_id) = post.community_id {
+            posts_by
+                .entry(community_id)
+                .or_default()
+                .push(serde_json::json!({
+                    "id": post.id.to_string(),
+                    "image_filename": post.image_filename,
+                    "image_width": post.image_width,
+                    "image_height": post.image_height,
+                    "author_login_name": post.author_login_name,
+                }));
+        }
+    }
+
+    let mut members_by: std::collections::HashMap<Uuid, Option<i64>> =
+        std::collections::HashMap::new();
+    for stat in members_stats {
+        members_by.insert(stat.community_id, stat.members_count);
+    }
+
+    Ok(communities
+        .iter()
+        .map(|community| {
+            serde_json::json!({
+                "id": community.id.to_string(),
+                "name": community.name,
+                "slug": community.slug,
+                "description": community.description,
+                "visibility": community.visibility,
+                "owner_login_name": community.owner_login_name,
+                "posts_count": community.posts_count,
+                "members_count": members_by.get(&community.id).cloned().unwrap_or(None),
+                "recent_posts": posts_by.get(&community.id).cloned().unwrap_or_default(),
+            })
+        })
+        .collect())
+}
+
+/// Communities per batch in the public directory.
+const COMMUNITIES_PER_BATCH: i64 = 20;
+
+/// GET /api/communities/cards — one batch of public community cards plus the
+/// next sentinel, for htmx to swap in.
+pub async fn communities_fragment(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Query(query): Query<CommunitiesQuery>,
+) -> Result<Html<String>, AppError> {
+    let offset = query.offset.unwrap_or(0).max(0);
+
+    let (viewer_user_id, viewer_show_sensitive) = match auth_session.user.as_ref() {
+        Some(user) => (Some(user.id), user.show_sensitive_content),
+        None => (None, false),
+    };
+
+    let term = query.q.as_deref().map(str::trim).filter(|s| !s.is_empty());
+
+    let mut tx = state.db_pool.begin().await?;
+    let rows = match term {
+        Some(term) => {
+            search_public_communities(&mut tx, term, COMMUNITIES_PER_BATCH, offset).await?
+        }
+        None => {
+            get_public_communities_paginated(&mut tx, query.sort, COMMUNITIES_PER_BATCH, offset)
+                .await?
+        }
+    };
+    let has_more = rows.len() as i64 == COMMUNITIES_PER_BATCH;
+    let communities =
+        enrich_public_communities(&mut tx, &rows, viewer_user_id, viewer_show_sensitive).await?;
+    tx.commit().await?;
+
+    let template = state.env.get_template("community_cards_fragment.jinja")?;
+    let rendered = template.render(context! {
+        communities => communities,
+        has_more => has_more,
+        next_url => communities_fragment_url(query.sort, term, offset + COMMUNITIES_PER_BATCH),
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+    })?;
+
+    Ok(Html(rendered))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CommunitiesQuery {
+    /// Missing or unrecognised sorts fall back to last-active.
+    #[serde(default)]
+    pub sort: CommunitySort,
+    /// Row offset for the infinite-scroll sentinel. The first page omits it.
+    pub offset: Option<i64>,
+    /// Search term. Server-side because the directory is paginated now — a
+    /// client-side filter would only ever search the batches already loaded.
+    pub q: Option<String>,
+}
+
+/// URL the infinite-scroll sentinel fetches next. Built in Rust so the search
+/// term gets percent-encoded.
+fn communities_fragment_url(sort: CommunitySort, q: Option<&str>, next_offset: i64) -> String {
+    let mut url = format!(
+        "/api/communities/cards?offset={}&sort={}",
+        next_offset,
+        sort.as_param()
+    );
+    if let Some(term) = q.filter(|s| !s.trim().is_empty()) {
+        url.push_str(&format!("&q={}", urlencoding::encode(term)));
+    }
+    url
+}
+
 pub async fn communities(
     auth_session: AuthSession,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
+    Query(query): Query<CommunitiesQuery>,
     messages: Messages,
 ) -> Result<Html<String>, AppError> {
+    let sort = query.sort;
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -306,7 +439,19 @@ pub async fn communities(
         None => vec![],
     };
 
-    let public_communities_raw = get_public_communities(&mut tx).await?;
+    // The official section must show every official community regardless of
+    // which page it would land on, so it is picked from the full list. That
+    // query carries no per-community enrichment; the expensive part is bounded
+    // below by what actually gets rendered.
+    let official_raw: Vec<_> = get_public_communities(&mut tx)
+        .await?
+        .into_iter()
+        .filter(|c| c.owner_login_name == state.config.official_account_login_name)
+        .collect();
+
+    let public_communities_raw =
+        get_public_communities_paginated(&mut tx, sort, COMMUNITIES_PER_BATCH, 0).await?;
+    let public_has_more = public_communities_raw.len() as i64 == COMMUNITIES_PER_BATCH;
 
     let participating_communities_raw = match auth_session.user.clone() {
         Some(user) => get_participating_communities(&mut tx, user.id).await?,
@@ -316,7 +461,6 @@ pub async fn communities(
     // Collect all community IDs for batch queries
     let mut all_community_ids: Vec<Uuid> = Vec::new();
     all_community_ids.extend(own_communities_raw.iter().map(|c| c.id));
-    all_community_ids.extend(public_communities_raw.iter().map(|c| c.id));
     all_community_ids.extend(participating_communities_raw.iter().map(|c| c.id));
     all_community_ids.sort();
     all_community_ids.dedup();
@@ -452,44 +596,17 @@ pub async fn communities(
         })
         .collect();
 
-    // Build public_communities with all metadata
-    let public_communities: Vec<serde_json::Value> = public_communities_raw
-        .iter()
-        .map(|community| {
-            let recent_posts = posts_by_community
-                .get(&community.id)
-                .cloned()
-                .unwrap_or_default();
-            let members_count = members_by_community
-                .get(&community.id)
-                .cloned()
-                .unwrap_or(None);
+    let public_communities = enrich_public_communities(
+        &mut tx,
+        &public_communities_raw,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
 
-            serde_json::json!({
-                "id": community.id.to_string(),
-                "name": community.name,
-                "slug": community.slug,
-                "description": community.description,
-                "visibility": community.visibility,
-                "owner_login_name": community.owner_login_name,
-                "posts_count": community.posts_count,
-                "members_count": members_count,
-                "recent_posts": recent_posts,
-            })
-        })
-        .collect();
-
-    // Filter official communities
-    let official_communities: Vec<serde_json::Value> = public_communities
-        .iter()
-        .filter(|c| {
-            c.get("owner_login_name")
-                .and_then(|v| v.as_str())
-                .map(|name| name == state.config.official_account_login_name)
-                .unwrap_or(false)
-        })
-        .cloned()
-        .collect();
+    let official_communities =
+        enrich_public_communities(&mut tx, &official_raw, viewer_user_id, viewer_show_sensitive)
+            .await?;
 
     // Build participating_communities with all metadata
     let participating_communities: Vec<serde_json::Value> = participating_communities_raw
@@ -537,6 +654,11 @@ pub async fn communities(
         messages => messages.into_iter().collect::<Vec<_>>(),
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
+        sort => sort.as_param(),
+        // Same key names the fragment uses, so the first batch and every
+        // scrolled batch render through one template.
+        has_more => public_has_more,
+        next_url => communities_fragment_url(sort, None, COMMUNITIES_PER_BATCH),
         official_communities,
         public_communities,
         participating_communities,
@@ -1956,7 +2078,8 @@ pub async fn get_public_communities_json(
     let offset = query.offset.max(0);
 
     // Fetch paginated public communities
-    let public_communities_raw = get_public_communities_paginated(&mut tx, limit, offset).await?;
+    let public_communities_raw = get_public_communities_paginated(&mut tx, CommunitySort::default(), limit, offset)
+            .await?;
 
     // Get total count
     let total_count = count_public_communities(&mut tx).await?;
@@ -2976,4 +3099,89 @@ pub async fn delete_community_json(
     tx.commit().await?;
 
     Ok(StatusCode::OK)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::communities_fragment_url;
+    use crate::models::community::CommunitySort;
+    use crate::web::handlers::test_support;
+    use minijinja::context;
+    use serde_json::json;
+
+    fn sample_community() -> serde_json::Value {
+        json!({
+            "id": "00000000-0000-0000-0000-000000000003",
+            "name": "Open Studio",
+            "slug": "open",
+            "description": "a place",
+            "visibility": "public",
+            "owner_login_name": "someone",
+            "posts_count": 12,
+            "members_count": 4,
+            "recent_posts": [{
+                "id": "00000000-0000-0000-0000-000000000001",
+                "image_filename": "abcdef.png",
+                "image_width": 300,
+                "image_height": 300,
+                "author_login_name": "someone",
+            }],
+        })
+    }
+
+    #[test]
+    fn sentinel_url_round_trips_sort_and_search() {
+        // The sentinel has to carry both, or scrolling a sorted or searched
+        // directory silently reverts to the default listing.
+        let url = communities_fragment_url(CommunitySort::Posts, None, 20);
+        assert_eq!(url, "/api/communities/cards?offset=20&sort=posts");
+
+        let url = communities_fragment_url(CommunitySort::Name, Some("art club"), 40);
+        assert_eq!(
+            url,
+            "/api/communities/cards?offset=40&sort=name&q=art%20club"
+        );
+    }
+
+    #[test]
+    fn blank_search_is_not_carried_into_the_sentinel() {
+        let url = communities_fragment_url(CommunitySort::Active, Some("   "), 20);
+        assert_eq!(url, "/api/communities/cards?offset=20&sort=active");
+    }
+
+    #[test]
+    fn renders_community_cards_fragment_standalone() {
+        let env = test_support::env();
+        let template = env
+            .get_template("community_cards_fragment.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                communities => vec![sample_community()],
+                has_more => true,
+                next_url => "/api/communities/cards?offset=20&sort=posts",
+                r2_public_endpoint_url => "https://example.test",
+            })
+            .expect("renders standalone");
+        assert!(rendered.contains("/communities/@open"));
+        assert!(rendered.contains("hx-trigger=\"revealed\""));
+    }
+
+    #[test]
+    fn fragment_shows_empty_state_and_no_sentinel() {
+        let env = test_support::env();
+        let template = env
+            .get_template("community_cards_fragment.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                communities => Vec::<serde_json::Value>::new(),
+                has_more => false,
+                next_url => "",
+                r2_public_endpoint_url => "https://example.test",
+            })
+            .expect("renders");
+        assert!(!rendered.contains("infinite-scroll-sentinel"));
+        assert!(rendered.contains("active-communities-nil"));
+    }
 }

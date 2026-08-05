@@ -1826,6 +1826,21 @@ legend {
   box-shadow: 0 0 0 3px rgba(239, 132, 45, 0.08);
 }
 
+.community-directory-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.community-sort {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .community-list {
   display: flex;
   flex-direction: column;
