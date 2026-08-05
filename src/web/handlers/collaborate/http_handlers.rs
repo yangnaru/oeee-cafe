@@ -222,12 +222,16 @@ pub async fn collaborate_lobby(
     let rendered = template.render(context! {
         current_user => user,
         active_sessions => active_sessions,
-        posts => collaborative_posts,
+        // Shared card fragment contract. The gallery does not paginate, so
+        // has_more is fixed false and no sentinel is emitted — otherwise it
+        // would point at the home feed's load-more endpoint from this page.
+        feed => context! {
+            posts => collaborative_posts,
+            has_more => false,
+            next_url => "",
+        },
         postable_communities => postable_communities,
         selected_community_slug => query.community,
-        // The shared card template renders a sentinel when this is true; the
-        // gallery is small enough not to paginate.
-        has_more => false,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         canvas_sizes => vec![
             ("300x300", "300×300"),
