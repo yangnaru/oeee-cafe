@@ -1,5 +1,23 @@
 {% extends "admin/base.jinja" %}
 {% block admin_content %}
+  {# Applied before first paint so the grid does not flash at the default width. #}
+  <script>
+    (function () {
+      var saved = localStorage.getItem("adminPostCols");
+      if (saved) document.documentElement.style.setProperty("--admin-cols", saved);
+    })();
+  </script>
+
+  <div class="admin-density">
+    <label for="admin-cols">Per row</label>
+    <input type="range"
+           id="admin-cols"
+           min="1"
+           max="12"
+           step="1" />
+    <output id="admin-cols-value"></output>
+  </div>
+
   <h2>
     All posts
     {%- if filter_author %} by @{{ filter_author }}{% endif -%}
@@ -45,10 +63,34 @@
   {% if posts %}
     {# The grid is the htmx swap target: the sentinel replaces itself with the
        next batch, which ends with a fresh sentinel. #}
-    <div class="admin-grid">
+    <div class="admin-grid adjustable">
       {% include "admin/posts_fragment.jinja" %}
     </div>
   {% else %}
     <p>No posts match this filter.</p>
   {% endif %}
+
+  <script>
+    (function () {
+      var DEFAULT_COLS = 6;
+      var slider = document.getElementById("admin-cols");
+      var readout = document.getElementById("admin-cols-value");
+      var root = document.documentElement;
+
+      var current = parseInt(localStorage.getItem("adminPostCols"), 10);
+      if (!current || current < 1 || current > 12) current = DEFAULT_COLS;
+
+      function apply(cols) {
+        root.style.setProperty("--admin-cols", cols);
+        readout.textContent = cols;
+        localStorage.setItem("adminPostCols", cols);
+      }
+
+      slider.value = current;
+      apply(current);
+      slider.addEventListener("input", function () {
+        apply(parseInt(slider.value, 10));
+      });
+    })();
+  </script>
 {% endblock admin_content %}

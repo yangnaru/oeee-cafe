@@ -17,6 +17,34 @@
     .admin-filters { margin-bottom: 1rem; display: flex; gap: .75rem; align-items: end; flex-wrap: wrap; }
     .admin-grid { display: flex; flex-wrap: wrap; gap: .75rem; }
     .admin-card { width: 160px; font-size: .85rem; }
+    /* Anchor for the absolutely positioned density control. */
+    .admin-content { position: relative; }
+    /* Posts grid only: column count is driven by --admin-cols so the control
+       can change it without re-rendering. Cards drop their fixed width and let
+       the track size them. Because the variable lives on :root, batches swapped
+       in by the infinite-scroll sentinel pick it up with no extra wiring. */
+    .admin-grid.adjustable {
+      display: grid;
+      grid-template-columns: repeat(var(--admin-cols, 6), minmax(0, 1fr));
+      align-items: start;
+    }
+    .admin-grid.adjustable .admin-card { width: auto; }
+    .admin-grid.adjustable .admin-sentinel { grid-column: 1 / -1; }
+    .admin-density {
+      position: absolute;
+      top: 0;
+      right: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .4rem .6rem;
+      font-size: .8rem;
+      background: var(--main-bg-color, #fff);
+      border: 1px solid var(--main-border-color, #ccc);
+      border-radius: 4px;
+    }
+    .admin-density output { min-width: 1.5em; text-align: right; font-weight: bold; }
     .admin-card img { width: 100%; height: auto; display: block; border: 1px solid #ccc; }
     .admin-card.deleted img { opacity: .4; }
     .banner-card { width: 260px; }
@@ -47,6 +75,8 @@
     <a href="/admin/banners">Banners</a>
     <a href="/">← Back to site</a>
   </nav>
-  {% block admin_content %}
-  {% endblock admin_content %}
+  <div class="admin-content">
+    {% block admin_content %}
+    {% endblock admin_content %}
+  </div>
 {% endblock content %}

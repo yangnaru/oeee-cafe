@@ -562,7 +562,7 @@ mod tests {
     fn renders_posts_list() {
         let env = test_env();
         let template = env.get_template("admin/posts.jinja").expect("template loads");
-        template
+        let rendered = template
             .render(context! {
                 current_user => current_user(),
                 posts => vec![sample_post()],
@@ -579,6 +579,10 @@ mod tests {
                 ftl_lang => "en",
             })
             .expect("posts.jinja renders");
+        // The column control drives --admin-cols; the grid must opt in via
+        // `adjustable` or the slider changes nothing.
+        assert!(rendered.contains("admin-grid adjustable"));
+        assert!(rendered.contains("id=\"admin-cols\""));
     }
 
     #[test]
