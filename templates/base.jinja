@@ -46,11 +46,12 @@
               <a href="/login">{{ ftl_get_message('draw') }}</a>
             </div>
           {% endif %}
-          {% if current_user %}
-            <div>
-              <a href="/collaborate">{{ ftl_get_message("collaborate") }}</a>
-            </div>
-          {% endif %}
+          {# Shown signed out too: the lobby is a public gallery of finished
+             collaborative drawings, and only creating a session needs an
+             account. #}
+          <div>
+            <a href="/collaborate">{{ ftl_get_message("collaborate") }}</a>
+          </div>
           <div>
             <a href="/communities">{{ ftl_get_message("community") }}</a>
           </div>

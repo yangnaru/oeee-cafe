@@ -97,15 +97,18 @@ pub async fn collaborate_lobby(
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = match auth_session.user {
-        Some(user) => user,
-        None => return Ok(Redirect::to("/login?next=/collaborate").into_response()),
+    // Viewable signed out: the lobby doubles as a public gallery. Creating a
+    // session still needs an account, which the template gates.
+    let user = auth_session.user;
+    let (viewer_user_id, viewer_show_sensitive) = match user.as_ref() {
+        Some(user) => (Some(user.id), user.show_sensitive_content),
+        None => (None, false),
     };
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let common_ctx = CommonContext::build(&mut tx, Some(user.id)).await?;
+    let common_ctx = CommonContext::build(&mut tx, viewer_user_id).await?;
 
     let active_sessions = sqlx::query_as!(
         SessionWithCounts,
@@ -134,11 +137,68 @@ pub async fn collaborate_lobby(
     .fetch_all(&mut *tx)
     .await?;
 
+    // Finished collaborative drawings, rendered through the same card template
+    // as the home grid. Sensitive posts follow the viewer's preference exactly
+    // as they do elsewhere.
+    let collaborative_posts = sqlx::query!(
+        r#"
+        SELECT
+            p.id,
+            p.title,
+            u.login_name AS user_login_name,
+            c.slug AS "community_slug?",
+            c.name AS "community_name?",
+            i.image_filename,
+            i.width AS image_width,
+            i.height AS image_height,
+            (p.is_sensitive OR p.is_explicit) AS "is_sensitive!"
+        FROM collaborative_sessions cs
+        JOIN posts p ON cs.saved_post_id = p.id
+        JOIN users u ON p.author_id = u.id
+        JOIN images i ON p.image_id = i.id
+        LEFT JOIN communities c ON p.community_id = c.id
+        WHERE p.published_at IS NOT NULL
+          AND p.deleted_at IS NULL
+          AND (c.visibility = 'public' OR p.community_id IS NULL)
+          AND ((p.is_sensitive = false AND p.is_explicit = false)
+               OR $1 = true
+               OR p.author_id = $2)
+        ORDER BY p.published_at DESC
+        LIMIT 60
+        "#,
+        viewer_show_sensitive,
+        viewer_user_id,
+    )
+    .fetch_all(&mut *tx)
+    .await?
+    .into_iter()
+    .map(|row| {
+        serde_json::json!({
+            "id": row.id.to_string(),
+            "title": row.title,
+            "user_login_name": row.user_login_name,
+            "community_slug": row.community_slug,
+            "community_name": row.community_name,
+            "image_filename": row.image_filename,
+            "image_width": row.image_width,
+            "image_height": row.image_height,
+            "is_sensitive": row.is_sensitive,
+        })
+    })
+    .collect::<Vec<_>>();
+
+    tx.commit().await?;
+
     let template = state.env.get_template("collaborate_lobby.jinja")?;
 
     let rendered = template.render(context! {
         current_user => user,
         active_sessions => active_sessions,
+        posts => collaborative_posts,
+        // The shared card template renders a sentinel when this is true; the
+        // gallery is small enough not to paginate.
+        has_more => false,
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         canvas_sizes => vec![
             ("300x300", "300×300"),
             ("1024x768", "1024×768"),
@@ -293,4 +353,85 @@ pub async fn get_active_sessions_json(
     .await?;
 
     Ok(Json(active_sessions))
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::web::handlers::test_support;
+    use minijinja::context;
+    use serde_json::json;
+
+    fn lobby_context(signed_in: bool, posts: Vec<serde_json::Value>) -> minijinja::Value {
+        context! {
+            current_user => if signed_in {
+                json!({"login_name": "someone", "email_verified_at": "2026-01-01T00:00:00Z"})
+            } else {
+                json!(null)
+            },
+            active_sessions => Vec::<serde_json::Value>::new(),
+            posts => posts,
+            has_more => false,
+            canvas_sizes => vec![("300x300", "300x300")],
+            draft_post_count => 0,
+            unread_notification_count => 0,
+            ftl_lang => "en",
+        }
+    }
+
+    fn sample_post() -> serde_json::Value {
+        json!({
+            "id": "00000000-0000-0000-0000-000000000001",
+            "title": "Together",
+            "user_login_name": "someone",
+            "community_slug": "open",
+            "community_name": "Open Studio",
+            "image_filename": "abcdef.png",
+            "image_width": 300,
+            "image_height": 300,
+            "is_sensitive": false,
+        })
+    }
+
+    #[test]
+    fn lobby_renders_signed_out_without_the_create_form() {
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context(false, vec![sample_post()]))
+            .expect("renders signed out");
+        assert!(!rendered.contains("create-session-form"));
+        assert!(rendered.contains("collaborate-sign-in-to-create"));
+        // The gallery is the reason signed-out visitors can reach this page.
+        assert!(rendered.contains("posts-grid-item"));
+    }
+
+    #[test]
+    fn lobby_shows_the_create_form_when_signed_in() {
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context(true, vec![]))
+            .expect("renders signed in");
+        assert!(rendered.contains("create-session-form"));
+    }
+
+    #[test]
+    fn lobby_gallery_reuses_the_home_card_and_omits_the_sentinel() {
+        // has_more is false, so the shared fragment must not emit a sentinel
+        // pointing at /api/home/posts from this page.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context(false, vec![sample_post()]))
+            .expect("renders");
+        assert!(rendered.contains("post-card-community"));
+        assert!(!rendered.contains("infinite-scroll-sentinel"));
+    }
 }

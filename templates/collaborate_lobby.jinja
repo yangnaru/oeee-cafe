@@ -5,8 +5,11 @@
 {% block content %}
   <div class="center">
     <h2>{{ ftl_get_message("collaborate-title") }}</h2>
-    <div class="create-session-section">
-      <h3>{{ ftl_get_message("collaborate-create-session") }}</h3>
+    {# Signed-out visitors can browse the gallery below; only creating a
+       session needs an account. #}
+    {% if current_user %}
+      <div class="create-session-section">
+        <h3>{{ ftl_get_message("collaborate-create-session") }}</h3>
       <form id="create-session-form" method="post" action="/collaborate">
         <p>
           <label for="canvas-size">{{ ftl_get_message("collaborate-canvas-size-label") }}:</label>
@@ -40,7 +43,14 @@
         <small>{{ ftl_get_message("collaborate-public-session-description") }}</small>
         <input type="submit" value="{{ ftl_get_message("collaborate-create-button") }}">
       </form>
-    </div>
+      </div>
+    {% else %}
+      <div class="create-session-section">
+        <p>
+          <a href="/login?next=/collaborate">{{ ftl_get_message("collaborate-sign-in-to-create") }}</a>
+        </p>
+      </div>
+    {% endif %}
     {% if active_sessions|length > 0 %}
       <div class="active-sessions-section">
         <h3>{{ ftl_get_message("collaborate-active-sessions") }}</h3>
@@ -81,6 +91,16 @@
       <div class="no-sessions">
         <p>{{ ftl_get_message("collaborate-no-sessions") }}</p>
       </div>
+    {% endif %}
+    {# Finished collaborative drawings, through the same card template as the
+       home grid so they carry the community label and sensitive handling. #}
+    {% if posts and posts|length > 0 %}
+      <section role="region" aria-labelledby="collab-gallery-heading">
+        <h3 id="collab-gallery-heading">{{ ftl_get_message("collaborate-finished-drawings") }}</h3>
+        <div class="posts-grid">
+          {% include "home_posts_fragment.jinja" %}
+        </div>
+      </section>
     {% endif %}
   </div>
   <style>
@@ -200,6 +220,9 @@
       border: 1px solid var(--main-border-color);
     }
   </style>
+  {# Only ship with the form: getElementById would be null signed out and
+     the TypeError would break any later script on the page. #}
+  {% if current_user %}
   <script>
     document.getElementById('create-session-form').addEventListener('submit', async function(e) {
       e.preventDefault();
@@ -238,4 +261,5 @@
       }
     });
   </script>
+  {% endif %}
 {% endblock content %}
