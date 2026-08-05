@@ -18,8 +18,8 @@
     {% endblock head %}
   </head>
   <body>
-    <header class="center">
-      <h1 class="logo">
+    <header>
+      <h1 class="logo center">
         <a href="/">
           <img src="{%- if ftl_lang == "zh" -%}/static/logo/en.svg{%- else -%}/static/logo/{{ ftl_lang }}.svg{%- endif -%}"
                alt="{{ ftl_get_message('brand') }}"
@@ -27,8 +27,8 @@
                width="{%- if ftl_lang == "ja" -%} 345px {%- else -%} 270px {%- endif -%}" />
         </a>
       </h1>
-      <nav>
-        <div id="menubar">
+      <nav class="nav-bar">
+        <div id="menubar" class="center">
           <div>
             <a href="/about">{{ ftl_get_message('brand') }}?</a>
           </div>
@@ -84,7 +84,7 @@
           {% endif %}
         </div>
       </nav>
-      <ul>
+      <ul class="center">
         {% for message in messages %}
           <li>
             <span><strong>{{ message.m }}</strong></span>

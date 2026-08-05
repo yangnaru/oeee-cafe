@@ -5,6 +5,10 @@
 {% block title %}Admin · {{ ftl_get_message("brand") }}{% endblock title %}
 {% block head %}
   <style>
+    /* Admin content is not wrapped in .center, so it already spans the window.
+       Widening the shared page variable brings the nav bar out to match it
+       instead of leaving a 829px nav above a full-bleed grid. */
+    :root { --page-width: 100%; }
     .admin-banner {
       background: #7a1020;
       color: #fff;

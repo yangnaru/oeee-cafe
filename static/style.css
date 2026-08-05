@@ -31,15 +31,6 @@ body {
   margin: 0 auto;
 }
 
-nav {
-  padding: 8px;
-  background-color: var(--main-nav-bg-color);
-  border-width: 1px;
-  border-color: var(--main-border-color);
-  border-style: solid;
-  color: var(--main-text-color);
-}
-
 a,
 a:visited,
 h1 > a:visited,
@@ -74,9 +65,28 @@ nav a:visited,
   gap: 8px;
 }
 
+/* The single source of truth for how wide a page is. The header reads the same
+   variable as the content below it, so the nav bar always lines up with the
+   page it sits on instead of each template deciding independently. A page that
+   wants to be wider overrides --page-width and the nav follows automatically. */
 .center {
   margin: 0 auto;
-  max-width: 829px;
+  max-width: var(--page-width, 829px);
+}
+
+/* Full-bleed bar, contained contents: the nav background spans the viewport
+   while #menubar stays aligned with the content. */
+.nav-bar {
+  background-color: var(--main-nav-bg-color);
+  border-width: 1px 0;
+  border-color: var(--main-border-color);
+  border-style: solid;
+  color: var(--main-text-color);
+  padding: 8px 0;
+}
+
+.nav-bar #menubar {
+  padding: 0 8px;
 }
 
 .post-image {
