@@ -161,7 +161,11 @@ nav a:visited,
   cursor: pointer;
   object-fit: cover;
   object-position: center;
-  max-width: 100%;
+  /* width, not max-width: max-width caps the image at its natural size, so
+     anything smaller than the cell left the rest of the square blank. Most
+     drawings here are 300px wide while a cell can be much wider at low column
+     counts, so that was the common case rather than the exception. */
+  width: 100%;
   height: auto;
   vertical-align: bottom;
   aspect-ratio: 1 / 1;
