@@ -17,8 +17,6 @@
     .admin-filters { margin-bottom: 1rem; display: flex; gap: .75rem; align-items: end; flex-wrap: wrap; }
     .admin-grid { display: flex; flex-wrap: wrap; gap: .75rem; }
     .admin-card { width: 160px; font-size: .85rem; }
-    /* Anchor for the absolutely positioned density control. */
-    .admin-content { position: relative; }
     /* Posts grid only: column count is driven by --admin-cols so the control
        can change it without re-rendering. Cards drop their fixed width and let
        the track size them. Because the variable lives on :root, batches swapped
@@ -30,10 +28,13 @@
     }
     .admin-grid.adjustable .admin-card { width: auto; }
     .admin-grid.adjustable .admin-sentinel { grid-column: 1 / -1; }
+    /* Fixed to the viewport so it stays reachable while scrolling an
+       infinitely-scrolling list. Offset from the edges so it does not sit flush
+       against the window chrome. */
     .admin-density {
-      position: absolute;
-      top: 0;
-      right: 0;
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
       z-index: 10;
       display: flex;
       align-items: center;
@@ -75,8 +76,6 @@
     <a href="/admin/banners">Banners</a>
     <a href="/">← Back to site</a>
   </nav>
-  <div class="admin-content">
-    {% block admin_content %}
-    {% endblock admin_content %}
-  </div>
+  {% block admin_content %}
+  {% endblock admin_content %}
 {% endblock content %}
