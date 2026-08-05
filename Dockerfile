@@ -23,12 +23,15 @@ ENV SCCACHE_DIR=/sccache
 ENV SCCACHE_CACHE_SIZE="10G"
 ENV DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5433/oeee_cafe
 
+# `cargo build --release` already builds both bin targets. /app/target is a
+# cache mount, so anything needed later must be copied out inside this RUN.
 RUN --mount=type=cache,target=/sccache \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
     cargo build --release && \
     sccache --show-stats && \
-    cp /app/target/release/oeee-cafe /app/oeee-cafe
+    cp /app/target/release/oeee-cafe /app/oeee-cafe && \
+    cp /app/target/release/cli /app/cli
 
 # Build neo-cucumber
 FROM node:24-slim AS node-builder-neo-cucumber
@@ -50,6 +53,9 @@ COPY locales/ ./locales/
 COPY static/ ./static/
 COPY templates/ ./templates/
 COPY --from=rust-builder /app/oeee-cafe ./
+# Admin/ops commands, e.g.
+#   docker exec oeee-cafe ./cli -c config/config.toml set-role <login_name> admin
+COPY --from=rust-builder /app/cli ./
 COPY --from=node-builder-neo-cucumber /app/neo-cucumber/dist/ ./neo-cucumber/dist/
 EXPOSE 3000
 CMD ["./oeee-cafe", "config/config.toml"]
