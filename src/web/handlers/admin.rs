@@ -488,24 +488,11 @@ mod tests {
     //! admin template against representative context. Catches syntax errors,
     //! broken inheritance and unknown filters.
 
-    use minijinja::{context, path_loader, Environment, State};
+    use minijinja::{context, Environment};
     use serde_json::json;
-    use std::path::PathBuf;
 
     fn test_env() -> Environment<'static> {
-        let mut env = Environment::new();
-        // Must mirror main.rs, or these tests would pass while production
-        // renders unescaped.
-        env.set_auto_escape_callback(|_| minijinja::AutoEscape::Html);
-        minijinja_contrib::add_to_environment(&mut env);
-        env.add_filter("cachebuster", |value: String| value);
-        env.add_filter("markdown", |value: String| value);
-        env.add_function("ftl_get_message", |_state: &State, id: String| id);
-        env.add_global("r2_public_endpoint_url", "https://example.test");
-        env.set_loader(path_loader(
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"),
-        ));
-        env
+        crate::web::handlers::test_support::env()
     }
 
     fn sample_post() -> serde_json::Value {

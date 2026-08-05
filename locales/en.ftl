@@ -235,6 +235,7 @@ active-communities-nil = There are no active communities.
 no-active-communities = No active communities at the moment.
 no-posts-in-community = No posts in this community yet.
 loading-more-posts = Loading more posts...
+home-thumbnail-size = Thumbnail size
 create-community = Create community
 new-community = New community
 community-name = Community name

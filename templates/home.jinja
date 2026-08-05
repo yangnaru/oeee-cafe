@@ -20,6 +20,29 @@
 {% block title %}
   {{ ftl_get_message("brand") }}
 {% endblock title %}
+{% block head %}
+  <style>
+    /* Wider than the 829px default so the grid has room to breathe, capped so
+       it does not sprawl on an ultrawide monitor. The nav bar reads the same
+       variable and follows automatically. */
+    :root { --page-width: 1600px; }
+    .thumbnail-size {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: .5rem;
+      margin: 8px 0;
+      font-size: .85rem;
+    }
+  </style>
+  {# Applied before first paint so the grid does not flash at the default size. #}
+  <script>
+    (function () {
+      var saved = localStorage.getItem("homeCardMin");
+      if (saved) document.documentElement.style.setProperty("--card-min", saved + "px");
+    })();
+  </script>
+{% endblock head %}
 {% block content %}
   <div class="center">
     {# Latest Active Communities Section #}
@@ -56,12 +79,21 @@
     {% if non_official_public_community_posts and non_official_public_community_posts|length > 0 %}
       <section role="region" aria-labelledby="public-posts-heading">
         <h2 id="public-posts-heading" class="home-section-title">{{ ftl_get_message("posts-from-public-communities") }}</h2>
+        <div class="thumbnail-size">
+          <label for="card-min">{{ ftl_get_message("home-thumbnail-size") }}</label>
+          <input type="range"
+                 id="card-min"
+                 min="100"
+                 max="320"
+                 step="20" />
+        </div>
         <div class="posts-grid" id="public-posts-grid">
           {% for post in non_official_public_community_posts %}{{ post_grid_item(post, r2_public_endpoint_url) }}{% endfor %}
-          {# Infinite scroll sentinel - triggers when scrolled into view #}
-          {% if non_official_public_community_posts|length == 18 %}
+          {# Infinite scroll sentinel - triggers when scrolled into view. Batch
+             size comes from the handler so it cannot drift from the query. #}
+          {% if posts_has_more %}
             <div class="infinite-scroll-sentinel"
-                 hx-get="/api/home/posts?offset=18&limit=18"
+                 hx-get="/api/home/posts?offset={{ posts_limit }}&limit={{ posts_limit }}"
                  hx-trigger="revealed"
                  hx-swap="outerHTML">
               <span class="loading-indicator">{{ ftl_get_message("loading-more-posts") }}</span>
@@ -70,5 +102,27 @@
         </div>
       </section>
     {% endif %}
+    <script>
+      (function () {
+        var DEFAULT_CARD_MIN = 170;
+        var slider = document.getElementById("card-min");
+        if (!slider) return;
+        var root = document.documentElement;
+
+        var current = parseInt(localStorage.getItem("homeCardMin"), 10);
+        if (!current || current < 100 || current > 320) current = DEFAULT_CARD_MIN;
+
+        function apply(px) {
+          root.style.setProperty("--card-min", px + "px");
+          localStorage.setItem("homeCardMin", px);
+        }
+
+        slider.value = current;
+        apply(current);
+        slider.addEventListener("input", function () {
+          apply(parseInt(slider.value, 10));
+        });
+      })();
+    </script>
   </div>
 {% endblock content %}

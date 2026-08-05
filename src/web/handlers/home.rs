@@ -42,6 +42,15 @@ use uuid::Uuid;
 
 use minijinja::context;
 
+/// Posts fetched per batch on the home grid.
+///
+/// Has to comfortably exceed one screenful at the *densest* thumbnail size, or
+/// the infinite-scroll sentinel starts already visible and chain-loads batches
+/// until the viewport finally fills. At the smallest card size on a wide
+/// monitor a screen holds roughly a hundred cards, so this bounds the worst
+/// case to a single extra fetch rather than eliminating it.
+const HOME_POSTS_PER_BATCH: i64 = 60;
+
 pub async fn home(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -61,7 +70,8 @@ pub async fn home(
     };
 
     let non_official_public_community_posts =
-        find_public_posts(&mut tx, 18, 0, viewer_user_id, viewer_show_sensitive).await?;
+        find_public_posts(&mut tx, HOME_POSTS_PER_BATCH, 0, viewer_user_id, viewer_show_sensitive)
+            .await?;
     let active_public_communities_raw = get_public_communities(&mut tx).await?;
 
     // Filter to communities with at least 10 posts
@@ -143,6 +153,8 @@ pub async fn home(
         current_user => auth_session.user,
         messages => messages.into_iter().collect::<Vec<_>>(),
         active_public_communities,
+        posts_limit => HOME_POSTS_PER_BATCH,
+        posts_has_more => non_official_public_community_posts.len() as i64 == HOME_POSTS_PER_BATCH,
         non_official_public_community_posts,
         recent_comments,
         draft_post_count => common_ctx.draft_post_count,
@@ -241,6 +253,7 @@ pub async fn load_more_public_posts(
         posts,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         offset => query.offset + query.limit,
+        limit => query.limit,
         has_more => posts.len() as i64 == query.limit,
     })?;
 
@@ -1342,4 +1355,100 @@ pub async fn remove_reaction_api(
             .collect(),
     })
     .into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::web::handlers::test_support;
+    use minijinja::context;
+    use serde_json::json;
+
+    fn sample_post() -> serde_json::Value {
+        json!({
+            "id": "00000000-0000-0000-0000-000000000001",
+            "title": "A drawing",
+            "user_login_name": "someone",
+            "community_slug": "open",
+            "image_filename": "abcdef.png",
+            "image_width": 300,
+            "image_height": 300,
+            "is_sensitive": false,
+        })
+    }
+
+    fn home_context(posts: Vec<serde_json::Value>, has_more: bool) -> minijinja::Value {
+        context! {
+            current_user => json!(null),
+            messages => Vec::<serde_json::Value>::new(),
+            active_public_communities => Vec::<serde_json::Value>::new(),
+            recent_comments => Vec::<serde_json::Value>::new(),
+            non_official_public_community_posts => posts,
+            posts_limit => super::HOME_POSTS_PER_BATCH,
+            posts_has_more => has_more,
+            draft_post_count => 0,
+            unread_notification_count => 0,
+            ftl_lang => "en",
+        }
+    }
+
+    #[test]
+    fn renders_home_with_size_control() {
+        let env = test_support::env();
+        let template = env.get_template("home.jinja").expect("template loads");
+        let rendered = template
+            .render(home_context(vec![sample_post()], false))
+            .expect("home.jinja renders");
+        assert!(rendered.contains("id=\"card-min\""));
+        // The grid must stay auto-fill driven; a fixed column count here would
+        // defeat the responsive layout.
+        assert!(rendered.contains("--page-width: 1600px"));
+    }
+
+    #[test]
+    fn sentinel_batch_size_matches_the_handler() {
+        // Regression: the sentinel URL used to hardcode limit=18 while the
+        // handler fetched its own count. If they drift, the grid either skips
+        // posts or re-fetches ones already shown.
+        let env = test_support::env();
+        let template = env.get_template("home.jinja").expect("template loads");
+        let rendered = template
+            .render(home_context(vec![sample_post()], true))
+            .expect("renders");
+        // The `&` is literal template text, not interpolated, so autoescaping
+        // leaves it raw — unlike a URL built in Rust and passed through {{ }}.
+        let expected = format!(
+            "/api/home/posts?offset={}&limit={}",
+            super::HOME_POSTS_PER_BATCH,
+            super::HOME_POSTS_PER_BATCH
+        );
+        assert!(rendered.contains(&expected), "sentinel url drifted");
+    }
+
+    #[test]
+    fn no_sentinel_when_there_is_no_more() {
+        let env = test_support::env();
+        let template = env.get_template("home.jinja").expect("template loads");
+        let rendered = template
+            .render(home_context(vec![sample_post()], false))
+            .expect("renders");
+        assert!(!rendered.contains("infinite-scroll-sentinel"));
+    }
+
+    #[test]
+    fn fragment_sentinel_carries_the_limit_through() {
+        let env = test_support::env();
+        let template = env
+            .get_template("home_posts_fragment.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                posts => vec![sample_post()],
+                offset => 120,
+                limit => 60,
+                has_more => true,
+                r2_public_endpoint_url => "https://example.test",
+            })
+            .expect("renders");
+        assert!(rendered.contains("/api/home/posts?offset=120&limit=60"));
+    }
 }

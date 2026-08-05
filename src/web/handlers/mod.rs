@@ -436,3 +436,32 @@ pub fn safe_parse_email(s: &str) -> Result<lettre::Address, AppError> {
     s.parse()
         .map_err(|e| AppError::InvalidEmail(format!("{}: {}", s, e)))
 }
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    //! Shared minijinja environment for template render tests.
+    //!
+    //! Must mirror the setup in `main.rs` — most importantly the autoescape
+    //! callback, or tests would pass while production rendered unescaped.
+
+    use minijinja::{path_loader, Environment, State};
+    use std::path::PathBuf;
+
+    pub fn env() -> Environment<'static> {
+        let mut env = Environment::new();
+        env.set_auto_escape_callback(|_| minijinja::AutoEscape::Html);
+        minijinja_contrib::add_to_environment(&mut env);
+        env.add_filter("cachebuster", |value: String| value);
+        env.add_filter("markdown", |value: String| value);
+        env.add_function("ftl_get_message", |_state: &State, id: String| id);
+        env.add_function(
+            "ftl_format_pattern",
+            |_state: &State, id: String, _args: minijinja::Value| id,
+        );
+        env.add_global("r2_public_endpoint_url", "https://example.test");
+        env.set_loader(path_loader(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"),
+        ));
+        env
+    }
+}

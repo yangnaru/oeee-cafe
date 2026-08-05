@@ -237,6 +237,7 @@ active-communities-nil = アクティブなパブリックコミュニティは�
 no-active-communities = 現在アクティブなコミュニティはありません。
 no-posts-in-community = まだこのコミュニティに投稿された絵はありません。
 loading-more-posts = さらに読み込み中...
+home-thumbnail-size = サムネイルの大きさ
 create-community = コミュニティの作成
 new-community = 新しいコミュニティ
 community-name = コミュニティ名

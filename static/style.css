@@ -1157,8 +1157,11 @@ nav a:visited,
 
 /* Grid Layout */
 
+/* auto-fill rather than a fixed column count: the browser fits as many cards as
+   the container allows, so one --card-min value works from phone to ultrawide
+   with no media queries. The thumbnail-size control just moves --card-min. */
 .posts-grid {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 170px), 1fr));
 }
 
 .community-badges {
