@@ -217,7 +217,6 @@ collaborate-create-button = セッションを作成
 collaborate-active-sessions = アクティブな公開セッション
 collaborate-sign-in-to-create = ログインして一緒に描き始めましょう
 collaborate-finished-drawings = 完成した共同制作の絵
-collaborate-community-label = コミュニティ
 collaborate-community-none = コミュニティなし
 community-draw-together = 一緒に描く
 collaborate-session-by = @

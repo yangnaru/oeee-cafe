@@ -465,3 +465,30 @@ pub(crate) mod test_support {
         env
     }
 }
+
+#[cfg(test)]
+mod locale_tests {
+    use super::{get_bundle, Language};
+    use axum::http::header::HeaderValue;
+
+    /// Building a bundle panics on a duplicate message id, and it happens per
+    /// request — a duplicate key takes every page down with a 502 while
+    /// `cargo check` and every template test stay green, because the template
+    /// tests stub ftl_get_message and never load the real bundles.
+    #[test]
+    fn every_locale_bundle_builds() {
+        let empty = HeaderValue::from_static("");
+        for lang in [Language::Ko, Language::Ja, Language::En, Language::Zh] {
+            let bundle = get_bundle(&empty, Some(lang.clone()));
+            assert!(
+                !bundle.locales.is_empty(),
+                "{lang:?} bundle built with no locale"
+            );
+        }
+        // The header-negotiated path builds its own bundle; cover it too.
+        for header in ["ko", "ja", "en", "zh", "", "xx"] {
+            let value = HeaderValue::from_str(header).expect("valid header");
+            let _ = get_bundle(&value, None);
+        }
+    }
+}

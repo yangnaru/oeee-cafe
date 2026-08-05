@@ -217,7 +217,6 @@ collaborate-create-button = 创建会话
 collaborate-active-sessions = 活跃的公共会话
 collaborate-sign-in-to-create = 登录后即可开始共同绘画
 collaborate-finished-drawings = 已完成的共同作品
-collaborate-community-label = 社区
 collaborate-community-none = 不选社区
 community-draw-together = 一起画画
 collaborate-session-by = 由 @
