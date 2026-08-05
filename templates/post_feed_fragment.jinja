@@ -4,41 +4,9 @@
    that feed uses. Rendered inline for the first batch and standalone by the
    load-more handlers for the rest, so it must not depend on anything those
    handlers do not pass. #}
+{% import "post_card.jinja" as card %}
 {% for post in feed.posts %}
-  <div class="posts-grid-item">
-    <a class="post-card-image"
-       href="/@{{ post.community_slug if post.community_slug else post.user_login_name }}/{{ post.id }}"
-       aria-label="{{ post.title if post.title else ftl_get_message('post-untitled') }} by {{ post.user_login_name }}">
-      <img width="{{ post.image_width }}"
-           height="{{ post.image_height }}"
-           alt="{{ post.title }}"
-           src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-           loading="lazy"
-           decoding="async"
-           class="{% if post.is_sensitive %}sensitive{% endif %}"
-           {% if post.is_sensitive %}aria-label="Sensitive content: {{ post.title }}"{% endif %} />
-    </a>
-    {# Attribution stays visible rather than appearing on hover: it is the
-       artist's credit, and hover does not exist on touch anyway. The author
-       and community links sit outside the post link because an <a> cannot
-       contain another <a>. #}
-    <div class="post-card-meta">
-      <div class="post-card-title" title="{{ post.title }}">
-        {{ post.title if post.title else ftl_get_message("post-untitled") }}
-      </div>
-      <div class="post-card-byline">
-        <a href="/@{{ post.user_login_name }}">@{{ post.user_login_name }}</a>
-        {% if post.community_slug %}
-          <span class="muted">·</span>
-          <a href="/communities/@{{ post.community_slug }}"
-             title="{{ post.community_name }}">{{ post.community_name }}</a>
-        {% endif %}
-      </div>
-      {% if post.published_at %}
-        <div class="post-card-date muted">{{ post.published_at|datetimeformat(format="short", tz="Asia/Seoul") }}</div>
-      {% endif %}
-    </div>
-  </div>
+  {{ card.post_card(post, r2_public_endpoint_url, false) }}
 {% endfor %}
 
 {% if feed.has_more %}

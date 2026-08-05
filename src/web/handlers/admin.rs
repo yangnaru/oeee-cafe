@@ -628,6 +628,40 @@ mod tests {
     }
 
     #[test]
+    fn shared_card_switches_targets_for_admin() {
+        // The public feed and the admin grid render the same macro; `admin`
+        // decides the link targets and the moderation tags. If that flag stops
+        // working, admin cards quietly start linking readers into /admin.
+        let env = test_env();
+        let template = env
+            .get_template("admin/posts_fragment.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                posts => vec![sample_post()],
+                has_more => false,
+                next_url => "",
+                r2_public_endpoint_url => "https://example.test",
+            })
+            .expect("renders");
+
+        // Admin targets, not public ones.
+        assert!(rendered.contains("/admin/posts/"));
+        assert!(rendered.contains("/admin/users/someone/posts"));
+        assert!(rendered.contains("/admin/communities/secret/posts"));
+        assert!(!rendered.contains("/communities/@secret"));
+        // Moderation tags are admin-only.
+        assert!(rendered.contains("admin-tag"));
+        assert!(rendered.contains("explicit"));
+        // The handle fallback resolves author_login_name for admin rows.
+        assert!(rendered.contains("@someone"));
+        // Staff see sensitive content unblurred.
+        assert!(!rendered.contains("class=\"sensitive\""));
+        // ...and the shared attribution block is present either way.
+        assert!(rendered.contains("post-card-byline"));
+    }
+
+    #[test]
     fn renders_posts_fragment_standalone() {
         // The fragment handler passes a strictly smaller context than the full
         // page, so render it with only those keys.

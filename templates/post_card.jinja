@@ -1,0 +1,63 @@
+{# The post card, shared by the public feeds and the admin grid.
+
+   `admin` switches the three link targets to their /admin equivalents and adds
+   the moderation tags. Everything else — layout, attribution, timestamp — is
+   identical, which is the point: a change to how a post is credited should
+   only have to be made once.
+
+   The handle fallback covers both row shapes: the feed queries call it
+   user_login_name, the admin queries author_login_name. #}
+{% macro post_card(post, r2_public_endpoint_url, admin) %}
+  {% set handle = post.user_login_name or post.author_login_name %}
+  {% set title = post.title if post.title else ftl_get_message("post-untitled") %}
+  <div class="posts-grid-item{% if admin and post.deleted_at %} deleted{% endif %}">
+    <a class="post-card-image"
+       href="{% if admin %}/admin/posts/{{ post.id }}{% else %}/@{{ post.community_slug if post.community_slug else handle }}/{{ post.id }}{% endif %}"
+       aria-label="{{ title }} by {{ handle }}">
+      <img width="{{ post.image_width }}"
+           height="{{ post.image_height }}"
+           alt="{{ post.title }}"
+           src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
+           loading="lazy"
+           decoding="async"
+           {# Staff reviewing content need to see it; the blur is for readers. #}
+           class="{% if post.is_sensitive and not admin %}sensitive{% endif %}"
+           {% if post.is_sensitive and not admin %}aria-label="Sensitive content: {{ post.title }}"{% endif %} />
+    </a>
+    {# Attribution stays visible rather than appearing on hover: it is the
+       artist's credit, and hover does not exist on touch anyway. The author and
+       community links sit outside the post link because an <a> cannot contain
+       another <a>. #}
+    <div class="post-card-meta">
+      {% if admin %}
+        <div class="post-card-tags">
+          {% if not post.published_at %}<span class="admin-tag draft">draft</span>{% endif %}
+          {% if post.deleted_at %}
+            <span class="admin-tag deleted">deleted{% if post.deletion_reason %}: {{ post.deletion_reason }}{% endif %}</span>
+          {% endif %}
+          {% if post.is_sensitive_by_author %}<span class="admin-tag sensitive">sensitive</span>{% endif %}
+          {% if post.is_explicit %}<span class="admin-tag deleted">explicit</span>{% endif %}
+          {% if post.community_visibility and post.community_visibility != "public" %}
+            <span class="admin-tag {{ post.community_visibility }}">{{ post.community_visibility }}</span>
+          {% endif %}
+        </div>
+      {% endif %}
+      <div class="post-card-title" title="{{ post.title }}">{{ title }}</div>
+      <div class="post-card-byline">
+        <a href="{% if admin %}/admin/users/{{ handle }}/posts{% else %}/@{{ handle }}{% endif %}">@{{ handle }}</a>
+        {% if post.community_slug %}
+          <span class="muted">·</span>
+          <a href="{% if admin %}/admin/communities/{{ post.community_slug }}/posts{% else %}/communities/@{{ post.community_slug }}{% endif %}"
+             title="{{ post.community_name }}">{{ post.community_name }}</a>
+        {% elif admin %}
+          <span class="muted">· no community</span>
+        {% endif %}
+      </div>
+      {# Drafts have no published_at, so admin falls back to when it was drawn. #}
+      {% set stamp = post.published_at if post.published_at else (post.created_at if admin else none) %}
+      {% if stamp %}
+        <div class="post-card-date muted">{{ stamp|datetimeformat(format="short", tz="Asia/Seoul") }}</div>
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}

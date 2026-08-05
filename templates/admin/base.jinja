@@ -21,6 +21,12 @@
     .admin-filters { margin-bottom: 1rem; display: flex; gap: .75rem; align-items: end; flex-wrap: wrap; }
     .admin-grid { display: flex; flex-wrap: wrap; gap: .75rem; }
     .admin-card { width: 160px; font-size: .85rem; }
+    /* Post cards come from the shared component, so they arrive as
+       .posts-grid-item. Only the sizing differs inside the admin grid. */
+    .admin-grid .posts-grid-item { width: 160px; font-size: .85rem; }
+    .admin-grid.adjustable .posts-grid-item { width: auto; }
+    .posts-grid-item.deleted img { opacity: .4; }
+    .post-card-tags { margin-bottom: 2px; }
     /* Posts grid only: column count is driven by --admin-cols so the control
        can change it without re-rendering. Cards drop their fixed width and let
        the track size them. Because the variable lives on :root, batches swapped
