@@ -87,10 +87,6 @@
           {% endfor %}
         </div>
       </div>
-    {% else %}
-      <div class="no-sessions">
-        <p>{{ ftl_get_message("collaborate-no-sessions") }}</p>
-      </div>
     {% endif %}
     {# Finished collaborative drawings, through the same card template as the
        home grid so they carry the community label and sensitive handling. #}
@@ -209,15 +205,6 @@
     .session-actions input[type="submit"]:hover,
     .session-actions a:hover {
       background-color: var(--main-border-color);
-    }
-    
-    .no-sessions {
-      text-align: center;
-      padding: 16px;
-      color: var(--main-text-color);
-      opacity: 0.7;
-      font-style: italic;
-      border: 1px solid var(--main-border-color);
     }
   </style>
   {# Only ship with the form: getElementById would be null signed out and

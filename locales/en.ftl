@@ -213,7 +213,6 @@ collaborate-public-session-label = Show in public lobby
 collaborate-public-session-description = Uncheck to create a private session (link-only access)
 collaborate-create-button = Create Session
 collaborate-active-sessions = Active Public Sessions
-collaborate-no-sessions = No active public sessions. Create one to get started!
 collaborate-sign-in-to-create = Sign in to start a collaborative drawing
 collaborate-finished-drawings = Finished collaborative drawings
 collaborate-session-by = by @

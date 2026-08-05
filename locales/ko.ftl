@@ -215,7 +215,6 @@ collaborate-public-session-label = 공개 로비에 표시
 collaborate-public-session-description = 체크를 해제하면 비공개 세션 (링크로만 접근)이 됩니다
 collaborate-create-button = 세션 생성
 collaborate-active-sessions = 활성 공개 세션
-collaborate-no-sessions = 활성 공개 세션이 없습니다. 새로 만들어 시작하세요!
 collaborate-sign-in-to-create = 로그인하고 함께 그리기를 시작해 보세요
 collaborate-finished-drawings = 완성된 함께 그린 그림
 collaborate-session-by = @

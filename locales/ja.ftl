@@ -215,7 +215,6 @@ collaborate-public-session-label = 公開ロビーに表示
 collaborate-public-session-description = チェックを外すとプライベート セッション (リンクのみアクセス) になります
 collaborate-create-button = セッションを作成
 collaborate-active-sessions = アクティブな公開セッション
-collaborate-no-sessions = アクティブな公開セッションはありません。作成して始めましょう！
 collaborate-sign-in-to-create = ログインして一緒に描き始めましょう
 collaborate-finished-drawings = 完成した共同制作の絵
 collaborate-session-by = @

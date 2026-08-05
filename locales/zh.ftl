@@ -215,7 +215,6 @@ collaborate-public-session-label = 显示在公共大厅
 collaborate-public-session-description = 取消选中创建私人会话 (仅链接访问)
 collaborate-create-button = 创建会话
 collaborate-active-sessions = 活跃的公共会话
-collaborate-no-sessions = 没有活跃的公共会话。创建一个开始吧！
 collaborate-sign-in-to-create = 登录后即可开始共同绘画
 collaborate-finished-drawings = 已完成的共同作品
 collaborate-session-by = 由 @

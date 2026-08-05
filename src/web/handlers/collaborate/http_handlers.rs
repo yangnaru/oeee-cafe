@@ -409,6 +409,23 @@ mod tests {
     }
 
     #[test]
+    fn lobby_omits_the_live_sessions_section_when_there_are_none() {
+        // No empty-state message: with zero live sessions the section is simply
+        // absent rather than announcing its own emptiness.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context(false, vec![sample_post()]))
+            .expect("renders");
+        assert!(!rendered.contains("collaborate-active-sessions"));
+        assert!(!rendered.contains("no-sessions"));
+        // ...while the gallery still renders.
+        assert!(rendered.contains("posts-grid-item"));
+    }
+
+    #[test]
     fn lobby_shows_the_create_form_when_signed_in() {
         let env = test_support::env();
         let template = env
