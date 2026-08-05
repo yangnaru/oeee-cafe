@@ -1325,9 +1325,10 @@ mod tests {
         let rendered = template
             .render(home_context(vec![sample_post()], false))
             .expect("home.jinja renders");
-        assert!(rendered.contains("id=\"card-min\""));
-        // The grid must stay auto-fill driven; a fixed column count here would
-        // defeat the responsive layout.
+        assert!(rendered.contains("id=\"post-cols\""));
+        // The readout is what tells the user the slider did something; without
+        // it a step that cannot change the layout looks like a broken control.
+        assert!(rendered.contains("id=\"post-cols-value\""));
         assert!(rendered.contains("--page-width: 1600px"));
     }
 

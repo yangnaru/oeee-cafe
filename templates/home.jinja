@@ -16,12 +16,31 @@
       margin: 8px 0;
       font-size: .85rem;
     }
+    .thumbnail-size input[type="range"] { max-width: 200px; }
+    .thumbnail-size output {
+      min-width: 1.5em;
+      text-align: right;
+      font-weight: bold;
+    }
+    /* Give the slider the full width on a phone: a short right-aligned track
+       is hard to land a thumb on precisely, which is half of why the control
+       felt unreliable there. */
+    @media (max-width: 600px) {
+      .thumbnail-size { justify-content: space-between; }
+      .thumbnail-size input[type="range"] {
+        flex: 1;
+        max-width: none;
+      }
+    }
   </style>
-  {# Applied before first paint so the grid does not flash at the default size. #}
+  {# Applied before first paint so the grid does not flash at another width. #}
   <script>
     (function () {
-      var saved = localStorage.getItem("homeCardMin");
-      if (saved) document.documentElement.style.setProperty("--card-min", saved + "px");
+      var saved = parseInt(localStorage.getItem("homeCols"), 10);
+      if (saved > 0) {
+        document.documentElement.style.setProperty("--home-cols", saved);
+        document.documentElement.setAttribute("data-cols", "");
+      }
     })();
   </script>
 {% endblock head %}
@@ -35,12 +54,9 @@
       <section role="region" aria-labelledby="public-posts-heading">
         <h2 id="public-posts-heading" class="home-section-title">{{ ftl_get_message("posts-from-public-communities") }}</h2>
         <div class="thumbnail-size">
-          <label for="card-min">{{ ftl_get_message("home-thumbnail-size") }}</label>
-          <input type="range"
-                 id="card-min"
-                 min="100"
-                 max="320"
-                 step="20" />
+          <label for="post-cols">{{ ftl_get_message("home-thumbnail-size") }}</label>
+          <input type="range" id="post-cols" min="1" step="1" />
+          <output id="post-cols-value"></output>
         </div>
         <div class="posts-grid" id="public-posts-grid">
           {% include "home_posts_fragment.jinja" %}
@@ -49,23 +65,53 @@
     {% endif %}
     <script>
       (function () {
-        var DEFAULT_CARD_MIN = 170;
-        var slider = document.getElementById("card-min");
-        if (!slider) return;
+        // The slider sets the column count directly. Its maximum is whatever
+        // the grid can fit at MIN_CARD px, recomputed on resize, so every step
+        // always changes the layout by one column on any screen.
+        var MIN_CARD = 90;
+        var GAP = 8;
+        var HARD_MAX = 12;
+        var TARGET_CARD = 180;
+
+        var slider = document.getElementById("post-cols");
+        var readout = document.getElementById("post-cols-value");
+        var grid = document.getElementById("public-posts-grid");
+        if (!slider || !grid) return;
         var root = document.documentElement;
 
-        var current = parseInt(localStorage.getItem("homeCardMin"), 10);
-        if (!current || current < 100 || current > 320) current = DEFAULT_CARD_MIN;
-
-        function apply(px) {
-          root.style.setProperty("--card-min", px + "px");
-          localStorage.setItem("homeCardMin", px);
+        function fits(px) {
+          var width = grid.clientWidth || window.innerWidth;
+          return Math.max(1, Math.min(HARD_MAX, Math.floor((width + GAP) / (px + GAP))));
         }
 
-        slider.value = current;
-        apply(current);
+        function apply(cols) {
+          root.style.setProperty("--home-cols", cols);
+          root.setAttribute("data-cols", "");
+          slider.value = cols;
+          readout.textContent = cols;
+          localStorage.setItem("homeCols", cols);
+        }
+
+        function sync() {
+          var max = fits(MIN_CARD);
+          slider.max = max;
+          var stored = parseInt(localStorage.getItem("homeCols"), 10);
+          // No stored preference: aim for roughly TARGET_CARD-wide thumbnails.
+          var cols = stored > 0 ? stored : fits(TARGET_CARD);
+          apply(Math.max(1, Math.min(max, cols)));
+        }
+
+        sync();
         slider.addEventListener("input", function () {
           apply(parseInt(slider.value, 10));
+        });
+
+        // Rotating a phone changes how many columns fit; re-clamp so a count
+        // chosen on a wider layout does not leave slivers.
+        var pending;
+        window.addEventListener("resize", function () {
+          clearTimeout(pending);
+          pending = setTimeout(sync, 150);
         });
       })();
     </script>

@@ -1197,11 +1197,21 @@ nav a:visited,
 
 /* Grid Layout */
 
-/* auto-fill rather than a fixed column count: the browser fits as many cards as
-   the container allows, so one --card-min value works from phone to ultrawide
-   with no media queries. The thumbnail-size control just moves --card-min. */
+/* No-JS / first-visit fallback: auto-fill picks a sensible column count for the
+   container without any script. */
 .posts-grid {
   grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 170px), 1fr));
+}
+
+/* Once the size control has a value, the column count is explicit.
+   auto-fill + minmax made the control feel broken on narrow screens: column
+   count is floor((width + gap) / (card-min + gap)), so on a 390px phone the
+   twelve slider steps collapsed to three distinct layouts and seven of them
+   changed nothing at all. Driving columns directly makes every step move the
+   grid by exactly one column. The attribute is set on :root before first
+   paint, so there is no flash. */
+:root[data-cols] .posts-grid {
+  grid-template-columns: repeat(var(--home-cols), minmax(0, 1fr));
 }
 
 .community-badges {
