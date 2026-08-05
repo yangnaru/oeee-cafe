@@ -72,91 +72,15 @@ pub async fn home(
     let non_official_public_community_posts =
         find_public_posts(&mut tx, HOME_POSTS_PER_BATCH, 0, viewer_user_id, viewer_show_sensitive)
             .await?;
-    let active_public_communities_raw = get_public_communities(&mut tx).await?;
-
-    // Filter to communities with at least 10 posts
-    let active_public_communities_raw: Vec<_> = active_public_communities_raw
-        .into_iter()
-        .filter(|c| c.posts_count.unwrap_or(0) >= 10)
-        .collect();
-
-    // Fetch recent posts and stats for active communities
-    let community_ids: Vec<uuid::Uuid> =
-        active_public_communities_raw.iter().map(|c| c.id).collect();
-
-    let recent_posts = find_recent_posts_by_communities(
-        &mut tx,
-        &community_ids,
-        3,
-        viewer_user_id,
-        viewer_show_sensitive,
-    )
-    .await?;
-    let community_stats = get_communities_members_count(&mut tx, &community_ids).await?;
-
-    // Group posts by community_id
-    use std::collections::HashMap;
-    let mut posts_by_community: HashMap<uuid::Uuid, Vec<serde_json::Value>> = HashMap::new();
-    for post in recent_posts {
-        if let Some(community_id) = post.community_id {
-            let posts = posts_by_community.entry(community_id).or_default();
-            posts.push(serde_json::json!({
-                "id": post.id.to_string(),
-                "image_filename": post.image_filename,
-                "image_width": post.image_width,
-                "image_height": post.image_height,
-                "author_login_name": post.author_login_name,
-            }));
-        }
-    }
-
-    // Create stats lookup map
-    let mut stats_by_community: HashMap<uuid::Uuid, Option<i64>> = HashMap::new();
-    for stat in community_stats {
-        stats_by_community.insert(stat.community_id, stat.members_count);
-    }
-
-    // Build active communities with all metadata
-    let active_public_communities: Vec<serde_json::Value> = active_public_communities_raw
-        .into_iter()
-        .map(|community| {
-            let recent_posts = posts_by_community
-                .get(&community.id)
-                .cloned()
-                .unwrap_or_default();
-            let members_count = stats_by_community
-                .get(&community.id)
-                .cloned()
-                .unwrap_or(None);
-
-            serde_json::json!({
-                "id": community.id.to_string(),
-                "name": community.name,
-                "slug": community.slug,
-                "description": community.description,
-                "visibility": community.visibility,
-                "owner_login_name": community.owner_login_name,
-                "posts_count": community.posts_count,
-                "members_count": members_count,
-                "recent_posts": recent_posts,
-            })
-        })
-        .collect();
-
-    // Get recent comments from public communities
-    let recent_comments = find_latest_comments_from_public_communities(&mut tx, 5).await?;
-
     tx.commit().await?;
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("home.jinja")?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         messages => messages.into_iter().collect::<Vec<_>>(),
-        active_public_communities,
         posts_limit => HOME_POSTS_PER_BATCH,
         posts_has_more => non_official_public_community_posts.len() as i64 == HOME_POSTS_PER_BATCH,
         non_official_public_community_posts,
-        recent_comments,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
@@ -1380,8 +1304,6 @@ mod tests {
         context! {
             current_user => json!(null),
             messages => Vec::<serde_json::Value>::new(),
-            active_public_communities => Vec::<serde_json::Value>::new(),
-            recent_comments => Vec::<serde_json::Value>::new(),
             non_official_public_community_posts => posts,
             posts_limit => super::HOME_POSTS_PER_BATCH,
             posts_has_more => has_more,
