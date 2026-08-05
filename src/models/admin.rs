@@ -42,6 +42,13 @@ pub struct AdminPost {
     pub created_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub deletion_reason: Option<PostDeletionReason>,
+    /// Author's own sensitive tick. Kept separate from `is_explicit` here — the
+    /// public queries collapse the two, but staff need to see which is which.
+    pub is_sensitive_by_author: bool,
+    /// Staff flag. Survives author edits.
+    pub is_explicit: bool,
+    pub explicit_flagged_at: Option<DateTime<Utc>>,
+    pub explicit_flagged_by_login_name: Option<String>,
 }
 
 impl AdminPost {
@@ -98,11 +105,16 @@ pub async fn find_all_posts(
             posts.published_at,
             posts.created_at,
             posts.deleted_at,
-            posts.deletion_reason AS "deletion_reason?: PostDeletionReason"
+            posts.deletion_reason AS "deletion_reason?: PostDeletionReason",
+            posts.is_sensitive AS is_sensitive_by_author,
+            posts.is_explicit,
+            posts.explicit_flagged_at,
+            flagger.login_name AS "explicit_flagged_by_login_name?"
         FROM posts
         JOIN users ON posts.author_id = users.id
         JOIN images ON posts.image_id = images.id
         LEFT JOIN communities ON posts.community_id = communities.id
+        LEFT JOIN users flagger ON posts.explicit_flagged_by = flagger.id
         WHERE ($1::uuid IS NULL OR posts.author_id = $1)
           AND ($2::uuid IS NULL OR posts.community_id = $2)
           AND ($3 OR posts.published_at IS NOT NULL)
@@ -172,16 +184,49 @@ pub async fn find_post_by_id(
             posts.published_at,
             posts.created_at,
             posts.deleted_at,
-            posts.deletion_reason AS "deletion_reason?: PostDeletionReason"
+            posts.deletion_reason AS "deletion_reason?: PostDeletionReason",
+            posts.is_sensitive AS is_sensitive_by_author,
+            posts.is_explicit,
+            posts.explicit_flagged_at,
+            flagger.login_name AS "explicit_flagged_by_login_name?"
         FROM posts
         JOIN users ON posts.author_id = users.id
         JOIN images ON posts.image_id = images.id
         LEFT JOIN communities ON posts.community_id = communities.id
+        LEFT JOIN users flagger ON posts.explicit_flagged_by = flagger.id
         WHERE posts.id = $1
         "#,
         post_id,
     );
     Ok(row.fetch_optional(&mut **tx).await?)
+}
+
+/// Sets or clears the staff explicit flag on a post. Takes the desired state
+/// rather than toggling so a double-submit is idempotent.
+///
+/// Nothing in the author-facing edit path writes this column, which is what
+/// makes the flag survive the author saving the post again.
+pub async fn set_post_explicit(
+    tx: &mut Transaction<'_, Postgres>,
+    post_id: Uuid,
+    is_explicit: bool,
+    flagged_by: Uuid,
+) -> Result<()> {
+    query!(
+        r#"
+        UPDATE posts
+        SET is_explicit = $2,
+            explicit_flagged_at = CASE WHEN $2 THEN now() ELSE NULL END,
+            explicit_flagged_by = CASE WHEN $2 THEN $3::uuid ELSE NULL END
+        WHERE id = $1
+        "#,
+        post_id,
+        is_explicit,
+        flagged_by,
+    )
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 /// Ordering for the user and community lists.

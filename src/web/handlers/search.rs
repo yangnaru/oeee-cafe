@@ -70,7 +70,7 @@ pub async fn search_json(
             images.width AS "image_width?",
             images.height AS "image_height?",
             posts.published_at,
-            posts.is_sensitive
+            (posts.is_sensitive OR posts.is_explicit) AS "is_sensitive!"
         FROM posts
         LEFT JOIN users ON posts.author_id = users.id
         LEFT JOIN images ON posts.image_id = images.id
@@ -79,7 +79,7 @@ pub async fn search_json(
           AND posts.published_at IS NOT NULL
           AND posts.deleted_at IS NULL
           AND (communities.visibility = 'public' OR posts.community_id IS NULL)
-          AND (posts.is_sensitive = false OR $3 = true OR posts.author_id = $4)
+          AND ((posts.is_sensitive = false AND posts.is_explicit = false) OR $3 = true OR posts.author_id = $4)
         ORDER BY posts.published_at DESC
         LIMIT $2
         "#,

@@ -230,7 +230,7 @@ pub async fn find_posts_by_hashtag(
             images.height,
             images.replay_filename,
             posts.viewer_count,
-            posts.is_sensitive,
+            (posts.is_sensitive OR posts.is_explicit) AS "is_sensitive!",
             posts.published_at,
             posts.created_at,
             posts.updated_at
@@ -244,7 +244,7 @@ pub async fn find_posts_by_hashtag(
         AND posts.published_at IS NOT NULL
         AND posts.deleted_at IS NULL
         AND c.visibility = 'public'
-        AND (posts.is_sensitive = false OR $3 = true OR posts.author_id = $4)
+        AND ((posts.is_sensitive = false AND posts.is_explicit = false) OR $3 = true OR posts.author_id = $4)
         ORDER BY posts.published_at DESC
         LIMIT $2
         "#,

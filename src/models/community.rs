@@ -354,7 +354,7 @@ pub async fn get_user_communities_with_latest_9_posts(
                     images.height AS height,
                     images.replay_filename AS replay_filename,
                     posts.viewer_count,
-                    posts.is_sensitive,
+                    (posts.is_sensitive OR posts.is_explicit) AS "is_sensitive!",
                     posts.published_at,
                     posts.created_at,
                     posts.updated_at,

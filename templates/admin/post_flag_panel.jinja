@@ -1,0 +1,39 @@
+{# Explicit-flag control. Rendered inside post_detail.jinja and returned
+   standalone by the flag endpoint, which swaps it via hx-swap="outerHTML". #}
+<div id="post-flag-panel" class="admin-flag-panel">
+  {% if post.is_explicit %}
+    <p>
+      <span class="admin-tag deleted">flagged explicit by staff</span>
+      {% if post.explicit_flagged_at %}
+        <span class="muted">
+          {{ post.explicit_flagged_at|datetimeformat(format="short", tz="Asia/Seoul") }}
+          {% if post.explicit_flagged_by_login_name %}
+            by @{{ post.explicit_flagged_by_login_name }}
+          {% endif %}
+        </span>
+      {% endif %}
+    </p>
+    <p class="muted">
+      Withheld from public listings and blurred, exactly as if the author had
+      marked it sensitive. The author cannot clear this by editing the post.
+    </p>
+  {% else %}
+    <p>
+      {% if post.is_sensitive_by_author %}
+        <span class="admin-tag sensitive">author marked this sensitive</span>
+      {% else %}
+        <span class="muted">not flagged</span>
+      {% endif %}
+    </p>
+  {% endif %}
+  <form hx-post="/admin/posts/{{ post.id }}/explicit"
+        hx-target="#post-flag-panel"
+        hx-swap="outerHTML">
+    <input type="hidden"
+           name="is_explicit"
+           value="{% if post.is_explicit %}false{% else %}true{% endif %}" />
+    <button type="submit">
+      {% if post.is_explicit %}Remove explicit flag{% else %}Flag as explicit{% endif %}
+    </button>
+  </form>
+</div>

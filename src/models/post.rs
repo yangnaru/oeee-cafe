@@ -223,7 +223,7 @@ pub async fn find_posts_by_community_id(
                 images.width AS width,
                 images.height AS height,
                 images.replay_filename AS replay_filename,
-                posts.is_sensitive,
+                (posts.is_sensitive OR posts.is_explicit) AS \"is_sensitive!\",
                 posts.viewer_count,
                 posts.published_at,
                 posts.created_at,
@@ -455,7 +455,7 @@ pub async fn find_published_posts_by_community_id(
                 images.height,
                 images.replay_filename,
                 posts.viewer_count,
-                posts.is_sensitive,
+                (posts.is_sensitive OR posts.is_explicit) AS \"is_sensitive!\",
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at
@@ -465,7 +465,7 @@ pub async fn find_published_posts_by_community_id(
             WHERE community_id = $1
             AND published_at IS NOT NULL
             AND posts.deleted_at IS NULL
-            AND (posts.is_sensitive = false OR $4 = true OR posts.author_id = $5)
+            AND ((posts.is_sensitive = false AND posts.is_explicit = false) OR $4 = true OR posts.author_id = $5)
             ORDER BY published_at DESC
             LIMIT $2 OFFSET $3
         ",
@@ -540,7 +540,7 @@ pub async fn find_recent_posts_by_communities(
             ranked.stroke_count,
             ranked.viewer_count,
             ranked.published_at,
-            ranked.is_sensitive
+            ranked.is_sensitive AS "is_sensitive!"
         FROM (
             SELECT
                 p.id,
@@ -555,7 +555,7 @@ pub async fn find_recent_posts_by_communities(
                 i.stroke_count,
                 p.viewer_count,
                 p.published_at,
-                p.is_sensitive,
+                (p.is_sensitive OR p.is_explicit) AS is_sensitive,
                 ROW_NUMBER() OVER (PARTITION BY p.community_id ORDER BY p.published_at DESC) as rn
             FROM posts p
             INNER JOIN images i ON p.image_id = i.id
@@ -563,7 +563,7 @@ pub async fn find_recent_posts_by_communities(
             WHERE p.community_id = ANY($1)
                 AND p.published_at IS NOT NULL
                 AND p.deleted_at IS NULL
-                AND (p.is_sensitive = false OR $3 = true OR p.author_id = $4)
+                AND ((p.is_sensitive = false AND p.is_explicit = false) OR $3 = true OR p.author_id = $4)
         ) ranked
         WHERE ranked.rn <= $2
         ORDER BY ranked.community_id, ranked.rn
@@ -817,7 +817,7 @@ pub async fn find_post_detail_for_json(
                 posts.id,
                 posts.title,
                 posts.content,
-                posts.is_sensitive,
+                (posts.is_sensitive OR posts.is_explicit) AS \"is_sensitive!\",
                 posts.allow_relay,
                 posts.author_id,
                 posts.community_id,
@@ -1392,7 +1392,7 @@ pub async fn find_public_posts(
                 images.height,
                 images.replay_filename,
                 posts.viewer_count,
-                posts.is_sensitive,
+                (posts.is_sensitive OR posts.is_explicit) AS \"is_sensitive!\",
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at
@@ -1404,7 +1404,7 @@ pub async fn find_public_posts(
             AND posts.parent_post_id IS NULL
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
-            AND (posts.is_sensitive = false OR $3 = true OR posts.author_id = $4)
+            AND ((posts.is_sensitive = false AND posts.is_explicit = false) OR $3 = true OR posts.author_id = $4)
             ORDER BY posts.published_at DESC
             LIMIT $1
             OFFSET $2
@@ -1456,7 +1456,7 @@ pub async fn find_following_posts_by_user_id(
                 images.height,
                 images.replay_filename,
                 posts.viewer_count,
-                posts.is_sensitive,
+                (posts.is_sensitive OR posts.is_explicit) AS \"is_sensitive!\",
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at
@@ -1471,7 +1471,7 @@ pub async fn find_following_posts_by_user_id(
             AND communities.visibility = 'public'
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
-            AND (posts.is_sensitive = false OR $2 = true OR posts.author_id = $1)
+            AND ((posts.is_sensitive = false AND posts.is_explicit = false) OR $2 = true OR posts.author_id = $1)
             ORDER BY posts.published_at DESC
         ",
         user_id,

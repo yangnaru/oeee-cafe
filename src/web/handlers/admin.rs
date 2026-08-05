@@ -8,7 +8,7 @@ use crate::app_error::AppError;
 use crate::models::admin::{
     count_all_posts, find_all_banners, find_all_communities, find_all_communities_with_activity,
     find_all_posts, find_all_users, find_banner_by_id, find_community_by_slug, find_post_by_id,
-    set_banner_explicit, AdminCommunity, AdminPostFilter, AdminSort,
+    set_banner_explicit, set_post_explicit, AdminCommunity, AdminPostFilter, AdminSort,
 };
 use crate::models::user::find_user_by_login_name;
 use crate::web::context::CommonContext;
@@ -272,6 +272,36 @@ pub async fn admin_post_detail(
 }
 
 #[derive(Debug, Deserialize)]
+pub struct FlagPostForm {
+    /// Desired end state, not a toggle, so a double-submit is idempotent.
+    pub is_explicit: bool,
+}
+
+/// POST /admin/posts/:post_id/explicit — flag or unflag a post as explicit.
+/// A flagged post is withheld and blurred exactly as if the author had ticked
+/// sensitive, and the author cannot clear it by editing the post.
+pub async fn admin_flag_post(
+    admin: AdminUser,
+    State(state): State<AppState>,
+    Path(post_id): Path<Uuid>,
+    Form(form): Form<FlagPostForm>,
+) -> Result<Html<String>, AppError> {
+    let mut tx = state.db_pool.begin().await?;
+    set_post_explicit(&mut tx, post_id, form.is_explicit, admin.0.id).await?;
+
+    // Re-read so the panel reflects what actually landed, including flagged_at.
+    let post = find_post_by_id(&mut tx, post_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Post".to_string()))?;
+    tx.commit().await?;
+
+    let template = state.env.get_template("admin/post_flag_panel.jinja")?;
+    let rendered = template.render(context! { post => post })?;
+
+    Ok(Html(rendered))
+}
+
+#[derive(Debug, Deserialize)]
 pub struct AdminBannersQuery {
     /// Row offset for the infinite-scroll sentinel. The first page omits it.
     pub offset: Option<i64>,
@@ -498,6 +528,10 @@ mod tests {
             "created_at": "2026-01-01T03:04:05Z",
             "deleted_at": "2026-02-01T03:04:05Z",
             "deletion_reason": "Moderation",
+            "is_sensitive_by_author": false,
+            "is_explicit": true,
+            "explicit_flagged_at": "2026-06-01T00:00:00Z",
+            "explicit_flagged_by_login_name": "admin",
         })
     }
 
@@ -673,6 +707,32 @@ mod tests {
             "is_active": true,
             "created_at": "2026-01-01T00:00:00Z",
         })
+    }
+
+    #[test]
+    fn post_flag_panel_renders_standalone_for_htmx_swap() {
+        let env = test_env();
+        let template = env
+            .get_template("admin/post_flag_panel.jinja")
+            .expect("template loads");
+
+        let rendered = template
+            .render(context! { post => sample_post() })
+            .expect("flagged panel renders");
+        assert!(rendered.contains("flagged explicit by staff"));
+        assert!(rendered.contains("Remove explicit flag"));
+        // Flipping back must post the opposite state, not a blind toggle.
+        assert!(rendered.contains("value=\"false\""));
+
+        let mut unflagged = sample_post();
+        unflagged["is_explicit"] = json!(false);
+        unflagged["explicit_flagged_at"] = json!(null);
+        unflagged["explicit_flagged_by_login_name"] = json!(null);
+        let rendered = template
+            .render(context! { post => unflagged })
+            .expect("unflagged panel renders");
+        assert!(rendered.contains("Flag as explicit"));
+        assert!(rendered.contains("value=\"true\""));
     }
 
     #[test]

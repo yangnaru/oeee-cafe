@@ -8,8 +8,8 @@ use crate::web::handlers::account::{
 };
 use crate::web::handlers::admin::{
     admin_banners, admin_banners_fragment, admin_communities, admin_community_posts,
-    admin_flag_banner, admin_post_detail, admin_posts, admin_posts_fragment, admin_user_posts,
-    admin_users,
+    admin_flag_banner, admin_flag_post, admin_post_detail, admin_posts, admin_posts_fragment,
+    admin_user_posts, admin_users,
 };
 use crate::web::handlers::activitypub::{
     activitypub_get_community, activitypub_get_post, activitypub_get_user,
@@ -247,6 +247,7 @@ impl App {
             .route("/admin/posts", get(admin_posts))
             .route("/admin/posts-fragment", get(admin_posts_fragment))
             .route("/admin/posts/:post_id", get(admin_post_detail))
+            .route("/admin/posts/:post_id/explicit", post(admin_flag_post))
             .route("/admin/users", get(admin_users))
             .route("/admin/users/:login_name/posts", get(admin_user_posts))
             .route("/admin/communities", get(admin_communities))
