@@ -23,13 +23,6 @@ ENV SCCACHE_DIR=/sccache
 ENV SCCACHE_CACHE_SIZE="10G"
 ENV DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5433/oeee_cafe
 
-# Baked in via option_env! and used to version static asset URLs, so a deploy
-# invalidates browser and CDN caches and nothing else does. Without it the
-# server falls back to its start time, which is correct but re-downloads
-# assets on every restart.
-ARG GIT_COMMIT=""
-ENV GIT_COMMIT=$GIT_COMMIT
-
 # `cargo build --release` already builds both bin targets. /app/target is a
 # cache mount, so anything needed later must be copied out inside this RUN.
 RUN --mount=type=cache,target=/sccache \
@@ -65,5 +58,14 @@ COPY --from=rust-builder /app/oeee-cafe ./
 #   docker exec oeee-cafe ./cli -c config/config.toml set-role <login_name> admin
 COPY --from=rust-builder /app/cli ./
 COPY --from=node-builder-neo-cucumber /app/neo-cucumber/dist/ ./neo-cucumber/dist/
+
+# Versions the static asset URLs the server hands out, so a deploy invalidates
+# browser and CDN caches and nothing else does. Read at runtime and declared in
+# this stage on purpose: putting it in the builder would invalidate the Rust
+# build cache on every deploy, and sccache does not key on it anyway, so a
+# compile-time value came back stale from cache.
+ARG GIT_COMMIT=""
+ENV GIT_COMMIT=$GIT_COMMIT
+
 EXPOSE 3000
 CMD ["./oeee-cafe", "config/config.toml"]
