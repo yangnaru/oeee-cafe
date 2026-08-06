@@ -27,7 +27,14 @@
     {% if current_user %}
       <div class="create-session-section">
         <h3>{{ ftl_get_message("collaborate-create-session") }}</h3>
-      <form id="create-session-form" method="post" action="/collaborate">
+      {# Failure messages ride on the form rather than being interpolated into
+         the script below: they are translated text, and an attribute is the
+         only context minijinja escapes correctly for. #}
+      <form id="create-session-form"
+            method="post"
+            action="/collaborate"
+            data-error="{{ ftl_get_message("collaborate-create-error") }}"
+            data-network-error="{{ ftl_get_message("collaborate-create-network-error") }}">
         <p>
           <label for="canvas-size">{{ ftl_get_message("collaborate-canvas-size-label") }}:</label>
           <select id="canvas-size" name="canvas-size" required>
@@ -91,47 +98,7 @@
         </p>
       </div>
     {% endif %}
-    {% if active_sessions|length > 0 %}
-      <div class="active-sessions-section">
-        <h3>{{ ftl_get_message("collaborate-active-sessions") }}</h3>
-        <div class="sessions-grid">
-          {% for session in active_sessions %}
-            <div class="session-card">
-              <div class="session-header">
-                {% if session.title %}
-                  <h4>{{ session.title }}</h4>
-                {% else %}
-                  <h4>{{ ftl_get_message("post-no-title") }}</h4>
-                {% endif %}
-                <small>
-                  <a href="/@{{ session.owner_login_name }}">@{{ session.owner_login_name }}</a>
-                </small>
-              </div>
-              <div class="session-info">
-                <div class="session-meta">
-                  <span class="canvas-size">{{ session.width }}×{{ session.height }}</span>
-                  {# Seats taken out of seats total: a bare count gives no sense
-                     of whether there is room to join. #}
-                  <span class="participant-count">{{ session.participant_count }} / {{ session.max_participants }} {{ ftl_get_message("collaborate-participants") }}</span>
-                  <span class="session-time">{{ ftl_get_message("collaborate-session-created") }} {{ session.created_at|dateformat(format="short", tz="Asia/Seoul") }}</span>
-                </div>
-                {# Where the finished drawing will be posted. Worth knowing
-                   before joining, and it is the same choice the create form
-                   above makes. #}
-                {% if session.community_slug %}
-                  <p class="session-community">
-                    <a href="/communities/@{{ session.community_slug }}">{{ session.community_name }}</a>
-                  </p>
-                {% endif %}
-              </div>
-              <div class="session-actions">
-                <a href="/collaborate/{{ session.id }}">{{ ftl_get_message("collaborate-join-session") }}</a>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      </div>
-    {% endif %}
+    {% include "collaborate_sessions_fragment.jinja" %}
     {# Finished collaborative drawings, through the same card template as the
        home grid so they carry the community label and sensitive handling. #}
     {% if feed.posts and feed.posts|length > 0 %}
@@ -213,6 +180,15 @@
     .session-community {
       margin: 4px 0 0 0;
       font-size: 0.9em;
+    }
+
+    /* A full session stays listed rather than disappearing, so its card has to
+       say why there is no join link. */
+    .session-join-disabled {
+      border: 1px solid var(--main-border-color);
+      padding: 4px 8px;
+      display: inline-block;
+      opacity: 0.6;
     }
 
     .active-sessions-section {
@@ -322,11 +298,11 @@
           const result = await response.json();
           window.location.href = result.url;
         } else {
-          alert('Failed to create session. Please try again.');
+          alert(e.target.dataset.error);
         }
       } catch (error) {
         console.error('Error creating session:', error);
-        alert('Failed to create session. Please check your connection and try again.');
+        alert(e.target.dataset.networkError);
       }
     });
   </script>

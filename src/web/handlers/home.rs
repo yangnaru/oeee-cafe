@@ -49,12 +49,13 @@ use minijinja::context;
 /// until the viewport finally fills. At the smallest card size on a wide
 /// monitor a screen holds roughly a hundred cards, so this bounds the worst
 /// case to a single extra fetch rather than eliminating it.
-const HOME_POSTS_PER_BATCH: i64 = 60;
+pub(crate) const HOME_POSTS_PER_BATCH: i64 = 60;
 
-/// Context both post feeds hand to the shared card fragment. `/` and `/home`
-/// differ only in which query fills `posts` and where the sentinel points, so
-/// everything else lives here rather than being written twice.
-fn feed_context(
+/// Context every post feed hands to the shared card fragment. `/`, `/home` and
+/// the collaborate lobby differ only in which query fills `posts` and where the
+/// sentinel points, so everything else lives here rather than being written
+/// three times.
+pub(crate) fn feed_context(
     posts: Vec<crate::models::post::SerializablePostForHome>,
     fragment_path: &str,
     offset: i64,

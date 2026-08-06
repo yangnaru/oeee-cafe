@@ -20,8 +20,9 @@ use crate::web::handlers::auth::{
     api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup,
 };
 use crate::web::handlers::collaborate::{
-    collaborate_lobby, create_collaborative_session, get_active_sessions_json, get_auth_info,
-    get_collaboration_meta, save_collaborative_session, serve_collaborative_app,
+    collaborate_lobby, collaborate_sessions_fragment, create_collaborative_session,
+    get_active_sessions_json, get_auth_info, get_collaboration_meta,
+    load_more_collaborative_posts, save_collaborative_session, serve_collaborative_app,
     websocket_collaborate_handler,
 };
 use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
@@ -302,6 +303,7 @@ impl App {
                 get(android_assetlinks),
             )
             .route("/api/home/posts", get(load_more_public_posts))
+            .route("/api/collaborate/posts", get(load_more_collaborative_posts))
             .route("/api/communities/cards", get(communities_fragment))
             .route("/api/v1/posts/public", get(load_more_public_posts_json))
             .route("/api/v1/posts/drafts", get(draft_posts_api))
@@ -481,6 +483,9 @@ impl App {
                 "/collaborate",
                 get(collaborate_lobby).post(create_collaborative_session),
             )
+            // Static segment, so it wins over /collaborate/:uuid — and no UUID
+            // can spell "sessions" anyway.
+            .route("/collaborate/sessions", get(collaborate_sessions_fragment))
             .route("/collaborate/", get(serve_collaborative_app))
             .route(
                 "/collaborate/:uuid",

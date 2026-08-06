@@ -32,13 +32,22 @@ pub struct SessionWithCounts {
     pub width: i32,
     pub height: i32,
     pub created_at: chrono::NaiveDateTime,
-    pub participant_count: Option<i64>,
+    pub participant_count: i64,
     /// Seats total, so a lobby card can say "2 / 4" rather than a count with
     /// nothing to compare it against.
     pub max_participants: i32,
+    /// Every seat taken. Full sessions are still listed — they are joinable by
+    /// anyone already in them, and a canvas that disappears at capacity reads
+    /// as one that ended.
+    pub is_full: bool,
+    /// False means link-only: it appears in the owner's own list, never the
+    /// public one.
+    pub is_public: bool,
     /// Where a saved session lands. None is a personal drawing.
     pub community_name: Option<String>,
     pub community_slug: Option<String>,
+    pub is_owner: bool,
+    pub viewer_is_participant: bool,
 }
 
 #[derive(Serialize)]

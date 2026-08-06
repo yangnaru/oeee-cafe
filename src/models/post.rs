@@ -1456,6 +1456,83 @@ pub async fn find_public_posts(
         .collect())
 }
 
+/// Finished collaborative drawings — the posts saved sessions turned into.
+/// Same shape as `find_public_posts`, so the collaborate lobby renders through
+/// the shared feed card and paginates through the shared sentinel.
+pub async fn find_collaborative_posts(
+    tx: &mut Transaction<'_, Postgres>,
+    limit: i64,
+    offset: i64,
+    viewer_user_id: Option<Uuid>,
+    viewer_show_sensitive: bool,
+) -> Result<Vec<SerializablePostForHome>> {
+    let result = query!(
+        r#"
+        SELECT
+            p.id,
+            p.title,
+            p.author_id,
+            u.login_name,
+            i.paint_duration,
+            i.stroke_count,
+            i.image_filename,
+            i.width,
+            i.height,
+            i.replay_filename,
+            p.viewer_count,
+            (p.is_sensitive OR p.is_explicit) AS "is_sensitive!",
+            c.slug AS "community_slug?",
+            c.name AS "community_name?",
+            p.published_at,
+            p.created_at,
+            p.updated_at
+        FROM collaborative_sessions cs
+        JOIN posts p ON cs.saved_post_id = p.id
+        JOIN users u ON p.author_id = u.id
+        JOIN images i ON p.image_id = i.id
+        LEFT JOIN communities c ON p.community_id = c.id
+        WHERE p.published_at IS NOT NULL
+          AND p.deleted_at IS NULL
+          AND (c.visibility = 'public' OR p.community_id IS NULL)
+          AND ((p.is_sensitive = false AND p.is_explicit = false)
+               OR $3 = true
+               OR p.author_id = $4)
+        ORDER BY p.published_at DESC
+        LIMIT $1
+        OFFSET $2
+        "#,
+        limit,
+        offset,
+        viewer_show_sensitive,
+        viewer_user_id,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(result
+        .into_iter()
+        .map(|row| SerializablePostForHome {
+            id: row.id,
+            title: row.title,
+            author_id: row.author_id,
+            user_login_name: row.login_name,
+            paint_duration: row.paint_duration.microseconds.to_string(),
+            stroke_count: row.stroke_count,
+            image_filename: row.image_filename,
+            image_width: row.width,
+            image_height: row.height,
+            replay_filename: row.replay_filename,
+            is_sensitive: row.is_sensitive,
+            community_slug: row.community_slug,
+            community_name: row.community_name,
+            viewer_count: row.viewer_count,
+            published_at: row.published_at,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+        .collect())
+}
+
 /// Posts from people the viewer follows. Returns the same shape as
 /// `find_public_posts` so the timeline renders through the shared feed card,
 /// community label and all.

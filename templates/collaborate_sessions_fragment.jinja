@@ -1,0 +1,76 @@
+{# Both session lists on the collaborate lobby. Rendered inline by the lobby and
+   standalone by GET /collaborate/sessions, so the wrapper carries its own poll
+   attributes and swaps itself — a fragment that dropped them would poll once
+   and then go quiet. Styling lives in collaborate_lobby.jinja, which is the
+   only page that includes this. #}
+<div id="collaborate-sessions"
+     hx-get="/collaborate/sessions"
+     hx-trigger="every 15s"
+     hx-swap="outerHTML">
+  {% macro session_card(session, show_visibility) %}
+    <div class="session-card">
+      <div class="session-header">
+        {% if session.title %}
+          <h4>{{ session.title }}</h4>
+        {% else %}
+          <h4>{{ ftl_get_message("post-no-title") }}</h4>
+        {% endif %}
+        <small>
+          <a href="/@{{ session.owner_login_name }}">@{{ session.owner_login_name }}</a>
+        </small>
+      </div>
+      <div class="session-info">
+        <div class="session-meta">
+          <span class="canvas-size">{{ session.width }}×{{ session.height }}</span>
+          {# Seats taken out of seats total: a bare count gives no sense of
+             whether there is room to join. #}
+          <span class="participant-count">{{ session.participant_count }} / {{ session.max_participants }} {{ ftl_get_message("collaborate-participants") }}</span>
+          {% if session.is_full %}
+            <span class="session-full">{{ ftl_get_message("collaborate-session-full") }}</span>
+          {% endif %}
+          {# Only the owner's own list needs this: everything in the public list
+             is public by definition. #}
+          {% if show_visibility and not session.is_public %}
+            <span class="session-private">{{ ftl_get_message("collaborate-session-link-only") }}</span>
+          {% endif %}
+          <span class="session-time">{{ ftl_get_message("collaborate-session-created") }} {{ session.created_at|dateformat(format="short", tz="Asia/Seoul") }}</span>
+        </div>
+        {# Where the finished drawing will be posted. Worth knowing before
+           joining, and it is the same choice the create form above makes. #}
+        {% if session.community_slug %}
+          <p class="session-community">
+            <a href="/communities/@{{ session.community_slug }}">{{ session.community_name }}</a>
+          </p>
+        {% endif %}
+      </div>
+      <div class="session-actions">
+        {# A full session is still joinable by someone already in it — the
+           capacity check lets existing participants back in — so the link is
+           dropped only for people who would be turned away at the socket. #}
+        {% if session.is_full and not session.viewer_is_participant and not session.is_owner %}
+          <span class="session-join-disabled">{{ ftl_get_message("collaborate-session-full") }}</span>
+        {% else %}
+          <a href="/collaborate/{{ session.id }}">{{ ftl_get_message("collaborate-join-session") }}</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endmacro %}
+
+  {% if viewer_sessions and viewer_sessions|length > 0 %}
+    <div class="active-sessions-section">
+      <h3>{{ ftl_get_message("collaborate-your-sessions") }}</h3>
+      <div class="sessions-grid">
+        {% for session in viewer_sessions %}{{ session_card(session, true) }}{% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if active_sessions and active_sessions|length > 0 %}
+    <div class="active-sessions-section">
+      <h3>{{ ftl_get_message("collaborate-active-sessions") }}</h3>
+      <div class="sessions-grid">
+        {% for session in active_sessions %}{{ session_card(session, false) }}{% endfor %}
+      </div>
+    </div>
+  {% endif %}
+</div>

@@ -99,6 +99,214 @@ pub struct LobbyQuery {
     pub community: Option<String>,
 }
 
+/// How many lobby cards either session list shows.
+const SESSION_LIST_LIMIT: i64 = 20;
+
+/// Every open public session, annotated for the viewer.
+///
+/// Full sessions stay in the list. Hiding them made a busy canvas look like it
+/// had ended, and the one case where a full session is still joinable — the
+/// viewer is already a participant — is exactly the case that vanished.
+async fn find_public_sessions(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    viewer_user_id: Option<Uuid>,
+) -> Result<Vec<SessionWithCounts>, AppError> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            cs.id,
+            u.login_name AS owner_login_name,
+            cs.title,
+            cs.width,
+            cs.height,
+            cs.created_at,
+            cs.max_participants,
+            cs.is_public,
+            c.name AS "community_name?",
+            c.slug AS "community_slug?",
+            COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) AS "participant_count!",
+            -- COALESCE, not a bare comparison: $1 is NULL for a signed-out
+            -- visitor, and NULL decoded into a non-null bool fails the query.
+            COALESCE(cs.owner_id = $1, false) AS "is_owner!",
+            COUNT(*) FILTER (WHERE csp.user_id = $1 AND csp.is_active = true) > 0 AS "viewer_is_participant!"
+        FROM collaborative_sessions cs
+        JOIN users u ON cs.owner_id = u.id
+        LEFT JOIN communities c ON cs.community_id = c.id
+        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
+        WHERE cs.is_public = true
+          AND cs.ended_at IS NULL
+          AND (cs.community_id IS NULL OR c.visibility = 'public')
+        GROUP BY cs.id, u.login_name, c.name, c.slug
+        ORDER BY cs.last_activity DESC
+        LIMIT $2
+        "#,
+        viewer_user_id,
+        SESSION_LIST_LIMIT,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| SessionWithCounts {
+            is_full: row.participant_count >= row.max_participants as i64,
+            id: row.id,
+            owner_login_name: row.owner_login_name,
+            title: row.title,
+            width: row.width,
+            height: row.height,
+            created_at: row.created_at,
+            participant_count: row.participant_count,
+            max_participants: row.max_participants,
+            is_public: row.is_public,
+            community_name: row.community_name,
+            community_slug: row.community_slug,
+            is_owner: row.is_owner,
+            viewer_is_participant: row.viewer_is_participant,
+        })
+        .collect())
+}
+
+/// Sessions the viewer owns or is drawing in, public or not.
+///
+/// Without this a private session is reachable only through a link the owner
+/// has to have kept: the lobby lists public sessions only, so closing the tab
+/// stranded the canvas.
+async fn find_viewer_sessions(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    viewer_user_id: Uuid,
+) -> Result<Vec<SessionWithCounts>, AppError> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            cs.id,
+            u.login_name AS owner_login_name,
+            cs.title,
+            cs.width,
+            cs.height,
+            cs.created_at,
+            cs.max_participants,
+            cs.is_public,
+            c.name AS "community_name?",
+            c.slug AS "community_slug?",
+            COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) AS "participant_count!",
+            cs.owner_id = $1 AS "is_owner!",
+            COUNT(*) FILTER (WHERE csp.user_id = $1 AND csp.is_active = true) > 0 AS "viewer_is_participant!"
+        FROM collaborative_sessions cs
+        JOIN users u ON cs.owner_id = u.id
+        LEFT JOIN communities c ON cs.community_id = c.id
+        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
+        WHERE cs.ended_at IS NULL
+        GROUP BY cs.id, u.login_name, c.name, c.slug
+        HAVING cs.owner_id = $1
+            OR COUNT(*) FILTER (WHERE csp.user_id = $1 AND csp.is_active = true) > 0
+        ORDER BY cs.last_activity DESC
+        LIMIT $2
+        "#,
+        viewer_user_id,
+        SESSION_LIST_LIMIT,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| SessionWithCounts {
+            is_full: row.participant_count >= row.max_participants as i64,
+            id: row.id,
+            owner_login_name: row.owner_login_name,
+            title: row.title,
+            width: row.width,
+            height: row.height,
+            created_at: row.created_at,
+            participant_count: row.participant_count,
+            max_participants: row.max_participants,
+            is_public: row.is_public,
+            community_name: row.community_name,
+            community_slug: row.community_slug,
+            is_owner: row.is_owner,
+            viewer_is_participant: row.viewer_is_participant,
+        })
+        .collect())
+}
+
+/// The two lists the lobby shows: the viewer's own sessions, then the public
+/// ones they are not already in. A session in both places is just noise.
+async fn lobby_sessions(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    viewer_user_id: Option<Uuid>,
+) -> Result<(Vec<SessionWithCounts>, Vec<SessionWithCounts>), AppError> {
+    let viewer_sessions = match viewer_user_id {
+        Some(user_id) => find_viewer_sessions(tx, user_id).await?,
+        None => Vec::new(),
+    };
+    let mut active_sessions = find_public_sessions(tx, viewer_user_id).await?;
+    active_sessions.retain(|session| !session.is_owner && !session.viewer_is_participant);
+    Ok((viewer_sessions, active_sessions))
+}
+
+/// GET /collaborate/sessions — both session lists on their own, so the lobby
+/// can poll them. A session filling up or ending is the one thing on this page
+/// that goes stale in seconds.
+pub async fn collaborate_sessions_fragment(
+    auth_session: AuthSession,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, AppError> {
+    let viewer_user_id = auth_session.user.as_ref().map(|u| u.id);
+
+    let mut tx = state.db_pool.begin().await?;
+    let (viewer_sessions, active_sessions) = lobby_sessions(&mut tx, viewer_user_id).await?;
+    tx.commit().await?;
+
+    let template = state
+        .env
+        .get_template("collaborate_sessions_fragment.jinja")?;
+    let rendered = template.render(context! {
+        viewer_sessions,
+        active_sessions,
+        ftl_lang,
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
+/// GET /api/collaborate/posts — one batch of finished-collaboration cards plus
+/// the sentinel that pulls the next. Same contract as the / and /home feeds.
+pub async fn load_more_collaborative_posts(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Query(query): Query<crate::web::handlers::home::LoadMoreQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let (viewer_user_id, viewer_show_sensitive) = match auth_session.user.as_ref() {
+        Some(user) => (Some(user.id), user.show_sensitive_content),
+        None => (None, false),
+    };
+
+    let mut tx = state.db_pool.begin().await?;
+    let posts = crate::models::post::find_collaborative_posts(
+        &mut tx,
+        query.limit,
+        query.offset,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
+    tx.commit().await?;
+
+    let template = state.env.get_template("post_feed_fragment.jinja")?;
+    let rendered = template.render(context! {
+        feed => crate::web::handlers::home::feed_context(
+            posts,
+            "/api/collaborate/posts",
+            query.offset,
+        ),
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+    })?;
+
+    Ok(Html(rendered).into_response())
+}
+
 pub async fn collaborate_lobby(
     auth_session: AuthSession,
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
@@ -118,87 +326,19 @@ pub async fn collaborate_lobby(
 
     let common_ctx = CommonContext::build(&mut tx, viewer_user_id).await?;
 
-    let active_sessions = sqlx::query_as!(
-        SessionWithCounts,
-        r#"
-        SELECT
-            cs.id,
-            u.login_name as owner_login_name,
-            cs.title,
-            cs.width,
-            cs.height,
-            cs.created_at,
-            cs.max_participants,
-            c.name AS "community_name?",
-            c.slug AS "community_slug?",
-            COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) as participant_count
-        FROM collaborative_sessions cs
-        JOIN users u ON cs.owner_id = u.id
-        LEFT JOIN communities c ON cs.community_id = c.id
-        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
-        WHERE cs.is_public = true
-          AND cs.ended_at IS NULL
-          AND (cs.community_id IS NULL OR c.visibility = 'public')
-        GROUP BY cs.id, u.login_name, cs.max_participants, c.name, c.slug
-        HAVING COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) < cs.max_participants
-        ORDER BY cs.last_activity DESC
-        LIMIT 20
-        "#
-    )
-    .fetch_all(&mut *tx)
-    .await?;
+    let (viewer_sessions, active_sessions) = lobby_sessions(&mut tx, viewer_user_id).await?;
 
     // Finished collaborative drawings, rendered through the same card template
-    // as the home grid. Sensitive posts follow the viewer's preference exactly
-    // as they do elsewhere.
-    let collaborative_posts = sqlx::query!(
-        r#"
-        SELECT
-            p.id,
-            p.title,
-            u.login_name AS user_login_name,
-            c.slug AS "community_slug?",
-            c.name AS "community_name?",
-            i.image_filename,
-            i.width AS image_width,
-            i.height AS image_height,
-            (p.is_sensitive OR p.is_explicit) AS "is_sensitive!",
-            p.published_at
-        FROM collaborative_sessions cs
-        JOIN posts p ON cs.saved_post_id = p.id
-        JOIN users u ON p.author_id = u.id
-        JOIN images i ON p.image_id = i.id
-        LEFT JOIN communities c ON p.community_id = c.id
-        WHERE p.published_at IS NOT NULL
-          AND p.deleted_at IS NULL
-          AND (c.visibility = 'public' OR p.community_id IS NULL)
-          AND ((p.is_sensitive = false AND p.is_explicit = false)
-               OR $1 = true
-               OR p.author_id = $2)
-        ORDER BY p.published_at DESC
-        LIMIT 60
-        "#,
-        viewer_show_sensitive,
+    // as the home grid and paginated through the same sentinel. Sensitive posts
+    // follow the viewer's preference exactly as they do elsewhere.
+    let collaborative_posts = crate::models::post::find_collaborative_posts(
+        &mut tx,
+        crate::web::handlers::home::HOME_POSTS_PER_BATCH,
+        0,
         viewer_user_id,
+        viewer_show_sensitive,
     )
-    .fetch_all(&mut *tx)
-    .await?
-    .into_iter()
-    .map(|row| {
-        serde_json::json!({
-            "id": row.id.to_string(),
-            "title": row.title,
-            "user_login_name": row.user_login_name,
-            "community_slug": row.community_slug,
-            "community_name": row.community_name,
-            "image_filename": row.image_filename,
-            "image_width": row.image_width,
-            "image_height": row.image_height,
-            "is_sensitive": row.is_sensitive,
-            "published_at": row.published_at,
-        })
-    })
-    .collect::<Vec<_>>();
+    .await?;
 
     // Communities this user may post into. Reuses the rule the "move post"
     // feature already applies — public, unlisted where they have posted,
@@ -239,15 +379,16 @@ pub async fn collaborate_lobby(
 
     let rendered = template.render(context! {
         current_user => user,
+        viewer_sessions => viewer_sessions,
         active_sessions => active_sessions,
-        // Shared card fragment contract. The gallery does not paginate, so
-        // has_more is fixed false and no sentinel is emitted — otherwise it
-        // would point at the home feed's load-more endpoint from this page.
-        feed => context! {
-            posts => collaborative_posts,
-            has_more => false,
-            next_url => "",
-        },
+        // Shared card fragment contract, sentinel included: the gallery pages
+        // through /api/collaborate/posts the way / and /home page through
+        // theirs.
+        feed => crate::web::handlers::home::feed_context(
+            collaborative_posts,
+            "/api/collaborate/posts",
+            0,
+        ),
         // Three tiers rather than one flat list; the template renders them as
         // optgroups in that order.
         has_postable_communities => !member_communities.is_empty()
@@ -392,42 +533,16 @@ pub async fn get_active_sessions_json(
     auth_session: AuthSession,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<SessionWithCounts>>, AppError> {
-    let _user = match auth_session.user {
+    let user = match auth_session.user {
         Some(user) => user,
         None => return Err(anyhow::anyhow!("Authentication required").into()),
     };
 
-    let db = &state.db_pool;
-
-    let active_sessions = sqlx::query_as!(
-        SessionWithCounts,
-        r#"
-        SELECT
-            cs.id,
-            u.login_name as owner_login_name,
-            cs.title,
-            cs.width,
-            cs.height,
-            cs.created_at,
-            cs.max_participants,
-            c.name AS "community_name?",
-            c.slug AS "community_slug?",
-            COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) as participant_count
-        FROM collaborative_sessions cs
-        JOIN users u ON cs.owner_id = u.id
-        LEFT JOIN communities c ON cs.community_id = c.id
-        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
-        WHERE cs.is_public = true
-          AND cs.ended_at IS NULL
-          AND (cs.community_id IS NULL OR c.visibility = 'public')
-        GROUP BY cs.id, u.login_name, cs.max_participants, c.name, c.slug
-        HAVING COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) < cs.max_participants
-        ORDER BY cs.last_activity DESC
-        LIMIT 20
-        "#
-    )
-    .fetch_all(db)
-    .await?;
+    let mut tx = state.db_pool.begin().await?;
+    // Same list the lobby renders, so the two cannot disagree about which
+    // sessions exist. Full ones are included and flagged rather than dropped.
+    let active_sessions = find_public_sessions(&mut tx, Some(user.id)).await?;
+    tx.commit().await?;
 
     Ok(Json(active_sessions))
 }
@@ -450,14 +565,40 @@ mod tests {
         })
     }
 
+    /// A lobby session card's context. Defaults describe an open, public,
+    /// half-full session in a community; tests override the field under test.
+    fn sample_session(overrides: serde_json::Value) -> serde_json::Value {
+        let mut session = json!({
+            "id": "00000000-0000-0000-0000-000000000009",
+            "owner_login_name": "someone",
+            "title": "Doodle",
+            "width": 300,
+            "height": 300,
+            "created_at": "2026-01-02T03:04:05",
+            "participant_count": 2,
+            "max_participants": 4,
+            "is_full": false,
+            "is_public": true,
+            "community_name": "Open Studio",
+            "community_slug": "open",
+            "is_owner": false,
+            "viewer_is_participant": false,
+        });
+        for (key, value) in overrides.as_object().expect("object") {
+            session[key] = value.clone();
+        }
+        session
+    }
+
     fn lobby_context(signed_in: bool, posts: Vec<serde_json::Value>) -> minijinja::Value {
-        lobby_context_with_sessions(signed_in, posts, Vec::new())
+        lobby_context_with_sessions(signed_in, posts, Vec::new(), Vec::new())
     }
 
     fn lobby_context_with_sessions(
         signed_in: bool,
         posts: Vec<serde_json::Value>,
         active_sessions: Vec<serde_json::Value>,
+        viewer_sessions: Vec<serde_json::Value>,
     ) -> minijinja::Value {
         let community = |id, name, slug, visibility| {
             if signed_in {
@@ -491,6 +632,7 @@ mod tests {
                 json!(null)
             },
             active_sessions => active_sessions,
+            viewer_sessions => viewer_sessions,
             feed => context! {
                 posts => posts,
                 has_more => false,
@@ -657,18 +799,8 @@ mod tests {
             .render(lobby_context_with_sessions(
                 false,
                 vec![],
-                vec![json!({
-                    "id": "00000000-0000-0000-0000-000000000009",
-                    "owner_login_name": "someone",
-                    "title": "Doodle",
-                    "width": 300,
-                    "height": 300,
-                    "created_at": "2026-01-02T03:04:05",
-                    "participant_count": 2,
-                    "max_participants": 4,
-                    "community_name": "Open Studio",
-                    "community_slug": "open",
-                })],
+                vec![sample_session(json!({}))],
+                vec![],
             ))
             .expect("renders");
         assert!(rendered.contains("2 / 4"));
@@ -686,22 +818,154 @@ mod tests {
             .render(lobby_context_with_sessions(
                 false,
                 vec![],
-                vec![json!({
-                    "id": "00000000-0000-0000-0000-000000000009",
-                    "owner_login_name": "someone",
-                    "title": "Doodle",
-                    "width": 300,
-                    "height": 300,
-                    "created_at": "2026-01-02T03:04:05",
-                    "participant_count": 1,
-                    "max_participants": 2,
-                    "community_name": json!(null),
-                    "community_slug": json!(null),
-                })],
+                vec![sample_session(json!({
+                    "community_name": null,
+                    "community_slug": null,
+                }))],
+                vec![],
             ))
             .expect("renders");
         // The class also appears in the page's <style> block, so match the tag.
         assert!(!rendered.contains("<p class=\"session-community\">"));
+    }
+
+    #[test]
+    fn full_sessions_stay_listed_without_a_join_link() {
+        // Regression: full sessions used to be filtered out of the query, so a
+        // busy canvas looked exactly like one that had ended.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context_with_sessions(
+                false,
+                vec![],
+                vec![sample_session(json!({
+                    "participant_count": 4,
+                    "is_full": true,
+                }))],
+                vec![],
+            ))
+            .expect("renders");
+        assert!(rendered.contains("4 / 4"));
+        assert!(rendered.contains("collaborate-session-full"));
+        assert!(!rendered.contains("/collaborate/00000000-0000-0000-0000-000000000009"));
+    }
+
+    #[test]
+    fn a_full_session_the_viewer_is_already_in_keeps_its_join_link() {
+        // The capacity check lets existing participants back in, so dropping
+        // their link would lock them out of their own drawing.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context_with_sessions(
+                true,
+                vec![],
+                vec![],
+                vec![sample_session(json!({
+                    "participant_count": 4,
+                    "is_full": true,
+                    "viewer_is_participant": true,
+                }))],
+            ))
+            .expect("renders");
+        assert!(rendered.contains("/collaborate/00000000-0000-0000-0000-000000000009"));
+    }
+
+    #[test]
+    fn viewer_sessions_list_reaches_link_only_sessions() {
+        // A private session appears nowhere else: the public list filters on
+        // is_public, so without this list the owner needs the original URL.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context_with_sessions(
+                true,
+                vec![],
+                vec![],
+                vec![sample_session(json!({
+                    "is_public": false,
+                    "is_owner": true,
+                }))],
+            ))
+            .expect("renders");
+        assert!(rendered.contains("collaborate-your-sessions"));
+        assert!(rendered.contains("collaborate-session-link-only"));
+        assert!(rendered.contains("/collaborate/00000000-0000-0000-0000-000000000009"));
+    }
+
+    #[test]
+    fn the_sessions_block_polls_itself() {
+        // The wrapper carries the poll attributes and swaps outerHTML, so the
+        // swapped-in copy keeps polling. Losing them stops the lobby refreshing
+        // after the first tick.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_sessions_fragment.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                viewer_sessions => Vec::<serde_json::Value>::new(),
+                active_sessions => vec![sample_session(json!({}))],
+                ftl_lang => "en",
+            })
+            .expect("renders");
+        assert!(rendered.contains("hx-get=\"/collaborate/sessions\""));
+        assert!(rendered.contains("hx-trigger=\"every 15s\""));
+        assert!(rendered.contains("hx-swap=\"outerHTML\""));
+        assert!(rendered.contains("id=\"collaborate-sessions\""));
+    }
+
+    #[test]
+    fn lobby_gallery_paginates_through_its_own_endpoint() {
+        // Regression: the gallery used to hardcode has_more false, so it capped
+        // at one batch. The sentinel must point here, not at the home feed.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                current_user => json!(null),
+                active_sessions => Vec::<serde_json::Value>::new(),
+                viewer_sessions => Vec::<serde_json::Value>::new(),
+                feed => crate::web::handlers::home::feed_context(
+                    Vec::new(),
+                    "/api/collaborate/posts",
+                    0,
+                ),
+                canvas_sizes => vec![("300x300", "300x300")],
+                has_postable_communities => false,
+                selected_community_slug => json!(null),
+                draft_post_count => 0,
+                unread_notification_count => 0,
+                ftl_lang => "en",
+            })
+            .expect("renders");
+        // An empty batch is short of a full one, so no sentinel — the contract
+        // the shared fragment already enforces for / and /home.
+        assert!(!rendered.contains("infinite-scroll-sentinel"));
+
+        let fragment = env
+            .get_template("post_feed_fragment.jinja")
+            .expect("template loads");
+        let rendered = fragment
+            .render(context! {
+                feed => context! {
+                    posts => vec![sample_post()],
+                    has_more => true,
+                    next_url => "/api/collaborate/posts?offset=60&limit=60",
+                },
+                r2_public_endpoint_url => "https://example.test",
+            })
+            .expect("renders");
+        assert!(rendered.contains("&#x2f;api&#x2f;collaborate&#x2f;posts?offset=60&amp;limit=60"));
     }
 
     #[test]
@@ -717,5 +981,20 @@ mod tests {
             .expect("renders");
         assert!(rendered.contains("post-card-byline"));
         assert!(!rendered.contains("infinite-scroll-sentinel"));
+    }
+
+    #[test]
+    fn create_form_carries_translated_failure_messages() {
+        // Regression: the submit handler alerted two hardcoded English strings.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context(true, vec![]))
+            .expect("renders signed in");
+        assert!(rendered.contains("data-error=\"collaborate-create-error\""));
+        assert!(rendered.contains("data-network-error=\"collaborate-create-network-error\""));
+        assert!(!rendered.contains("Failed to create session"));
     }
 }
