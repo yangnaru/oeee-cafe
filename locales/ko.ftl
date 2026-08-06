@@ -8,14 +8,14 @@ about = 오에카키는 그림을 그릴 수 있는 게시판입니다.
   오이를 깎을 수 있는 카페 오이카페입니다.
 user-contributors = 오이카페를 함께 만든 사람들
 
-timeline = 타임라인
-timeline-public = 공개 타임라인
-timeline-my = 내 타임라인
-timeline-empty = 타임라인이 비어 있습니다. <a href="/communities">커뮤니티</a>에서 다른 사람과 동맹을 맺어 보세요!
+timeline = 동맹
+timeline-public = 공개 동맹
+timeline-my = 내 동맹
+timeline-empty = 동맹이 비어 있습니다. <a href="/communities">커뮤니티</a>에서 다른 사람과 동맹을 맺어 보세요!
 
 home = 홈
 draw = 그리기!
-collaborate = 함께 그리기
+collaborate = 넷캔
 drafts = 임시 보관함
 profile = 프로필
 community = 커뮤니티
@@ -132,7 +132,7 @@ post-published-at = 발행 시각
 post-duration = 소요 시간
 post-replay = 리플레이
 post-author = 그린이
-post-collaborative-participants = 함께 그리기 참가자
+post-collaborative-participants = 넷캔 참가자
 post-title = 제목
 post-no-title = 무제
 post-description = 내용
@@ -203,7 +203,7 @@ sort-recent = 최근 활동순
 sort-alphabetical = 가나다순
 
 # Collaborative drawing
-collaborate-title = 함께 그리기 세션
+collaborate-title = 넷캔 세션
 collaborate-create-session = 새 세션 만들기
 collaborate-community-label = 커뮤니티
 collaborate-canvas-size-label = 캔버스 크기
@@ -220,8 +220,8 @@ collaborate-session-full = 가득 참
 collaborate-session-link-only = 링크 전용
 collaborate-create-error = 세션을 만들지 못했습니다. 다시 시도해 주세요.
 collaborate-create-network-error = 세션을 만들지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.
-collaborate-sign-in-to-create = 로그인하고 함께 그리기를 시작해 보세요
-collaborate-finished-drawings = 완성된 함께 그린 그림
+collaborate-sign-in-to-create = 로그인하고 넷캔을 시작해 보세요
+collaborate-finished-drawings = 완성된 넷캔 그림
 collaborate-community-none = 커뮤니티 없음
 collaborate-community-search-placeholder = 커뮤니티 검색
 collaborate-community-group-yours = 내 커뮤니티
@@ -229,7 +229,7 @@ collaborate-community-group-participated = 그림을 올린 커뮤니티
 collaborate-community-group-public = 다른 공개 커뮤니티
 collaborate-community-no-matches = 일치하는 커뮤니티가 없습니다
 collaborate-community-hint = 세션을 저장하면 완성된 그림이 여기에 올라갑니다.
-community-draw-together = 함께 그리기
+community-draw-together = 넷캔
 collaborate-session-by = @
 collaborate-session-participants-singular = 참가자 1명
 collaborate-session-participants-plural = 명의 참가자
