@@ -359,3 +359,48 @@ describe("reset point squashing", () => {
     expect(history.canUndo()).toBe(false);
   });
 });
+
+describe("reconnect", () => {
+  it("replays history onto a blank canvas instead of the stale drawing", async () => {
+    const { engine, history } = setup();
+    await remote(history, encodeUndoPoint(REMOTE), 1);
+    await remote(history, stroke(REMOTE, 1, 1, 50), 2);
+    await remote(history, encodeFill(REMOTE, "foreground", 4, 4, 30, 0, 0, 255), 3);
+    expect(red(engine, 1, 1)).toBe(30);
+    const opsBeforeDrop = [...engine.ops];
+
+    // The connection drops and comes back: the canvas still shows everything
+    // above, and the server is about to replay all of it from seq 1
+    history.resetToBlankCanvas();
+    expect(red(engine, 1, 1)).toBe(0);
+    expect(red(engine, 4, 4)).toBe(0);
+
+    engine.ops.length = 0;
+    await remote(history, encodeUndoPoint(REMOTE), 1);
+    await remote(history, stroke(REMOTE, 1, 1, 50), 2);
+    await remote(history, encodeFill(REMOTE, "foreground", 4, 4, 30, 0, 0, 255), 3);
+
+    // The replay reproduces the drawing exactly, doing the same work once
+    expect(red(engine, 1, 1)).toBe(30);
+    expect(engine.ops).toEqual(opsBeforeDrop);
+  });
+
+  it("keeps a reconnecting user's own strokes undoable under their new id", async () => {
+    const { engine, history } = setup();
+    await remote(history, encodeUndoPoint(LOCAL), 1);
+    await remote(history, stroke(LOCAL, 2, 2, 40), 2);
+
+    history.resetToBlankCanvas();
+    // The server hands back the same session user id, since the id map
+    // outlives the connection that owned it
+    history.setLocalUserId(LOCAL);
+    await remote(history, encodeUndoPoint(LOCAL), 1);
+    await remote(history, stroke(LOCAL, 2, 2, 40), 2);
+
+    expect(red(engine, 2, 2)).toBe(40);
+    const undo = encodeUndo(LOCAL, false);
+    local(history, undo);
+    await remote(history, undo);
+    expect(red(engine, 2, 2)).toBe(0);
+  });
+});

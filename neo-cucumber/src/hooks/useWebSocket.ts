@@ -10,6 +10,20 @@ import { type CanvasHistory } from "../utils/canvasHistory";
 
 export type ConnectionState = "disconnected" | "connecting" | "connected";
 
+// A server redeploy drops every socket at once. Come back on our own instead
+// of making everyone in the room notice the modal and click Reconnect: the
+// canonical history lives on the server, so a reconnect restores the canvas
+// exactly. Backoff is capped well below the point where a person would give
+// up and reload themselves.
+const RECONNECT_MAX_ATTEMPTS = 10;
+const RECONNECT_BASE_MS = 500;
+const RECONNECT_MAX_MS = 10000;
+// Spreads the retries of a whole room across a window instead of stampeding
+// the process that just came up.
+const RECONNECT_JITTER_MS = 500;
+// The server's close code for a refused join (session over or full).
+const WS_CLOSE_POLICY = 1008;
+
 interface Participant {
   userId: string;
   username: string;
@@ -77,6 +91,11 @@ export const useWebSocket = ({
     { message: DecodedMessage; raw: Uint8Array; seq?: number }[]
   >([]);
   const isConnectingRef = useRef(false);
+  // Reconnect bookkeeping. `hasConnectedRef` distinguishes the first connect
+  // (blank canvas) from a reconnect (canvas still holds pre-disconnect pixels).
+  const hasConnectedRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<number | null>(null);
   // Serializes async message processing so messages are always applied in
   // arrival order (the server's canonical order), even when handling involves
   // awaits like PNG decoding
@@ -111,6 +130,45 @@ export const useWebSocket = ({
     return `wss://${window.location.host}/collaborate/${sessionId}/ws`;
   }, []);
 
+  // Set after connectWebSocket is defined; lets the close handler retry
+  // without depending on the callback identity.
+  const connectRef = useRef<() => void>(() => {});
+
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current !== null) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleReconnect = useCallback(() => {
+    clearReconnectTimer();
+
+    if (reconnectAttemptsRef.current >= RECONNECT_MAX_ATTEMPTS) {
+      console.warn(
+        `Giving up after ${RECONNECT_MAX_ATTEMPTS} reconnect attempts`
+      );
+      setConnectionState("disconnected");
+      return;
+    }
+
+    const attempt = reconnectAttemptsRef.current++;
+    const delay =
+      Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** attempt) +
+      Math.random() * RECONNECT_JITTER_MS;
+
+    // Stay in "connecting" so the UI shows the spinner rather than the
+    // manual-reconnect modal while retries are still in flight.
+    setConnectionState("connecting");
+    console.log(
+      `Reconnecting in ${Math.round(delay)}ms (attempt ${attempt + 1}/${RECONNECT_MAX_ATTEMPTS})`
+    );
+    reconnectTimerRef.current = window.setTimeout(() => {
+      reconnectTimerRef.current = null;
+      connectRef.current();
+    }, delay);
+  }, [clearReconnectTimer, setConnectionState]);
+
   const connectWebSocket = useCallback(async () => {
     // Only connect if we should be connecting
     if (!shouldConnectRef.current && wsRef.current) {
@@ -129,9 +187,14 @@ export const useWebSocket = ({
 
     // Set connecting flag
     isConnectingRef.current = true;
+    clearReconnectTimer();
 
-    // Clean up any existing connection
+    // Clean up any existing connection. Detach its handlers first so closing
+    // it here is not mistaken for a dropped connection worth retrying.
     if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onmessage = null;
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -166,10 +229,18 @@ export const useWebSocket = ({
       console.log("WebSocket connected successfully:", ws.url);
       setConnectionState("connected");
       isConnectingRef.current = false;
+      reconnectAttemptsRef.current = 0;
 
       // Fresh connection: the server replays the canonical history from
-      // scratch, so any local history state is stale
-      canvasHistoryRef.current?.reset();
+      // scratch, so any local history state is stale. On a reconnect the
+      // canvas still shows the pre-disconnect drawing, which that replay
+      // would then draw over a second time - blank it first.
+      if (hasConnectedRef.current) {
+        canvasHistoryRef.current?.resetToBlankCanvas();
+      } else {
+        canvasHistoryRef.current?.reset();
+      }
+      hasConnectedRef.current = true;
       lastSeqRef.current = 0;
       localIdRef.current = null; // reassigned by WELCOME
 
@@ -256,8 +327,8 @@ export const useWebSocket = ({
         url: ws.url,
         event: event,
       });
-      setConnectionState("disconnected");
       isConnectingRef.current = false;
+      // A close event always follows, which is where the retry is decided
     };
 
     ws.onclose = (event) => {
@@ -266,9 +337,26 @@ export const useWebSocket = ({
         reason: event.reason,
         wasClean: event.wasClean,
       });
-      setConnectionState("disconnected");
       isConnectingRef.current = false;
-      // No automatic reconnection - user must manually reconnect
+
+      // Leaving the session (unmount, or the session ended) - stay closed
+      if (!shouldConnectRef.current) {
+        setConnectionState("disconnected");
+        return;
+      }
+
+      // The server refused the join: the session is over or full, and no
+      // amount of retrying will change that
+      if (event.code === WS_CLOSE_POLICY) {
+        console.warn("Server refused the session join:", event.reason);
+        setConnectionState("disconnected");
+        return;
+      }
+
+      // Anything else - a redeploy, a flaky network - is worth retrying, and
+      // the modal's Reconnect button remains as the manual fallback once the
+      // attempts run out
+      scheduleReconnect();
     };
 
     // Process all queued messages immediately during catch-up
@@ -501,12 +589,25 @@ export const useWebSocket = ({
     processingMessageRef,
     shouldConnectRef,
     userIdRef,
+    clearReconnectTimer,
+    scheduleReconnect,
   ]);
+
+  useEffect(() => {
+    connectRef.current = () => {
+      void connectWebSocket();
+    };
+  }, [connectWebSocket]);
 
   // Cleanup WebSocket on unmount
   useEffect(() => {
     return () => {
+      if (reconnectTimerRef.current !== null) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
       if (wsRef.current) {
+        wsRef.current.onclose = null;
         wsRef.current.close();
         wsRef.current = null;
       }

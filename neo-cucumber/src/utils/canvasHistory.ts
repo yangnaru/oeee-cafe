@@ -179,6 +179,21 @@ export class CanvasHistory {
     this.localUserId = id;
   }
 
+  /**
+   * Blanks the canvas, then resets history against it.
+   *
+   * Used when a reconnect is about to replay the whole canonical history:
+   * `reset()` alone bases everything on whatever is currently on screen, so
+   * replaying on top of the pre-disconnect pixels would apply every stroke a
+   * second time — invisible for opaque brushes, not for translucent ones.
+   */
+  resetToBlankCanvas(): void {
+    this.engine.layers.foreground.fill(0);
+    this.engine.layers.background.fill(0);
+    this.reset();
+    this.queueUpdates();
+  }
+
   /** Clears everything and takes a base savepoint of the current layers. */
   reset(): void {
     this.entries = [];
