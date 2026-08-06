@@ -14,7 +14,7 @@
   {% if communities %}
     <optgroup label="{{ group_label }}">
       {% for community in communities %}
-        <option value="{{ community.id }}" data-search="{{ (community.name ~ " " ~ community.slug ~ " @" ~ community.owner_login_name ~ " " ~ (community.description or ""))|lower }}" {% if community.slug == selected_slug %}selected{% endif %}>{{ community.name }}{% if community.visibility == "unlisted" %} ({{ ftl_get_message("community-badge-unlisted") }}){% elif community.visibility == "private" %} ({{ ftl_get_message("community-badge-private") }}){% endif %}</option>
+        <option value="{{ community.id }}" data-owner="@{{ community.owner_login_name }}" data-search="{{ (community.name ~ " " ~ community.slug ~ " @" ~ community.owner_login_name ~ " " ~ (community.description or ""))|lower }}" {% if community.slug == selected_slug %}selected{% endif %}>{{ community.name }}{% if community.visibility == "unlisted" %} ({{ ftl_get_message("community-badge-unlisted") }}){% elif community.visibility == "private" %} ({{ ftl_get_message("community-badge-private") }}){% endif %}</option>
       {% endfor %}
     </optgroup>
   {% endif %}
@@ -30,65 +30,89 @@
       {# Failure messages ride on the form rather than being interpolated into
          the script below: they are translated text, and an attribute is the
          only context minijinja escapes correctly for. #}
+      {# A label column and a control column, so the eye follows one edge down
+         the form instead of four. Every field stays visible: the form is short
+         enough that folding half of it behind a disclosure would trade clutter
+         for a click. #}
       <form id="create-session-form"
+            class="session-form"
             method="post"
             action="/collaborate"
             data-error="{{ ftl_get_message("collaborate-create-error") }}"
             data-network-error="{{ ftl_get_message("collaborate-create-network-error") }}">
-        <p>
-          <label for="canvas-size">{{ ftl_get_message("collaborate-canvas-size-label") }}:</label>
+        <label for="canvas-size">{{ ftl_get_message("collaborate-canvas-size-label") }}</label>
+        <div class="field">
           <select id="canvas-size" name="canvas-size" required>
             {% for size_value, size_label in canvas_sizes %}<option value="{{ size_value }}">{{ size_label }}</option>{% endfor %}
           </select>
-        </p>
-        <p>
-          <label for="session-title">{{ ftl_get_message("collaborate-session-title-label") }}:</label>
+        </div>
+
+        <label for="session-title">{{ ftl_get_message("collaborate-session-title-label") }}</label>
+        <div class="field">
           <input type="text"
                  id="session-title"
                  name="title"
                  maxlength="100"
                  placeholder="{{ ftl_get_message("collaborate-session-title-placeholder") }}">
-        </p>
-        <p>
-          <label for="max-participants">{{ ftl_get_message("collaborate-max-participants-label") }}:</label>
+        </div>
+
+        <label for="max-participants">{{ ftl_get_message("collaborate-max-participants-label") }}</label>
+        <div class="field">
           <select id="max-participants" name="max_participants" required>
             <option value="2">2 {{ ftl_get_message("collaborate-participants") }}</option>
             <option value="4" selected>4 {{ ftl_get_message("collaborate-participants") }}</option>
             <option value="6">6 {{ ftl_get_message("collaborate-participants") }}</option>
             <option value="8">8 {{ ftl_get_message("collaborate-participants") }}</option>
           </select>
-        </p>
-        <p>
-          <label for="is-public">
-            <input type="checkbox" id="is-public" name="is_public" checked>
-            {{ ftl_get_message("collaborate-public-session-label") }}
-          </label>
-        </p>
-        <small>{{ ftl_get_message("collaborate-public-session-description") }}</small>
+        </div>
+
         {% if has_postable_communities %}
-          <div class="community-field">
-            <label for="session-community">{{ ftl_get_message("collaborate-community-label") }}:</label>
-            {# The select is the working control on its own; the filter box is
-               unhidden by script, so a no-JS visitor still gets every option
-               and the tiers stay in priority order. #}
-            <input type="search"
-                   id="community-filter"
-                   class="community-filter"
-                   autocomplete="off"
-                   hidden
-                   aria-controls="session-community"
-                   data-no-matches="{{ ftl_get_message("collaborate-community-no-matches") }}"
-                   placeholder="{{ ftl_get_message("collaborate-community-search-placeholder") }}">
+          <label for="community-input" id="community-label">{{ ftl_get_message("collaborate-community-label") }}</label>
+          <div class="field">
+            {# One control, not two. The select stays the form's value holder —
+               so there is no second community_id and a visitor without JS gets
+               the plain select with its tiers intact — and the script builds a
+               type-ahead facade over it. #}
+            <div class="combobox" id="community-combobox">
+              <input type="text"
+                     id="community-input"
+                     class="combobox-input"
+                     role="combobox"
+                     aria-expanded="false"
+                     aria-controls="community-listbox"
+                     aria-autocomplete="list"
+                     aria-labelledby="community-label"
+                     autocomplete="off"
+                     hidden
+                     data-no-matches="{{ ftl_get_message("collaborate-community-no-matches") }}"
+                     placeholder="{{ ftl_get_message("collaborate-community-search-placeholder") }}">
+              <div id="community-listbox"
+                   class="combobox-list"
+                   role="listbox"
+                   aria-labelledby="community-label"
+                   hidden></div>
+            </div>
             <select id="session-community" name="community_id">
               <option value="">{{ ftl_get_message("collaborate-community-none") }}</option>
               {{ community_options(member_communities, ftl_get_message("collaborate-community-group-yours"), selected_community_slug) }}
               {{ community_options(participated_communities, ftl_get_message("collaborate-community-group-participated"), selected_community_slug) }}
               {{ community_options(other_communities, ftl_get_message("collaborate-community-group-public"), selected_community_slug) }}
             </select>
-            <small class="community-field-hint">{{ ftl_get_message("collaborate-community-hint") }}</small>
+            <p class="field-help">{{ ftl_get_message("collaborate-community-hint") }}</p>
           </div>
         {% endif %}
-        <input type="submit" value="{{ ftl_get_message("collaborate-create-button") }}">
+
+        <div class="field field-wide">
+          <label class="checkbox-label" for="is-public">
+            <input type="checkbox" id="is-public" name="is_public" checked>
+            {{ ftl_get_message("collaborate-public-session-label") }}
+          </label>
+          <p class="field-help">{{ ftl_get_message("collaborate-public-session-description") }}</p>
+        </div>
+
+        <div class="field field-wide form-actions">
+          <input type="submit" value="{{ ftl_get_message("collaborate-create-button") }}">
+        </div>
       </form>
       </div>
     {% else %}
@@ -127,54 +151,128 @@
     }
     
     .create-session-section h3 {
-      margin: 0 0 8px 0;
+      margin: 0 0 12px 0;
     }
-    
-    .create-session-section p {
-      margin: 8px 0;
+
+    /* Label column sized to the longest label, control column takes the rest.
+       Capped so the controls stay a readable length rather than running the
+       width of the box. */
+    .session-form {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      gap: 10px 12px;
+      align-items: baseline;
+      max-width: 520px;
     }
-    
-    .create-session-section label {
+
+    .session-form > label {
       font-weight: normal;
-    }
-    
-    .create-session-section select,
-    .create-session-section input[type="text"] {
-      font-family: inherit;
-      font-size: inherit;
-    }
-    
-    .create-session-section small {
-      font-size: 0.9em;
-      color: var(--main-text-color);
-      opacity: 0.7;
-    }
-    
-    .create-session-section input[type="submit"] {
-      margin-top: 8px;
+      opacity: 0.85;
     }
 
-    /* The community picker is two stacked controls under one label, so it
-       cannot use the single-line <p> layout the rest of the form uses. */
-    .community-field {
+    .field {
+      min-width: 0;
+    }
+
+    /* Rows with no label of their own span both columns. */
+    .field-wide {
+      grid-column: 1 / -1;
+    }
+
+    .session-form select,
+    .session-form input[type="text"] {
+      font-family: inherit;
+      font-size: inherit;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    /* The two hints that used to float loose under the form. Attached to the
+       field they explain, and quiet enough not to compete with it. */
+    .field-help {
+      margin: 4px 0 0 0;
+      font-size: 0.85em;
+      opacity: 0.65;
+      line-height: 1.4;
+    }
+
+    .checkbox-label {
       display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-      margin: 8px 0;
+      align-items: center;
+      gap: 6px;
     }
 
-    .community-field .community-filter,
-    .community-field select {
+    .checkbox-label input[type="checkbox"] {
+      margin: 0;
+    }
+
+    .form-actions {
+      margin-top: 4px;
+    }
+
+    /* Combobox: one input with the list overlaid beneath it. Positioned rather
+       than in flow so opening it does not shove the rest of the form down. */
+    .combobox {
+      position: relative;
+    }
+
+    .combobox-input {
       font-family: inherit;
       font-size: inherit;
-      max-width: 100%;
-      min-width: min(320px, 100%);
+      width: 100%;
+      box-sizing: border-box;
     }
 
-    .community-field-hint {
-      font-size: 0.9em;
-      opacity: 0.7;
+    .combobox-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      max-height: 280px;
+      overflow-y: auto;
+      background-color: var(--main-bg-color);
+      border: 1px solid var(--main-border-color);
+      border-top: none;
+    }
+
+    .combobox-group-label {
+      padding: 4px 8px;
+      font-size: 0.8em;
+      opacity: 0.6;
+      background-color: var(--main-nav-bg-color);
+      border-bottom: 1px solid var(--main-border-color);
+    }
+
+    .combobox-option {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 5px 8px;
+      cursor: pointer;
+    }
+
+    /* One highlight for both the pointer and the arrow keys, so the two never
+       disagree about which row Enter would take. */
+    .combobox-option:hover,
+    .combobox-option[data-active] {
+      background-color: var(--main-nav-bg-color);
+    }
+
+    .combobox-option[aria-selected="true"] .combobox-option-name {
+      font-weight: bold;
+    }
+
+    .combobox-option-meta {
+      font-size: 0.85em;
+      opacity: 0.6;
+      white-space: nowrap;
+    }
+
+    .combobox-empty {
+      padding: 5px 8px;
+      opacity: 0.6;
     }
 
     .session-community {
@@ -307,73 +405,212 @@
     });
   </script>
   <script>
-    // Filters the community select down to matching options. The select keeps
-    // its optgroup order — members first, then communities the user has posted
-    // in — so typing narrows a list that is already in priority order rather
-    // than replacing it with a differently ranked one.
+    // A type-ahead facade over the community <select>. The select stays the
+    // form's value holder — it is what create-session reads and what a visitor
+    // without JS uses — so this only ever mirrors a choice back into it.
+    //
+    // It replaces a search box that filtered a separate dropdown: two controls
+    // for one decision, where typing never got you closer to picking.
     (function () {
       function init() {
-        var filter = document.getElementById("community-filter");
         var select = document.getElementById("session-community");
+        var input = document.getElementById("community-input");
+        var list = document.getElementById("community-listbox");
         // The picker is omitted entirely when the user can post nowhere.
-        if (!filter || !select) return;
+        if (!select || !input || !list) return;
 
-        // Snapshot before the first filter run: rebuilding from the live DOM
-        // would permanently drop whatever the previous query hid.
-        var groups = [];
+        // Read the tiers out of the select once. Everything below works off
+        // this snapshot, so filtering can never lose an option permanently.
+        var items = [];
         Array.prototype.forEach.call(select.children, function (child) {
           if (child.tagName === "OPTGROUP") {
-            groups.push({
-              label: child.label,
-              options: Array.prototype.slice.call(child.children),
+            Array.prototype.forEach.call(child.children, function (option) {
+              items.push({
+                value: option.value,
+                label: option.textContent.trim(),
+                owner: option.dataset.owner || "",
+                group: child.label,
+                search: option.dataset.search || "",
+              });
+            });
+          } else if (child.tagName === "OPTION") {
+            // "No community" — ungrouped, and offered only on an empty query,
+            // since it has no text to match against.
+            items.push({
+              value: child.value,
+              label: child.textContent.trim(),
+              group: "",
+              search: "",
             });
           }
         });
-        var none = select.querySelector('option[value=""]');
-        var empty = document.createElement("option");
-        empty.disabled = true;
-        // Carried on the input rather than interpolated into this script: the
-        // translation is arbitrary text and attribute escaping is the only
-        // context minijinja can escape it for correctly.
-        empty.textContent = filter.dataset.noMatches;
 
-        function apply() {
-          var query = filter.value.toLowerCase().trim();
-          // Keeping the selection visible matters: filtering it out would post
-          // the drawing to a community the user can no longer see they picked.
-          var selected = select.value;
-          var matched = 0;
+        var open = false;
+        var active = -1;
+        var shown = [];
 
-          select.textContent = "";
-          select.appendChild(none);
-          groups.forEach(function (group) {
-            var hits = group.options.filter(function (option) {
-              if (query === "" || (option.dataset.search || "").indexOf(query) !== -1) {
-                matched++;
-                return true;
-              }
-              // Kept but not counted: a lone surviving selection is not a hit,
-              // and reporting it as one would hide "no matches" entirely.
-              return option.value === selected;
-            });
-            if (!hits.length) return;
-            var optgroup = document.createElement("optgroup");
-            optgroup.label = group.label;
-            hits.forEach(function (option) {
-              optgroup.appendChild(option);
-            });
-            select.appendChild(optgroup);
-          });
-          if (!matched) select.appendChild(empty);
-
-          select.value = selected;
+        function labelFor(value) {
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].value === value) return items[i].label;
+          }
+          return "";
         }
 
-        filter.hidden = false;
-        filter.addEventListener("input", apply);
-        // Enter in a search field submits the form; here it should only filter.
-        filter.addEventListener("keydown", function (e) {
-          if (e.key === "Enter") e.preventDefault();
+        function matches(query) {
+          if (query === "") return items.slice();
+          return items.filter(function (item) {
+            // The empty-value row has nothing to match on, so it only shows on
+            // an empty query — otherwise it would survive every search.
+            return item.search.indexOf(query) !== -1;
+          });
+        }
+
+        function render(query) {
+          shown = matches(query);
+          list.textContent = "";
+          if (!shown.length) {
+            var empty = document.createElement("div");
+            empty.className = "combobox-empty";
+            empty.textContent = input.dataset.noMatches;
+            list.appendChild(empty);
+            return;
+          }
+          var group = null;
+          var container = list;
+          shown.forEach(function (item, index) {
+            if (item.group !== group) {
+              group = item.group;
+              if (group) {
+                container = document.createElement("div");
+                container.setAttribute("role", "group");
+                container.setAttribute("aria-label", group);
+                var heading = document.createElement("div");
+                heading.className = "combobox-group-label";
+                heading.textContent = group;
+                container.appendChild(heading);
+                list.appendChild(container);
+              } else {
+                container = list;
+              }
+            }
+            var option = document.createElement("div");
+            option.className = "combobox-option";
+            option.id = "community-option-" + index;
+            option.setAttribute("role", "option");
+            option.setAttribute("aria-selected", item.value === select.value ? "true" : "false");
+            option.dataset.value = item.value;
+            var name = document.createElement("span");
+            name.className = "combobox-option-name";
+            name.textContent = item.label;
+            option.appendChild(name);
+            // The owner handle disambiguates two communities with the same
+            // display name, which the label alone cannot.
+            if (item.owner) {
+              var meta = document.createElement("span");
+              meta.className = "combobox-option-meta";
+              meta.textContent = item.owner;
+              option.appendChild(meta);
+            }
+            // mousedown, not click: click fires after blur has already closed
+            // the list and thrown the row away.
+            option.addEventListener("mousedown", function (e) {
+              e.preventDefault();
+              choose(index);
+            });
+            container.appendChild(option);
+          });
+        }
+
+        function setActive(index) {
+          var options = list.querySelectorAll(".combobox-option");
+          for (var i = 0; i < options.length; i++) {
+            options[i].removeAttribute("data-active");
+          }
+          active = index;
+          if (index < 0 || index >= options.length) {
+            input.removeAttribute("aria-activedescendant");
+            return;
+          }
+          options[index].setAttribute("data-active", "");
+          input.setAttribute("aria-activedescendant", options[index].id);
+          // Keep the highlighted row in view when arrowing past the fold.
+          var top = options[index].offsetTop;
+          var bottom = top + options[index].offsetHeight;
+          if (top < list.scrollTop) list.scrollTop = top;
+          else if (bottom > list.scrollTop + list.clientHeight) {
+            list.scrollTop = bottom - list.clientHeight;
+          }
+        }
+
+        function openList(query) {
+          render(query === undefined ? "" : query);
+          list.hidden = false;
+          input.setAttribute("aria-expanded", "true");
+          open = true;
+          // Start on the current selection so Enter without arrowing is a
+          // no-op rather than a silent change.
+          var index = -1;
+          for (var i = 0; i < shown.length; i++) {
+            if (shown[i].value === select.value) index = i;
+          }
+          setActive(index);
+        }
+
+        function closeList() {
+          list.hidden = true;
+          input.setAttribute("aria-expanded", "false");
+          input.removeAttribute("aria-activedescendant");
+          open = false;
+          active = -1;
+        }
+
+        function choose(index) {
+          if (index < 0 || index >= shown.length) return;
+          select.value = shown[index].value;
+          input.value = shown[index].label;
+          closeList();
+        }
+
+        // Show the select's initial choice, which may be preselected by
+        // ?community=<slug>.
+        input.value = labelFor(select.value);
+        input.hidden = false;
+        select.hidden = true;
+
+        input.addEventListener("focus", function () {
+          input.select();
+          openList("");
+        });
+        input.addEventListener("input", function () {
+          openList(input.value.toLowerCase().trim());
+        });
+        input.addEventListener("blur", function () {
+          // Whatever half-typed query is in the box is not a choice; put the
+          // real one back so the field never lies about what will be posted.
+          input.value = labelFor(select.value);
+          closeList();
+        });
+        input.addEventListener("keydown", function (e) {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            if (!open) return openList(input.value.toLowerCase().trim());
+            var next = active + (e.key === "ArrowDown" ? 1 : -1);
+            if (next < 0) next = shown.length - 1;
+            if (next >= shown.length) next = 0;
+            setActive(next);
+          } else if (e.key === "Enter") {
+            // Always swallowed: with the list open Enter picks a row, and with
+            // it closed Enter here would submit a form the user is still
+            // filling in.
+            e.preventDefault();
+            if (open) choose(active);
+          } else if (e.key === "Escape") {
+            if (open) {
+              e.preventDefault();
+              input.value = labelFor(select.value);
+              closeList();
+            }
+          }
         });
       }
 

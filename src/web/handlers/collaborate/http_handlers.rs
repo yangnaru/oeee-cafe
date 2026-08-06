@@ -756,7 +756,11 @@ mod tests {
     }
 
     #[test]
-    fn community_picker_ships_the_filter_and_its_search_keys() {
+    fn community_picker_is_one_combobox_over_the_select() {
+        // Regression: the picker used to be a search box plus a separate
+        // dropdown — two controls for one decision, where typing never got you
+        // closer to picking. The select stays as the value holder so there is
+        // exactly one community_id and no-JS still works.
         let env = test_support::env();
         let template = env
             .get_template("collaborate_lobby.jinja")
@@ -764,12 +768,38 @@ mod tests {
         let rendered = template
             .render(lobby_context(true, vec![]))
             .expect("renders signed in");
-        assert!(rendered.contains("id=\"community-filter\""));
-        // Hidden until the script unhides it: without JS the select alone still
-        // works, and a dead search box would be worse than none.
-        assert!(rendered.contains("hidden"));
+        assert!(rendered.contains("role=\"combobox\""));
+        assert!(rendered.contains("id=\"community-listbox\""));
+        assert!(!rendered.contains("id=\"community-filter\""));
+        assert_eq!(rendered.matches("name=\"community_id\"").count(), 1);
         // Owner handle and slug are matchable, not just the display name.
         assert!(rendered.contains("data-search=\"open studio open @owner"));
+    }
+
+    #[test]
+    fn create_form_lays_labels_and_controls_out_in_one_grid() {
+        // The clutter was four differently-shaped rows and two loose hint
+        // paragraphs; every field now sits in the label/control grid and each
+        // hint is attached to the field it explains.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context(true, vec![]))
+            .expect("renders signed in");
+        assert!(rendered.contains("class=\"session-form\""));
+        assert_eq!(rendered.matches("class=\"field-help\"").count(), 2);
+        // Every control still ships — tidying must not drop a field.
+        for id in [
+            "canvas-size",
+            "session-title",
+            "max-participants",
+            "is-public",
+            "session-community",
+        ] {
+            assert!(rendered.contains(&format!("id=\"{id}\"")), "{id} missing");
+        }
     }
 
     #[test]
