@@ -1,0 +1,69 @@
+/* Admin surface only, linked from templates/admin/base.jinja.
+
+   Split out of that template's <style> block: it is a separate surface with its
+   own vocabulary, and inlining it meant re-sending it on every admin page load
+   and keeping it out of reach of anything else. */
+.admin-banner {
+  background: #7a1020;
+  color: #fff;
+  padding: .5rem 1rem;
+  margin-bottom: 1rem;
+  font-weight: bold;
+}
+.admin-banner a { color: #fff; }
+.admin-nav { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.admin-filters { margin-bottom: 1rem; display: flex; gap: .75rem; align-items: end; flex-wrap: wrap; }
+.admin-grid { display: flex; flex-wrap: wrap; gap: .75rem; }
+.admin-card { width: 160px; font-size: .85rem; }
+/* Post cards come from the shared component, so they arrive as
+   .posts-grid-item. Only the sizing differs inside the admin grid. */
+.admin-grid .posts-grid-item { width: 160px; font-size: .85rem; }
+.admin-grid.adjustable .posts-grid-item { width: auto; }
+.posts-grid-item.deleted img { opacity: .4; }
+.post-card-tags { margin-bottom: 2px; }
+/* Posts grid only: column count is driven by --admin-cols so the control
+   can change it without re-rendering. Cards drop their fixed width and let
+   the track size them. Because the variable lives on :root, batches swapped
+   in by the infinite-scroll sentinel pick it up with no extra wiring. */
+.admin-grid.adjustable {
+  display: grid;
+  grid-template-columns: repeat(var(--admin-cols, 6), minmax(0, 1fr));
+  align-items: start;
+}
+.admin-grid.adjustable .admin-card { width: auto; }
+.admin-grid.adjustable .admin-sentinel { grid-column: 1 / -1; }
+/* Fixed to the viewport so it stays reachable while scrolling an
+   infinitely-scrolling list. Offset from the edges so it does not sit flush
+   against the window chrome. */
+.admin-density {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .4rem .6rem;
+  font-size: .8rem;
+  background: var(--main-bg-color, #fff);
+  border: 1px solid var(--main-border-color, #ccc);
+  border-radius: 4px;
+}
+.admin-density output { min-width: 1.5em; text-align: right; font-weight: bold; }
+.admin-card img { width: 100%; height: auto; display: block; border: 1px solid #ccc; }
+.admin-card.deleted img { opacity: .4; }
+.banner-card { width: 260px; }
+.banner-card.flagged img { opacity: .35; outline: 2px solid #7a1020; }
+.admin-table { width: 100%; border-collapse: collapse; }
+.admin-table th, .admin-table td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #ddd; }
+.admin-tag { font-size: .7rem; padding: .1rem .3rem; border-radius: 3px; border: 1px solid currentColor; }
+.admin-tag.draft { color: #8a6d00; }
+.admin-tag.deleted { color: #7a1020; }
+.admin-tag.private { color: #4a2a7a; }
+.admin-tag.unlisted { color: #2a5a7a; }
+.admin-tag.sensitive { color: #7a1020; }
+.admin-pager { margin-top: 1rem; display: flex; gap: 1rem; }
+.admin-sort-active { font-weight: bold; }
+/* Full-width so it always enters the viewport and fires hx-trigger="revealed",
+   even when the last row of cards does not fill the grid. */
+.admin-sentinel { width: 100%; padding: 1rem; text-align: center; }

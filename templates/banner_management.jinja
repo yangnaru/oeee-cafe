@@ -15,7 +15,7 @@
                     <div class="banner-item" style="border: 1px solid #ccc; padding: 0.5rem; border-radius: 4px; {% if banner.is_active %}background-color: #e8f5e9;{% endif %}">
                         <img src="{{ image_url }}" alt="Banner" style="width: 100%; height: auto; display: block;">
                         <div style="margin-top: 0.5rem;">
-                            <div style="font-size: 0.875rem; color: #666;">
+                            <div style="font-size: 0.875rem; color: var(--main-text-muted-color);">
                                 {{ ftl_get_message("banner-management-created") }}: {{ banner.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}
                             </div>
                             {% if banner.is_active %}

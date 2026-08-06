@@ -5,7 +5,7 @@
 {% block content %}
   <div class="center">
     <h2>#{{ hashtag.display_name }}</h2>
-    <p style="color: #666; font-size: 14px; margin: 5px 0;">{{ hashtag.post_count }} {{ ftl_get_message("hashtag-post-count") }}</p>
+    <p style="color: var(--main-text-muted-color); font-size: 14px; margin: 5px 0;">{{ hashtag.post_count }} {{ ftl_get_message("hashtag-post-count") }}</p>
 
     <h3>{{ ftl_get_message("recent-drawings") }}</h3>
     {% if posts %}

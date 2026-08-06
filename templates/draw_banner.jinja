@@ -4,7 +4,9 @@
   ftl_get_message("profile-draw-banner") }}
 {% endblock title %}
 {% block content %}
-  <h2 class="center">{{ ftl_get_message("profile-draw-banner") }}</h2>
+  <div class="center">
+    <h2>{{ ftl_get_message("profile-draw-banner") }}</h2>
+  </div>
   <link rel="stylesheet"
         href="{{ '/static/neo/dist/neo.css' | cachebuster | safe }}"
         type="text/css" />

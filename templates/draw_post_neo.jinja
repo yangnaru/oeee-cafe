@@ -16,7 +16,8 @@
   {% endif %}
 {% endblock title %}
 {% block content %}
-<h2 class="center">
+<div class="center">
+<h2>
   {% if parent_post %}
     {% if community_name %}
       Re: {{ parent_post.title }} @ {{ community_name }}
@@ -31,6 +32,7 @@
     {% endif %}
   {% endif %}
 </h2>
+</div>
 <link rel="stylesheet"
       href="{{ '/static/neo/dist/neo.css' | cachebuster | safe }}"
       type="text/css" />

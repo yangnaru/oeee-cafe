@@ -1,3 +1,34 @@
+/* ---------------------------------------------------------------------------
+   Design tokens
+
+   Sizes and spacing used to be written as literals at every call site: eighteen
+   distinct pixel gaps and twenty font sizes across px, em and rem. Pull them
+   from here instead, so "one step of space" means the same thing on every page.
+   --------------------------------------------------------------------------- */
+:root {
+  /* Space: a 4px scale. --space-2 is the house gap between related things,
+     --space-5 the gap between sections. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Type: rem, so a size never depends on how deeply nested its element is.
+     The em-based sizes these replace did — the same 0.9em was a different
+     number of pixels in a comment than in a card. */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.875rem; /* 14px */
+  --text-base: 1rem; /* 16px */
+  --text-lg: 1.125rem; /* 18px */
+  --text-xl: 1.375rem; /* 22px */
+  --text-2xl: 1.75rem; /* 28px */
+
+  --leading-tight: 1.3;
+  --leading-normal: 1.5;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     --main-bg-color: white;
@@ -6,6 +37,15 @@
     --main-border-color: #3c6712;
     --main-highlight-color: #ef842d;
     --main-anchor-color: black;
+    /* Darker than the `gray` and `#666` it replaces, both of which failed
+       contrast against white (3.9:1 and — in dark mode — 2.4:1). This is
+       7:1. */
+    --main-text-muted-color: #595959;
+    --main-highlight-hover-color: #d97826;
+    --danger-color: #dc2626;
+    --danger-hover-color: #b91c1c;
+    --danger-bg-color: #fef2f2;
+    --danger-text-color: #991b1b;
   }
 }
 
@@ -17,13 +57,115 @@
     --main-border-color: #5a5a5a;
     --main-highlight-color: #ff8c00;
     --main-anchor-color: #e0e0e0;
+    /* 5.3:1 on the dark background. */
+    --main-text-muted-color: #a0a0a0;
+    --main-highlight-hover-color: #ffa333;
+    --danger-color: #ef4444;
+    --danger-hover-color: #dc2626;
+    --danger-bg-color: rgba(220, 38, 38, 0.12);
+    --danger-text-color: #fca5a5;
   }
+}
+
+/* Aliases for names the drafts page already used but nothing ever defined, so
+   every rule referencing them was dropped: the drafts CTA rendered as
+   colourless text on no background. Kept as aliases rather than renamed at the
+   call sites so the two vocabularies cannot drift apart again. */
+:root {
+  --secondary-bg-color: var(--main-bg-color);
+  --secondary-text-color: var(--main-text-muted-color);
+  --link-color: var(--main-anchor-color);
 }
 
 body {
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
   font-family: Arial, Helvetica, sans-serif;
+  /* Stated explicitly so the em-based sizes elsewhere have a known base. */
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+}
+
+/* ---------------------------------------------------------------------------
+   Headings
+
+   There was no h1–h6 rule anywhere in this file, so every heading's size and
+   margin came from the browser. That made appearance a function of tag choice,
+   and tag choice follows the document outline — two different things, which is
+   why a section heading looked one size on one page and another elsewhere.
+   --------------------------------------------------------------------------- */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: var(--space-5) 0 var(--space-3);
+  line-height: var(--leading-tight);
+  font-weight: 600;
+}
+
+h1 {
+  font-size: var(--text-2xl);
+}
+
+h2 {
+  font-size: var(--text-xl);
+}
+
+h3 {
+  font-size: var(--text-lg);
+}
+
+h4,
+h5,
+h6 {
+  font-size: var(--text-base);
+}
+
+/* The page owns the gap under the nav; the first block inside it does not add
+   its own. Two levels deep because several pages open with a <section> wrapper
+   around their heading. Without this the gap above a page title depended on
+   whether the heading sat inside .center or was .center — 0px on /draw against
+   20px on /collaborate, which is exactly the inconsistency this file grew. */
+main {
+  padding: var(--space-5) 0 var(--space-6);
+}
+
+main > .center > :first-child,
+main > .center > :first-child > :first-child {
+  margin-top: 0;
+}
+
+/* "Heading that opens a box or a section." This was five classes carrying five
+   different sizes — 1.2em, 1.2em, 1.3em, 1.2em and whatever h2 happened to be —
+   for one job. The names stay, because they are spread across a dozen
+   templates and renaming them buys nothing; they now resolve to one rule. */
+.section-heading,
+.home-section-title,
+.community-section-title,
+.post-move-preview-title,
+.notifications-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+  line-height: var(--leading-tight);
+  font-weight: 600;
+  word-wrap: break-word;
+}
+
+/* The title of the thing the page is about, as opposed to a section of it. */
+.post-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+  font-weight: 600;
+}
+
+/* Card titles: sized by the card's own context, so only weight is set here. */
+.draft-title,
+.post-card-title {
+  margin: 0;
+  font-weight: 600;
 }
 
 #appstage {
@@ -62,7 +204,7 @@ nav a:visited,
   display: flex;
   flex-direction: row;
   flex-flow: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /* The single source of truth for how wide a page is. The header reads the same
@@ -82,11 +224,11 @@ nav a:visited,
   border-color: var(--main-border-color);
   border-style: solid;
   color: var(--main-text-color);
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 
 .nav-bar #menubar {
-  padding: 0 8px;
+  padding: 0 var(--space-2);
 }
 
 .post-image {
@@ -102,10 +244,14 @@ nav a:visited,
   object-fit: contain;
 }
 
+/* The no-JS / first-visit column count lives here too. It used to sit a
+   thousand lines away in a "Grid Layout" section, so which half of .posts-grid
+   you found depended on where you looked. */
 .posts-grid {
   display: grid;
-  gap: 8px;
-  margin: 16px 0;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 170px), 1fr));
 }
 
 .posts-grid-item {
@@ -118,14 +264,10 @@ nav a:visited,
    entirely on touch. Each line clips rather than wraps so card heights stay
    uniform across the grid at any column count. */
 .post-card-meta {
-  padding: 4px 6px;
-  font-size: 12px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
   line-height: 1.35;
   border-top: 1px solid var(--main-border-color);
-}
-
-.post-card-title {
-  font-weight: 600;
 }
 
 .post-card-title,
@@ -137,7 +279,7 @@ nav a:visited,
 }
 
 .post-card-date {
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 .post-card-image {
@@ -166,7 +308,7 @@ nav a:visited,
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .banner {
@@ -178,7 +320,7 @@ nav a:visited,
 .banners-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 7px;
+  gap: var(--space-2);
 }
 
 .banners-grid-item img {
@@ -193,7 +335,7 @@ nav a:visited,
 }
 
 .comment-wrapper {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .comment-wrapper:last-child {
@@ -202,7 +344,7 @@ nav a:visited,
 
 .comment {
   border: 1px solid var(--main-border-color);
-  padding: 8px;
+  padding: var(--space-2);
   background-color: var(--main-bg-color);
 }
 
@@ -236,7 +378,7 @@ nav a:visited,
   color: inherit;
   display: block;
   cursor: pointer;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .comment-card-link:last-of-type {
@@ -257,19 +399,19 @@ nav a:visited,
 }
 
 .comment-post-reference {
-  margin-top: 4px;
-  padding-top: 4px;
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
   border-top: 1px solid var(--main-border-color);
-  font-size: 0.9em;
-  color: #666;
+  font-size: var(--text-sm);
+  color: var(--main-text-muted-color);
   font-style: italic;
 }
 
 .comment-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.9em;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
 }
 
 .comment-author {
@@ -277,22 +419,22 @@ nav a:visited,
 }
 
 .comment-handle {
-  font-size: 0.85em;
+  font-size: var(--text-xs);
 }
 
 .comment-timestamp {
   margin-left: auto;
-  font-size: 0.85em;
+  font-size: var(--text-xs);
 }
 
 .comment-content {
-  font-size: 0.95em;
+  font-size: var(--text-sm);
   line-height: 1.4;
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .comment-content p {
-  margin: 4px 0;
+  margin: var(--space-1) 0;
 }
 
 .comment-content p:first-child {
@@ -300,14 +442,14 @@ nav a:visited,
 }
 
 .comment-actions {
-  margin-top: 8px;
+  margin-top: var(--space-2);
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .comment-reply-btn {
-  font-size: 0.85em;
-  padding: 4px 8px;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-2);
   background: none;
   border: 1px solid var(--main-border-color);
   color: var(--main-text-color);
@@ -320,18 +462,18 @@ nav a:visited,
 }
 
 .comment-replies {
-  margin-left: 24px;
-  margin-top: 8px;
-  padding-left: 12px;
+  margin-left: var(--space-5);
+  margin-top: var(--space-2);
+  padding-left: var(--space-3);
   border-left: 2px solid var(--main-border-color);
 }
 
 #comments form {
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--main-border-color);
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: flex-start;
 }
 
@@ -339,10 +481,10 @@ nav a:visited,
   flex: 1;
   min-height: 40px;
   max-height: 200px;
-  padding: 10px 12px;
+  padding: var(--space-3) var(--space-3);
   border: 1px solid var(--main-border-color);
   font-family: inherit;
-  font-size: 0.95em;
+  font-size: var(--text-sm);
   resize: vertical;
   box-sizing: border-box;
 }
@@ -357,8 +499,8 @@ nav a:visited,
   background-color: var(--main-highlight-color);
   color: white;
   border: none;
-  padding: 10px 20px;
-  font-size: 0.95em;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s;
@@ -391,10 +533,6 @@ nav a:visited,
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
-}
-
-.notifications-title {
-  margin: 0;
 }
 
 .notification-mark-all-button {
@@ -431,7 +569,7 @@ nav a:visited,
 .notification-mark-read,
 .notification-delete {
   padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   cursor: pointer;
   background-color: var(--main-bg-color);
   border: 1px solid var(--main-border-color);
@@ -443,8 +581,8 @@ nav a:visited,
 }
 
 .notification-delete:hover {
-  background-color: #ff6b6b;
-  border-color: #ff6b6b;
+  background-color: var(--danger-color);
+  border-color: var(--danger-color);
   color: white;
 }
 
@@ -456,12 +594,12 @@ nav a:visited,
 }
 
 .notification-type {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--main-highlight-color);
 }
 
 .notification-time {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .notification-body {
@@ -494,7 +632,7 @@ nav a:visited,
 }
 
 .notification-emoji {
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
   vertical-align: middle;
 }
 
@@ -503,17 +641,20 @@ nav a:visited,
   padding: 0.5rem;
   background-color: var(--main-bg-color);
   border: 1px solid var(--main-border-color);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
+/* One name for de-emphasised text. It was three: this class, five hardcoded
+   #666 rules, and a scattering of opacity. None of them matched, and neither
+   colour met contrast in either theme. */
 .muted {
-  color: gray;
+  color: var(--main-text-muted-color);
 }
 
 .button-follow {
   background-color: var(--main-nav-bg-color);
   color: white;
-  padding: 8px;
+  padding: var(--space-2);
   border: solid 1px var(--main-border-color);
   cursor: pointer;
   height: 42px;
@@ -526,7 +667,7 @@ nav a:visited,
 .button-unfollow {
   background-color: red;
   color: white;
-  padding: 8px;
+  padding: var(--space-2);
   border: solid 1px var(--main-border-color);
   cursor: pointer;
   height: 42px;
@@ -545,7 +686,7 @@ nav a:visited,
 
 .followings-list {
   columns: 3;
-  column-gap: 4px;
+  column-gap: var(--space-1);
   list-style: none;
   padding-left: 0;
 }
@@ -553,8 +694,8 @@ nav a:visited,
 .followings-list li {
   break-inside: avoid-column;
   border: 1px solid var(--main-border-color);
-  padding: 8px;
-  margin: 4px 0;
+  padding: var(--space-2);
+  margin: var(--space-1) 0;
 }
 
 .followings-list li:first-of-type {
@@ -571,20 +712,20 @@ nav a:visited,
 
 .guestbook-entry {
   border: 1px solid var(--main-border-color);
-  padding: 8px;
-  margin: 8px 0;
+  padding: var(--space-2);
+  margin: var(--space-2) 0;
 }
 
 .guestbook-reply {
   border: 1px solid var(--main-border-color);
-  padding: 8px;
-  margin: 8px 0;
+  padding: var(--space-2);
+  margin: var(--space-2) 0;
 }
 
 .flex-inline {
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 
@@ -595,19 +736,7 @@ nav a:visited,
 .post-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 32px;
-}
-
-.section-heading {
-  margin-top: 0;
-  margin-bottom: 12px;
-  font-size: 1.2em;
-  font-weight: 600;
-  color: var(--main-text-color);
-}
-
-.parent-post-section {
-  /* Spacing handled by post-sidebar gap */
+  gap: var(--space-6);
 }
 
 .post-card:hover {
@@ -618,8 +747,8 @@ nav a:visited,
 .post-detail-container {
   display: flex;
   flex-direction: row;
-  gap: 24px;
-  padding: 20px;
+  gap: var(--space-5);
+  padding: var(--space-5);
   border: 1px solid var(--main-border-color);
 }
 
@@ -633,27 +762,20 @@ nav a:visited,
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .post-header {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.post-title {
-  font-size: 1.5em;
-  font-weight: 600;
-  margin: 0;
-  line-height: 1.3;
+  gap: var(--space-2);
 }
 
 .post-author-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px 0;
+  gap: var(--space-1);
+  padding: var(--space-3) 0;
   border-top: 1px solid var(--main-border-color);
   border-bottom: 1px solid var(--main-border-color);
 }
@@ -661,37 +783,37 @@ nav a:visited,
 .post-metadata {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.9em;
-  color: #666;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--main-text-muted-color);
 }
 
 .post-metadata p {
-  margin: 4px 0;
+  margin: var(--space-1) 0;
 }
 
 .post-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-top: 12px;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
   border-top: 1px solid var(--main-border-color);
 }
 
 .post-action-buttons {
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .post-action-buttons button {
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
-  padding: 10px 16px;
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--main-border-color);
   cursor: pointer;
-  font-size: 0.95em;
+  font-size: var(--text-sm);
 }
 
 .post-action-buttons button:hover {
@@ -710,28 +832,24 @@ nav a:visited,
 .post-comments {
   flex-grow: 1;
   border: 1px solid var(--main-border-color);
-  padding: 20px;
+  padding: var(--space-5);
 }
 
 .post-comments h2 {
   margin-top: 0;
-  margin-bottom: 16px;
-  font-size: 1.3em;
-  font-weight: 600;
-  color: var(--main-text-color);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-xl);
 }
 
 .post-child-posts {
   border: 1px solid var(--main-border-color);
-  padding: 20px;
+  padding: var(--space-5);
 }
 
 .post-child-posts h2 {
   margin-top: 0;
-  margin-bottom: 16px;
-  font-size: 1.3em;
-  font-weight: 600;
-  color: var(--main-text-color);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-xl);
 }
 
 .post-content {
@@ -742,7 +860,7 @@ nav a:visited,
 .post-menu {
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /* Responsive: Stack on mobile */
@@ -753,21 +871,21 @@ nav a:visited,
 
   /* Comments section responsive */
   .post-comments {
-    padding: 12px;
+    padding: var(--space-3);
   }
 
   .post-comments h2 {
-    font-size: 1.1em;
+    font-size: var(--text-lg);
   }
 
   .comment {
-    padding: 10px;
-    gap: 10px;
+    padding: var(--space-3);
+    gap: var(--space-3);
   }
 
   .comment-header {
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--space-1);
   }
 
   .comment-timestamp {
@@ -782,17 +900,17 @@ nav a:visited,
 
   #comments form {
     flex-direction: column;
-    gap: 12px;
+    gap: var(--space-3);
   }
 
   #comments button[type="submit"] {
     width: 100%;
-    padding: 12px 20px;
+    padding: var(--space-3) var(--space-5);
   }
 }
 
 .post-share {
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 
 .sensitive {
@@ -808,24 +926,18 @@ nav a:visited,
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  margin: 24px 0 12px 0;
-}
-
-.home-section-title {
-  margin: 0;
-  font-size: 1.2em;
-  font-weight: 600;
-  line-height: 1.4;
+  margin: var(--space-5) 0 var(--space-3) 0;
 }
 
 .community-badges {
   display: grid;
-  gap: 12px;
-  margin: 16px 0;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
 }
 
 .community-badge {
-  padding: 12px;
+  padding: var(--space-3);
   border: solid 1px var(--main-border-color);
   line-height: 1.4;
 }
@@ -849,7 +961,7 @@ nav a:visited,
   display: flex;
   justify-content: center;
   flex-direction: row;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 #cucumber-canvas {
@@ -873,19 +985,19 @@ nav a:visited,
 #cucumber-controls-drawing {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 #cucumber-color-picker-container {
   display: flex;
   flex-direction: row;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 /* Post Reactions */
 
 .post-reactions-container {
-  padding: 20px;
+  padding: var(--space-5);
   border: 1px solid var(--main-border-color);
 }
 
@@ -893,16 +1005,16 @@ nav a:visited,
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
   align-items: center;
 }
 
 .reaction-total {
   color: var(--main-text-color);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: bold;
-  padding: 6px 12px;
-  margin-right: 4px;
+  padding: var(--space-2) var(--space-3);
+  margin-right: var(--space-1);
   border: 1px solid var(--main-border-color);
   display: inline-block;
 }
@@ -911,12 +1023,12 @@ nav a:visited,
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
   border: 1px solid var(--main-border-color);
-  padding: 6px 12px;
-  font-size: 14px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 50px;
   justify-content: center;
 }
@@ -935,11 +1047,11 @@ nav a:visited,
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
   border: 1px solid var(--main-border-color);
-  padding: 6px 12px;
-  font-size: 14px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 50px;
   justify-content: center;
   opacity: 0.7;
@@ -948,18 +1060,18 @@ nav a:visited,
 /* Hashtags */
 
 .post-hashtags {
-  padding: 8px 0;
+  padding: var(--space-2) 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .hashtag-link {
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
   border: 1px solid var(--main-highlight-color);
-  padding: 4px 10px;
-  font-size: 14px;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 
@@ -969,16 +1081,16 @@ nav a:visited,
 
 .trending-hashtags {
   padding: 0;
-  margin: 0 0 24px 0;
+  margin: 0 0 var(--space-5) 0;
   background-color: var(--main-bg-color);
 }
 
 .trending-hashtags h3 {
   margin-top: 0;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--main-border-color);
-  font-size: 1.1em;
+  font-size: var(--text-lg);
   font-weight: 600;
 }
 
@@ -988,7 +1100,7 @@ nav a:visited,
   margin: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   line-height: 1.8;
 }
 
@@ -999,9 +1111,9 @@ nav a:visited,
 .hashtag-item a {
   display: inline-block;
   text-decoration: none;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--main-border-color);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
@@ -1013,14 +1125,14 @@ nav a:visited,
 .hashtag-post-count {
   color: var(--main-text-color);
   opacity: 0.8;
-  font-size: 13px;
+  font-size: var(--text-xs);
   font-weight: 500;
-  margin-left: 4px;
+  margin-left: var(--space-1);
 }
 
 .form-hint {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--main-text-color);
   opacity: 0.7;
   margin-top: 2px;
@@ -1053,7 +1165,7 @@ nav a:visited,
 }
 
 .hashtag-autocomplete-item {
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   cursor: pointer;
   border-bottom: 1px solid var(--main-border-color);
 }
@@ -1069,31 +1181,31 @@ nav a:visited,
 /* Hashtag Discovery Page */
 
 .hashtag-discovery-controls {
-  margin: 16px 0;
+  margin: var(--space-4) 0;
 }
 
 .hashtag-search-form {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
 .hashtag-search-input {
   flex-grow: 1;
-  padding: 8px;
+  padding: var(--space-2);
   border: 1px solid var(--main-border-color);
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .hashtag-search-form button {
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   background-color: var(--main-nav-bg-color);
   border: 1px solid var(--main-border-color);
   color: var(--main-text-color);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .hashtag-search-form button:hover {
@@ -1102,16 +1214,16 @@ nav a:visited,
 
 .hashtag-sort-controls {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
 }
 
 .hashtag-sort-controls a {
-  padding: 4px 12px;
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--main-border-color);
   text-decoration: none;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .hashtag-sort-controls a:hover {
@@ -1125,17 +1237,17 @@ nav a:visited,
 }
 
 .hashtag-search-info {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--main-text-color);
   opacity: 0.8;
-  margin: 16px 0;
+  margin: var(--space-4) 0;
 }
 
 .hashtag-discovery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-  margin-top: 16px;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 .hashtag-discovery-item {
@@ -1148,28 +1260,28 @@ nav a:visited,
 
 .hashtag-discovery-item a {
   display: block;
-  padding: 16px;
+  padding: var(--space-4);
   text-decoration: none;
   color: var(--main-text-color);
 }
 
 .hashtag-discovery-item .hashtag-name {
   display: block;
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: bold;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .hashtag-discovery-item .hashtag-count {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-xs);
   opacity: 0.7;
 }
 
 /* Empty State Styling */
 
 .empty-state {
-  padding: 32px;
+  padding: var(--space-6);
   text-align: center;
   color: var(--main-text-color);
   opacity: 0.7;
@@ -1180,26 +1292,20 @@ nav a:visited,
 
 .community-post-count {
   opacity: 0.7;
-  font-size: 13px;
+  font-size: var(--text-xs);
 }
 
 /* Trending Hashtags Section Layout */
 
 .recent-comments-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-5);
 }
 
 .trending-hashtags-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-5);
 }
 
 /* Grid Layout */
-
-/* No-JS / first-visit fallback: auto-fill picks a sensible column count for the
-   container without any script. */
-.posts-grid {
-  grid-template-columns: repeat(auto-fill, minmax(var(--card-min, 170px), 1fr));
-}
 
 /* Once the size control has a value, the column count is explicit.
    auto-fill + minmax made the control feel broken on narrow screens: column
@@ -1223,15 +1329,11 @@ nav a:visited,
   }
 }
 
-.community-badges {
-  grid-template-columns: repeat(2, 1fr);
-}
-
 /* Infinite Scroll Loading Indicator */
 
 .infinite-scroll-sentinel {
   grid-column: 1 / -1;
-  padding: 32px;
+  padding: var(--space-6);
   text-align: center;
   color: var(--main-text-color);
   opacity: 0;
@@ -1262,36 +1364,36 @@ nav a:visited,
 /* Draft Management Styles */
 
 .drafts-header {
-  margin-bottom: 24px;
-  padding: 20px;
+  margin-bottom: var(--space-5);
+  padding: var(--space-5);
   border: 1px solid var(--main-border-color);
   background-color: var(--secondary-bg-color);
 }
 
 .drafts-header h2 {
-  margin: 0 0 8px 0;
+  margin: 0 0 var(--space-2) 0;
 }
 
 .drafts-count {
   color: var(--secondary-text-color);
-  font-size: 0.9em;
+  font-size: var(--text-sm);
   margin: 0;
 }
 
 .drafts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  margin-bottom: 32px;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
 }
 
 .draft-card {
   border: 1px solid var(--main-border-color);
   background-color: var(--secondary-bg-color);
-  padding: 16px;
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .draft-card:hover {
@@ -1299,13 +1401,13 @@ nav a:visited,
 }
 
 .draft-card-header {
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .draft-metadata {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .draft-community {
@@ -1322,7 +1424,7 @@ nav a:visited,
 }
 
 .draft-date {
-  font-size: 0.85em;
+  font-size: var(--text-sm);
   color: var(--secondary-text-color);
 }
 
@@ -1341,18 +1443,12 @@ nav a:visited,
 .draft-card-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.draft-title {
-  margin: 0;
-  font-size: 1em;
-  font-weight: 600;
+  gap: var(--space-2);
 }
 
 .draft-description {
   margin: 0;
-  font-size: 0.9em;
+  font-size: var(--text-sm);
   color: var(--secondary-text-color);
   line-height: 1.4;
 }
@@ -1369,20 +1465,20 @@ nav a:visited,
 
 .drafts-empty {
   text-align: center;
-  padding: 64px 32px;
+  padding: 64px var(--space-6);
   background-color: var(--secondary-bg-color);
   border: 1px solid var(--main-border-color);
 }
 
 .drafts-empty-message {
-  font-size: 1.1em;
+  font-size: var(--text-lg);
   color: var(--secondary-text-color);
-  margin-bottom: 24px;
+  margin-bottom: var(--space-5);
 }
 
 .drafts-empty-cta {
   display: inline-block;
-  padding: 12px 32px;
+  padding: var(--space-3) var(--space-6);
   background-color: var(--link-color);
   color: var(--secondary-bg-color);
   text-decoration: none;
@@ -1397,40 +1493,40 @@ nav a:visited,
 
 fieldset {
   border: 1px solid var(--main-border-color);
-  padding: 20px;
-  margin: 16px 0;
+  padding: var(--space-5);
+  margin: var(--space-4) 0;
   background-color: var(--main-bg-color);
 }
 
 legend {
-  padding: 4px 12px;
+  padding: var(--space-1) var(--space-3);
   font-weight: 600;
-  font-size: 1.1em;
+  font-size: var(--text-lg);
   color: var(--main-text-color);
   background-color: var(--main-nav-bg-color);
   border: 1px solid var(--main-border-color);
 }
 
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .form-group label {
   font-weight: 500;
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--main-text-color);
 }
 
 .form-group input[type="text"],
 .form-group textarea {
-  padding: 8px;
+  padding: var(--space-2);
   border: 1px solid var(--main-border-color);
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-family: inherit;
   width: 100%;
   box-sizing: border-box;
@@ -1450,8 +1546,8 @@ legend {
 
 .form-group input[type="text"]:invalid:focus,
 .form-group textarea:invalid:focus {
-  border-color: #ff6b6b;
-  outline-color: #ff6b6b;
+  border-color: var(--danger-color);
+  outline-color: var(--danger-color);
 }
 
 .form-group textarea {
@@ -1462,7 +1558,7 @@ legend {
 .form-group-checkbox {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .form-group-checkbox input[type="checkbox"] {
@@ -1478,18 +1574,18 @@ legend {
 }
 
 .form-actions {
-  margin-top: 20px;
+  margin-top: var(--space-5);
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .form-actions input[type="submit"],
 .form-actions button {
-  padding: 10px 24px;
+  padding: var(--space-3) var(--space-5);
   background-color: var(--main-nav-bg-color);
   border: 1px solid var(--main-border-color);
   color: var(--main-text-color);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
@@ -1511,33 +1607,33 @@ legend {
 
 .post-preview-section {
   border: 1px solid var(--main-border-color);
-  padding: 20px;
-  margin-bottom: 24px;
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
   background-color: var(--main-bg-color);
 }
 
 .post-preview-section h2 {
   margin-top: 0;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--main-border-color);
-  font-size: 1.3em;
+  font-size: var(--text-xl);
   font-weight: 600;
 }
 
 .post-preview-meta {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .post-preview-meta p {
-  margin: 4px 0;
-  font-size: 14px;
+  margin: var(--space-1) 0;
+  font-size: var(--text-sm);
 }
 
 .post-preview-image {
   display: flex;
   justify-content: center;
-  margin-top: 16px;
+  margin-top: var(--space-4);
 }
 
 .post-preview-image img {
@@ -1549,60 +1645,55 @@ legend {
 /* Delete Form */
 
 .delete-form {
-  margin-top: 24px;
-  padding-top: 24px;
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
   border-top: 1px solid var(--main-border-color);
 }
 
 .delete-button {
-  padding: 8px 20px;
-  background-color: #ff6b6b;
-  border: 1px solid #ff6b6b;
+  padding: var(--space-2) var(--space-5);
+  background-color: var(--danger-color);
+  border: 1px solid var(--danger-color);
   color: white;
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
 }
 
 .delete-button:hover {
-  background-color: #ff5252;
-  border-color: #ff5252;
+  background-color: var(--danger-hover-color);
+  border-color: var(--danger-hover-color);
 }
 
 .delete-button:focus {
-  outline: 2px solid #ff6b6b;
+  outline: 2px solid var(--danger-color);
   outline-offset: 2px;
 }
 
 /* Community Page */
 
 .community-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-5);
 }
 
 .community-handle {
-  color: #666;
-  font-size: 14px;
-  margin: 5px 0;
+  color: var(--main-text-muted-color);
+  font-size: var(--text-sm);
+  margin: var(--space-1) 0;
   user-select: all;
-}
-
-.community-description {
-  margin: 12px 0;
-  line-height: 1.5;
 }
 
 .community-stats-card {
   border: 1px solid var(--main-border-color);
   background-color: var(--main-nav-bg-color);
-  padding: 16px;
-  margin-bottom: 32px;
-  font-size: 0.95em;
+  padding: var(--space-4);
+  margin-bottom: var(--space-6);
+  font-size: var(--text-sm);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .community-stats-content {
@@ -1614,11 +1705,11 @@ legend {
 }
 
 .community-stats-draw-form input[type="submit"] {
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   background-color: var(--main-bg-color);
   border: 1px solid var(--main-border-color);
   color: var(--main-text-color);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -1632,47 +1723,40 @@ legend {
 .community-drawing-card {
   border: 1px solid var(--main-border-color);
   background-color: var(--main-bg-color);
-  padding: 16px;
-  margin-bottom: 32px;
+  padding: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
 .community-menu {
-  margin-top: 12px;
+  margin-top: var(--space-3);
 }
 
 .community-section {
-  margin-bottom: 32px;
+  margin-bottom: var(--space-6);
 }
 
 .community-section:last-child {
   margin-bottom: 0;
 }
 
-.community-section-title {
-  margin-top: 0;
-  margin-bottom: 8px;
-  font-size: 1.3em;
-  font-weight: 600;
-}
-
 .community-section-subtitle {
-  color: #666;
-  font-size: 0.9em;
-  margin-bottom: 16px;
-  margin-top: -4px;
+  color: var(--main-text-muted-color);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+  margin-top: -var(--space-1);
 }
 
 .community-section-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 12px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
 }
 
 .community-section-link {
   text-decoration: underline;
-  font-size: 0.95em;
+  font-size: var(--text-sm);
   flex-shrink: 0;
   align-self: center;
 }
@@ -1680,24 +1764,24 @@ legend {
 .community-drawing-card form {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 
 .community-drawing-card select {
-  padding: 6px 8px;
+  padding: var(--space-2) var(--space-2);
   border: 1px solid var(--main-border-color);
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .community-drawing-card input[type="submit"] {
-  padding: 8px 16px;
+  padding: var(--space-2) var(--space-4);
   background-color: var(--main-nav-bg-color);
   border: 1px solid var(--main-border-color);
   color: var(--main-text-color);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   margin-left: auto;
@@ -1714,20 +1798,20 @@ legend {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
-  padding-bottom: 20px;
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-5);
   border-bottom: 1px solid var(--main-border-color);
 }
 
 .post-move-header h2 {
   margin: 0;
-  font-size: 1.75em;
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--main-text-color);
 }
 
 .post-move-preview {
-  margin-bottom: 32px;
+  margin-bottom: var(--space-6);
 }
 
 .post-move-preview-link {
@@ -1743,9 +1827,9 @@ legend {
 
 .post-move-preview-content {
   border: 1px solid var(--main-border-color);
-  padding: 20px;
+  padding: var(--space-5);
   display: flex;
-  gap: 20px;
+  gap: var(--space-5);
   align-items: center;
   background-color: var(--main-bg-color);
   cursor: pointer;
@@ -1765,16 +1849,8 @@ legend {
   min-width: 0;
 }
 
-.post-move-preview-title {
-  margin: 0;
-  font-size: 1.2em;
-  font-weight: 700;
-  line-height: 1.4;
-  word-wrap: break-word;
-}
-
 .community-current-section {
-  margin-bottom: 32px;
+  margin-bottom: var(--space-6);
 }
 
 .community-current-card {
@@ -1789,52 +1865,52 @@ legend {
 
 .community-current-badge {
   display: inline-block;
-  padding: 3px 10px;
+  padding: var(--space-1) var(--space-3);
   background-color: var(--main-highlight-color);
   color: white;
-  font-size: 0.75em;
+  font-size: var(--text-xs);
   font-weight: 700;
-  margin-left: 8px;
+  margin-left: var(--space-2);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .community-private-badge {
   display: inline-block;
-  padding: 3px 10px;
-  background-color: #666;
+  padding: var(--space-1) var(--space-3);
+  background-color: var(--main-text-muted-color);
   color: white;
-  font-size: 0.75em;
+  font-size: var(--text-xs);
   font-weight: 700;
-  margin-left: 8px;
+  margin-left: var(--space-2);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .community-known-badge {
   display: inline-block;
-  padding: 3px 10px;
+  padding: var(--space-1) var(--space-3);
   background-color: #4a90e2;
   color: white;
-  font-size: 0.75em;
+  font-size: var(--text-xs);
   font-weight: 700;
-  margin-left: 8px;
+  margin-left: var(--space-2);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .community-move-section {
-  margin-bottom: 32px;
+  margin-bottom: var(--space-6);
 }
 
 .community-move-search {
   width: 100%;
-  padding: 14px 18px;
-  font-size: 16px;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-base);
   border: 1px solid var(--main-border-color);
   background-color: var(--main-bg-color);
   color: var(--main-text-color);
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
   box-sizing: border-box;
   font-family: inherit;
 }
@@ -1854,7 +1930,7 @@ legend {
 }
 
 .community-sort {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -1863,12 +1939,12 @@ legend {
 .community-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .community-move-card {
   border: 1px solid var(--main-border-color);
-  padding: 20px;
+  padding: var(--space-5);
   background-color: var(--main-bg-color);
 }
 
@@ -1879,7 +1955,7 @@ legend {
 
 .community-move-card-content {
   display: flex;
-  gap: 20px;
+  gap: var(--space-5);
   align-items: flex-start;
 }
 
@@ -1894,7 +1970,7 @@ legend {
 }
 
 .community-move-card-header {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 /* Responsive: Stack on mobile */
@@ -1902,17 +1978,17 @@ legend {
   .post-move-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
+    gap: var(--space-4);
   }
 
   .post-move-header h2 {
-    font-size: 1.5em;
+    font-size: var(--text-xl);
   }
 
   .post-move-preview-content {
     flex-direction: column;
-    padding: 16px;
-    gap: 16px;
+    padding: var(--space-4);
+    gap: var(--space-4);
   }
 
   .post-move-preview-image {
@@ -1920,7 +1996,7 @@ legend {
   }
 
   .community-move-card {
-    padding: 16px;
+    padding: var(--space-4);
   }
 
   .community-move-card-content {
@@ -1933,7 +2009,7 @@ legend {
 }
 
 .community-name {
-  font-size: 1.15em;
+  font-size: var(--text-lg);
   font-weight: 700;
   text-decoration: none;
   color: var(--main-text-color);
@@ -1946,36 +2022,37 @@ legend {
 }
 
 .community-owner-handle {
-  font-size: 0.85em;
-  margin: 6px 0 0 0;
+  font-size: var(--text-sm);
+  margin: var(--space-2) 0 0 0;
   font-weight: 500;
 }
 
+/* Was declared twice, 350 lines apart, with different margins and line
+   heights; this one won every property, so the other was dead weight. */
 .community-description {
-  margin: 12px 0 0 0;
-  line-height: 1.6;
-  color: var(--main-text-color);
-  opacity: 0.85;
-  font-size: 0.95em;
+  margin: var(--space-3) 0 0 0;
+  line-height: var(--leading-normal);
+  color: var(--main-text-muted-color);
+  font-size: var(--text-sm);
 }
 
 .community-stats-inline {
-  margin: 10px 0 0 0;
-  font-size: 0.85em;
+  margin: var(--space-3) 0 0 0;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 
 .community-move-form {
-  margin-top: 16px;
+  margin-top: var(--space-4);
 }
 
 .btn {
   display: inline-block;
-  padding: 10px 20px;
+  padding: var(--space-3) var(--space-5);
   background-color: var(--main-bg-color);
   border: 1px solid var(--main-border-color);
   color: var(--main-text-color);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   text-decoration: none;
@@ -2004,7 +2081,7 @@ legend {
 
 .community-move-no-results {
   text-align: center;
-  padding: 32px;
+  padding: var(--space-6);
   color: var(--main-text-color);
   opacity: 0.7;
   font-style: italic;
@@ -2013,7 +2090,7 @@ legend {
 .community-thumbnails {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /* Responsive: 2 columns on small tablets */
@@ -2045,10 +2122,10 @@ legend {
 }
 
 .community-no-posts-message {
-  font-size: 0.85em;
+  font-size: var(--text-sm);
   font-style: italic;
   margin: 0;
-  padding: 32px 12px;
+  padding: var(--space-6) var(--space-3);
   background-color: rgba(128, 128, 128, 0.05);
   border: 1px dashed var(--main-border-color);
   text-align: center;
@@ -2058,3 +2135,380 @@ legend {
   justify-content: center;
 }
 
+/* ---------------------------------------------------------------------------
+   Components hoisted out of template <style> blocks
+
+   These lived inline in the templates that used them — 223 lines in
+   collaborate_lobby.jinja alone — where nothing else could reach them, so the
+   next page needing a form or a card grid wrote its own.
+   --------------------------------------------------------------------------- */
+
+/* Feed density control. Shared by /, /home and the collaborate gallery, so it
+   cannot live in any one of their templates. The --page-width override that
+   goes with it stays inline: it is a per-page decision, not a component. */
+.thumbnail-size {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  font-size: var(--text-sm);
+}
+
+.thumbnail-size input[type="range"] {
+  max-width: 200px;
+}
+
+.thumbnail-size output {
+  min-width: 1.5em;
+  text-align: right;
+  font-weight: bold;
+}
+
+/* Phones use a fixed three-column grid, so the control has nothing to do. */
+@media (max-width: 600px) {
+  .thumbnail-size {
+    display: none;
+  }
+}
+
+/* Label column sized to the longest label, control column takes the rest.
+   Capped so controls stay a readable length rather than running the width of
+   whatever box they sit in. */
+.session-form {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-3) var(--space-3);
+  align-items: baseline;
+  max-width: 520px;
+}
+
+.session-form > label {
+  font-weight: normal;
+  color: var(--main-text-muted-color);
+}
+
+.field {
+  min-width: 0;
+}
+
+/* Rows with no label of their own span both columns. */
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.session-form select,
+.session-form input[type="text"] {
+  font-family: inherit;
+  font-size: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Help text attached to the field it explains, rather than floating loose
+   under the form as two unattached <small> paragraphs. */
+.field-help {
+  margin: var(--space-1) 0 0 0;
+  font-size: var(--text-sm);
+  color: var(--main-text-muted-color);
+  line-height: 1.4;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin: 0;
+}
+
+/* Combobox: one input with the list overlaid beneath it. Positioned rather
+   than in flow so opening it does not shove the rest of the form down. */
+.combobox {
+  position: relative;
+}
+
+.combobox-input {
+  font-family: inherit;
+  font-size: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.combobox-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  max-height: 280px;
+  overflow-y: auto;
+  background-color: var(--main-bg-color);
+  border: 1px solid var(--main-border-color);
+  border-top: none;
+}
+
+.combobox-group-label {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--main-text-muted-color);
+  background-color: var(--main-nav-bg-color);
+  border-bottom: 1px solid var(--main-border-color);
+}
+
+.combobox-option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+}
+
+/* One highlight for both the pointer and the arrow keys, so the two never
+   disagree about which row Enter would take. */
+.combobox-option:hover,
+.combobox-option[data-active] {
+  background-color: var(--main-nav-bg-color);
+}
+
+.combobox-option[aria-selected="true"] .combobox-option-name {
+  font-weight: bold;
+}
+
+.combobox-option-meta {
+  font-size: var(--text-sm);
+  color: var(--main-text-muted-color);
+  white-space: nowrap;
+}
+
+.combobox-empty {
+  padding: var(--space-1) var(--space-2);
+  color: var(--main-text-muted-color);
+}
+
+/* Collaborative session cards */
+
+.create-session-section {
+  background-color: var(--main-nav-bg-color);
+  border: 1px solid var(--main-border-color);
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+  /* The feed pages widen --page-width to 1600px so the grid has room; a form
+     of short controls stretched that far reads as an empty box. */
+  max-width: 829px;
+}
+
+.session-community {
+  margin: var(--space-1) 0 0 0;
+  font-size: var(--text-sm);
+}
+
+/* A full session stays listed rather than disappearing, so its card has to say
+   why there is no join link. */
+.session-join-disabled {
+  border: 1px solid var(--main-border-color);
+  padding: var(--space-1) var(--space-2);
+  display: inline-block;
+  color: var(--main-text-muted-color);
+}
+
+.active-sessions-section {
+  margin-top: var(--space-2);
+}
+
+.active-sessions-section h3 {
+  padding: var(--space-2);
+  background-color: var(--main-nav-bg-color);
+  border: 1px solid var(--main-border-color);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.sessions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-2);
+}
+
+.session-card {
+  border: 1px solid var(--main-border-color);
+  padding: var(--space-2);
+  background-color: var(--main-bg-color);
+}
+
+.session-header h4 {
+  margin: 0 0 var(--space-1) 0;
+}
+
+.session-header small {
+  color: var(--main-text-muted-color);
+}
+
+.session-info {
+  margin: var(--space-2) 0;
+}
+
+.session-meta {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.session-meta span {
+  background-color: var(--main-nav-bg-color);
+  border: 1px solid var(--main-border-color);
+  padding: 2px var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.session-actions {
+  text-align: right;
+}
+
+.session-actions input[type="submit"],
+.session-actions a {
+  background-color: var(--main-nav-bg-color);
+  border: 1px solid var(--main-border-color);
+  color: var(--main-text-color);
+  padding: var(--space-1) var(--space-2);
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.session-actions input[type="submit"]:hover,
+.session-actions a:hover {
+  background-color: var(--main-border-color);
+}
+
+/* Data table. Was inline in community_members.jinja; nothing else could use
+   it, which is why no other table on the site is styled at all. */
+.members-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-4) 0;
+}
+
+.members-table th,
+.members-table td {
+  padding: var(--space-3);
+  text-align: left;
+  border: 1px solid var(--main-border-color);
+}
+
+.members-table thead th {
+  background-color: var(--main-nav-bg-color);
+  font-weight: 600;
+  border-bottom: 2px solid var(--main-border-color);
+}
+
+.members-table tbody tr:hover {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+.members-table tbody tr:nth-child(even) {
+  background-color: rgba(128, 128, 128, 0.02);
+}
+
+.invite-section,
+.pending-invitations-section,
+.members-section {
+  margin-bottom: var(--space-6);
+}
+
+.btn-danger {
+  background-color: var(--danger-color);
+  color: white;
+  border: 1px solid var(--danger-color);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.btn-danger:hover {
+  background-color: var(--danger-hover-color);
+  border-color: var(--danger-hover-color);
+}
+
+/* Destructive area on the community edit form. The tokens it reads used to be
+   defined only in that template's dark-mode block, so light mode fell through
+   to literals inlined at each call site. */
+.danger-zone {
+  margin-top: var(--space-6);
+  padding: var(--space-5);
+  border-top: 2px solid var(--danger-color);
+  background-color: var(--danger-bg-color);
+}
+
+.danger-zone h3,
+.danger-zone p {
+  color: var(--danger-text-color);
+}
+
+.danger-zone h3 {
+  margin-top: 0;
+}
+
+/* Stacked-label form. Same shape as .session-form's fields but full width,
+   used by the community create/edit forms. */
+.create-community-form {
+  max-width: 600px;
+}
+
+.create-community-form .form-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-4);
+}
+
+.create-community-form .form-field label {
+  margin-bottom: var(--space-1);
+  font-weight: 500;
+}
+
+.create-community-form .form-field input[type="text"],
+.create-community-form .form-field textarea {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--main-border-color);
+  font-family: inherit;
+  font-size: var(--text-base);
+  box-sizing: border-box;
+}
+
+.create-community-form .form-field textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.create-community-form fieldset {
+  margin: var(--space-5) 0;
+  border: 1px solid var(--main-border-color);
+  padding: var(--space-4);
+}
+
+.create-community-form fieldset legend {
+  font-weight: 600;
+  padding: 0 var(--space-2);
+}
+
+.create-community-form fieldset p {
+  margin: var(--space-3) 0;
+}
+
+.create-community-form fieldset p:first-of-type {
+  margin-top: var(--space-2);
+}
+
+.create-community-form fieldset p:last-of-type {
+  margin-bottom: var(--space-2);
+}
+
+.create-community-form input[type="submit"] {
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-base);
+  cursor: pointer;
+}

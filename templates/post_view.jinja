@@ -14,11 +14,11 @@
             </span>
           </div>
           {% if post.content %}
-            <div style="color: #666; font-size: 0.85em; margin-top: 4px; line-height: 1.3;">
+            <div style="color: var(--main-text-muted-color); font-size: 0.85em; margin-top: 4px; line-height: 1.3;">
               {{ post.content[:100] }}{% if post.content|length > 100 %}...{% endif %}
             </div>
           {% endif %}
-          <div style="color: #666; font-size: 0.9em; margin-top: 4px;">
+          <div style="color: var(--main-text-muted-color); font-size: 0.9em; margin-top: 4px;">
             by <span style="font-weight: normal;">{{ post.user_display_name }}</span>
             <span class="muted">{{ post.user_actor_handle }}</span>
             {% if post.published_at_formatted %}
