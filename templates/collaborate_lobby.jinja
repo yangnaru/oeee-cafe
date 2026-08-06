@@ -2,6 +2,23 @@
 {% block title %}
   {{ super() }} | {{ ftl_get_message("collaborate-title") }}
 {% endblock title %}
+{% block head %}
+  {# Same page width and column-restore script the / and /home feeds use, so the
+     finished-drawings grid behaves identically here. #}
+  {% include "post_feed_head.jinja" %}
+{% endblock head %}
+{# One tier of the community picker. data-search is what the filter box matches
+   against, lowercased server-side so the script only has to lowercase the
+   query. #}
+{% macro community_options(communities, group_label, selected_slug) %}
+  {% if communities %}
+    <optgroup label="{{ group_label }}">
+      {% for community in communities %}
+        <option value="{{ community.id }}" data-search="{{ (community.name ~ " " ~ community.slug ~ " @" ~ community.owner_login_name ~ " " ~ (community.description or ""))|lower }}" {% if community.slug == selected_slug %}selected{% endif %}>{{ community.name }}{% if community.visibility == "unlisted" %} ({{ ftl_get_message("community-badge-unlisted") }}){% elif community.visibility == "private" %} ({{ ftl_get_message("community-badge-private") }}){% endif %}</option>
+      {% endfor %}
+    </optgroup>
+  {% endif %}
+{% endmacro %}
 {% block content %}
   <div class="center">
     <h2>{{ ftl_get_message("collaborate-title") }}</h2>
@@ -41,19 +58,28 @@
           </label>
         </p>
         <small>{{ ftl_get_message("collaborate-public-session-description") }}</small>
-        {% if postable_communities %}
-          <p>
+        {% if has_postable_communities %}
+          <div class="community-field">
             <label for="session-community">{{ ftl_get_message("collaborate-community-label") }}:</label>
+            {# The select is the working control on its own; the filter box is
+               unhidden by script, so a no-JS visitor still gets every option
+               and the tiers stay in priority order. #}
+            <input type="search"
+                   id="community-filter"
+                   class="community-filter"
+                   autocomplete="off"
+                   hidden
+                   aria-controls="session-community"
+                   data-no-matches="{{ ftl_get_message("collaborate-community-no-matches") }}"
+                   placeholder="{{ ftl_get_message("collaborate-community-search-placeholder") }}">
             <select id="session-community" name="community_id">
               <option value="">{{ ftl_get_message("collaborate-community-none") }}</option>
-              {% for community in postable_communities %}
-                <option value="{{ community.id }}"
-                        {% if community.slug == selected_community_slug %}selected{% endif %}>
-                  {{ community.name }}
-                </option>
-              {% endfor %}
+              {{ community_options(member_communities, ftl_get_message("collaborate-community-group-yours"), selected_community_slug) }}
+              {{ community_options(participated_communities, ftl_get_message("collaborate-community-group-participated"), selected_community_slug) }}
+              {{ community_options(other_communities, ftl_get_message("collaborate-community-group-public"), selected_community_slug) }}
             </select>
-          </p>
+            <small class="community-field-hint">{{ ftl_get_message("collaborate-community-hint") }}</small>
+          </div>
         {% endif %}
         <input type="submit" value="{{ ftl_get_message("collaborate-create-button") }}">
       </form>
@@ -84,15 +110,19 @@
               <div class="session-info">
                 <div class="session-meta">
                   <span class="canvas-size">{{ session.width }}×{{ session.height }}</span>
-                  <span class="participant-count">
-                    {% if session.participant_count == 1 %}
-                      {{ ftl_get_message("collaborate-session-participants-singular") }}
-                    {% else %}
-                      {{ session.participant_count }}{{ ftl_get_message("collaborate-session-participants-plural") }}
-                    {% endif %}
-                  </span>
+                  {# Seats taken out of seats total: a bare count gives no sense
+                     of whether there is room to join. #}
+                  <span class="participant-count">{{ session.participant_count }} / {{ session.max_participants }} {{ ftl_get_message("collaborate-participants") }}</span>
                   <span class="session-time">{{ ftl_get_message("collaborate-session-created") }} {{ session.created_at|dateformat(format="short", tz="Asia/Seoul") }}</span>
                 </div>
+                {# Where the finished drawing will be posted. Worth knowing
+                   before joining, and it is the same choice the create form
+                   above makes. #}
+                {% if session.community_slug %}
+                  <p class="session-community">
+                    <a href="/communities/@{{ session.community_slug }}">{{ session.community_name }}</a>
+                  </p>
+                {% endif %}
               </div>
               <div class="session-actions">
                 <a href="/collaborate/{{ session.id }}">{{ ftl_get_message("collaborate-join-session") }}</a>
@@ -106,8 +136,11 @@
        home grid so they carry the community label and sensitive handling. #}
     {% if feed.posts and feed.posts|length > 0 %}
       <section role="region" aria-labelledby="collab-gallery-heading">
-        <h3 id="collab-gallery-heading">{{ ftl_get_message("collaborate-finished-drawings") }}</h3>
-        <div class="posts-grid">
+        <div class="feed-header">
+          <h3 id="collab-gallery-heading" class="home-section-title">{{ ftl_get_message("collaborate-finished-drawings") }}</h3>
+          {% include "post_feed_controls.jinja" %}
+        </div>
+        <div class="posts-grid" id="post-feed-grid">
           {% include "post_feed_fragment.jinja" %}
         </div>
       </section>
@@ -115,11 +148,15 @@
   </div>
   <style>
     /* Oeee Cafe style collaborative lobby */
+    /* The page took the feeds' 1600px width so the gallery has room, but a form
+       of short controls stretched that far reads as an empty box. Only the grid
+       below wants the extra width. */
     .create-session-section {
       background-color: var(--main-nav-bg-color);
       border: 1px solid var(--main-border-color);
       padding: 8px;
       margin-bottom: 8px;
+      max-width: 829px;
     }
     
     .create-session-section h3 {
@@ -149,7 +186,35 @@
     .create-session-section input[type="submit"] {
       margin-top: 8px;
     }
-    
+
+    /* The community picker is two stacked controls under one label, so it
+       cannot use the single-line <p> layout the rest of the form uses. */
+    .community-field {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      margin: 8px 0;
+    }
+
+    .community-field .community-filter,
+    .community-field select {
+      font-family: inherit;
+      font-size: inherit;
+      max-width: 100%;
+      min-width: min(320px, 100%);
+    }
+
+    .community-field-hint {
+      font-size: 0.9em;
+      opacity: 0.7;
+    }
+
+    .session-community {
+      margin: 4px 0 0 0;
+      font-size: 0.9em;
+    }
+
     .active-sessions-section {
       margin-top: 8px;
     }
@@ -264,6 +329,84 @@
         alert('Failed to create session. Please check your connection and try again.');
       }
     });
+  </script>
+  <script>
+    // Filters the community select down to matching options. The select keeps
+    // its optgroup order — members first, then communities the user has posted
+    // in — so typing narrows a list that is already in priority order rather
+    // than replacing it with a differently ranked one.
+    (function () {
+      function init() {
+        var filter = document.getElementById("community-filter");
+        var select = document.getElementById("session-community");
+        // The picker is omitted entirely when the user can post nowhere.
+        if (!filter || !select) return;
+
+        // Snapshot before the first filter run: rebuilding from the live DOM
+        // would permanently drop whatever the previous query hid.
+        var groups = [];
+        Array.prototype.forEach.call(select.children, function (child) {
+          if (child.tagName === "OPTGROUP") {
+            groups.push({
+              label: child.label,
+              options: Array.prototype.slice.call(child.children),
+            });
+          }
+        });
+        var none = select.querySelector('option[value=""]');
+        var empty = document.createElement("option");
+        empty.disabled = true;
+        // Carried on the input rather than interpolated into this script: the
+        // translation is arbitrary text and attribute escaping is the only
+        // context minijinja can escape it for correctly.
+        empty.textContent = filter.dataset.noMatches;
+
+        function apply() {
+          var query = filter.value.toLowerCase().trim();
+          // Keeping the selection visible matters: filtering it out would post
+          // the drawing to a community the user can no longer see they picked.
+          var selected = select.value;
+          var matched = 0;
+
+          select.textContent = "";
+          select.appendChild(none);
+          groups.forEach(function (group) {
+            var hits = group.options.filter(function (option) {
+              if (query === "" || (option.dataset.search || "").indexOf(query) !== -1) {
+                matched++;
+                return true;
+              }
+              // Kept but not counted: a lone surviving selection is not a hit,
+              // and reporting it as one would hide "no matches" entirely.
+              return option.value === selected;
+            });
+            if (!hits.length) return;
+            var optgroup = document.createElement("optgroup");
+            optgroup.label = group.label;
+            hits.forEach(function (option) {
+              optgroup.appendChild(option);
+            });
+            select.appendChild(optgroup);
+          });
+          if (!matched) select.appendChild(empty);
+
+          select.value = selected;
+        }
+
+        filter.hidden = false;
+        filter.addEventListener("input", apply);
+        // Enter in a search field submits the form; here it should only filter.
+        filter.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") e.preventDefault();
+        });
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+      } else {
+        init();
+      }
+    })();
   </script>
   {% endif %}
 {% endblock content %}

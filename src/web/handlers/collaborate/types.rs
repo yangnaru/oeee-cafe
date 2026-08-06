@@ -33,6 +33,12 @@ pub struct SessionWithCounts {
     pub height: i32,
     pub created_at: chrono::NaiveDateTime,
     pub participant_count: Option<i64>,
+    /// Seats total, so a lobby card can say "2 / 4" rather than a count with
+    /// nothing to compare it against.
+    pub max_participants: i32,
+    /// Where a saved session lands. None is a personal drawing.
+    pub community_name: Option<String>,
+    pub community_slug: Option<String>,
 }
 
 #[derive(Serialize)]

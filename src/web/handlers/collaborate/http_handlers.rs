@@ -128,6 +128,9 @@ pub async fn collaborate_lobby(
             cs.width,
             cs.height,
             cs.created_at,
+            cs.max_participants,
+            c.name AS "community_name?",
+            c.slug AS "community_slug?",
             COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) as participant_count
         FROM collaborative_sessions cs
         JOIN users u ON cs.owner_id = u.id
@@ -136,7 +139,7 @@ pub async fn collaborate_lobby(
         WHERE cs.is_public = true
           AND cs.ended_at IS NULL
           AND (cs.community_id IS NULL OR c.visibility = 'public')
-        GROUP BY cs.id, u.login_name, cs.max_participants
+        GROUP BY cs.id, u.login_name, cs.max_participants, c.name, c.slug
         HAVING COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) < cs.max_participants
         ORDER BY cs.last_activity DESC
         LIMIT 20
@@ -199,23 +202,36 @@ pub async fn collaborate_lobby(
 
     // Communities this user may post into. Reuses the rule the "move post"
     // feature already applies — public, unlisted where they have posted,
-    // private where they are a member — rather than inventing a second one.
-    let postable_communities: Vec<serde_json::Value> = match viewer_user_id {
-        Some(user_id) => {
-            crate::models::post::get_movable_communities(&mut tx, user_id)
-                .await?
-                .into_iter()
-                .map(|(id, name, slug, ..)| {
-                    serde_json::json!({
-                        "id": id.to_string(),
-                        "name": name,
-                        "slug": slug,
-                    })
-                })
-                .collect()
+    // private where they are a member — rather than inventing a second one, so
+    // what the picker offers is exactly what create_collaborative_session
+    // accepts.
+    //
+    // Split into three tiers so the ones a user actually draws in are reachable
+    // without scrolling past every public community on the site: communities
+    // they belong to, then ones they have posted in, then the rest. A member
+    // who has also posted appears only in the first tier.
+    let mut member_communities: Vec<serde_json::Value> = Vec::new();
+    let mut participated_communities: Vec<serde_json::Value> = Vec::new();
+    let mut other_communities: Vec<serde_json::Value> = Vec::new();
+    if let Some(user_id) = viewer_user_id {
+        for community in crate::models::post::get_movable_communities(&mut tx, user_id).await? {
+            let entry = serde_json::json!({
+                "id": community.id.to_string(),
+                "name": community.name,
+                "slug": community.slug,
+                "description": community.description,
+                "owner_login_name": community.owner_login_name,
+                "visibility": community.visibility,
+            });
+            if community.is_member {
+                member_communities.push(entry);
+            } else if community.has_participated {
+                participated_communities.push(entry);
+            } else {
+                other_communities.push(entry);
+            }
         }
-        None => Vec::new(),
-    };
+    }
 
     tx.commit().await?;
 
@@ -232,7 +248,14 @@ pub async fn collaborate_lobby(
             has_more => false,
             next_url => "",
         },
-        postable_communities => postable_communities,
+        // Three tiers rather than one flat list; the template renders them as
+        // optgroups in that order.
+        has_postable_communities => !member_communities.is_empty()
+            || !participated_communities.is_empty()
+            || !other_communities.is_empty(),
+        member_communities => member_communities,
+        participated_communities => participated_communities,
+        other_communities => other_communities,
         selected_community_slug => query.community,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         canvas_sizes => vec![
@@ -274,7 +297,7 @@ pub async fn create_collaborative_session(
         let allowed = crate::models::post::get_movable_communities(&mut tx, user.id)
             .await?
             .into_iter()
-            .any(|(id, ..)| id == community_id);
+            .any(|community| community.id == community_id);
         if !allowed {
             return Err(AppError::Forbidden);
         }
@@ -386,6 +409,9 @@ pub async fn get_active_sessions_json(
             cs.width,
             cs.height,
             cs.created_at,
+            cs.max_participants,
+            c.name AS "community_name?",
+            c.slug AS "community_slug?",
             COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) as participant_count
         FROM collaborative_sessions cs
         JOIN users u ON cs.owner_id = u.id
@@ -394,7 +420,7 @@ pub async fn get_active_sessions_json(
         WHERE cs.is_public = true
           AND cs.ended_at IS NULL
           AND (cs.community_id IS NULL OR c.visibility = 'public')
-        GROUP BY cs.id, u.login_name, cs.max_participants
+        GROUP BY cs.id, u.login_name, cs.max_participants, c.name, c.slug
         HAVING COALESCE(COUNT(DISTINCT csp.user_id) FILTER (WHERE csp.is_active = true), 0) < cs.max_participants
         ORDER BY cs.last_activity DESC
         LIMIT 20
@@ -413,29 +439,68 @@ mod tests {
     use minijinja::context;
     use serde_json::json;
 
-    fn sample_community() -> serde_json::Value {
+    fn sample_community(id: &str, name: &str, slug: &str, visibility: &str) -> serde_json::Value {
         json!({
-            "id": "00000000-0000-0000-0000-000000000003",
-            "name": "Open Studio",
-            "slug": "open",
+            "id": id,
+            "name": name,
+            "slug": slug,
+            "description": "",
+            "owner_login_name": "owner",
+            "visibility": visibility,
         })
     }
 
     fn lobby_context(signed_in: bool, posts: Vec<serde_json::Value>) -> minijinja::Value {
+        lobby_context_with_sessions(signed_in, posts, Vec::new())
+    }
+
+    fn lobby_context_with_sessions(
+        signed_in: bool,
+        posts: Vec<serde_json::Value>,
+        active_sessions: Vec<serde_json::Value>,
+    ) -> minijinja::Value {
+        let community = |id, name, slug, visibility| {
+            if signed_in {
+                vec![sample_community(id, name, slug, visibility)]
+            } else {
+                vec![]
+            }
+        };
+        let members = community(
+            "00000000-0000-0000-0000-000000000003",
+            "Private Club",
+            "club",
+            "private",
+        );
+        let participated = community(
+            "00000000-0000-0000-0000-000000000004",
+            "Open Studio",
+            "open",
+            "public",
+        );
+        let others = community(
+            "00000000-0000-0000-0000-000000000005",
+            "Somewhere Else",
+            "elsewhere",
+            "public",
+        );
         context! {
             current_user => if signed_in {
                 json!({"login_name": "someone", "email_verified_at": "2026-01-01T00:00:00Z"})
             } else {
                 json!(null)
             },
-            active_sessions => Vec::<serde_json::Value>::new(),
+            active_sessions => active_sessions,
             feed => context! {
                 posts => posts,
                 has_more => false,
                 next_url => "",
             },
             canvas_sizes => vec![("300x300", "300x300")],
-            postable_communities => if signed_in { vec![sample_community()] } else { vec![] },
+            has_postable_communities => signed_in,
+            member_communities => members,
+            participated_communities => participated,
+            other_communities => others,
             selected_community_slug => "open",
             draft_post_count => 0,
             unread_notification_count => 0,
@@ -520,6 +585,123 @@ mod tests {
             .render(lobby_context(true, vec![]))
             .expect("renders signed in");
         assert!(rendered.contains("create-session-form"));
+    }
+
+    #[test]
+    fn community_picker_ranks_membership_above_participation() {
+        // The whole point of the tiers: a user with a hundred public
+        // communities in the list still finds their own without scrolling.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context(true, vec![]))
+            .expect("renders signed in");
+        let yours = rendered
+            .find("collaborate-community-group-yours")
+            .expect("member group rendered");
+        let participated = rendered
+            .find("collaborate-community-group-participated")
+            .expect("participated group rendered");
+        let public = rendered
+            .find("collaborate-community-group-public")
+            .expect("public group rendered");
+        assert!(yours < participated && participated < public, "tiers out of order");
+        // Non-public tiers say so in the option text, because a saved drawing
+        // landing somewhere nobody can see it is a surprise worth preventing.
+        assert!(rendered.contains("community-badge-private"));
+    }
+
+    #[test]
+    fn community_picker_ships_the_filter_and_its_search_keys() {
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context(true, vec![]))
+            .expect("renders signed in");
+        assert!(rendered.contains("id=\"community-filter\""));
+        // Hidden until the script unhides it: without JS the select alone still
+        // works, and a dead search box would be worse than none.
+        assert!(rendered.contains("hidden"));
+        // Owner handle and slug are matchable, not just the display name.
+        assert!(rendered.contains("data-search=\"open studio open @owner"));
+    }
+
+    #[test]
+    fn lobby_gallery_carries_the_shared_density_control() {
+        // Same control, grid id and head fragment as / and /home, so the
+        // stored column count applies here too.
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context(false, vec![sample_post()]))
+            .expect("renders");
+        assert!(rendered.contains("id=\"post-cols\""));
+        assert!(rendered.contains("id=\"post-feed-grid\""));
+        assert!(rendered.contains("--page-width: 1600px"));
+        assert!(rendered.contains("class=\"feed-header\""));
+    }
+
+    #[test]
+    fn session_cards_show_seats_and_destination_community() {
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context_with_sessions(
+                false,
+                vec![],
+                vec![json!({
+                    "id": "00000000-0000-0000-0000-000000000009",
+                    "owner_login_name": "someone",
+                    "title": "Doodle",
+                    "width": 300,
+                    "height": 300,
+                    "created_at": "2026-01-02T03:04:05",
+                    "participant_count": 2,
+                    "max_participants": 4,
+                    "community_name": "Open Studio",
+                    "community_slug": "open",
+                })],
+            ))
+            .expect("renders");
+        assert!(rendered.contains("2 / 4"));
+        assert!(rendered.contains("/communities/@open"));
+        assert!(rendered.contains("Open Studio"));
+    }
+
+    #[test]
+    fn session_cards_omit_the_community_line_for_personal_sessions() {
+        let env = test_support::env();
+        let template = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(lobby_context_with_sessions(
+                false,
+                vec![],
+                vec![json!({
+                    "id": "00000000-0000-0000-0000-000000000009",
+                    "owner_login_name": "someone",
+                    "title": "Doodle",
+                    "width": 300,
+                    "height": 300,
+                    "created_at": "2026-01-02T03:04:05",
+                    "participant_count": 1,
+                    "max_participants": 2,
+                    "community_name": json!(null),
+                    "community_slug": json!(null),
+                })],
+            ))
+            .expect("renders");
+        // The class also appears in the page's <style> block, so match the tag.
+        assert!(!rendered.contains("<p class=\"session-community\">"));
     }
 
     #[test]

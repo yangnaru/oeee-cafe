@@ -3448,28 +3448,30 @@ pub async fn get_movable_communities_api(
     }
 
     // Add other communities, excluding the current community and private communities
-    for (id, name, slug, visibility, bg_color, fg_color, owner_login, owner_display, has_participated) in communities
-    {
+    for community in communities {
         // Skip the current community
-        if Some(id) == post.community_id {
+        if Some(community.id) == post.community_id {
             continue;
         }
 
         // Skip private communities - moving to private communities is restricted
-        if matches!(visibility, crate::models::community::CommunityVisibility::Private) {
+        if matches!(
+            community.visibility,
+            crate::models::community::CommunityVisibility::Private
+        ) {
             continue;
         }
 
         response_communities.push(MovableCommunity {
-            id: Some(id),
-            name,
-            slug: Some(slug),
-            visibility: Some(visibility),
-            background_color: bg_color,
-            foreground_color: fg_color,
-            owner_login_name: Some(owner_login),
-            owner_display_name: Some(owner_display),
-            has_participated: Some(has_participated),
+            id: Some(community.id),
+            name: community.name,
+            slug: Some(community.slug),
+            visibility: Some(community.visibility),
+            background_color: community.background_color,
+            foreground_color: community.foreground_color,
+            owner_login_name: Some(community.owner_login_name),
+            owner_display_name: Some(community.owner_display_name),
+            has_participated: Some(community.has_participated),
         });
     }
 

@@ -1289,6 +1289,24 @@ pub async fn is_post_movable(
     Ok(true)
 }
 
+/// One community the caller may put a drawing into, carrying the two signals a
+/// picker needs to rank it: whether they are a member, and whether they have
+/// posted there before.
+#[derive(Clone, Debug)]
+pub struct PostableCommunity {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub description: String,
+    pub visibility: CommunityVisibility,
+    pub background_color: Option<String>,
+    pub foreground_color: Option<String>,
+    pub owner_login_name: String,
+    pub owner_display_name: String,
+    pub has_participated: bool,
+    pub is_member: bool,
+}
+
 /// Get list of communities that a post can be moved to
 /// Includes:
 /// - All public communities
@@ -1298,25 +1316,14 @@ pub async fn is_post_movable(
 pub async fn get_movable_communities(
     tx: &mut Transaction<'_, Postgres>,
     user_id: Uuid,
-) -> Result<
-    Vec<(
-        Uuid,
-        String,
-        String,
-        CommunityVisibility,
-        Option<String>,
-        Option<String>,
-        String,
-        String,
-        bool,
-    )>,
-> {
+) -> Result<Vec<PostableCommunity>> {
     let communities = query!(
         r#"
         SELECT
             c.id,
             c.name,
             c.slug,
+            c.description,
             c.visibility as "visibility: CommunityVisibility",
             c.background_color,
             c.foreground_color,
@@ -1325,7 +1332,11 @@ pub async fn get_movable_communities(
             EXISTS(
                 SELECT 1 FROM posts p
                 WHERE p.community_id = c.id AND p.author_id = $1
-            ) as "has_participated!"
+            ) as "has_participated!",
+            EXISTS(
+                SELECT 1 FROM community_members cm
+                WHERE cm.community_id = c.id AND cm.user_id = $1
+            ) as "is_member!"
         FROM communities c
         INNER JOIN users u ON c.owner_id = u.id
         WHERE c.deleted_at IS NULL
@@ -1357,18 +1368,18 @@ pub async fn get_movable_communities(
     .fetch_all(&mut **tx)
     .await?
     .into_iter()
-    .map(|row| {
-        (
-            row.id,
-            row.name,
-            row.slug,
-            row.visibility,
-            row.background_color,
-            row.foreground_color,
-            row.owner_login_name,
-            row.owner_display_name,
-            row.has_participated,
-        )
+    .map(|row| PostableCommunity {
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        description: row.description,
+        visibility: row.visibility,
+        background_color: row.background_color,
+        foreground_color: row.foreground_color,
+        owner_login_name: row.owner_login_name,
+        owner_display_name: row.owner_display_name,
+        has_participated: row.has_participated,
+        is_member: row.is_member,
     })
     .collect();
 
