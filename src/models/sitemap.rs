@@ -17,7 +17,13 @@ pub async fn sitemap_posts(
 ) -> Result<Vec<SitemapEntry>> {
     let rows = query!(
         r#"
-            SELECT posts.id, users.login_name, posts.updated_at
+            SELECT
+                posts.id,
+                -- A post in a community lives at /@community-slug/id and only
+                -- redirects from the author's handle, so the sitemap has to
+                -- name the same handle the post page calls itself by.
+                COALESCE(NULLIF(communities.slug, ''), users.login_name) AS "handle!",
+                posts.updated_at
             FROM posts
             JOIN users ON posts.author_id = users.id
             LEFT JOIN communities ON posts.community_id = communities.id
@@ -36,7 +42,7 @@ pub async fn sitemap_posts(
     Ok(rows
         .into_iter()
         .map(|row| SitemapEntry {
-            path: format!("/@{}/{}", row.login_name, row.id),
+            path: format!("/@{}/{}", row.handle, row.id),
             last_modified: row.updated_at,
         })
         .collect())
