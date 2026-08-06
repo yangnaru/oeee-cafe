@@ -4,13 +4,11 @@
    ambiguous which context you are looking at. #}
 {% block title %}Admin · {{ ftl_get_message("brand") }}{% endblock title %}
 {% block head %}
-  <style>
-    /* Admin content is not wrapped in .center, so it already spans the window.
-       Widening the shared page variable brings the nav bar out to match it
-       instead of leaving a 829px nav above a full-bleed grid. Stays inline
-       because it is a per-page override, not a component. */
-    :root { --page-width: 100%; }
-  </style>
+  {# Admin content is not wrapped in .center, so it already spans the window.
+     This used to widen --page-width to 100% so the nav matched, but that also
+     moved the site header — the same bug the public pages had. The nav keeps
+     its normal width now; the admin grid being wider than it is the same
+     arrangement the feed pages use. #}
   <link rel="stylesheet"
         href="{{ '/static/admin.css' | cachebuster | safe }}"
         type="text/css" />

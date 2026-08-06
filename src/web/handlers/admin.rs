@@ -570,8 +570,9 @@ mod tests {
         // `adjustable` or the slider changes nothing.
         assert!(rendered.contains("admin-grid adjustable"));
         assert!(rendered.contains("id=\"admin-cols\""));
-        // The nav bar is full-bleed with its contents aligned to --page-width;
-        // losing either half leaves a narrow nav over a full-width grid.
+        // The nav bar is full-bleed with its contents in the page column, the
+        // same as every other page — admin no longer widens the header to match
+        // its own full-bleed grid.
         assert!(rendered.contains("<nav class=\"nav-bar\">"));
         assert!(rendered.contains("id=\"menubar\" class=\"center\""));
     }

@@ -1,14 +1,11 @@
-{# Head fragment shared by the / and /home feeds: page width and the pre-paint
+{# Head fragment shared by the /, /home and /collaborate feeds: the pre-paint
    column restore. Included from each page's {% block head %} so the feeds
-   cannot drift apart. The control's own styling is in style.css — it is a
-   component, not a page decision, and three pages use it. #}
-<style>
-  /* Wider than the 829px default so the grid has room to breathe, capped so it
-     does not sprawl on an ultrawide monitor. This one stays inline: it is a
-     per-page override of a global, which is exactly what it should be. The nav
-     bar reads the same variable and follows automatically. */
-  :root { --page-width: 1600px; }
-</style>
+   cannot drift apart.
+
+   No page-width override lives here any more. It used to widen the whole page
+   to 1600px, which moved the header too — the logo and nav sat flush left on
+   these three pages and centred everywhere else. The grid section opts into
+   .center-wide instead, so only the grid is wide. #}
 {# Applied before first paint so the grid does not flash at another width. #}
 <script>
   (function () {

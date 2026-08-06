@@ -1387,7 +1387,10 @@ mod tests {
         assert!(rendered.contains("id=\"post-cols-value\""));
         assert!(rendered.contains("class=\"feed-header\""));
         assert!(rendered.contains("DOMContentLoaded"));
-        assert!(rendered.contains("--page-width: 1600px"));
+        // The grid opts into the wide container; the page — and so the header
+        // above it — keeps the one width every other page uses.
+        assert!(rendered.contains("class=\"center-wide\""));
+        assert!(!rendered.contains("--page-width"));
     }
 
     #[test]
@@ -1477,7 +1480,8 @@ mod tests {
                 ftl_lang => "en",
             })
             .expect("timeline.jinja renders");
-        assert!(rendered.contains("--page-width: 1600px"));
+        assert!(rendered.contains("class=\"center-wide\""));
+        assert!(!rendered.contains("--page-width"));
         assert!(rendered.contains("id=\"post-cols\""));
         assert!(rendered.contains("id=\"post-feed-grid\""));
         // Heading and control share one row.

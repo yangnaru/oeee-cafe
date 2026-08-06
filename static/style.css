@@ -133,7 +133,9 @@ main {
 }
 
 main > .center > :first-child,
-main > .center > :first-child > :first-child {
+main > .center > :first-child > :first-child,
+main > .center-wide > :first-child,
+main > .center-wide > :first-child > :first-child {
   margin-top: 0;
 }
 
@@ -207,13 +209,30 @@ nav a:visited,
   gap: var(--space-2);
 }
 
-/* The single source of truth for how wide a page is. The header reads the same
-   variable as the content below it, so the nav bar always lines up with the
-   page it sits on instead of each template deciding independently. A page that
-   wants to be wider overrides --page-width and the nav follows automatically. */
+/* The page column. One width, everywhere, including the header — so the logo
+   and nav sit in the same place on every page.
+
+   This used to read a --page-width that individual pages overrode, which meant
+   the header moved with them: 829px and centred on most pages, flush left on
+   the three that widened it to 1600px. Chrome that relocates as you navigate is
+   worse than chrome that does not line up with an unusually wide grid, so pages
+   needing more room now opt a single section into .center-wide instead of
+   changing the width of the whole page out from under the header. */
 .center {
   margin: 0 auto;
-  max-width: var(--page-width, 829px);
+  /* A literal, not a variable. This read var(--page-width, 829px), and the
+     override that made possible is exactly what moved the header around. Wide
+     content opts in below rather than changing the page under the chrome. */
+  max-width: 829px;
+}
+
+/* For content that genuinely wants more room than the text column — the post
+   grids, which fit far more thumbnails per row at this width. Only the section
+   that needs it opts in; the page around it, and the header above it, do not
+   move. */
+.center-wide {
+  margin: 0 auto;
+  max-width: 1600px;
 }
 
 /* Full-bleed bar, contained contents: the nav background spans the viewport
@@ -2144,8 +2163,8 @@ legend {
    --------------------------------------------------------------------------- */
 
 /* Feed density control. Shared by /, /home and the collaborate gallery, so it
-   cannot live in any one of their templates. The --page-width override that
-   goes with it stays inline: it is a per-page decision, not a component. */
+   cannot live in any one of their templates. The width those pages want comes
+   from .center-wide on the grid section itself. */
 .thumbnail-size {
   display: flex;
   align-items: center;

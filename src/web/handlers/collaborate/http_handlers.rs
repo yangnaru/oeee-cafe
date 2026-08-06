@@ -815,7 +815,7 @@ mod tests {
             .expect("renders");
         assert!(rendered.contains("id=\"post-cols\""));
         assert!(rendered.contains("id=\"post-feed-grid\""));
-        assert!(rendered.contains("--page-width: 1600px"));
+        assert!(rendered.contains("class=\"center-wide\""));
         assert!(rendered.contains("class=\"feed-header\""));
     }
 
