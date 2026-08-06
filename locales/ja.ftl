@@ -9,11 +9,9 @@ about = お絵かきの発音はOEEEカフェに似ています。
 user-contributors = OEEEカフェを一緒に作った人たち
 
 timeline = タイムライン
-timeline-public = 公開タイムライン
 timeline-my = 私のタイムライン
 timeline-empty = タイムラインが空です。 <a href="/communities">コミュニティ</a>で他の人と同盟を結びましょう！
 
-home = ホーム
 draw = 描きましょう！
 collaborate = 一緒に描く
 drafts = 一時保管箱
@@ -91,7 +89,6 @@ password-reset-sent-message = そのメールアドレスで登録されたア�
 password-reset-sent-email = メール
 password-reset-check-email = メールを確認して、リンクをクリックしてパスワードを再設定してください。
 password-reset-verify-title = 新しいパスワード設定
-password-reset-token = 認証コード
 password-reset-submit = パスワード再設定
 password-reset-success = パスワードが正常に再設定されました。新しいパスワードでログインできます。
 password-reset-error-mismatch = パスワードが一致しません。
@@ -112,7 +109,6 @@ participating-community = 参加中のコミュニティ
 latest-active-public-community = 最近の活動公開コミュニティ
 recent-drawings = 最近のお絵かき
 recent-comments = 最近のコメント
-recent-comments-from-public-communities = 公開コミュニティからの最近のコメント
 view-all-comments = すべてのコメントを見る
 no-comments-yet = まだコメントがありません
 
@@ -157,7 +153,6 @@ move-section-unlisted = 投稿したコミュニティ
 move-section-public-participated = 投稿したパブリックコミュニティ
 move-section-public-other = その他のパブリックコミュニティ
 post-delete-confirm = 本当にこの画像を削除しますか？
-post-relay-enabled-notice = この画像は継続して描くことができます。画像をクリックしてみてください！
 post-relay = リレー
 post-reply-with-drawing = 絵で返信
 post-reply-select-tool = ツールとキャンバスサイズを選択
@@ -177,7 +172,6 @@ post-report-description-placeholder = この投稿を報告する理由を説明
 post-report-submit = 報告する
 post-report-success = 投稿が報告されました。コミュニティの安全維持にご協力いただきありがとうございます。
 post-report-error = 報告の送信に失敗しました。もう一度お試しください。
-post-report-confirm = この投稿を報告してもよろしいですか？
 
 allow-relay = リレー描画を許可
 sensitive = 敏感な内容
@@ -188,7 +182,6 @@ draft-posts-count = 件の下書き
 draft-empty = まだ下書きがありません
 
 # Hashtags
-trending-hashtags = トレンドハッシュタグ
 hashtag-post-count = 件の投稿
 hashtag-no-posts = このハッシュタグがついた投稿はまだありません
 hashtag-discovery = ハッシュタグ
@@ -230,25 +223,17 @@ collaborate-community-group-public = その他の公開コミュニティ
 collaborate-community-no-matches = 該当するコミュニティがありません
 collaborate-community-hint = セッションを保存すると、完成した絵はここに投稿されます。
 community-draw-together = 一緒に描く
-collaborate-session-by = @
-collaborate-session-participants-singular = 1人の参加者
-collaborate-session-participants-plural = 人の参加者
 collaborate-session-created = 作成日時
 collaborate-join-session = セッションに参加
 
 welcome = { $name }さん、ようこそ！
 
-comment-created-at = 時刻
-
 my-communities = 私のコミュニティ
 my-communities-nil = 私が作成したコミュニティはありません。
 
-latest-active-communities = 最近のアクティブなコミュニティ
 official-communities = 公式コミュニティ
 official-communities-nil = 公式コミュニティはありません。
 active-communities-nil = アクティブなパブリックコミュニティはありません。
-no-active-communities = 現在アクティブなコミュニティはありません。
-no-posts-in-community = まだこのコミュニティに投稿された絵はありません。
 loading-more-posts = さらに読み込み中...
 feed-columns = 1行あたり
 post-untitled = 無題
@@ -258,11 +243,8 @@ community-sort-posts = 投稿数順
 community-sort-newest = 新着順
 community-sort-name = 名前順
 create-community = コミュニティの作成
-new-community = 新しいコミュニティ
 community-name = コミュニティ名
 community-description = コミュニティの説明
-private-community = プライベートコミュニティ
-private-community-description = コミュニティの住所を知っている人だけがアクセスできます。
 
 community-visibility = 公開範囲
 visibility-public = 公開
@@ -281,7 +263,6 @@ community-invite-user = ユーザーを招待
 community-invite-username = 招待するユーザー名
 community-invite-button = 招待を送る
 community-invite-success = 招待を送りました
-community-invite-error = 招待の送信に失敗しました
 community-invite-user-not-found = ユーザーが見つかりません
 community-invite-already-member = すでにメンバーです
 community-invite-already-invited = すでに保留中の招待があります
@@ -367,8 +348,6 @@ banner-management-active-badge = アクティブ
 banner-management-set-active = アクティブにする
 banner-management-delete = 削除
 banner-management-delete-confirm = 本当にこのバナーを削除してもよろしいですか？この操作は元に戻せません。
-banner-management-activate-error = バナーのアクティブ化に失敗しました。もう一度お試しください。
-banner-management-delete-error = バナーの削除に失敗しました。アクティブなバナーは削除できません。
 banner-management-back-to-settings = 設定に戻る
 banner-draw-error = バナーの投稿中にエラーが発生しました。もう一度お試しください。
 
@@ -419,10 +398,6 @@ account-language-settings-save = 言語設定の保存
 account-content-settings = コンテンツ設定
 account-show-sensitive-content = センシティブなコンテンツを表示
 account-content-settings-save = コンテンツ設定の保存
-
-cucumber-save = 保存
-cucumber-undo = 元に戻す
-cucumber-redo = 再実行
 
 privacy-policy = プライバシーポリシー
 privacy-content = OEEEカフェはお客様のプライバシーを尊重します。基本的に、OEEEカフェの利用時に個人情報を収集することはありません。

@@ -9,11 +9,9 @@ about = 오에카키는 그림을 그릴 수 있는 게시판입니다.
 user-contributors = 오이카페를 함께 만든 사람들
 
 timeline = 동맹
-timeline-public = 공개 동맹
 timeline-my = 내 동맹
 timeline-empty = 동맹이 비어 있습니다. <a href="/communities">커뮤니티</a>에서 다른 사람과 동맹을 맺어 보세요!
 
-home = 홈
 draw = 그리기!
 collaborate = 넷캔
 drafts = 임시 보관함
@@ -91,7 +89,6 @@ password-reset-sent-message = 해당 이메일 주소로 등록된 계정이 있
 password-reset-sent-email = 이메일
 password-reset-check-email = 이메일을 확인하시고 링크를 클릭하여 비밀번호를 재설정해 주세요.
 password-reset-verify-title = 새 비밀번호 설정
-password-reset-token = 인증 코드
 password-reset-submit = 비밀번호 재설정
 password-reset-success = 비밀번호가 성공적으로 재설정되었습니다. 이제 새 비밀번호로 로그인할 수 있습니다.
 password-reset-error-mismatch = 비밀번호가 일치하지 않습니다.
@@ -112,7 +109,6 @@ participating-community = 참여 중인 커뮤니티
 latest-active-public-community = 최근 활동 공개 커뮤니티
 recent-drawings = 최근 그림
 recent-comments = 최근 댓글
-recent-comments-from-public-communities = 공개 커뮤니티의 최근 댓글
 view-all-comments = 모든 댓글 보기
 no-comments-yet = 아직 댓글이 없습니다
 
@@ -157,7 +153,6 @@ move-section-unlisted = 참여한 커뮤니티
 move-section-public-participated = 참여한 공개 커뮤니티
 move-section-public-other = 다른 공개 커뮤니티
 post-delete-confirm = 정말 이 그림을 삭제하시겠습니까?
-post-relay-enabled-notice = 이 그림은 이어 그릴수 있습니다. 그림을 눌러 보세요!
 post-relay = 이어그리기
 post-reply-with-drawing = 그림으로 답글
 post-reply-select-tool = 도구와 캔버스 크기 선택
@@ -177,7 +172,6 @@ post-report-description-placeholder = 이 게시물을 신고하는 이유를 �
 post-report-submit = 신고하기
 post-report-success = 게시물이 신고되었습니다. 커뮤니티를 안전하게 유지하는 데 도움을 주셔서 감사합니다.
 post-report-error = 신고 제출에 실패했습니다. 다시 시도해주세요.
-post-report-confirm = 이 게시물을 신고하시겠습니까?
 
 allow-relay = 릴레이 그림 허용
 sensitive = 민감한 내용
@@ -188,7 +182,6 @@ draft-posts-count = 개의 임시 보관함
 draft-empty = 아직 임시 보관된 그림이 없습니다
 
 # Hashtags
-trending-hashtags = 인기 해시태그
 hashtag-post-count = 개의 게시물
 hashtag-no-posts = 이 해시태그가 달린 게시물이 아직 없습니다
 hashtag-discovery = 해시태그
@@ -230,25 +223,17 @@ collaborate-community-group-public = 다른 공개 커뮤니티
 collaborate-community-no-matches = 일치하는 커뮤니티가 없습니다
 collaborate-community-hint = 세션을 저장하면 완성된 그림이 여기에 올라갑니다.
 community-draw-together = 넷캔
-collaborate-session-by = @
-collaborate-session-participants-singular = 참가자 1명
-collaborate-session-participants-plural = 명의 참가자
 collaborate-session-created = 생성됨
 collaborate-join-session = 세션 참가
 
 welcome = { $name }님, 환영합니다!
 
-comment-created-at = 작성 시간
-
 my-communities = 내 커뮤니티
 my-communities-nil = 내가 만든 커뮤니티가 없습니다.
 
-latest-active-communities = 최근 활동 커뮤니티
 official-communities = 공식 커뮤니티
 official-communities-nil = 공식 커뮤니티가 없습니다.
 active-communities-nil = 활동 중인 공개 커뮤니티가 없습니다.
-no-active-communities = 현재 활동 중인 커뮤니티가 없습니다.
-no-posts-in-community = 아직 이 커뮤니티에 게시된 그림이 없습니다.
 loading-more-posts = 더 많은 그림 불러오는 중...
 feed-columns = 한 줄에
 post-untitled = 제목 없음
@@ -258,11 +243,8 @@ community-sort-posts = 그림 많은순
 community-sort-newest = 최신순
 community-sort-name = 이름순
 create-community = 커뮤니티 만들기
-new-community = 새 커뮤니티
 community-name = 커뮤니티 이름
 community-description = 커뮤니티 설명
-private-community = 비공개 커뮤니티
-private-community-description = 커뮤니티 주소를 아는 사람만 찾아올 수 있습니다.
 
 community-visibility = 공개 범위
 visibility-public = 공개
@@ -281,7 +263,6 @@ community-invite-user = 사용자 초대
 community-invite-username = 초대할 사용자 이름
 community-invite-button = 초대 보내기
 community-invite-success = 초대를 보냈습니다
-community-invite-error = 초대를 보내지 못했습니다
 community-invite-user-not-found = 사용자를 찾을 수 없습니다
 community-invite-already-member = 이미 멤버입니다
 community-invite-already-invited = 이미 대기 중인 초대가 있습니다
@@ -367,8 +348,6 @@ banner-management-active-badge = 활성화됨
 banner-management-set-active = 활성화하기
 banner-management-delete = 삭제
 banner-management-delete-confirm = 정말 이 배너를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
-banner-management-activate-error = 배너 활성화에 실패했습니다. 다시 시도해주세요.
-banner-management-delete-error = 배너 삭제에 실패했습니다. 활성화된 배너는 삭제할 수 없습니다.
 banner-management-back-to-settings = 설정으로 돌아가기
 banner-draw-error = 배너를 게시하는 도중 오류가 발생했습니다. 다시 시도해주세요.
 
@@ -419,10 +398,6 @@ account-language-settings-save = 언어 설정 저장
 account-content-settings = 콘텐츠 설정
 account-show-sensitive-content = 민감한 콘텐츠 표시
 account-content-settings-save = 콘텐츠 설정 저장
-
-cucumber-save = 저장
-cucumber-undo = 실행 취소
-cucumber-redo = 다시 실행
 
 privacy-policy = 개인정보 처리방침
 privacy-content = 오이카페는 회원님의 개인정보를 소중히 다룹니다. 기본적으로 오이카페 이용 시 개인정보를 수집하지 않습니다.

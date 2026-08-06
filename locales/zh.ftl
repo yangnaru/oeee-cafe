@@ -9,11 +9,9 @@ about = 黄瓜画板是一个可以画画的留言板。
 user-contributors = 一起创建黄瓜咖啡馆的人们
 
 timeline = 时间线
-timeline-public = 公开时间线
 timeline-my = 我的时间线
 timeline-empty = 时间线是空的。在<a href="/communities">社区</a>中与其他用户建立联系吧！
 
-home = 首页
 draw = 画画！
 collaborate = 协作画画
 drafts = 草稿箱
@@ -91,7 +89,6 @@ password-reset-sent-message = 如果该邮箱地址存在对应账户，我们�
 password-reset-sent-email = 邮箱
 password-reset-check-email = 请检查您的邮箱并点击链接重置密码。
 password-reset-verify-title = 设置新密码
-password-reset-token = 验证码
 password-reset-submit = 重置密码
 password-reset-success = 密码已成功重置。现在可以使用新密码登录了。
 password-reset-error-mismatch = 密码不匹配。
@@ -112,7 +109,6 @@ participating-community = 参与的社区
 latest-active-public-community = 最近活跃的公开社区
 recent-drawings = 最近的作品
 recent-comments = 最近的评论
-recent-comments-from-public-communities = 来自公开社区的最近评论
 view-all-comments = 查看所有评论
 no-comments-yet = 暂无评论
 
@@ -157,7 +153,6 @@ move-section-unlisted = 您参与过的社区
 move-section-public-participated = 您参与过的公开社区
 move-section-public-other = 其他公开社区
 post-delete-confirm = 确定要删除这幅画吗？
-post-relay-enabled-notice = 这幅画可以接续创作。点击画作试试看！
 post-relay = 接力
 post-reply-with-drawing = 用画回复
 post-reply-select-tool = 选择工具和画布尺寸
@@ -177,7 +172,6 @@ post-report-description-placeholder = 请描述您举报此帖子的原因...
 post-report-submit = 提交举报
 post-report-success = 帖子已被举报。感谢您帮助维护社区安全。
 post-report-error = 提交举报失败。请重试。
-post-report-confirm = 您确定要举报此帖子吗？
 
 allow-relay = 允许接续创作
 sensitive = 敏感内容
@@ -188,7 +182,6 @@ draft-posts-count = 个草稿
 draft-empty = 您还没有草稿
 
 # Hashtags
-trending-hashtags = 热门标签
 hashtag-post-count = 篇作品
 hashtag-no-posts = 暂无使用此标签的作品
 hashtag-discovery = 标签
@@ -230,25 +223,17 @@ collaborate-community-group-public = 其他公开社区
 collaborate-community-no-matches = 没有匹配的社区
 collaborate-community-hint = 保存会话后，完成的作品会发布到这里。
 community-draw-together = 一起画画
-collaborate-session-by = 由 @
-collaborate-session-participants-singular = 1位参与者
-collaborate-session-participants-plural = 位参与者
 collaborate-session-created = 创建于
 collaborate-join-session = 加入会话
 
 welcome = 欢迎，{ $name }！
 
-comment-created-at = 评论时间
-
 my-communities = 我的社区
 my-communities-nil = 您还没有创建任何社区
 
-latest-active-communities = 最近活跃的社区
 official-communities = 官方社区
 official-communities-nil = 暂无官方社区
 active-communities-nil = 暂无活跃的公开社区
-no-active-communities = 目前没有活跃的社区。
-no-posts-in-community = 该社区暂无作品。
 loading-more-posts = 加载更多作品...
 feed-columns = 每行
 post-untitled = 无标题
@@ -258,11 +243,8 @@ community-sort-posts = 作品最多
 community-sort-newest = 最新创建
 community-sort-name = 按名称
 create-community = 创建社区
-new-community = 新社区
 community-name = 社区名称
 community-description = 社区描述
-private-community = 私密社区
-private-community-description = 只有知道社区地址的人才能访问
 
 community-visibility = 可见性
 visibility-public = 公开
@@ -281,7 +263,6 @@ community-invite-user = 邀请用户
 community-invite-username = 邀请用户名
 community-invite-button = 发送邀请
 community-invite-success = 邀请已发送
-community-invite-error = 发送邀请失败
 community-invite-user-not-found = 未找到用户
 community-invite-already-member = 该用户已是成员
 community-invite-already-invited = 该用户已有待处理的邀请
@@ -367,8 +348,6 @@ banner-management-active-badge = 已启用
 banner-management-set-active = 设为启用
 banner-management-delete = 删除
 banner-management-delete-confirm = 确定要删除此横幅吗？此操作无法撤销。
-banner-management-activate-error = 启用横幅失败，请重试。
-banner-management-delete-error = 删除横幅失败。您无法删除已启用的横幅。
 banner-management-back-to-settings = 返回设置
 banner-draw-error = 发布横幅时发生错误，请重试。
 
@@ -419,10 +398,6 @@ account-language-settings-save = 保存语言设置
 account-content-settings = 内容设置
 account-show-sensitive-content = 显示敏感内容
 account-content-settings-save = 保存内容设置
-
-cucumber-save = 保存
-cucumber-undo = 撤销
-cucumber-redo = 重做
 
 privacy-policy = 隐私政策
 privacy-content = 黄瓜咖啡馆尊重您的隐私。默认情况下，我们不会收集黄瓜咖啡馆用户的任何个人信息。

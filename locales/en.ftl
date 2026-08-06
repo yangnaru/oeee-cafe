@@ -7,11 +7,9 @@ about = Oeee Cafe is an oekaki board.
 user-contributors = Users who made Oeee Cafe together
 
 timeline = Timeline
-timeline-public = Public timeline
 timeline-my = My timeline
 timeline-empty = Your timeline is empty. Discover and follow other people from <a href="/communities">communities</a>!
 
-home = Home
 draw = Draw!
 collaborate = Collaborate
 drafts = Drafts
@@ -89,7 +87,6 @@ password-reset-sent-message = If an account exists with that email address, we'v
 password-reset-sent-email = Email
 password-reset-check-email = Please check your email and click the link to reset your password.
 password-reset-verify-title = Set New Password
-password-reset-token = Verification code
 password-reset-submit = Reset password
 password-reset-success = Your password has been successfully reset. You can now log in with your new password.
 password-reset-error-mismatch = Passwords do not match.
@@ -110,7 +107,6 @@ participating-community = Participating communities
 latest-active-public-community = Recently active public communities
 recent-drawings = Recent posts
 recent-comments = Recent comments
-recent-comments-from-public-communities = Recent comments from public communities
 view-all-comments = View all comments
 no-comments-yet = No comments yet
 
@@ -155,7 +151,6 @@ move-section-unlisted = Communities You've Posted In
 move-section-public-participated = Public Communities You've Posted In
 move-section-public-other = Other Public Communities
 post-delete-confirm = Are you sure you want to delete this post?
-post-relay-enabled-notice = You can continue drawing on this canvas. Click on the image!
 post-relay = Relay
 post-reply-with-drawing = Reply with Drawing
 post-reply-select-tool = Select tool and canvas size
@@ -175,7 +170,6 @@ post-report-description-placeholder = Please describe why you are reporting this
 post-report-submit = Submit Report
 post-report-success = Post reported successfully. Thank you for helping keep our community safe.
 post-report-error = Failed to submit report. Please try again.
-post-report-confirm = Are you sure you want to report this post?
 
 allow-relay = Allow relay posts
 sensitive = Sensitive
@@ -186,7 +180,6 @@ draft-posts-count = drafts
 draft-empty = You don't have any drafts yet
 
 # Hashtags
-trending-hashtags = Trending Hashtags
 hashtag-post-count = posts
 hashtag-no-posts = No posts with this hashtag yet
 hashtag-discovery = Hashtags
@@ -228,25 +221,17 @@ collaborate-community-group-public = Other public communities
 collaborate-community-no-matches = No matching communities
 collaborate-community-hint = The finished drawing is posted here when the session is saved.
 community-draw-together = Draw together
-collaborate-session-by = by @
-collaborate-session-participants-singular = 1 participant
-collaborate-session-participants-plural = participants
 collaborate-session-created = Created
 collaborate-join-session = Join Session
 
 welcome = Welcome, { $name }!
 
-comment-created-at = Commented at
-
 my-communities = My communities
 my-communities-nil = There are no communities created by you.
 
-latest-active-communities = Latest active communities
 official-communities = Official communities
 official-communities-nil = There are no official communities.
 active-communities-nil = There are no active communities.
-no-active-communities = No active communities at the moment.
-no-posts-in-community = No posts in this community yet.
 loading-more-posts = Loading more posts...
 feed-columns = Per row
 post-untitled = Untitled
@@ -256,11 +241,8 @@ community-sort-posts = Most posts
 community-sort-newest = Newest
 community-sort-name = Name
 create-community = Create community
-new-community = New community
 community-name = Community name
 community-description = Community description
-private-community = Private community
-private-community-description = Only people with the link to the community can find it.
 
 community-visibility = Visibility
 visibility-public = Public
@@ -279,7 +261,6 @@ community-invite-user = Invite user
 community-invite-username = Username to invite
 community-invite-button = Send invitation
 community-invite-success = Invitation sent successfully
-community-invite-error = Failed to send invitation
 community-invite-user-not-found = User not found
 community-invite-already-member = User is already a member
 community-invite-already-invited = User already has a pending invitation
@@ -365,8 +346,6 @@ banner-management-active-badge = Active
 banner-management-set-active = Set as active
 banner-management-delete = Delete
 banner-management-delete-confirm = Are you sure you want to delete this banner? This action cannot be undone.
-banner-management-activate-error = Failed to activate banner. Please try again.
-banner-management-delete-error = Failed to delete banner. You cannot delete your active banner.
 banner-management-back-to-settings = Back to settings
 banner-draw-error = An error occurred while posting your banner. Please try again.
 
@@ -417,10 +396,6 @@ account-language-settings-save = Save language
 account-content-settings = Content settings
 account-show-sensitive-content = Show sensitive content
 account-content-settings-save = Save content settings
-
-cucumber-save = Save
-cucumber-undo = Undo
-cucumber-redo = Redo
 
 privacy-policy = Privacy Policy
 privacy-content = We respect your privacy. By default, we do not collect any personal information from users of Oeee Cafe.
