@@ -3,6 +3,11 @@ base_url = "http://localhost:3000"
 domain = "localhost:3000"
 port = 3000
 
+# tracing env-filter directive; RUST_LOG overrides this when set.
+log_level = "info"
+# Leave empty to disable Sentry error reporting.
+sentry_dsn = ""
+
 db_url = "postgres://"
 db_max_connections = 5
 db_acquire_timeout = 3

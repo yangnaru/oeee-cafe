@@ -80,6 +80,16 @@ impl PushService {
         })
     }
 
+    /// A push service with no transport configured. Every send becomes a no-op,
+    /// which lets the server keep running when push credentials are broken.
+    pub fn disabled(db_pool: PgPool) -> Self {
+        Self {
+            apns_client: None,
+            fcm_client: None,
+            db_pool,
+        }
+    }
+
     pub async fn send_notification_to_user(
         &self,
         user_id: uuid::Uuid,

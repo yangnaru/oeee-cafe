@@ -14,6 +14,21 @@
     <meta name="keywords" content="오이카페, 오에카키, 커뮤니티, お絵かき" />
     <meta name="description" content="오이카페는 오에카키 커뮤니티입니다. お絵かできるOEEEカフェです。" />
     <link rel="icon" type="image/png" href="/static/favicon.png" />
+    {# Link-preview card. Every page gets the site-level version; pages with
+       something more specific to say (a post, a profile, a community) override
+       this block. Only og:* and twitter:card are set — X falls back to og:title
+       and og:description when the twitter:* equivalents are absent, so there is
+       no reason to write each string twice. #}
+    {% block social_meta %}
+      <meta property="og:site_name" content="{{ ftl_get_message('brand') }}" />
+      <meta property="og:type" content="website" />
+      <meta property="og:title" content="{{ ftl_get_message('brand') }}" />
+      <meta property="og:description" content="{{ ftl_get_message('about') }}" />
+      <meta property="og:url" content="{{ base_url|safe }}/" />
+      <meta property="og:image" content="{{ base_url|safe }}/static/favicon.png" />
+      <meta name="twitter:card" content="summary" />
+      <meta name="twitter:site" content="@oeee_cafe" />
+    {% endblock social_meta %}
     {% block head %}
     {% endblock head %}
   </head>

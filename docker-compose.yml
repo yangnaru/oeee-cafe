@@ -8,6 +8,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # deploy.sh exports this from the checked-out commit.
+        GIT_COMMIT: ${GIT_COMMIT:-}
     container_name: oeee-cafe
     ports:
       - "30000:3000"
@@ -16,6 +19,14 @@ services:
     networks:
       - oeee-cafe-network
     restart: always
+    # `restart: always` only notices a process that exited. This catches the
+    # other failure: still running, but unable to reach the database.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 networks:
   oeee-cafe-network:

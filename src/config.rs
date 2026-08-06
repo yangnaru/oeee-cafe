@@ -13,6 +13,14 @@ pub struct AppConfig {
     pub domain: String,
     pub port: u16,
 
+    /// `tracing_subscriber` env-filter directive, e.g. "info" or
+    /// "warn,oeee_cafe=debug". Overridden by `RUST_LOG` when that is set.
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+    /// Error reporting is disabled when unset or empty.
+    #[serde(default)]
+    pub sentry_dsn: Option<String>,
+
     pub db_url: String,
     pub db_max_connections: u32,
     #[serde_as(as = "DurationSeconds<u64>")]
@@ -47,6 +55,10 @@ pub struct AppConfig {
     // FCM configuration (V1 API)
     pub fcm_service_account_path: String,
     pub fcm_project_id: String,
+}
+
+fn default_log_level() -> String {
+    "info".to_string()
 }
 
 impl AppConfig {

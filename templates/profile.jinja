@@ -2,6 +2,27 @@
 {% block title %}
   {{ super() }} | {{ user.display_name }} (@{{ user.login_name }})
 {% endblock title %}
+{% block social_meta %}
+  <meta property="og:site_name" content="{{ ftl_get_message('brand') }}" />
+  <meta property="og:type" content="profile" />
+  <meta property="og:title"
+        content="{{ user.display_name }} (@{{ user.login_name }})" />
+  <meta property="og:description"
+        content="{{ user.display_name }} @{{ user.login_name }}@{{ domain }}" />
+  <meta property="og:url" content="{{ base_url|safe }}/@{{ user.login_name }}" />
+  {# The banner is the one image that belongs to a profile; fall back to the
+     site mark when the user has not drawn one. #}
+  {% if banner %}
+    <meta property="og:image"
+          content="{{ r2_public_endpoint_url|safe }}/image/{{ banner.image_filename[:2] }}/{{ banner.image_filename }}" />
+    <meta property="og:image:width" content="{{ banner.width }}" />
+    <meta property="og:image:height" content="{{ banner.height }}" />
+  {% else %}
+    <meta property="og:image" content="{{ base_url|safe }}/static/favicon.png" />
+  {% endif %}
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:site" content="@oeee_cafe" />
+{% endblock social_meta %}
 {% block head %}
   <link rel="alternate"
         type="application/activity+json"

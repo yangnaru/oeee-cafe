@@ -23,6 +23,13 @@ ENV SCCACHE_DIR=/sccache
 ENV SCCACHE_CACHE_SIZE="10G"
 ENV DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5433/oeee_cafe
 
+# Baked in via option_env! and used to version static asset URLs, so a deploy
+# invalidates browser and CDN caches and nothing else does. Without it the
+# server falls back to its start time, which is correct but re-downloads
+# assets on every restart.
+ARG GIT_COMMIT=""
+ENV GIT_COMMIT=$GIT_COMMIT
+
 # `cargo build --release` already builds both bin targets. /app/target is a
 # cache mount, so anything needed later must be copied out inside this RUN.
 RUN --mount=type=cache,target=/sccache \
@@ -46,7 +53,8 @@ RUN pnpm run build
 # Build runtime image
 FROM ubuntu:25.10
 WORKDIR /app
-RUN apt-get update && apt-get install ca-certificates -y
+# curl is what the compose healthcheck shells out to.
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
 COPY tegaki/ ./tegaki/
 COPY neo/dist/neo.css neo/dist/neo.js ./neo/dist/
 COPY locales/ ./locales/

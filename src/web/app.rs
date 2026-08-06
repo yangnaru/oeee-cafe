@@ -6,50 +6,49 @@ use crate::web::handlers::account::{
     request_email_verification_code, request_email_verification_json, save_language,
     save_show_sensitive_content, verify_email_code_json, verify_email_verification_code,
 };
-use crate::web::handlers::admin::{
-    admin_banners, admin_banners_fragment, admin_communities, admin_community_posts,
-    admin_flag_banner, admin_flag_post, admin_post_detail, admin_posts, admin_posts_fragment,
-    admin_user_posts, admin_users,
-};
 use crate::web::handlers::activitypub::{
     activitypub_get_community, activitypub_get_post, activitypub_get_user,
     activitypub_post_community_inbox, activitypub_post_shared_inbox,
     activitypub_post_user_followers, activitypub_post_user_inbox, activitypub_webfinger,
+};
+use crate::web::handlers::admin::{
+    admin_banners, admin_banners_fragment, admin_communities, admin_community_posts,
+    admin_flag_banner, admin_flag_post, admin_post_detail, admin_posts, admin_posts_fragment,
+    admin_user_posts, admin_users,
 };
 use crate::web::handlers::auth::{
     api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup,
 };
 use crate::web::handlers::collaborate::{
     collaborate_lobby, collaborate_sessions_fragment, create_collaborative_session,
-    get_active_sessions_json, get_auth_info, get_collaboration_meta,
-    load_more_collaborative_posts, save_collaborative_session, serve_collaborative_app,
-    websocket_collaborate_handler,
+    get_active_sessions_json, get_auth_info, get_collaboration_meta, load_more_collaborative_posts,
+    save_collaborative_session, serve_collaborative_app, websocket_collaborate_handler,
 };
 use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
     communities, communities_fragment, community, community_comments, community_detail_json,
-    community_iframe,
-    create_community_form, create_community_json, delete_community_json, do_accept_invitation,
-    do_create_community, do_leave_community, do_reject_invitation, get_communities_list_json,
-    get_community_invitations_json, get_community_members_json, get_members,
-    get_public_communities_json, get_user_invitations_json, hx_delete_community,
-    hx_do_edit_community, hx_edit_community, invite_user, invite_user_json,
-    leave_community_json, members_page, redirect_community_to_unified, remove_member,
-    remove_member_json, retract_invitation, retract_invitation_json,
-    search_public_communities_json, update_community_json,
+    community_iframe, create_community_form, create_community_json, delete_community_json,
+    do_accept_invitation, do_create_community, do_leave_community, do_reject_invitation,
+    get_communities_list_json, get_community_invitations_json, get_community_members_json,
+    get_members, get_public_communities_json, get_user_invitations_json, hx_delete_community,
+    hx_do_edit_community, hx_edit_community, invite_user, invite_user_json, leave_community_json,
+    members_page, redirect_community_to_unified, remove_member, remove_member_json,
+    retract_invitation, retract_invitation_json, search_public_communities_json,
+    update_community_json,
+};
+use crate::web::handlers::devices::{
+    delete_device_handler, list_devices_handler, register_device_handler,
 };
 use crate::web::handlers::draw::{
     banner_draw_finish, draw_finish, start_banner_draw, start_banner_draw_mobile, start_draw,
     start_draw_get, start_draw_mobile,
 };
-use crate::web::handlers::handler_404;
 use crate::web::handlers::hashtag::{hashtag_autocomplete, hashtag_discovery, hashtag_view};
 use crate::web::handlers::home::{
     add_reaction_api, create_comment_api, delete_comment_api, delete_post_api, edit_post_api,
     get_active_communities_json, get_latest_comments_json, get_post_comments_api,
     get_post_details_json, get_post_reactions_by_emoji_json, home, load_more_public_posts,
-    load_more_timeline_posts,
-    load_more_public_posts_json, my_timeline, remove_reaction_api,
+    load_more_public_posts_json, load_more_timeline_posts, my_timeline, remove_reaction_api,
 };
 use crate::web::handlers::notifications::{
     api_delete_notification, api_list_notifications, api_mark_notification_read,
@@ -60,6 +59,7 @@ use crate::web::handlers::password_reset::{
     password_reset_request, password_reset_request_page, password_reset_verify,
     password_reset_verify_page,
 };
+use crate::web::handlers::policy::policy;
 use crate::web::handlers::post::{
     add_reaction, do_create_comment, do_post_edit_community, draft_posts, draft_posts_api,
     get_movable_communities_api, hx_delete_post, hx_do_edit_post, hx_edit_post,
@@ -68,9 +68,7 @@ use crate::web::handlers::post::{
     post_replay_view_by_login_name, post_replay_view_mobile, post_view_by_login_name,
     redirect_post_to_login_name, remove_reaction,
 };
-use crate::web::handlers::policy::policy;
 use crate::web::handlers::privacy::privacy;
-use crate::web::handlers::report::{report_post_api, report_profile_api};
 use crate::web::handlers::profile::{
     activate_banner_api, banner_management, delete_banner_api, do_activate_banner, do_add_link,
     do_delete_banner, do_delete_guestbook_entry, do_delete_link, do_follow_profile,
@@ -79,23 +77,28 @@ use crate::web::handlers::profile::{
     profile_banners_iframe, profile_followings_json, profile_iframe, profile_json,
     profile_or_community, profile_settings, unfollow_profile_api,
 };
-use crate::web::handlers::devices::{
-    delete_device_handler, list_devices_handler, register_device_handler,
-};
+use crate::web::handlers::report::{report_post_api, report_profile_api};
 use crate::web::handlers::search::search_json;
-use crate::web::handlers::well_known::{android_assetlinks, apple_app_site_association};
+use crate::web::handlers::well_known::{
+    android_assetlinks, apple_app_site_association, robots_txt, sitemap_xml,
+};
+use crate::web::handlers::{handler_404, health};
 use activitypub_federation::config::{FederationConfig, FederationMiddleware};
 use anyhow::Result;
+use axum::body::Body;
 use axum::extract::DefaultBodyLimit;
+use axum::http::{header, Response, StatusCode};
 use axum::response::Redirect;
 use axum::routing::{delete, get, post, put};
 use axum::Router;
 use axum_login::{login_required, AuthManagerLayerBuilder};
 use axum_messages::MessagesManagerLayer;
+use std::any::Any;
 use std::net::SocketAddr;
 use time::Duration;
 use tokio::signal;
 use tokio::task::AbortHandle;
+use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::SameSite;
 use tower_sessions::{session_store::ExpiredDeletion, Expiry, SessionManagerLayer};
@@ -258,7 +261,10 @@ impl App {
             .route("/admin/communities/:slug/posts", get(admin_community_posts))
             .route("/admin/banners", get(admin_banners))
             .route("/admin/banners-fragment", get(admin_banners_fragment))
-            .route("/admin/banners/:banner_id/explicit", post(admin_flag_banner))
+            .route(
+                "/admin/banners/:banner_id/explicit",
+                post(admin_flag_banner),
+            )
             .route_layer(login_required!(Backend, login_url = "/login"));
 
         let state = self.state.clone();
@@ -294,14 +300,14 @@ impl App {
 
         let app = Router::new()
             .route("/", get(home))
+            .route("/health", get(health))
+            .route("/robots.txt", get(robots_txt))
+            .route("/sitemap.xml", get(sitemap_xml))
             .route(
                 "/.well-known/apple-app-site-association",
                 get(apple_app_site_association),
             )
-            .route(
-                "/.well-known/assetlinks.json",
-                get(android_assetlinks),
-            )
+            .route("/.well-known/assetlinks.json", get(android_assetlinks))
             .route("/api/home/posts", get(load_more_public_posts))
             .route("/api/collaborate/posts", get(load_more_collaborative_posts))
             .route("/api/communities/cards", get(communities_fragment))
@@ -391,7 +397,10 @@ impl App {
                 "/api/v1/communities/:slug/members/:user_id",
                 delete(remove_member_json),
             )
-            .route("/api/v1/communities/:slug/leave", post(leave_community_json))
+            .route(
+                "/api/v1/communities/:slug/leave",
+                post(leave_community_json),
+            )
             .route(
                 "/api/v1/communities/:slug/invitations",
                 get(get_community_invitations_json),
@@ -511,7 +520,12 @@ impl App {
             .layer(auth_layer)
             .with_state(self.state.clone())
             .merge(static_router)
-            .merge(activitypub_router);
+            .merge(activitypub_router)
+            // Outermost, so it also covers panics raised inside the layers
+            // above. Without this axum drops the connection on a panic: the
+            // client sees a reset with no status, and Sentry never hears about
+            // it.
+            .layer(CatchPanicLayer::custom(handle_panic));
 
         // run our app with hyper, listening globally
         let addr = SocketAddr::from(([0, 0, 0, 0], self.state.config.port));
@@ -533,6 +547,32 @@ impl App {
 
         Ok(())
     }
+}
+
+/// Turn a panicking handler into a logged, reported 500 instead of a dropped
+/// connection.
+fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response<Body> {
+    let details = if let Some(s) = err.downcast_ref::<String>() {
+        s.clone()
+    } else if let Some(s) = err.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else {
+        "unknown panic payload".to_string()
+    };
+
+    tracing::error!("handler panicked: {}", details);
+    sentry::capture_message(
+        &format!("handler panicked: {}", details),
+        sentry::Level::Fatal,
+    );
+
+    Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            r#"{"code":"INTERNAL_ERROR","message":"Something went wrong"}"#,
+        ))
+        .expect("panic response is statically valid")
 }
 
 async fn shutdown_signal(

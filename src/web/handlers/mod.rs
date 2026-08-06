@@ -43,11 +43,11 @@ pub mod hashtag;
 pub mod home;
 pub mod notifications;
 pub mod password_reset;
-pub mod post;
 pub mod policy;
+pub mod post;
 pub mod privacy;
-pub mod report;
 pub mod profile;
+pub mod report;
 pub mod search;
 pub mod well_known;
 
@@ -56,21 +56,46 @@ pub async fn handler_404(
     ExtractFtlLang(ftl_lang): ExtractFtlLang,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let db = &state.db_pool;
-    let mut tx = db.begin().await?;
-
-    let common_ctx =
-        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    // The header counts only exist for signed-in users, and this handler
+    // absorbs every bot scan for /wp-admin and friends — so don't open a
+    // transaction we have nothing to ask.
+    let (draft_post_count, unread_notification_count) = match auth_session.user.as_ref() {
+        Some(user) => {
+            let mut tx = state.db_pool.begin().await?;
+            let common_ctx = CommonContext::build(&mut tx, Some(user.id)).await?;
+            (
+                common_ctx.draft_post_count,
+                common_ctx.unread_notification_count,
+            )
+        }
+        None => (0, 0),
+    };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("404.jinja")?;
     let rendered: String = template.render(context! {
         current_user => auth_session.user,
-        draft_post_count => common_ctx.draft_post_count,
-        unread_notification_count => common_ctx.unread_notification_count,
+        draft_post_count,
+        unread_notification_count,
         ftl_lang
     })?;
 
-    Ok(Html(rendered).into_response())
+    Ok((StatusCode::NOT_FOUND, Html(rendered)).into_response())
+}
+
+/// Liveness/readiness probe. Checks that a connection can actually be taken
+/// from the pool and used, so a wedged or exhausted pool fails the check
+/// instead of reporting healthy because the process is still running.
+pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
+    match sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(&state.db_pool)
+        .await
+    {
+        Ok(_) => (StatusCode::OK, "ok").into_response(),
+        Err(e) => {
+            tracing::error!("health check failed: {}", e);
+            (StatusCode::SERVICE_UNAVAILABLE, "database unavailable").into_response()
+        }
+    }
 }
 
 pub async fn render_403(
@@ -459,10 +484,172 @@ pub(crate) mod test_support {
             |_state: &State, id: String, _args: minijinja::Value| id,
         );
         env.add_global("r2_public_endpoint_url", "https://example.test");
+        env.add_global("base_url", "https://oeee.test");
         env.set_loader(path_loader(
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates"),
         ));
         env
+    }
+}
+
+#[cfg(test)]
+mod social_meta_tests {
+    //! The link-preview card lives in `base.jinja` and is overridden per page.
+    //! These render the real templates because the failure mode is silent —
+    //! a typo'd variable renders as an empty `content=""`, not an error.
+
+    use super::test_support;
+    use minijinja::context;
+    use serde_json::json;
+
+    fn chrome() -> minijinja::Value {
+        context! {
+            current_user => json!(null),
+            messages => Vec::<serde_json::Value>::new(),
+            draft_post_count => 0,
+            unread_notification_count => 0,
+            ftl_lang => "en",
+        }
+    }
+
+    /// The `<head>` with runs of whitespace collapsed. Templates are formatted
+    /// by djlint, which wraps long tags across lines, so asserting on raw
+    /// output would break on reformatting rather than on behaviour. Scoping to
+    /// the head also keeps body text from satisfying a meta-tag assertion.
+    fn head(rendered: &str) -> String {
+        let start = rendered.find("<head>").expect("page has a head");
+        let end = rendered.find("</head>").expect("head is closed");
+        rendered[start..end]
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    #[test]
+    fn pages_without_an_override_get_the_site_card() {
+        let env = test_support::env();
+        let rendered = env
+            .get_template("404.jinja")
+            .expect("404 template loads")
+            .render(chrome())
+            .expect("404 renders");
+
+        let head = head(&rendered);
+        assert!(head.contains(r#"<meta property="og:title" content="brand" />"#));
+        assert!(head.contains(r#"<meta property="og:description" content="about" />"#));
+        assert!(
+            head.contains(r#"<meta property="og:url" content="https://oeee.test/" />"#),
+            "site card should point at the site root"
+        );
+        assert!(head.contains(r#"<meta name="twitter:card" content="summary" />"#));
+    }
+
+    #[test]
+    fn public_community_gets_a_card_and_stays_indexable() {
+        let env = test_support::env();
+        let rendered = env
+            .get_template("community.jinja")
+            .expect("community template loads")
+            .render(context! {
+                community => json!({
+                    "id": "00000000-0000-0000-0000-000000000001",
+                    "name": "Open Studio",
+                    "description": "Draw with us",
+                    "slug": "open",
+                    "visibility": "public",
+                    "owner_id": "00000000-0000-0000-0000-000000000002",
+                }),
+                community_id => "00000000-0000-0000-0000-000000000001",
+                domain => "oeee.test",
+                posts => Vec::<serde_json::Value>::new(),
+                comments => Vec::<serde_json::Value>::new(),
+                ..chrome()
+            })
+            .expect("community renders");
+
+        let head = head(&rendered);
+        assert!(head.contains(r#"<meta property="og:title" content="Open Studio" />"#));
+        assert!(head.contains(r#"<meta property="og:url" content="https://oeee.test/@open" />"#));
+        assert!(
+            !head.contains("noindex"),
+            "a public community should be indexable"
+        );
+    }
+
+    #[test]
+    fn private_community_is_noindexed_and_leaks_no_preview() {
+        let env = test_support::env();
+        let rendered = env
+            .get_template("community.jinja")
+            .expect("community template loads")
+            .render(context! {
+                community => json!({
+                    "id": "00000000-0000-0000-0000-000000000001",
+                    "name": "Secret Studio",
+                    "description": "Members only",
+                    "slug": "secret",
+                    "visibility": "private",
+                    "owner_id": "00000000-0000-0000-0000-000000000002",
+                }),
+                community_id => "00000000-0000-0000-0000-000000000001",
+                domain => "oeee.test",
+                posts => Vec::<serde_json::Value>::new(),
+                comments => Vec::<serde_json::Value>::new(),
+                ..chrome()
+            })
+            .expect("community renders");
+
+        let head = head(&rendered);
+        assert!(head.contains(r#"<meta name="robots" content="noindex, nofollow" />"#));
+        assert!(
+            !head.contains("og:title"),
+            "a private community must not emit a preview card"
+        );
+        assert!(
+            !head.contains("Members only"),
+            "the description must not leak into meta tags"
+        );
+    }
+
+    #[test]
+    fn profile_card_uses_the_banner_when_there_is_one() {
+        let env = test_support::env();
+        let user = json!({
+            "id": "00000000-0000-0000-0000-000000000001",
+            "login_name": "artist",
+            "display_name": "An Artist",
+        });
+        let ctx = context! {
+            user => user,
+            domain => "oeee.test",
+            banner => json!({
+                "image_filename": "abcdef.png",
+                "width": 200,
+                "height": 40,
+            }),
+            followings => Vec::<serde_json::Value>::new(),
+            links => Vec::<serde_json::Value>::new(),
+            public_community_posts => Vec::<serde_json::Value>::new(),
+            private_community_posts => Vec::<serde_json::Value>::new(),
+            is_following => false,
+            ..chrome()
+        };
+
+        let rendered = env
+            .get_template("profile.jinja")
+            .expect("profile template loads")
+            .render(ctx)
+            .expect("profile renders");
+
+        let head = head(&rendered);
+        assert!(head.contains(r#"<meta property="og:title" content="An Artist (@artist)" />"#));
+        assert!(head.contains(r#"<meta property="og:url" content="https://oeee.test/@artist" />"#));
+        assert!(
+            head.contains(
+                r#"<meta property="og:image" content="https://example.test/image/ab/abcdef.png" />"#
+            ),
+            "the banner is the profile's own image and should be the preview"
+        );
     }
 }
 

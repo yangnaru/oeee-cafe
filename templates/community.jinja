@@ -3,7 +3,24 @@
 {% block title %}
   {{ super() }} | {{ community.name }}
 {% endblock title %}
+{% block social_meta %}
+  {% if community.visibility == "public" %}
+    <meta property="og:site_name" content="{{ ftl_get_message('brand') }}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{{ community.name }}" />
+    <meta property="og:description" content="{{ community.description }}" />
+    <meta property="og:url" content="{{ base_url|safe }}/@{{ community.slug }}" />
+    <meta property="og:image" content="{{ base_url|safe }}/static/favicon.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:site" content="@oeee_cafe" />
+  {% endif %}
+{% endblock social_meta %}
 {% block head %}
+  {# Unlisted and private communities should not show up in search results,
+     and there is nothing to preview for someone who cannot open them. #}
+  {% if community.visibility != "public" %}
+    <meta name="robots" content="noindex, nofollow" />
+  {% endif %}
   <link rel="alternate"
         type="application/activity+json"
         href="https://{{ domain }}/ap/communities/{{ community.id }}" />

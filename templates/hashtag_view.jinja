@@ -2,6 +2,26 @@
 {% block title %}
   {{ super() }} | #{{ hashtag.display_name }}
 {% endblock title %}
+{% block social_meta %}
+  <meta property="og:site_name" content="{{ ftl_get_message('brand') }}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="#{{ hashtag.display_name }}" />
+  <meta property="og:description"
+        content="{{ hashtag.post_count }} {{ ftl_get_message('hashtag-post-count') }}" />
+  <meta property="og:url"
+        content="{{ base_url|safe }}/hashtags/{{ hashtag.display_name }}" />
+  {# Lead with the most recent drawing carrying the tag, which is a far better
+     preview than the site mark. #}
+  {% if posts %}
+    <meta property="og:image"
+          content="{{ r2_public_endpoint_url|safe }}/image/{{ posts[0].image_filename[:2] }}/{{ posts[0].image_filename }}" />
+    <meta name="twitter:card" content="summary_large_image" />
+  {% else %}
+    <meta property="og:image" content="{{ base_url|safe }}/static/favicon.png" />
+    <meta name="twitter:card" content="summary" />
+  {% endif %}
+  <meta name="twitter:site" content="@oeee_cafe" />
+{% endblock social_meta %}
 {% block content %}
   <div class="center">
     <h2>#{{ hashtag.display_name }}</h2>

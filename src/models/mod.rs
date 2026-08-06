@@ -16,4 +16,5 @@ pub mod notification;
 pub mod password_reset_challenge;
 pub mod post;
 pub mod reaction;
+pub mod sitemap;
 pub mod user;

@@ -65,6 +65,9 @@ done
 echo "Migrations completed successfully!"
 
 echo "==> Building and deploying with Docker Compose..."
+# Versions the static asset URLs the server hands out, so each deploy
+# invalidates browser and CDN caches exactly once.
+export GIT_COMMIT="$(git rev-parse HEAD)"
 if ! docker compose up -d --build --remove-orphans; then
     echo "ERROR: docker compose failed"
     exit 1

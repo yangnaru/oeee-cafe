@@ -13,43 +13,61 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::Level;
+use tracing_subscriber::EnvFilter;
 
 fn main() {
     // Initialize rustls crypto provider for push notifications
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let _guard = sentry::init(("https://d8284c2171832794baf0bdaace92c55f@o4504757655764992.ingest.us.sentry.io/4510046127194112", sentry::ClientOptions {
-        release: sentry::release_name!(),
-        // Capture user IPs and potentially sensitive headers when using HTTP server integrations
-        // see https://docs.sentry.io/platforms/rust/data-management/data-collected for more info
-        send_default_pii: true,
-        ..Default::default()
-      }));
+    let args: Vec<String> = args().collect();
+    if args.len() < 2 {
+        println!("usage: {} CFG", args.first().unwrap_or(&"oeee".to_string()));
+        exit(1);
+    }
+
+    // Config is loaded before the runtime starts because both Sentry and the
+    // tracing subscriber are configured from it, and Sentry's guard has to
+    // outlive everything it might report on.
+    let cfg: AppConfig = AppConfig::new_from_file_and_env(args[1].as_ref()).unwrap_or_else(|e| {
+        eprintln!("error: {}", e);
+        exit(1);
+    });
+
+    // RUST_LOG wins when set, so an operator can turn up detail on a running
+    // container without editing config; otherwise fall back to `log_level`.
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&cfg.log_level)),
+        )
+        .finish();
+    let _ = tracing::subscriber::set_global_default(subscriber);
+
+    let _guard = cfg
+        .sentry_dsn
+        .as_deref()
+        .filter(|dsn| !dsn.is_empty())
+        .map(|dsn| {
+            sentry::init((
+                dsn,
+                sentry::ClientOptions {
+                    release: sentry::release_name!(),
+                    environment: Some(cfg.env.clone().into()),
+                    // Capture user IPs and potentially sensitive headers when using HTTP server integrations
+                    // see https://docs.sentry.io/platforms/rust/data-management/data-collected for more info
+                    send_default_pii: true,
+                    ..Default::default()
+                },
+            ))
+        });
+    if _guard.is_none() {
+        tracing::warn!("sentry_dsn not configured, error reporting is disabled");
+    }
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("Failed to build tokio runtime")
         .block_on(async {
-            let args: Vec<String> = args().collect();
-            if args.len() < 2 {
-                println!("usage: {} CFG", args.first().unwrap_or(&"oeee".to_string()));
-                exit(1);
-            }
-
-            let cfg: AppConfig =
-                AppConfig::new_from_file_and_env(args[1].as_ref()).unwrap_or_else(|e| {
-                    eprintln!("error: {}", e);
-                    exit(1);
-                });
-
-            // initialize tracing
-            let subscriber = tracing_subscriber::fmt()
-                .with_max_level(Level::DEBUG)
-                .finish();
-            let _ = tracing::subscriber::set_global_default(subscriber);
-
             tracing::debug!("config: {:?}", cfg);
 
             let template_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates");
@@ -63,14 +81,24 @@ fn main() {
             env.set_auto_escape_callback(|_| AutoEscape::Html);
             minijinja_contrib::add_to_environment(&mut env);
 
-            fn cachebuster(value: String) -> String {
-                let timestamp = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("System time is before UNIX_EPOCH")
-                    .as_secs();
-                format!("{}?{}", value, timestamp)
-            }
-            env.add_filter("cachebuster", cachebuster);
+            // In production the asset URL has to be *stable*, or browsers and
+            // the CDN re-fetch every file on every page view — which is what a
+            // fresh `now()` per render used to do. Versioning by build id means
+            // assets cache indefinitely and a deploy invalidates them all at
+            // once. In development we want the opposite: a new value per render,
+            // so editing style.css shows up without restarting the server.
+            let asset_version: Option<String> =
+                (cfg.env == "production").then(|| oeee_cafe::build_info::build_id().to_string());
+            env.add_filter("cachebuster", move |value: String| match &asset_version {
+                Some(version) => format!("{}?{}", value, version),
+                None => {
+                    let timestamp = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("System time is before UNIX_EPOCH")
+                        .as_secs();
+                    format!("{}?{}", value, timestamp)
+                }
+            });
 
             fn markdown_to_html(value: String) -> String {
                 oeee_cafe::markdown_utils::process_markdown_content(&value)
@@ -175,6 +203,10 @@ fn main() {
 
             // Add global variables
             env.add_global("r2_public_endpoint_url", cfg.r2_public_endpoint_url.clone());
+            // Needed by base.jinja to build absolute og:url/og:image values on
+            // every page. Handlers that pass their own `base_url` still win,
+            // since context takes precedence over globals.
+            env.add_global("base_url", cfg.base_url.trim_end_matches('/').to_string());
 
             env.set_loader(path_loader(&template_path));
 
@@ -190,13 +222,19 @@ fn main() {
 
             let redis_state = RedisStateManager::new(redis_pool.clone());
 
-            let push_service = PushService::new(&cfg, db_pool.clone())
-                .await
-                .unwrap_or_else(|e| {
-                    tracing::error!("Failed to initialize push service: {:?}", e);
-                    tracing::error!("Push notifications will not be available");
-                    panic!("Failed to initialize push service");
-                });
+            // Push is a nice-to-have: an expired APNs key or unreadable FCM
+            // service account must not stop the site from serving pages.
+            let push_service = match PushService::new(&cfg, db_pool.clone()).await {
+                Ok(service) => service,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to initialize push service, continuing without push \
+                         notifications: {:?}",
+                        e
+                    );
+                    PushService::disabled(db_pool.clone())
+                }
+            };
 
             let state = AppState {
                 config: cfg.clone(),
