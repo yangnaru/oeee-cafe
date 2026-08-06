@@ -761,6 +761,7 @@ pub async fn post_replay_view(
 pub async fn post_replay_view_mobile(
     auth_session: AuthSession,
     State(state): State<AppState>,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let uuid = match parse_id_with_legacy_support(&id, "/posts", &state)? {
@@ -827,6 +828,7 @@ pub async fn post_replay_view_mobile(
         .render(context! {
             post => Some(&post),
             r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+            ftl_lang,
         })
         .map_err(|e| AppError::from(anyhow::anyhow!("Template render error: {}", e)))?;
     Ok(Html(rendered).into_response())

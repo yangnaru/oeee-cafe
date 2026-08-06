@@ -81,12 +81,17 @@
     <div class="error-container">
       <div class="error-emoji">🔥🥒🔥</div>
       <h1 class="error-title">Invalid ID</h1>
-      <p class="error-message">
-        <p>잘못된 ID 형식입니다.</p>
-        <p>無効なIDフォーマットです。</p>
-        <p>无效的ID格式。</p>
-        <p>The URL you're looking for contains an invalid ID format.</p>
-      </p>
+      {# Rendered from parse_id_with_legacy_support, which has no request
+         context and so cannot know the visitor's language — hence all four at
+         once, each tagged so screen readers switch voices instead of reading
+         Korean with an English one. The document stays `en` for the chrome
+         around them. #}
+      <div class="error-message">
+        <p lang="ko">잘못된 ID 형식입니다.</p>
+        <p lang="ja">無効なIDフォーマットです。</p>
+        <p lang="zh">无效的ID格式。</p>
+        <p lang="en">The URL you're looking for contains an invalid ID format.</p>
+      </div>
       <p class="error-home-link">
         <a href="/">← Go back to home</a>
       </p>

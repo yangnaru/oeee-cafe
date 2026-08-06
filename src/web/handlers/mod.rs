@@ -526,6 +526,27 @@ mod social_meta_tests {
     }
 
     #[test]
+    fn html_lang_names_the_language_the_page_was_rendered_in() {
+        // This used to read `ftl_get_message('lang')`, and no locale defines a
+        // `lang` message, so every page shipped `<html lang="lang">` — the
+        // fallback for a missing key is the key itself, which is silent.
+        for lang in ["ko", "ja", "en", "zh"] {
+            let env = test_support::env();
+            let rendered = env
+                .get_template("404.jinja")
+                .expect("404 template loads")
+                .render(context! { ftl_lang => lang, ..chrome() })
+                .expect("404 renders");
+
+            assert!(
+                rendered.contains(&format!(r#"<html lang="{}">"#, lang)),
+                "expected the document to declare {lang}, got: {}",
+                &rendered[..rendered.find("<head>").unwrap_or(80)]
+            );
+        }
+    }
+
+    #[test]
     fn pages_without_an_override_get_the_site_card() {
         let env = test_support::env();
         let rendered = env
