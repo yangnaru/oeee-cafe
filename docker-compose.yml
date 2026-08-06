@@ -19,6 +19,10 @@ services:
     networks:
       - oeee-cafe-network
     restart: always
+    # On SIGTERM the server waits up to 10s for open drawing sessions to close
+    # cleanly. Docker's default 10s grace period would SIGKILL it right as that
+    # wait expires, so give it room to finish and exit on its own.
+    stop_grace_period: 20s
     # `restart: always` only notices a process that exited. This catches the
     # other failure: still running, but unable to reach the database.
     healthcheck:

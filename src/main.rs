@@ -5,7 +5,7 @@ use oeee_cafe::locale::LOCALES;
 use oeee_cafe::push::PushService;
 use oeee_cafe::web::app::App;
 use oeee_cafe::web::handlers::collaborate::redis_state::RedisStateManager;
-use oeee_cafe::web::state::AppState;
+use oeee_cafe::web::state::{AppState, Shutdown};
 use oeee_cafe::AppConfig;
 use std::collections::HashMap;
 use std::env::args;
@@ -243,6 +243,7 @@ fn main() {
                 redis_pool,
                 redis_state,
                 push_service: Arc::new(push_service),
+                shutdown: Shutdown::new(),
             };
 
             App::new(state)

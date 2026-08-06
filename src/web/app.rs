@@ -1,4 +1,4 @@
-use super::state::AppState;
+use super::state::{AppState, Shutdown};
 use crate::models::user::Backend;
 use crate::web::handlers::about::about;
 use crate::web::handlers::account::{
@@ -539,13 +539,58 @@ impl App {
             .with_graceful_shutdown(shutdown_signal(
                 deletion_task.abort_handle(),
                 cleanup_task.abort_handle(),
+                self.state.shutdown.clone(),
             ))
             .await?;
 
-        deletion_task.await??;
-        cleanup_task.await?;
+        // Axum considers a WebSocket done as soon as it is upgraded, so it is
+        // on us to wait for the drawing sessions to say goodbye and record
+        // that their participants left.
+        drain_websockets(&self.state).await;
+
+        // Both tasks were aborted by the shutdown signal above, so a
+        // cancellation here is the expected outcome rather than a failure —
+        // treating it as one turned every SIGTERM into a panic on the way out.
+        match deletion_task.await {
+            Ok(result) => result?,
+            Err(e) if e.is_cancelled() => {}
+            Err(e) => return Err(e.into()),
+        }
+        match cleanup_task.await {
+            Ok(()) => {}
+            Err(e) if e.is_cancelled() => {}
+            Err(e) => return Err(e.into()),
+        }
 
         Ok(())
+    }
+}
+
+// Long enough for open sessions to close cleanly, short enough to stay inside
+// the container's stop grace period (see `stop_grace_period` in
+// docker-compose.yml) so the wait never ends in a SIGKILL instead.
+const WEBSOCKET_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const WEBSOCKET_DRAIN_POLL: std::time::Duration = std::time::Duration::from_millis(50);
+
+async fn drain_websockets(state: &AppState) {
+    let live = state.shutdown.live_socket_count();
+    if live == 0 {
+        return;
+    }
+
+    tracing::info!("waiting for {} websocket session(s) to close", live);
+    let deadline = tokio::time::Instant::now() + WEBSOCKET_DRAIN_TIMEOUT;
+    while state.shutdown.live_socket_count() > 0 && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(WEBSOCKET_DRAIN_POLL).await;
+    }
+
+    match state.shutdown.live_socket_count() {
+        0 => tracing::info!("all websocket sessions closed"),
+        remaining => tracing::warn!(
+            "giving up on {} websocket session(s) after {:?}",
+            remaining,
+            WEBSOCKET_DRAIN_TIMEOUT
+        ),
     }
 }
 
@@ -578,6 +623,7 @@ fn handle_panic(err: Box<dyn Any + Send + 'static>) -> Response<Body> {
 async fn shutdown_signal(
     deletion_task_abort_handle: AbortHandle,
     cleanup_task_abort_handle: AbortHandle,
+    shutdown: Shutdown,
 ) {
     let ctrl_c = async {
         signal::ctrl_c()
@@ -597,13 +643,14 @@ async fn shutdown_signal(
     let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = ctrl_c => {
-            deletion_task_abort_handle.abort();
-            cleanup_task_abort_handle.abort();
-        },
-        _ = terminate => {
-            deletion_task_abort_handle.abort();
-            cleanup_task_abort_handle.abort();
-        },
+        _ = ctrl_c => {},
+        _ = terminate => {},
     }
+
+    tracing::info!("shutdown signal received");
+    deletion_task_abort_handle.abort();
+    cleanup_task_abort_handle.abort();
+    // Tell live drawing sessions to wind down now, in parallel with axum
+    // draining the plain HTTP connections.
+    shutdown.signal();
 }

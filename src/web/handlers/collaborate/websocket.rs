@@ -1,10 +1,13 @@
 use crate::app_error::AppError;
 use crate::models::user::AuthSession;
 use crate::web::state::AppState;
-use axum::extract::{ws::Message, ws::WebSocket, Path, State, WebSocketUpgrade};
+use axum::extract::{
+    ws::close_code, ws::CloseFrame, ws::Message, ws::WebSocket, Path, State, WebSocketUpgrade,
+};
 use axum::response::Response;
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
+use std::borrow::Cow;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -26,6 +29,11 @@ struct SessionContext<'a> {
 // client to upload a session reset that replaces the accumulated history
 // (Drawpile's auto-reset). Keeps catch-up for late joiners fast.
 const RESET_THRESHOLD_MESSAGES: usize = 500;
+
+// How often a live connection refreshes its Redis registry entry. Comfortably
+// inside the 30s entry TTL, so a slow beat never drops a live connection out
+// of its room.
+const HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
 // An in-progress session reset upload from this connection: `count` snapshot
 // messages follow a RESET_BEGIN and replace all history up to `base_seq`.
@@ -58,6 +66,10 @@ pub async fn handle_socket(
 ) {
     let (mut sender, mut receiver) = socket.split();
 
+    // Counts this session as live until the handler returns, so a redeploy
+    // waits for it to close cleanly instead of killing it mid-stroke.
+    let _socket_guard = state.shutdown.track_socket();
+
     let connection_id = Uuid::new_v4().to_string();
 
     info!(
@@ -67,7 +79,7 @@ pub async fn handle_socket(
 
     let db = &state.db_pool;
 
-    let (is_owner, owner_id, session_user_id) = match setup_connection(
+    let (is_owner, owner_id, session_user_id, connection_info) = match setup_connection(
         db,
         room_uuid,
         user_id,
@@ -78,7 +90,18 @@ pub async fn handle_socket(
     .await
     {
         Ok(owner_info) => owner_info,
-        Err(_) => return,
+        Err(_) => {
+            // The join was refused (session over, full, or out of session user
+            // ids). Say so with a policy close rather than just dropping the
+            // socket, so the client knows not to keep retrying.
+            let _ = sender
+                .send(Message::Close(Some(CloseFrame {
+                    code: close_code::POLICY,
+                    reason: Cow::from("cannot join session"),
+                })))
+                .await;
+            return;
+        }
     };
 
     // Tell the client its 1-byte session user id before any history arrives;
@@ -149,6 +172,13 @@ pub async fn handle_socket(
         }
     });
 
+    // Keep this connection visible in the room registry for as long as the
+    // socket is open. Without it the entry lapses after CONNECTION_TTL and the
+    // room looks empty to auto-reset and to the cleanup task while people are
+    // still drawing. Spawned past the early returns above so no failure path
+    // leaves it running.
+    let heartbeat_task = tokio::spawn(heartbeat_loop(state.clone(), connection_info));
+
     // Send history to new connection, remembering the highest sequence number
     // it contained so the live stream can skip messages history already covered
     let max_history_seq =
@@ -162,17 +192,38 @@ pub async fn handle_socket(
     );
 
     // Handle outgoing messages (from Redis) in a separate task
+    let outgoing_shutdown = state.shutdown.clone();
     let outgoing_task = tokio::spawn(async move {
-        while let Some((seq, payload)) = redis_rx.recv().await {
-            let msg = match seq {
-                // Skip sequenced messages already delivered via history replay
-                Some(s) if s <= max_history_seq => continue,
-                Some(s) => Message::Binary(wrap_sequenced(s, &payload)),
-                None => Message::Binary(payload),
-            };
-            if sender.send(msg).await.is_err() {
-                debug!("WebSocket send failed");
-                break;
+        loop {
+            tokio::select! {
+                biased;
+                // A redeploy: say goodbye properly. A close frame lets the
+                // client start reconnecting to the new process right away
+                // instead of inferring the loss from a severed socket.
+                _ = outgoing_shutdown.signalled() => {
+                    let _ = sender
+                        .send(Message::Close(Some(CloseFrame {
+                            code: close_code::AWAY,
+                            reason: Cow::from("server restarting"),
+                        })))
+                        .await;
+                    break;
+                }
+                next = redis_rx.recv() => {
+                    let Some((seq, payload)) = next else {
+                        break;
+                    };
+                    let msg = match seq {
+                        // Skip sequenced messages already delivered via history replay
+                        Some(s) if s <= max_history_seq => continue,
+                        Some(s) => Message::Binary(wrap_sequenced(s, &payload)),
+                        None => Message::Binary(payload),
+                    };
+                    if sender.send(msg).await.is_err() {
+                        debug!("WebSocket send failed");
+                        break;
+                    }
+                }
             }
         }
     });
@@ -192,6 +243,10 @@ pub async fn handle_socket(
     )
     .await;
 
+    // Stop the heartbeat before cleaning up, or a beat landing between the
+    // unregister and the abort would helpfully re-register this connection.
+    heartbeat_task.abort();
+
     cleanup_connection(
         &connection_id,
         &user_login_name,
@@ -206,6 +261,52 @@ pub async fn handle_socket(
     outgoing_task.abort();
 }
 
+/// Refreshes this connection's Redis registry entry until the socket closes.
+async fn heartbeat_loop(state: AppState, mut info: super::redis_state::ConnectionInfo) {
+    let mut ticker = tokio::time::interval(HEARTBEAT_INTERVAL);
+    // The first tick completes immediately; the entry was just written.
+    ticker.tick().await;
+
+    loop {
+        ticker.tick().await;
+
+        match state
+            .redis_state
+            .heartbeat_connection(&info.connection_id)
+            .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                // The entry lapsed anyway (a Redis restart, or a beat that
+                // could not be delivered in time). Re-register rather than
+                // keep beating against a key that is no longer there.
+                info.last_heartbeat = now_secs();
+                match state.redis_state.register_connection(&info).await {
+                    Ok(()) => warn!(
+                        "Re-registered lapsed connection {} in room {}",
+                        info.connection_id, info.room_id
+                    ),
+                    Err(e) => error!(
+                        "Failed to re-register connection {}: {}",
+                        info.connection_id, e
+                    ),
+                }
+            }
+            Err(e) => error!(
+                "Heartbeat failed for connection {}: {}",
+                info.connection_id, e
+            ),
+        }
+    }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("System time is before UNIX_EPOCH")
+        .as_secs()
+}
+
 async fn setup_connection(
     db: &sqlx::Pool<sqlx::Postgres>,
     room_uuid: Uuid,
@@ -213,7 +314,7 @@ async fn setup_connection(
     user_login_name: &str,
     connection_id: &str,
     state: &AppState,
-) -> Result<(bool, Uuid, u8), ()> {
+) -> Result<(bool, Uuid, u8, super::redis_state::ConnectionInfo), ()> {
     let session_info = match db::get_session_info(db, room_uuid).await {
         Ok(Some(info)) => info,
         Ok(None) => {
@@ -253,7 +354,9 @@ async fn setup_connection(
     db::update_session_activity(state, room_uuid).await;
 
     // Atomically handle all connection management
-    setup_connection_atomically(state, room_uuid, user_id, connection_id, user_login_name).await;
+    let connection_info =
+        setup_connection_atomically(state, room_uuid, user_id, connection_id, user_login_name)
+            .await;
 
     let session_user_id = match state.redis_state.assign_user_id(room_uuid, user_id).await {
         Ok(Some(id)) => id,
@@ -274,6 +377,7 @@ async fn setup_connection(
         session_info.owner_id == user_id,
         session_info.owner_id,
         session_user_id,
+        connection_info,
     ))
 }
 
@@ -283,7 +387,7 @@ async fn setup_connection_atomically(
     user_id: Uuid,
     connection_id: &str,
     user_login_name: &str,
-) {
+) -> super::redis_state::ConnectionInfo {
     // With pure Redis Pub/Sub, we don't need local room tracking
     // Each connection is independent with its own Redis subscriber
 
@@ -299,14 +403,8 @@ async fn setup_connection_atomically(
         room_id: room_uuid,
         user_login_name: user_login_name.to_string(),
         server_instance: state.redis_state.get_server_instance_id().to_string(),
-        connected_at: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX_EPOCH")
-            .as_secs(),
-        last_heartbeat: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX_EPOCH")
-            .as_secs(),
+        connected_at: now_secs(),
+        last_heartbeat: now_secs(),
     };
 
     if let Err(e) = state
@@ -324,6 +422,8 @@ async fn setup_connection_atomically(
         "Completed Redis Pub/Sub setup for connection {} in room {}",
         connection_id, room_uuid
     );
+
+    connection_info
 }
 
 // Wraps a history message in the [0x0A][seq: 8 bytes LE][payload] envelope so
@@ -408,7 +508,25 @@ async fn handle_incoming_messages(
 ) {
     let mut pending_reset: Option<PendingReset> = None;
 
-    while let Some(msg) = receiver.next().await {
+    loop {
+        let msg = tokio::select! {
+            biased;
+            // Stop reading on a redeploy so the caller's cleanup runs: without
+            // it the task is dropped where it stands and nobody in the room
+            // ever hears that this user left.
+            _ = ctx.state.shutdown.signalled() => {
+                info!(
+                    "Server shutting down, closing connection {} in room {}",
+                    ctx.connection_id, ctx.room_uuid
+                );
+                break;
+            }
+            msg = receiver.next() => match msg {
+                Some(msg) => msg,
+                None => break,
+            },
+        };
+
         let mut msg = match msg {
             Ok(msg) => msg,
             Err(e) => {
@@ -738,6 +856,17 @@ async fn cleanup_connection(
             "Failed to unregister connection {} from Redis: {}",
             connection_id, e
         );
+    }
+
+    // On a redeploy the room is emptying because the server is going away, not
+    // because everyone left: these same people are already reconnecting. Leave
+    // the room's Redis state exactly as it is for them to come back to.
+    if state.shutdown.is_signalled() {
+        debug!(
+            "Shutting down - leaving room {} state intact for reconnecting clients",
+            room_uuid
+        );
+        return;
     }
 
     // Check if user has any other connections in this room

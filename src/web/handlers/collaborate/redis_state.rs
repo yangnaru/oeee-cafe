@@ -205,6 +205,14 @@ impl RedisStateManager {
         Ok(())
     }
 
+    /// Refreshes a connection's registry entry and the TTL of the room set it
+    /// belongs to. Both expire after `CONNECTION_TTL`, so without this running
+    /// on a timer the registry empties out from under a session that is very
+    /// much alive — and everything that reads it (auto-reset target selection,
+    /// stale-connection cleanup, SESSION_EXPIRED delivery) sees an empty room.
+    ///
+    /// Returns false if the entry has already expired, which tells the caller
+    /// to re-register rather than keep beating against a missing key.
     pub async fn heartbeat_connection(
         &self,
         connection_id: &str,
@@ -221,6 +229,14 @@ impl RedisStateManager {
             let serialized = serde_json::to_string(&connection_info)?;
             conn.set::<_, _, ()>(&key, &serialized).await?;
             conn.expire::<_, ()>(&key, CONNECTION_TTL as i64).await?;
+
+            // The room set carries its own TTL, set when a connection last
+            // registered; refresh it too or the membership disappears while
+            // the connections it lists are still alive.
+            let room_key = format!("{}{}:connections", ROOM_PREFIX, connection_info.room_id);
+            conn.sadd::<_, _, ()>(&room_key, connection_id).await?;
+            conn.expire::<_, ()>(&room_key, CONNECTION_TTL as i64)
+                .await?;
 
             debug!("Updated heartbeat for connection {}", connection_id);
             Ok(true)
@@ -400,12 +416,19 @@ impl RedisStateManager {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
 
-        // Clean up all room-related keys
+        // Clean up all room-related keys.
+        //
+        // Deliberately not the session user id map: it is the key to reading
+        // the message history, which outlives an empty room on purpose so
+        // people can come back to their drawing. Dropping the mapping while
+        // keeping the history would hand the next person to rejoin an id that
+        // already owns someone else's strokes — and their undo. It shares the
+        // history's TTL, and `RedisMessageStore::cleanup_room` deletes both
+        // together once the session is really over.
         let patterns = [
             format!("{}{}:*", ROOM_PREFIX, room_uuid),
             format!("{}{}", ACTIVITY_PREFIX, room_uuid),
             format!("{}{}", RESET_PENDING_PREFIX, room_uuid),
-            format!("{}{}", USER_ID_PREFIX, room_uuid),
         ];
 
         let mut total_deleted = 0;
