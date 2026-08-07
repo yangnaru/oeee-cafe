@@ -400,3 +400,87 @@ pub async fn api_delete_notification(
             .into_response())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::web::handlers::test_support;
+    use minijinja::context;
+    use serde_json::json;
+
+    fn sample_notification() -> serde_json::Value {
+        json!({
+            "id": "00000000-0000-0000-0000-000000000001",
+            "notification_type": "Follow",
+            "read_at": null,
+            "created_at": "2026-01-02T03:04:05Z",
+            "actor_login_name": "someone",
+            "actor_name": "Someone",
+        })
+    }
+
+    fn sample_invitation() -> serde_json::Value {
+        json!({
+            "id": "00000000-0000-0000-0000-000000000002",
+            "community_name": "Open Studio",
+            "community_slug": "open",
+            "inviter_login_name": "someone",
+            "inviter_display_name": "Someone",
+            "created_at": "2026-01-02T03:04:05Z",
+        })
+    }
+
+    fn render(
+        notifications: Vec<serde_json::Value>,
+        invitations: Vec<serde_json::Value>,
+    ) -> String {
+        let env = test_support::env();
+        let template = env
+            .get_template("notifications.jinja")
+            .expect("template loads");
+        template
+            .render(context! {
+                current_user => json!({"login_name": "someone"}),
+                messages => Vec::<serde_json::Value>::new(),
+                notifications => notifications,
+                invitations => invitations,
+                draft_post_count => 0,
+                unread_notification_count => 1,
+                ftl_lang => "en",
+            })
+            .expect("notifications.jinja renders")
+    }
+
+    /// The list used to carry an <h3> holding the same string as the page's
+    /// <h2>, so the page opened with its own title printed twice.
+    #[test]
+    fn the_page_title_is_not_repeated_over_the_list() {
+        let rendered = render(vec![sample_notification()], Vec::new());
+        // ftl_get_message is stubbed to echo the id, so both headings would
+        // render the literal key.
+        assert_eq!(
+            rendered.matches(">notifications<").count(),
+            1,
+            "notifications heading rendered more than once"
+        );
+        assert!(rendered.contains("notifications-title"));
+    }
+
+    /// The invitations block keeps its heading: it is the section that is not
+    /// notifications, so it is the one that needs naming.
+    #[test]
+    fn invitations_keep_their_own_heading() {
+        let rendered = render(vec![sample_notification()], vec![sample_invitation()]);
+        assert!(rendered.contains("invitations-pending"));
+        assert_eq!(rendered.matches(">notifications<").count(), 1);
+        assert!(rendered.contains("Open Studio"));
+    }
+
+    #[test]
+    fn empty_state_shows_only_when_there_is_nothing_at_all() {
+        let rendered = render(Vec::new(), Vec::new());
+        assert!(rendered.contains("no-notifications"));
+        // An invitation is something; the empty state must not claim otherwise.
+        let with_invite = render(Vec::new(), vec![sample_invitation()]);
+        assert!(!with_invite.contains("no-notifications"));
+    }
+}

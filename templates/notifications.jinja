@@ -43,8 +43,10 @@
     </div>
     {% endif %}
 
+    {# No heading over this list: it is what the page is, and the h2 above
+       already says so. The invitations block gets one because it is the
+       section that is not notifications. #}
     {% if notifications %}
-      <h3>{{ ftl_get_message("notifications") }}</h3>
       {% for notification in notifications %}
         {% include "notification_item.jinja" %}
       {% endfor %}
