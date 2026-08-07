@@ -2155,6 +2155,139 @@ legend {
 }
 
 /* ---------------------------------------------------------------------------
+   The /communities directory grid
+
+   The stacked .community-list above is still what post_edit_community.jinja
+   renders, where one wide row per community is right: you are picking a
+   destination and there are only a handful of candidates. The directory is the
+   opposite problem — 90-odd public communities to browse — so it uses the grid
+   below, built to the same proportions as .posts-grid on the home feed.
+   --------------------------------------------------------------------------- */
+
+.community-grid {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+  grid-template-columns: repeat(auto-fill, minmax(var(--community-card-min, 260px), 1fr));
+}
+
+/* Search-came-back-empty and the load-more sentinel are children of the grid;
+   without this they would sit in the first column as a card-width sliver. */
+.community-grid > p {
+  grid-column: 1 / -1;
+}
+
+/* Two columns on a phone rather than the one a 260px minimum would force, for
+   the same reason the post grid pins three: the cards are legible smaller than
+   the desktop minimum, and one per row is the density this page just left. */
+@media (max-width: 600px) {
+  .community-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.community-grid-item {
+  overflow: hidden;
+  border: 1px solid var(--main-border-color);
+}
+
+.community-grid-item:hover {
+  border-color: var(--main-highlight-color);
+}
+
+/* Three cells wide always, and each cell square, so the strip is a third of the
+   card tall whatever a community has in it. A community with one drawing leaves
+   two cells of empty space rather than stretching one image across the card —
+   that keeps every card in the grid exactly the same height, which is what lets
+   the rows stay flush. */
+/* The gap shows the card's own background, not the border colour. Painting the
+   grid border-coloured and letting it show through the gaps would also paint
+   the cells a community has not filled — a two-thirds-wide bar of border on
+   every card with one drawing in it, which is a third of the directory. */
+.community-card-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background-color: var(--main-bg-color);
+  border-bottom: 1px solid var(--main-border-color);
+}
+
+.community-strip-cell {
+  display: block;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background-color: var(--main-bg-color);
+}
+
+.community-strip-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+/* Matches the height of a row of cells: three squares across means the strip is
+   a third as tall as the card is wide. */
+.community-strip-empty {
+  grid-column: 1 / -1;
+  aspect-ratio: 3 / 1;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-style: italic;
+  background-color: var(--main-bg-color);
+}
+
+/* Three fixed lines that clip rather than wrap, exactly as .post-card-meta
+   does. Wrapping would make card heights depend on how long a community's name
+   is, and the grid would go ragged. */
+.community-card-meta {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+
+.community-card-name,
+.community-card-byline,
+.community-card-stats {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.community-card-name {
+  font-weight: 700;
+}
+
+.community-card-name a {
+  color: var(--main-text-color);
+  text-decoration: none;
+}
+
+.community-card-name a:hover {
+  color: var(--main-highlight-color);
+}
+
+.community-directory-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* The page-wide search box was 600px in a 829px column. Here it shares a header
+   row with the sort control, so it takes what is left rather than a fixed width. */
+.community-directory-search {
+  margin-bottom: 0;
+  width: auto;
+  min-width: 200px;
+  flex: 1;
+}
+
+/* ---------------------------------------------------------------------------
    Components hoisted out of template <style> blocks
 
    These lived inline in the templates that used them — 223 lines in

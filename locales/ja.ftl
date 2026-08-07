@@ -105,7 +105,6 @@ password = PW
 password-repeat = PW (もう一度)
 display-name = ニックネーム
 
-participating-community = 参加中のコミュニティ
 latest-active-public-community = 最近の活動公開コミュニティ
 recent-drawings = 最近のお絵かき
 recent-comments = 最近のコメント
@@ -229,7 +228,7 @@ collaborate-join-session = セッションに参加
 welcome = { $name }さん、ようこそ！
 
 my-communities = 私のコミュニティ
-my-communities-nil = 私が作成したコミュニティはありません。
+my-communities-nil = 作成または参加しているコミュニティはありません。
 
 official-communities = 公式コミュニティ
 official-communities-nil = 公式コミュニティはありません。

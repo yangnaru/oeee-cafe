@@ -105,7 +105,6 @@ password = 비밀번호
 password-repeat = 비밀번호 (한 번 더)
 display-name = 닉네임
 
-participating-community = 참여 중인 커뮤니티
 latest-active-public-community = 최근 활동 공개 커뮤니티
 recent-drawings = 최근 그림
 recent-comments = 최근 댓글
@@ -229,7 +228,7 @@ collaborate-join-session = 세션 참가
 welcome = { $name }님, 환영합니다!
 
 my-communities = 내 커뮤니티
-my-communities-nil = 내가 만든 커뮤니티가 없습니다.
+my-communities-nil = 만들거나 참여 중인 커뮤니티가 없습니다.
 
 official-communities = 공식 커뮤니티
 official-communities-nil = 공식 커뮤니티가 없습니다.

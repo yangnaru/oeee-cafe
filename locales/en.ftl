@@ -103,7 +103,6 @@ password = Password
 password-repeat = Password (again)
 display-name = Display name
 
-participating-community = Participating communities
 latest-active-public-community = Recently active public communities
 recent-drawings = Recent posts
 recent-comments = Recent comments
@@ -227,7 +226,7 @@ collaborate-join-session = Join Session
 welcome = Welcome, { $name }!
 
 my-communities = My communities
-my-communities-nil = There are no communities created by you.
+my-communities-nil = You have not created or joined any communities yet.
 
 official-communities = Official communities
 official-communities-nil = There are no official communities.

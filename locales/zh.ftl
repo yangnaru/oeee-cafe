@@ -105,7 +105,6 @@ password = 密码
 password-repeat = 确认密码
 display-name = 昵称
 
-participating-community = 参与的社区
 latest-active-public-community = 最近活跃的公开社区
 recent-drawings = 最近的作品
 recent-comments = 最近的评论
@@ -229,7 +228,7 @@ collaborate-join-session = 加入会话
 welcome = 欢迎，{ $name }！
 
 my-communities = 我的社区
-my-communities-nil = 您还没有创建任何社区
+my-communities-nil = 您还没有创建或加入任何社区
 
 official-communities = 官方社区
 official-communities-nil = 暂无官方社区

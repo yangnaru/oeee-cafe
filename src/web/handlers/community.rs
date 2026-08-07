@@ -312,8 +312,16 @@ async fn enrich_public_communities(
 
     let mut posts_by: std::collections::HashMap<Uuid, Vec<serde_json::Value>> =
         std::collections::HashMap::new();
+    // The query hands back each community's posts newest first, so the first one
+    // seen is the last time the community was active — the key the default sort
+    // orders by, which the card had no way to show.
+    let mut last_post_by: std::collections::HashMap<Uuid, chrono::DateTime<chrono::Utc>> =
+        std::collections::HashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
+            if let Some(published_at) = post.published_at {
+                last_post_by.entry(community_id).or_insert(published_at);
+            }
             posts_by
                 .entry(community_id)
                 .or_default()
@@ -346,6 +354,7 @@ async fn enrich_public_communities(
                 "posts_count": community.posts_count,
                 "members_count": members_by.get(&community.id).cloned().unwrap_or(None),
                 "recent_posts": posts_by.get(&community.id).cloned().unwrap_or_default(),
+                "last_post_at": last_post_by.get(&community.id),
             })
         })
         .collect())
@@ -529,8 +538,17 @@ pub async fn communities(
     // Group posts by community_id
     use std::collections::HashMap as StdHashMap;
     let mut posts_by_community: StdHashMap<Uuid, Vec<serde_json::Value>> = StdHashMap::new();
+    // Newest first per community, so the first one seen is the community's last
+    // activity. Same trick as enrich_public_communities.
+    let mut last_post_by_community: StdHashMap<Uuid, chrono::DateTime<chrono::Utc>> =
+        StdHashMap::new();
     for post in recent_posts {
         if let Some(community_id) = post.community_id {
+            if let Some(published_at) = post.published_at {
+                last_post_by_community
+                    .entry(community_id)
+                    .or_insert(published_at);
+            }
             let posts = posts_by_community.entry(community_id).or_default();
             posts.push(serde_json::json!({
                 "id": post.id.to_string(),
@@ -561,9 +579,19 @@ pub async fn communities(
         owner_login_by_id.insert(owner.id, owner.login_name);
     }
 
-    // Build own_communities with all metadata
-    let own_communities: Vec<serde_json::Value> = own_communities_raw
+    // One "yours" band rather than two: get_own_communities matches on ownership
+    // and get_participating_communities on membership, and an owner is normally
+    // also a member, so the two lists overlapped and rendered the same community
+    // twice before you reached anything new. Deduped by id, owned first, then
+    // ordered by last activity so the band leads with whatever is alive.
+    let mut seen_your_ids: std::collections::HashSet<Uuid> = std::collections::HashSet::new();
+    let mut your_communities_sorted: Vec<(
+        Option<chrono::DateTime<chrono::Utc>>,
+        serde_json::Value,
+    )> = own_communities_raw
         .into_iter()
+        .chain(participating_communities_raw)
+        .filter(|community| seen_your_ids.insert(community.id))
         .map(|community| {
             let recent_posts = posts_by_community
                 .get(&community.id)
@@ -581,8 +609,9 @@ pub async fn communities(
                 .get(&community.owner_id)
                 .cloned()
                 .unwrap_or_default();
+            let last_post_at = last_post_by_community.get(&community.id).copied();
 
-            serde_json::json!({
+            let card = serde_json::json!({
                 "id": community.id.to_string(),
                 "name": community.name,
                 "slug": community.slug,
@@ -592,8 +621,17 @@ pub async fn communities(
                 "posts_count": posts_count,
                 "members_count": members_count,
                 "recent_posts": recent_posts,
-            })
+                "last_post_at": last_post_at,
+            });
+            (last_post_at, card)
         })
+        .collect();
+    // Descending, so a community nobody has drawn in sorts last rather than
+    // first — which is where a plain sort on Option would put None.
+    your_communities_sorted.sort_by_key(|(last_post_at, _)| std::cmp::Reverse(*last_post_at));
+    let your_communities: Vec<serde_json::Value> = your_communities_sorted
+        .into_iter()
+        .map(|(_, card)| card)
         .collect();
 
     let public_communities = enrich_public_communities(
@@ -607,41 +645,6 @@ pub async fn communities(
     let official_communities =
         enrich_public_communities(&mut tx, &official_raw, viewer_user_id, viewer_show_sensitive)
             .await?;
-
-    // Build participating_communities with all metadata
-    let participating_communities: Vec<serde_json::Value> = participating_communities_raw
-        .into_iter()
-        .map(|community| {
-            let recent_posts = posts_by_community
-                .get(&community.id)
-                .cloned()
-                .unwrap_or_default();
-            let members_count = members_by_community
-                .get(&community.id)
-                .cloned()
-                .unwrap_or(None);
-            let posts_count = posts_count_by_community
-                .get(&community.id)
-                .cloned()
-                .unwrap_or(None);
-            let owner_login_name = owner_login_by_id
-                .get(&community.owner_id)
-                .cloned()
-                .unwrap_or_default();
-
-            serde_json::json!({
-                "id": community.id.to_string(),
-                "name": community.name,
-                "slug": community.slug,
-                "description": community.description,
-                "visibility": community.visibility,
-                "owner_login_name": owner_login_name,
-                "posts_count": posts_count,
-                "members_count": members_count,
-                "recent_posts": recent_posts,
-            })
-        })
-        .collect();
 
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
@@ -663,8 +666,7 @@ pub async fn communities(
         // Key name must match community_cards_fragment.jinja's loop variable;
         // the page includes that template with this context.
         communities => public_communities,
-        participating_communities,
-        own_communities,
+        your_communities,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
         ftl_lang
     })?;
@@ -3128,7 +3130,27 @@ mod tests {
                 "image_height": 300,
                 "author_login_name": "someone",
             }],
+            "last_post_at": "2026-01-02T03:04:05Z",
         })
+    }
+
+    fn directory_context(
+        your_communities: Vec<serde_json::Value>,
+        current_user: serde_json::Value,
+    ) -> minijinja::Value {
+        context! {
+            current_user => current_user,
+            messages => Vec::<serde_json::Value>::new(),
+            your_communities => your_communities,
+            official_communities => Vec::<serde_json::Value>::new(),
+            communities => vec![sample_community()],
+            sort => "active",
+            has_more => true,
+            next_url => "/api/communities/cards?offset=20&sort=active",
+            draft_post_count => 0,
+            unread_notification_count => 0,
+            ftl_lang => "en",
+        }
     }
 
     #[test]
@@ -3161,27 +3183,108 @@ mod tests {
             .get_template("communities.jinja")
             .expect("template loads");
         let rendered = template
-            .render(context! {
-                current_user => json!(null),
-                messages => Vec::<serde_json::Value>::new(),
-                own_communities => Vec::<serde_json::Value>::new(),
-                participating_communities => Vec::<serde_json::Value>::new(),
-                official_communities => Vec::<serde_json::Value>::new(),
-                communities => vec![sample_community()],
-                sort => "active",
-                has_more => true,
-                next_url => "/api/communities/cards?offset=20&sort=active",
-                draft_post_count => 0,
-                unread_notification_count => 0,
-                ftl_lang => "en",
-            })
+            .render(directory_context(Vec::new(), json!(null)))
             .expect("communities.jinja renders");
         assert!(
-            rendered.contains("class=\"community-move-card\""),
+            rendered.contains("class=\"community-grid-item\""),
             "first batch did not render inside the page"
         );
         assert!(rendered.contains("Open Studio"));
         assert!(rendered.contains("infinite-scroll-sentinel"));
+        // The directory is a grid in the wide container, like the home feed.
+        // At .center it fit exactly one community per row.
+        assert!(rendered.contains("class=\"center-wide\""));
+        assert!(rendered.contains("class=\"community-grid\""));
+    }
+
+    #[test]
+    fn card_shows_last_activity_and_hides_the_slug() {
+        // The directory defaults to sorting on last activity, so the card has
+        // to show it. The slug does not appear: it links where the name already
+        // links, and for most communities it is a raw UUID.
+        let env = test_support::env();
+        let template = env
+            .get_template("communities.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(directory_context(Vec::new(), json!(null)))
+            .expect("renders");
+        assert!(rendered.contains("2026-01-02"), "last activity not shown");
+        assert!(
+            !rendered.contains("&gt;@open&lt;") && !rendered.contains(">@open<"),
+            "slug rendered as its own line again"
+        );
+        // The owner handle is still credited.
+        assert!(rendered.contains("@someone"));
+    }
+
+    #[test]
+    fn a_community_with_no_posts_still_renders_a_card() {
+        // Owned-but-empty communities appear in the "yours" band, where they
+        // have no thumbnails and no last-activity date. Both used to be the
+        // only things on the card with any height.
+        let env = test_support::env();
+        let template = env
+            .get_template("communities.jinja")
+            .expect("template loads");
+        let mut empty = sample_community();
+        empty["name"] = json!("Nothing Yet");
+        empty["recent_posts"] = json!([]);
+        empty["posts_count"] = json!(0);
+        empty["last_post_at"] = json!(null);
+        let rendered = template
+            .render(directory_context(
+                vec![empty],
+                json!({"login_name": "someone"}),
+            ))
+            .expect("renders");
+        assert!(rendered.contains("Nothing Yet"));
+        assert!(rendered.contains("community-strip-empty"));
+    }
+
+    #[test]
+    fn yours_band_sits_above_the_directory() {
+        let env = test_support::env();
+        let template = env
+            .get_template("communities.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(directory_context(
+                vec![sample_community()],
+                json!({"login_name": "someone"}),
+            ))
+            .expect("renders");
+        let yours = rendered.find("my-communities").expect("yours band");
+        let directory = rendered
+            .find("latest-active-public-community")
+            .expect("directory");
+        assert!(yours < directory, "yours band fell below the directory");
+        // One band, not two: the participating section was a second copy of
+        // every community you both own and are a member of.
+        assert!(!rendered.contains("participating-community"));
+    }
+
+    #[test]
+    fn search_sits_with_the_list_it_actually_filters() {
+        // Its hx-target has always been the public list alone. At the top of
+        // the page that read as a page-wide search that quietly was not one.
+        let env = test_support::env();
+        let template = env
+            .get_template("communities.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(directory_context(
+                vec![sample_community()],
+                json!({"login_name": "someone"}),
+            ))
+            .expect("renders");
+        let search = rendered
+            .find("id=\"community-search\"")
+            .expect("search box");
+        let heading = rendered
+            .find("latest-active-public-community")
+            .expect("directory heading");
+        assert!(search > heading, "search box drifted back above the page");
     }
 
     #[test]

@@ -2,53 +2,9 @@
    batch. Rendered inline by communities.jinja for the first batch and
    standalone by /api/communities/cards for search results and every scrolled
    batch, so it must not depend on anything that handler does not pass. #}
+{% import "community_card_macro.jinja" as card %}
 {% for community in communities %}
-  <div class="community-move-card">
-    <div class="community-move-card-content">
-      <div class="community-move-card-main">
-        <div class="community-move-card-header">
-          <div>
-            <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
-            <a href="/communities/@{{ community.slug }}"
-               class="muted"
-               style="margin-left: 8px;
-                      text-decoration: none">@{{ community.slug }}</a>
-          </div>
-          <p class="community-owner-handle muted">
-            by <a href="/@{{ community.owner_login_name }}">@{{ community.owner_login_name }}</a>
-          </p>
-        </div>
-        {% if community.description %}<p class="community-description">{{ community.description }}</p>{% endif %}
-        <p class="community-stats-inline muted">
-          {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
-          {% if community.members_count %}
-            {% if community.posts_count %}·{% endif %}
-            {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
-          {% endif %}
-        </p>
-      </div>
-      <div class="community-move-card-thumbnails">
-        {% if community.recent_posts %}
-          <div class="community-thumbnails">
-            {% for post in community.recent_posts %}
-              <a href="/@{{ community.slug }}/{{ post.id }}"
-                 class="community-thumbnail-link">
-                <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                     alt=""
-                     class="community-thumbnail"
-                     width="{{ post.image_width }}"
-                     height="{{ post.image_height }}"
-                     loading="lazy"
-                     decoding="async" />
-              </a>
-            {% endfor %}
-          </div>
-        {% else %}
-          <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
+  {{ card.community_card(community, r2_public_endpoint_url) }}
 {% endfor %}
 
 {% if not communities %}

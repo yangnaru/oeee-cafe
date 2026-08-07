@@ -1,238 +1,86 @@
 {% extends "base.jinja" %}
+{% import "community_card_macro.jinja" as card %}
 {% block title %}
   {{ super() }} | {{ ftl_get_message("community") }}
 {% endblock title %}
 {% block content %}
-  <div class="center">
+  {# .center-wide, not .center: this is a directory of image-led cards, the same
+     kind of content the home grid shows, and the 829px text column fit exactly
+     one community per row. Every section below is a grid for the same reason. #}
+  <div class="center-wide">
     <h2>{{ ftl_get_message("community") }}</h2>
-    {# Search box #}
-    <input type="text"
-           id="community-search"
-           name="q"
-           class="community-move-search"
-           placeholder="{{ ftl_get_message('post-move-search-placeholder') }}"
-           autocomplete="off"
-           hx-get="/api/communities/cards"
-           hx-trigger="input changed delay:300ms, search"
-           hx-target="#public-communities-list"
-           hx-swap="innerHTML"
-           hx-include="[name='sort']"
-           style="margin-bottom: 20px;
-                  width: 100%;
-                  max-width: 600px" />
-    {# My Communities #}
+    {# Yours: owned and joined in one band. They were two stacked sections that
+       both matched for any community you own and are a member of, so the same
+       card appeared twice before you reached anything new. #}
     {% if current_user %}
-      <div class="community-section" style="margin-top: 40px;">
-        <h3>{{ ftl_get_message("my-communities") }}</h3>
-        {% if own_communities %}
-          <div class="community-list">
-            {% for community in own_communities %}
-              <div class="community-move-card"
-                   data-community-name="{{ community.name|lower }}"
-                   data-community-slug="{{ community.slug|lower }}"
-                   data-community-description="{{ community.description|lower if community.description else '' }}">
-                <div class="community-move-card-content">
-                  <div class="community-move-card-main">
-                    <div class="community-move-card-header">
-                      <div>
-                        <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
-                        {% if community.visibility == "unlisted" %}
-                          <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
-                        {% elif community.visibility == "private" %}
-                          <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
-                        {% endif %}
-                      </div>
-                      <p class="community-owner-handle muted">@{{ community.owner_login_name }}</p>
-                    </div>
-                    {% if community.description %}<p class="community-description">{{ community.description }}</p>{% endif %}
-                    <p class="community-stats-inline muted">
-                      {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
-                      {% if community.members_count %}
-                        {% if community.posts_count %}·{% endif %}
-                        {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
-                      {% endif %}
-                    </p>
-                  </div>
-                  <div class="community-move-card-thumbnails">
-                    {% if community.recent_posts %}
-                      <div class="community-thumbnails">
-                        {% for post in community.recent_posts %}
-                          <a href="/@{{ community.slug }}/{{ post.id }}"
-                             class="community-thumbnail-link">
-                            <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                                 alt=""
-                                 class="community-thumbnail"
-                                 width="{{ post.image_width }}"
-                                 height="{{ post.image_height }}" />
-                          </a>
-                        {% endfor %}
-                      </div>
-                    {% else %}
-                      <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
-                    {% endif %}
-                  </div>
-                </div>
-              </div>
+      <section class="community-section">
+        <div class="community-directory-header">
+          <h3>{{ ftl_get_message("my-communities") }}</h3>
+          <a href="/communities/new" class="btn">{{ ftl_get_message("create-community") }}</a>
+        </div>
+        {% if your_communities %}
+          <div class="community-grid">
+            {% for community in your_communities %}
+              {{ card.community_card(community, r2_public_endpoint_url) }}
             {% endfor %}
           </div>
         {% else %}
-          <p>{{ ftl_get_message("my-communities-nil") }}</p>
+          <p class="muted">{{ ftl_get_message("my-communities-nil") }}</p>
         {% endif %}
-        <div style="margin-top: 20px;">
-          <a href="/communities/new" class="btn">{{ ftl_get_message("create-community") }}</a>
-        </div>
-      </div>
+      </section>
     {% endif %}
-    {# Participating Communities #}
-    {% if current_user %}
-      {% if participating_communities %}
-        <div class="community-section" style="margin-top: 40px;">
-          <h3>{{ ftl_get_message("participating-community") }}</h3>
-          <div class="community-list">
-            {% for community in participating_communities %}
-              <div class="community-move-card"
-                   data-community-name="{{ community.name|lower }}"
-                   data-community-slug="{{ community.slug|lower }}"
-                   data-community-description="{{ community.description|lower if community.description else '' }}">
-                <div class="community-move-card-content">
-                  <div class="community-move-card-main">
-                    <div class="community-move-card-header">
-                      <div>
-                        <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
-                        {% if community.visibility == "unlisted" %}
-                          <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
-                        {% elif community.visibility == "private" %}
-                          <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
-                        {% endif %}
-                      </div>
-                      <p class="community-owner-handle muted">@{{ community.owner_login_name }}</p>
-                    </div>
-                    {% if community.description %}<p class="community-description">{{ community.description }}</p>{% endif %}
-                    <p class="community-stats-inline muted">
-                      {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
-                      {% if community.members_count %}
-                        {% if community.posts_count %}·{% endif %}
-                        {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
-                      {% endif %}
-                    </p>
-                  </div>
-                  <div class="community-move-card-thumbnails">
-                    {% if community.recent_posts %}
-                      <div class="community-thumbnails">
-                        {% for post in community.recent_posts %}
-                          <a href="/@{{ community.slug }}/{{ post.id }}"
-                             class="community-thumbnail-link">
-                            <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                                 alt=""
-                                 class="community-thumbnail"
-                                 width="{{ post.image_width }}"
-                                 height="{{ post.image_height }}" />
-                          </a>
-                        {% endfor %}
-                      </div>
-                    {% else %}
-                      <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
-                    {% endif %}
-                  </div>
-                </div>
-              </div>
-            {% endfor %}
-          </div>
-        </div>
-      {% else %}
-        <div style="margin-top: 40px;">
-          <h3>{{ ftl_get_message("participating-community") }}</h3>
-          <p>{{ ftl_get_message("active-communities-nil") }}</p>
-        </div>
-      {% endif %}
-    {% endif %}
-    {# Official Communities #}
+    {# Official #}
     {% if official_communities %}
-      <div class="community-section">
+      <section class="community-section">
         <h3>{{ ftl_get_message("official-communities") }}</h3>
-        <div class="community-list">
+        <div class="community-grid">
           {% for community in official_communities %}
-            <div class="community-move-card"
-                 data-community-name="{{ community.name|lower }}"
-                 data-community-slug="{{ community.slug|lower }}"
-                 data-community-description="{{ community.description|lower if community.description else '' }}">
-              <div class="community-move-card-content">
-                <div class="community-move-card-main">
-                  <div class="community-move-card-header">
-                    <div>
-                      <a href="/communities/@{{ community.slug }}" class="community-name">{{ community.name }}</a>
-                      <a href="/communities/@{{ community.slug }}"
-                         class="muted"
-                         style="margin-left: 8px;
-                                text-decoration: none">@{{ community.slug }}</a>
-                      {% if community.visibility == "Unlisted" %}
-                        <span class="community-private-badge">{{ ftl_get_message("community-badge-unlisted") }}</span>
-                      {% elif community.visibility == "Private" %}
-                        <span class="community-private-badge">{{ ftl_get_message("community-badge-private") }}</span>
-                      {% endif %}
-                    </div>
-                    <p class="community-owner-handle muted">
-                      by <a href="/@{{ community.owner_login_name }}">@{{ community.owner_login_name }}</a>
-                    </p>
-                  </div>
-                  {% if community.description %}<p class="community-description">{{ community.description }}</p>{% endif %}
-                  <p class="community-stats-inline muted">
-                    {% if community.posts_count %}{{ community.posts_count }} {{ ftl_get_message("community-stats-posts") }}{% endif %}
-                    {% if community.members_count %}
-                      {% if community.posts_count %}·{% endif %}
-                      {{ community.members_count }} {{ ftl_get_message("community-stats-contributors") }}
-                    {% endif %}
-                  </p>
-                </div>
-                <div class="community-move-card-thumbnails">
-                  {% if community.recent_posts %}
-                    <div class="community-thumbnails">
-                      {% for post in community.recent_posts %}
-                        <a href="/@{{ community.slug }}/{{ post.id }}"
-                           class="community-thumbnail-link">
-                          <img src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}"
-                               alt=""
-                               class="community-thumbnail"
-                               width="{{ post.image_width }}"
-                               height="{{ post.image_height }}" />
-                        </a>
-                      {% endfor %}
-                    </div>
-                  {% else %}
-                    <p class="community-no-posts-message muted">{{ ftl_get_message("community-no-posts") }}</p>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
+            {{ card.community_card(community, r2_public_endpoint_url) }}
           {% endfor %}
         </div>
-      </div>
+      </section>
     {% else %}
-      <p>{{ ftl_get_message("official-communities-nil") }}</p>
+      <p class="muted">{{ ftl_get_message("official-communities-nil") }}</p>
     {% endif %}
-    {# Latest Active Public Communities. Cards live in
+    {# Latest active public communities. Cards live in
        community_cards_fragment.jinja so the first batch, search results and
        every scrolled batch share one definition. #}
-    <div class="community-section" style="margin-top: 40px;">
+    <section class="community-section">
       <div class="community-directory-header">
         <h3>{{ ftl_get_message("latest-active-public-community") }}</h3>
-        <label class="community-sort">
-          {{ ftl_get_message("community-sort") }}
-          <select name="sort"
-                  hx-get="/api/communities/cards"
-                  hx-target="#public-communities-list"
-                  hx-swap="innerHTML"
-                  hx-include="#community-search">
-            <option value="active" {% if sort == "active" %}selected{% endif %}>{{ ftl_get_message("community-sort-active") }}</option>
-            <option value="posts" {% if sort == "posts" %}selected{% endif %}>{{ ftl_get_message("community-sort-posts") }}</option>
-            <option value="newest" {% if sort == "newest" %}selected{% endif %}>{{ ftl_get_message("community-sort-newest") }}</option>
-            <option value="name" {% if sort == "name" %}selected{% endif %}>{{ ftl_get_message("community-sort-name") }}</option>
-          </select>
-        </label>
+        {# Search sits in this header rather than at the top of the page. Its
+           hx-target has always been this list alone, so at the top it looked
+           like it searched everything and quietly did not. #}
+        <div class="community-directory-controls">
+          <input type="text"
+                 id="community-search"
+                 name="q"
+                 class="community-move-search community-directory-search"
+                 placeholder="{{ ftl_get_message('post-move-search-placeholder') }}"
+                 autocomplete="off"
+                 hx-get="/api/communities/cards"
+                 hx-trigger="input changed delay:300ms, search"
+                 hx-target="#public-communities-list"
+                 hx-swap="innerHTML"
+                 hx-include="[name='sort']" />
+          <label class="community-sort">
+            {{ ftl_get_message("community-sort") }}
+            <select name="sort"
+                    hx-get="/api/communities/cards"
+                    hx-target="#public-communities-list"
+                    hx-swap="innerHTML"
+                    hx-include="#community-search">
+              <option value="active" {% if sort == "active" %}selected{% endif %}>{{ ftl_get_message("community-sort-active") }}</option>
+              <option value="posts" {% if sort == "posts" %}selected{% endif %}>{{ ftl_get_message("community-sort-posts") }}</option>
+              <option value="newest" {% if sort == "newest" %}selected{% endif %}>{{ ftl_get_message("community-sort-newest") }}</option>
+              <option value="name" {% if sort == "name" %}selected{% endif %}>{{ ftl_get_message("community-sort-name") }}</option>
+            </select>
+          </label>
+        </div>
       </div>
-      <div class="community-list" id="public-communities-list">
+      <div class="community-grid" id="public-communities-list">
         {% include "community_cards_fragment.jinja" %}
       </div>
-    </div>
+    </section>
   </div>
 {% endblock content %}
