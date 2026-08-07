@@ -55,10 +55,12 @@
     {# No heading over this list: it is what the page is, and the h2 above
        already says so. The invitations block gets one because it is the
        section that is not notifications. #}
+    {# Rows live in notifications_fragment.jinja so the first batch and every
+       scrolled batch share one definition. #}
     {% if notifications %}
-      {% for notification in notifications %}
-        {% include "notification_item.jinja" %}
-      {% endfor %}
+      <div class="notification-list">
+        {% include "notifications_fragment.jinja" %}
+      </div>
     {% elif not invitations %}
       <p>{{ ftl_get_message("no-notifications") }}</p>
     {% endif %}

@@ -33,6 +33,8 @@ notification-community-post = 新社区作品
 # Notification action messages with FluentArgs for proper word order in different languages
 notification-action-commented-on = 评论了{ $postTitle }
 notification-action-reacted-to-post = 对{ $postTitle }用{ $emoji }做出了反应
+notification-action-reacted-to-post-grouped = 对{ $postTitle }做出了反应
+notification-actors-and-others = 等 { $count } 人
 notification-action-followed-you = 关注了您
 notification-action-wrote-guestbook = 写了留言
 notification-action-replied-guestbook = 回复了留言

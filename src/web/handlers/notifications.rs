@@ -30,6 +30,53 @@ use crate::{
     },
 };
 
+/// Rows per batch in the notification list.
+///
+/// This used to be a hardcoded 50 with no way to ask for the next page, so a
+/// reader with more than fifty simply could not reach the rest — two people on
+/// this instance were already past it, one at 74.
+pub const NOTIFICATIONS_PER_BATCH: i64 = 30;
+
+/// GET /api/notifications/items — one batch of notification rows plus the next
+/// sentinel, for htmx to swap in.
+pub async fn notifications_fragment(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
+    Query(query): Query<NotificationsFragmentQuery>,
+) -> Result<Html<String>, AppError> {
+    let user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+    let offset = query.offset.unwrap_or(0).max(0);
+
+    let mut tx = state.db_pool.begin().await?;
+    let notifications =
+        fetch_notifications(&mut tx, user.id, NOTIFICATIONS_PER_BATCH, offset).await?;
+    tx.commit().await?;
+
+    let has_more = notifications.len() as i64 == NOTIFICATIONS_PER_BATCH;
+
+    let template = state.env.get_template("notifications_fragment.jinja")?;
+    let rendered = template.render(context! {
+        notifications => notifications,
+        has_more => has_more,
+        next_url => notifications_fragment_url(offset + NOTIFICATIONS_PER_BATCH),
+        ftl_lang,
+    })?;
+
+    Ok(Html(rendered))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NotificationsFragmentQuery {
+    /// Row offset for the infinite-scroll sentinel. The first batch omits it.
+    pub offset: Option<i64>,
+}
+
+/// URL the infinite-scroll sentinel fetches next.
+fn notifications_fragment_url(next_offset: i64) -> String {
+    format!("/api/notifications/items?offset={next_offset}")
+}
+
 pub async fn list_notifications(
     auth_session: AuthSession,
     State(state): State<AppState>,
@@ -45,8 +92,8 @@ pub async fn list_notifications(
         .ok_or(AppError::Unauthorized)?
         .clone();
 
-    // Fetch notifications using the new notification system
-    let notifications = fetch_notifications(&mut tx, user.id, 50, 0).await?;
+    let notifications = fetch_notifications(&mut tx, user.id, NOTIFICATIONS_PER_BATCH, 0).await?;
+    let has_more = notifications.len() as i64 == NOTIFICATIONS_PER_BATCH;
 
     // Fetch pending invitations with all details in a single query (no N+1)
     let invitations = get_pending_invitations_with_details_for_user(&mut tx, user.id).await?;
@@ -79,6 +126,10 @@ pub async fn list_notifications(
         invitations => invitations_with_details,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
+        // Same key names the fragment uses, so the first batch and every
+        // scrolled batch render through one template.
+        has_more => has_more,
+        next_url => notifications_fragment_url(NOTIFICATIONS_PER_BATCH),
         ftl_lang
     })?;
 
@@ -403,6 +454,7 @@ pub async fn api_delete_notification(
 
 #[cfg(test)]
 mod tests {
+    use super::notifications_fragment_url;
     use crate::web::handlers::test_support;
     use minijinja::context;
     use serde_json::json;
@@ -415,6 +467,7 @@ mod tests {
             "created_at": "2026-01-02T03:04:05Z",
             "actor_login_name": "someone",
             "actor_name": "Someone",
+            "actor_count": 1,
         })
     }
 
@@ -435,7 +488,17 @@ mod tests {
             "post_image_filename": "abcdef.png",
             "post_image_width": 300,
             "post_image_height": 300,
+            "actor_count": 1,
         })
+    }
+
+    /// Sixteen people reacting to one drawing is one row. The biggest real
+    /// group on this instance is fifteen.
+    fn sample_reaction_group() -> serde_json::Value {
+        let mut n = sample_reaction();
+        n["actor_count"] = json!(16);
+        n["read_at"] = json!(null);
+        n
     }
 
     fn sample_invitation() -> serde_json::Value {
@@ -465,6 +528,8 @@ mod tests {
                 invitations => invitations,
                 draft_post_count => 0,
                 unread_notification_count => 1,
+                has_more => false,
+                next_url => "/api/notifications/items?offset=30",
                 ftl_lang => "en",
             })
             .expect("notifications.jinja renders")
@@ -572,6 +637,83 @@ mod tests {
         assert!(rendered.contains("Open Studio"));
         assert!(rendered.contains("btn-accept"));
         assert!(rendered.contains("btn-reject"));
+    }
+
+    /// Sixteen reactions on one drawing are one row saying so, not sixteen
+    /// rows saying it one at a time.
+    #[test]
+    fn a_reaction_group_names_one_actor_and_counts_the_rest() {
+        let rendered = render(vec![sample_reaction_group()], Vec::new());
+        assert_eq!(rendered.matches("notification-line").count(), 1);
+        assert!(rendered.contains("Someone"));
+        // 16 actors: one named, fifteen counted.
+        assert!(
+            rendered.contains("count=15"),
+            "the group did not count the other actors"
+        );
+        // A group has as many emoji as it has people, so the grouped verb drops
+        // it rather than picking one.
+        assert!(rendered.contains("notification-action-reacted-to-post-grouped"));
+        assert!(!rendered.contains("emoji="));
+    }
+
+    /// One person reacting keeps the emoji and gains no "and 0 others".
+    #[test]
+    fn a_single_reaction_is_unchanged() {
+        let rendered = render(vec![sample_reaction()], Vec::new());
+        assert!(rendered.contains("emoji=\u{1f49c}"));
+        assert!(!rendered.contains("notification-actors-and-others"));
+        assert!(!rendered.contains("notification-action-reacted-to-post-grouped"));
+    }
+
+    /// The list was capped at 50 with no way to ask for more; two readers here
+    /// were already past it. The sentinel is what makes the rest reachable.
+    #[test]
+    fn a_full_batch_offers_the_next_one() {
+        let env = test_support::env();
+        let template = env
+            .get_template("notifications_fragment.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                notifications => vec![sample_reaction()],
+                has_more => true,
+                next_url => "/api/notifications/items?offset=30",
+                ftl_lang => "en",
+            })
+            .expect("fragment renders standalone");
+        assert!(rendered.contains("infinite-scroll-sentinel"));
+        assert!(rendered.contains("hx-trigger=\"revealed\""));
+        // Built in Rust and passed through {{ }}, so autoescaping encodes the
+        // slashes. Pinned so double-escaping is caught.
+        assert!(rendered.contains("&#x2f;api&#x2f;notifications&#x2f;items?offset=30"));
+    }
+
+    #[test]
+    fn a_short_batch_is_the_end_of_the_list() {
+        let env = test_support::env();
+        let template = env
+            .get_template("notifications_fragment.jinja")
+            .expect("template loads");
+        let rendered = template
+            .render(context! {
+                notifications => vec![sample_reaction()],
+                has_more => false,
+                next_url => "",
+                ftl_lang => "en",
+            })
+            .expect("renders");
+        assert!(!rendered.contains("infinite-scroll-sentinel"));
+    }
+
+    /// The sentinel offset has to match what the page already rendered, or the
+    /// second batch either skips rows or repeats them.
+    #[test]
+    fn the_first_sentinel_starts_where_the_page_stopped() {
+        assert_eq!(
+            notifications_fragment_url(super::NOTIFICATIONS_PER_BATCH),
+            "/api/notifications/items?offset=30"
+        );
     }
 
     #[test]

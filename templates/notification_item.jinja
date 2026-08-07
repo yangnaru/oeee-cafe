@@ -36,10 +36,19 @@
 
   <div class="notification-content">
     <p class="notification-line">
+      {# Every reaction on one post is a single row. The actor shown is the most
+         recent one; the rest are a count, because "Alice and 15 others reacted"
+         is the whole of what sixteen separate rows were telling you. #}
+      {% set grouped = notification.actor_count > 1 %}
       {% if notification.actor_login_name %}
         <a href="/@{{ notification.actor_login_name }}" class="notification-actor">{{ notification.actor_name }}</a>
       {% else %}
         <a href="{{ notification.actor_handle }}" class="notification-actor">{{ notification.actor_name }}</a>
+      {% endif %}
+      {# The actor is a link, so it cannot live inside the pattern; the string
+         carries only the remainder ("and N others"). #}
+      {% if grouped %}
+        <span class="notification-others">{{ ftl_format_pattern("notification-actors-and-others", {"count": notification.actor_count - 1}) }}</span>
       {% endif %}
       {# The action strings are written as sentence continuations — "commented
          on X", "started following you" — so the actor and the verb belong on
@@ -52,7 +61,15 @@
       {% if notification.notification_type == "Comment" %}
         <a href="{{ post_url }}" class="notification-action">{{ ftl_format_pattern("notification-action-commented-on", {"postTitle": title}) }}</a>
       {% elif notification.notification_type == "Reaction" %}
-        <a href="{{ post_url }}" class="notification-action">{{ ftl_format_pattern("notification-action-reacted-to-post", {"emoji": notification.reaction_emoji, "postTitle": title}) }}</a>
+        {# A group has as many emoji as it has people, so naming one of them
+           would be picking a winner. The grouped string drops it. #}
+        <a href="{{ post_url }}" class="notification-action">
+          {%- if grouped -%}
+            {{ ftl_format_pattern("notification-action-reacted-to-post-grouped", {"postTitle": title}) }}
+          {%- else -%}
+            {{ ftl_format_pattern("notification-action-reacted-to-post", {"emoji": notification.reaction_emoji, "postTitle": title}) }}
+          {%- endif -%}
+        </a>
       {% elif notification.notification_type == "Mention" %}
         <a href="{{ post_url }}" class="notification-action">{{ ftl_format_pattern("notification-action-mentioned-in-comment", {"postTitle": title}) }}</a>
       {% elif notification.notification_type == "CommentReply" %}

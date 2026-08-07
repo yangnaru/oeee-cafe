@@ -31,6 +31,8 @@ notification-community-post = New community post
 # Notification action messages with FluentArgs for proper word order in different languages
 notification-action-commented-on = commented on { $postTitle }
 notification-action-reacted-to-post = reacted with { $emoji } to { $postTitle }
+notification-action-reacted-to-post-grouped = reacted to { $postTitle }
+notification-actors-and-others = and { $count } others
 notification-action-followed-you = started following you
 notification-action-wrote-guestbook = wrote on your guestbook
 notification-action-replied-guestbook = replied to your guestbook entry

@@ -53,7 +53,7 @@ use crate::web::handlers::home::{
 use crate::web::handlers::notifications::{
     api_delete_notification, api_list_notifications, api_mark_notification_read,
     delete_notification_handler, get_unread_notification_count, list_notifications,
-    mark_all_notifications_read, mark_notification_read,
+    mark_all_notifications_read, mark_notification_read, notifications_fragment,
 };
 use crate::web::handlers::password_reset::{
     password_reset_request, password_reset_request_page, password_reset_verify,
@@ -157,6 +157,7 @@ impl App {
             .route("/home", get(my_timeline))
             .route("/api/timeline/posts", get(load_more_timeline_posts))
             .route("/notifications", get(list_notifications))
+            .route("/api/notifications/items", get(notifications_fragment))
             .route(
                 "/notifications/unread-count",
                 get(get_unread_notification_count),

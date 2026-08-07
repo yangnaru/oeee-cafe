@@ -33,6 +33,8 @@ notification-community-post = 新しいコミュニティ投稿
 # Notification action messages with FluentArgs for proper word order in different languages
 notification-action-commented-on = { $postTitle }にコメントを残しました
 notification-action-reacted-to-post = { $postTitle }に{ $emoji }でリアクションしました
+notification-action-reacted-to-post-grouped = { $postTitle }にリアクションしました
+notification-actors-and-others = 他{ $count }人
 notification-action-followed-you = さんが同盟を結びました
 notification-action-wrote-guestbook = さんがゲストブックを残しました
 notification-action-replied-guestbook = さんがゲストブックに返信を残しました

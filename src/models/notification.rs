@@ -68,6 +68,9 @@ pub struct NotificationWithActor {
     pub comment_content: Option<String>,
     pub comment_content_html: Option<String>,
     pub guestbook_content: Option<String>,
+    /// How many distinct people this row stands for. 1 for everything that is
+    /// not a collapsed reaction group; the row then reads "X and N others".
+    pub actor_count: i64,
 }
 
 pub struct CreateNotificationParams {
@@ -140,7 +143,17 @@ async fn get_user_id_from_actor(
         .ok_or_else(|| anyhow::anyhow!("Actor has no associated user"))
 }
 
-/// List notifications for a user with pagination
+/// List notifications for a user, newest first, with every reaction on one post
+/// collapsed into a single row.
+///
+/// Reactions are 55% of all notifications here and they arrive in clumps: one
+/// drawing picked up sixteen of them, and 181 of the 234 in the table share a
+/// post with at least one other. Collapsing them cuts the list by 41% overall.
+///
+/// The grouping happens in SQL rather than over an already-fetched page so that
+/// `limit`/`offset` count *rows the reader sees*. Grouping afterwards would make
+/// page size vary with content and let a group straddle a page boundary, which
+/// is exactly the kind of thing that makes an infinite scroll skip or repeat.
 pub async fn list_notifications(
     tx: &mut Transaction<'_, Postgres>,
     recipient_id: Uuid,
@@ -149,7 +162,37 @@ pub async fn list_notifications(
 ) -> Result<Vec<NotificationWithActor>> {
     let notifications = sqlx::query!(
         r#"
+        WITH scoped AS (
+            SELECT
+                id,
+                actor_id,
+                read_at,
+                created_at,
+                -- Reactions collapse per post; everything else is its own group,
+                -- keyed by its own id so it can never merge with anything.
+                CASE
+                    WHEN notification_type = 'reaction' THEN 'reaction:' || post_id::text
+                    ELSE 'single:' || id::text
+                END AS group_key
+            FROM notifications
+            WHERE recipient_id = $1
+        ),
+        groups AS (
+            SELECT
+                MAX(created_at) AS latest_at,
+                -- Distinct actors, not rows: one person reacting twice to the
+                -- same drawing is one person, and the row says "and N others".
+                COUNT(DISTINCT actor_id) AS actor_count,
+                BOOL_OR(read_at IS NULL) AS has_unread,
+                -- Ordered by created_at DESC, so element 1 is the newest member
+                -- and MAX(created_at) above is its timestamp.
+                (ARRAY_AGG(id ORDER BY created_at DESC))[1] AS representative_id
+            FROM scoped
+            GROUP BY group_key
+        )
         SELECT
+            groups.actor_count AS "actor_count!",
+            groups.has_unread AS "has_unread!",
             n.id,
             n.recipient_id,
             n.actor_id,
@@ -172,7 +215,8 @@ pub async fn list_notifications(
             c.content AS "comment_content?",
             c.content_html AS "comment_content_html?",
             g.content AS "guestbook_content?"
-        FROM notifications n
+        FROM groups
+        JOIN notifications n ON n.id = groups.representative_id
         LEFT JOIN actors a ON n.actor_id = a.id
         LEFT JOIN users actor_users ON a.user_id = actor_users.id
         LEFT JOIN posts p ON n.post_id = p.id
@@ -181,8 +225,7 @@ pub async fn list_notifications(
         LEFT JOIN comments c ON n.comment_id = c.id
         LEFT JOIN reactions r ON n.reaction_iri = r.iri
         LEFT JOIN guestbook_entries g ON n.guestbook_entry_id = g.id
-        WHERE n.recipient_id = $1
-        ORDER BY n.created_at DESC
+        ORDER BY groups.latest_at DESC, n.id
         LIMIT $2 OFFSET $3
         "#,
         recipient_id,
@@ -207,7 +250,10 @@ pub async fn list_notifications(
             reaction_iri: row.reaction_iri,
             reaction_emoji: row.reaction_emoji,
             guestbook_entry_id: row.guestbook_entry_id,
-            read_at: row.read_at,
+            // A group counts as unread while any member of it is, so marking it
+            // read from the list clears the whole clump rather than the one
+            // reaction that happened to be newest.
+            read_at: if row.has_unread { None } else { row.read_at },
             created_at: row.created_at,
             post_title: row.post_title,
             post_author_login_name: row.post_author_login_name,
@@ -217,11 +263,18 @@ pub async fn list_notifications(
             comment_content: row.comment_content,
             comment_content_html: row.comment_content_html,
             guestbook_content: row.guestbook_content,
+            actor_count: row.actor_count,
         })
         .collect())
 }
 
-/// Get a single notification by ID
+/// Get a single notification by ID, carrying the same group count the list
+/// gives it.
+///
+/// The mark-read handler re-renders whatever it just changed, and for a
+/// collapsed reaction group that is the whole group — without the count here it
+/// would swap "Alice and 15 others reacted" for a bare "Alice reacted" the
+/// moment you marked it read.
 pub async fn get_notification_by_id(
     tx: &mut Transaction<'_, Postgres>,
     notification_id: Uuid,
@@ -230,6 +283,14 @@ pub async fn get_notification_by_id(
     let notification = sqlx::query!(
         r#"
         SELECT
+            (
+                SELECT COUNT(DISTINCT peer.actor_id)
+                FROM notifications peer
+                WHERE peer.recipient_id = n.recipient_id
+                  AND n.notification_type = 'reaction'
+                  AND peer.notification_type = 'reaction'
+                  AND peer.post_id = n.post_id
+            ) AS "peer_actor_count?",
             n.id,
             n.recipient_id,
             n.actor_id,
@@ -292,10 +353,17 @@ pub async fn get_notification_by_id(
         comment_content: row.comment_content,
         comment_content_html: row.comment_content_html,
         guestbook_content: row.guestbook_content,
+        // NULL for everything that is not a reaction, and 0 can't happen for one
+        // (the row is its own peer), so 1 is the right floor either way.
+        actor_count: row.peer_actor_count.unwrap_or(1).max(1),
     }))
 }
 
-/// Mark a notification as read
+/// Mark a notification as read, and with it the rest of its group.
+///
+/// The list collapses every reaction on a post into one row, so the one button
+/// the reader can see has to clear all of them. Marking only the representative
+/// would leave the group unread and it would spring back on the next load.
 pub async fn mark_notification_as_read(
     tx: &mut Transaction<'_, Postgres>,
     notification_id: Uuid,
@@ -303,9 +371,24 @@ pub async fn mark_notification_as_read(
 ) -> Result<bool> {
     let result = sqlx::query!(
         r#"
-        UPDATE notifications
+        WITH target AS (
+            SELECT id, notification_type, post_id
+            FROM notifications
+            WHERE id = $1 AND recipient_id = $2
+        )
+        UPDATE notifications n
         SET read_at = CURRENT_TIMESTAMP
-        WHERE id = $1 AND recipient_id = $2 AND read_at IS NULL
+        FROM target
+        WHERE n.recipient_id = $2
+          AND n.read_at IS NULL
+          AND (
+              n.id = target.id
+              OR (
+                  target.notification_type = 'reaction'
+                  AND n.notification_type = 'reaction'
+                  AND n.post_id = target.post_id
+              )
+          )
         "#,
         notification_id,
         recipient_id
@@ -354,7 +437,11 @@ pub async fn get_unread_count(
     Ok(result.count.unwrap_or(0))
 }
 
-/// Delete a notification
+/// Delete a notification, and with it the rest of its group.
+///
+/// Same reason as marking read: the row the reader deleted stands for every
+/// reaction on that post, so leaving the others behind would delete one line
+/// and put fifteen back in its place.
 pub async fn delete_notification(
     tx: &mut Transaction<'_, Postgres>,
     notification_id: Uuid,
@@ -362,8 +449,22 @@ pub async fn delete_notification(
 ) -> Result<bool> {
     let result = sqlx::query!(
         r#"
-        DELETE FROM notifications
-        WHERE id = $1 AND recipient_id = $2
+        WITH target AS (
+            SELECT id, notification_type, post_id
+            FROM notifications
+            WHERE id = $1 AND recipient_id = $2
+        )
+        DELETE FROM notifications n
+        USING target
+        WHERE n.recipient_id = $2
+          AND (
+              n.id = target.id
+              OR (
+                  target.notification_type = 'reaction'
+                  AND n.notification_type = 'reaction'
+                  AND n.post_id = target.post_id
+              )
+          )
         "#,
         notification_id,
         recipient_id

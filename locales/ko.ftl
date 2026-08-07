@@ -33,6 +33,8 @@ notification-community-post = 새 커뮤니티 게시물
 # Notification action messages with FluentArgs for proper word order in different languages
 notification-action-commented-on = { $postTitle }에 댓글을 남겼습니다
 notification-action-reacted-to-post = { $postTitle }에 { $emoji }(으)로 반응했습니다
+notification-action-reacted-to-post-grouped = { $postTitle }에 반응했습니다
+notification-actors-and-others = 외 { $count }명
 notification-action-followed-you = 님이 동맹을 맺었습니다
 notification-action-wrote-guestbook = 님이 방명록을 남겼습니다
 notification-action-replied-guestbook = 님이 방명록에 답글을 남겼습니다

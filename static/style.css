@@ -2751,3 +2751,9 @@ legend {
   font-size: var(--text-base);
   cursor: pointer;
 }
+
+/* "and N others" after the linked actor name. Muted so the sentence still
+   leads with the person, not the arithmetic. */
+.notification-others {
+  color: var(--main-text-muted-color);
+}
