@@ -16,31 +16,40 @@
       {% endif %}
     </div>
 
+    {# Invitations use the notification row's proportions — one line, time and
+       controls on the right — so the two lists scan as one page rather than as
+       two unrelated components stacked on each other. #}
     {% if invitations %}
-    <div class="invitations-section">
-      <h3>{{ ftl_get_message("invitations-pending") }}</h3>
-      {% for invitation in invitations %}
-      <div class="invitation-item">
-        <div class="invitation-content">
-          <p>
-            <strong>{{ ftl_get_message("invitation-from") }}</strong>
-            <a href="/@{{ invitation.inviter_login_name }}">@{{ invitation.inviter_login_name }}</a>
-            {{ ftl_get_message("invitation-to-community") }}
-            <a href="/communities/@{{ invitation.community_slug }}">{{ invitation.community_name }}</a>
-          </p>
-          <p class="invitation-date muted">{{ invitation.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}</p>
-        </div>
-        <div class="invitation-actions">
-          <form method="post" action="/invitations/{{ invitation.id }}/accept" style="display:inline;">
-            <button type="submit" class="btn-accept">{{ ftl_get_message("invitation-accept") }}</button>
-          </form>
-          <form method="post" action="/invitations/{{ invitation.id }}/reject" style="display:inline;">
-            <button type="submit" class="btn-reject">{{ ftl_get_message("invitation-reject") }}</button>
-          </form>
-        </div>
+      <div class="invitations-section">
+        <h3 class="notifications-title">{{ ftl_get_message("invitations-pending") }}</h3>
+        {% for invitation in invitations %}
+          <div class="notification invitation-item">
+            <div class="notification-content">
+              {# Same four pieces in the same order as before: the locales
+                 write these as one sentence frame — "Invitation from" @who
+                 "to join" Community — so the wording cannot be rearranged
+                 without retranslating it. Only the layout changed. #}
+              <p class="notification-line">
+                {{ ftl_get_message("invitation-from") }}
+                <a href="/@{{ invitation.inviter_login_name }}" class="notification-actor">@{{ invitation.inviter_login_name }}</a>
+                {{ ftl_get_message("invitation-to-community") }}
+                <a href="/communities/@{{ invitation.community_slug }}">{{ invitation.community_name }}</a>
+              </p>
+            </div>
+            <div class="notification-meta">
+              <time class="notification-time muted">{{ invitation.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}</time>
+              <div class="notification-actions">
+                <form method="post" action="/invitations/{{ invitation.id }}/accept">
+                  <button type="submit" class="btn-accept">{{ ftl_get_message("invitation-accept") }}</button>
+                </form>
+                <form method="post" action="/invitations/{{ invitation.id }}/reject">
+                  <button type="submit" class="btn-reject">{{ ftl_get_message("invitation-reject") }}</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
     {% endif %}
 
     {# No heading over this list: it is what the page is, and the h2 above

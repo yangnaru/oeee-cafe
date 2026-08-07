@@ -418,6 +418,26 @@ mod tests {
         })
     }
 
+    /// A reaction to a titled post: the common case, and the one that carries a
+    /// thumbnail. 55% of all notifications are reactions.
+    fn sample_reaction() -> serde_json::Value {
+        json!({
+            "id": "00000000-0000-0000-0000-000000000003",
+            "notification_type": "Reaction",
+            "read_at": "2026-01-02T04:00:00Z",
+            "created_at": "2026-01-02T03:04:05Z",
+            "actor_login_name": "someone",
+            "actor_name": "Someone",
+            "reaction_emoji": "\u{1f49c}",
+            "post_id": "00000000-0000-0000-0000-000000000009",
+            "post_title": "A drawing",
+            "post_author_login_name": "artist",
+            "post_image_filename": "abcdef.png",
+            "post_image_width": 300,
+            "post_image_height": 300,
+        })
+    }
+
     fn sample_invitation() -> serde_json::Value {
         json!({
             "id": "00000000-0000-0000-0000-000000000002",
@@ -473,6 +493,85 @@ mod tests {
         assert!(rendered.contains("invitations-pending"));
         assert_eq!(rendered.matches(">notifications<").count(), 1);
         assert!(rendered.contains("Open Studio"));
+    }
+
+    /// The row is one line: actor and verb in a single <p>, with the type
+    /// label gone. It used to be a button bar, a type label restating the verb
+    /// below it, then the actor and the action as two separate paragraphs.
+    #[test]
+    fn a_notification_is_one_row_not_four() {
+        let rendered = render(vec![sample_reaction()], Vec::new());
+        assert_eq!(rendered.matches("notification-line").count(), 1);
+        // The type label ("New reaction") sat directly above the sentence that
+        // already said it.
+        assert!(!rendered.contains("notification-type"));
+        assert!(!rendered.contains("notification-header"));
+        assert!(!rendered.contains("notification-body"));
+        // Actor and verb are in the same paragraph now.
+        assert!(rendered.contains("notification-actor"));
+        assert!(rendered.contains("notification-action"));
+    }
+
+    /// Regression: every title-bearing type wrapped its whole action line in
+    /// `if post_title`, so a reaction to an untitled drawing rendered the
+    /// actor's name followed by nothing at all.
+    #[test]
+    fn an_untitled_post_still_gets_a_verb() {
+        let mut untitled = sample_reaction();
+        untitled["post_title"] = json!(null);
+        let rendered = render(vec![untitled], Vec::new());
+        assert!(
+            rendered.contains("notification-action"),
+            "untitled post rendered an actor with no verb"
+        );
+        // Falls back to the same string the post cards use rather than a new
+        // one. The stub echoes both the pattern id and the arguments, so this
+        // sees the title that was actually interpolated.
+        assert!(
+            rendered.contains("postTitle=post-untitled"),
+            "the untitled fallback did not reach the action pattern"
+        );
+    }
+
+    /// 95% of notifications carry a post. The thumbnail used to be gated on a
+    /// hardcoded list of six type names instead of on having an image.
+    #[test]
+    fn anything_with_a_post_image_gets_a_thumbnail() {
+        let rendered = render(vec![sample_reaction()], Vec::new());
+        assert!(rendered.contains("notification-post-image"));
+        assert!(rendered.contains("/image/ab/abcdef.png"));
+        // Follows have no post, so no thumbnail and no broken image.
+        let follow = render(vec![sample_notification()], Vec::new());
+        assert!(!follow.contains("notification-post-image"));
+    }
+
+    /// The mark-read button is the control that disappears once used; delete
+    /// is always there. Both live in the row rather than on one of their own.
+    #[test]
+    fn read_rows_drop_the_mark_read_button() {
+        let unread = render(vec![sample_notification()], Vec::new());
+        assert!(unread.contains("notification-mark-read"));
+        assert!(unread.contains("class=\"notification unread\""));
+
+        let read = render(vec![sample_reaction()], Vec::new());
+        assert!(!read.contains("notification-mark-read"));
+        assert!(read.contains("notification-delete"));
+        assert!(!read.contains("notification unread"));
+    }
+
+    /// The invitation row is built from the same pieces as a notification row,
+    /// but its wording is a sentence frame the locales fill in four parts —
+    /// "Invitation from" @who "to join" Community — so all four must survive.
+    #[test]
+    fn invitations_keep_their_sentence_frame() {
+        let rendered = render(Vec::new(), vec![sample_invitation()]);
+        for key in ["invitation-from", "invitation-to-community"] {
+            assert!(rendered.contains(key), "{key} dropped from the invitation");
+        }
+        assert!(rendered.contains("@someone"));
+        assert!(rendered.contains("Open Studio"));
+        assert!(rendered.contains("btn-accept"));
+        assert!(rendered.contains("btn-reject"));
     }
 
     #[test]

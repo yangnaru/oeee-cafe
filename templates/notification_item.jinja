@@ -1,156 +1,123 @@
-<div class="notification {% if not notification.read_at %}unread{% endif %}">
-  <div class="notification-actions">
-    {# Mark as read button #}
-    {% if not notification.read_at %}
-      <button class="notification-mark-read"
-              hx-post="/notifications/{{ notification.id }}/mark-read"
-              hx-target="closest .notification"
-              hx-swap="outerHTML">
-        {{ ftl_get_message("notification-mark-read") }}
-      </button>
-    {% endif %}
-    {# Delete button #}
-    <button class="notification-delete"
-            hx-delete="/notifications/{{ notification.id }}"
-            hx-target="closest .notification"
-            hx-swap="outerHTML"
-            hx-confirm="{{ ftl_get_message("notification-delete-confirm") }}">
-      {{ ftl_get_message("notification-delete") }}
-    </button>
-  </div>
+{# One notification as a single row: thumbnail, one sentence, time, actions.
 
-  <div class="notification-header">
-    <strong class="notification-type">
-      {% if notification.notification_type == "Comment" %}
-        {{ ftl_get_message("notification-comment") }}
-      {% elif notification.notification_type == "Reaction" %}
-        {{ ftl_get_message("notification-reaction") }}
-      {% elif notification.notification_type == "Follow" %}
-        {{ ftl_get_message("notification-follow") }}
-      {% elif notification.notification_type == "GuestbookEntry" %}
-        {{ ftl_get_message("notification-guestbook-entry") }}
-      {% elif notification.notification_type == "GuestbookReply" %}
-        {{ ftl_get_message("notification-guestbook-reply") }}
-      {% elif notification.notification_type == "Mention" %}
-        {{ ftl_get_message("notification-mention") }}
-      {% elif notification.notification_type == "PostReply" %}
-        {{ ftl_get_message("notification-post-reply") }}
-      {% elif notification.notification_type == "CommentReply" %}
-        {{ ftl_get_message("notification-comment-reply") }}
-      {% elif notification.notification_type == "CommunityPost" %}
-        {{ ftl_get_message("notification-community-post") }}
+   This used to be four stacked blocks to say "Someone commented on X" — a
+   right-aligned button bar, a type label, the actor, then the action — which
+   cost about 175px each and put five notifications on a screen. The type label
+   restated the sentence directly beneath it ("New reaction" over "reacted 💜
+   to …"), and the actor and the verb are one sentence that was being rendered
+   as two paragraphs.
+
+   Rendered by the page in a loop and standalone by the mark-read handler, so it
+   must not depend on anything that handler passes beyond `notification` —
+   r2_public_endpoint_url is a global, not part of that context. #}
+{% set title = notification.post_title if notification.post_title else ftl_get_message("post-untitled") %}
+{% set post_url = "/@" ~ notification.post_author_login_name ~ "/" ~ notification.post_id %}
+<div class="notification{% if not notification.read_at %} unread{% endif %}">
+  {# Shown for anything carrying a post rather than for a list of six named
+     types: 95% of notifications have one, and the old list left the rest of
+     them out for no reason anyone recorded. #}
+  {% if notification.post_image_filename %}
+    <a href="{{ post_url }}" class="notification-thumbnail">
+      <img class="notification-post-image"
+           width="{{ notification.post_image_width }}"
+           height="{{ notification.post_image_height }}"
+           alt="{{ notification.post_title }}"
+           loading="lazy"
+           decoding="async"
+           src="{{ r2_public_endpoint_url }}/image/{{ notification.post_image_filename[:2] }}/{{ notification.post_image_filename }}" />
+    </a>
+  {% else %}
+    {# Follows and guestbook entries have no post to show. They keep the space
+       anyway so every sentence in the list starts at the same x — one row
+       starting 60px to the left of the rest reads as broken, and with 95% of
+       notifications carrying an image it would always be the odd one out. #}
+    <span class="notification-thumbnail-placeholder" aria-hidden="true"></span>
+  {% endif %}
+
+  <div class="notification-content">
+    <p class="notification-line">
+      {% if notification.actor_login_name %}
+        <a href="/@{{ notification.actor_login_name }}" class="notification-actor">{{ notification.actor_name }}</a>
+      {% else %}
+        <a href="{{ notification.actor_handle }}" class="notification-actor">{{ notification.actor_name }}</a>
       {% endif %}
-    </strong>
-    <span class="notification-time muted">{{ notification.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}</span>
-  </div>
+      {# The action strings are written as sentence continuations — "commented
+         on X", "started following you" — so the actor and the verb belong on
+         one line. They were two block paragraphs.
 
-  <div class="notification-body">
-    {# Post thumbnail for post-related notifications #}
-    {% if notification.post_image_filename and (notification.notification_type == "Comment" or notification.notification_type == "Reaction" or notification.notification_type == "Mention" or notification.notification_type == "PostReply" or notification.notification_type == "CommentReply" or notification.notification_type == "CommunityPost") %}
-      <a href="/@{{ notification.post_author_login_name }}/{{ notification.post_id }}" class="notification-thumbnail">
-        <img class="post-image notification-post-image"
-             width="{{ notification.post_image_width }}"
-             height="{{ notification.post_image_height }}"
-             alt="{{ notification.post_title }}"
-             src="{{ r2_public_endpoint_url|safe }}/image/{{ notification.post_image_filename[:2] }}/{{ notification.post_image_filename }}" />
-      </a>
-    {% endif %}
-
-    <div class="notification-content">
-      {# Actor information #}
-      <p class="notification-actor">
-        {% if notification.actor_login_name %}
-          <a href="/@{{ notification.actor_login_name }}">{{ notification.actor_name }}</a>
-          <span class="muted">@{{ notification.actor_login_name }}</span>
-        {% else %}
-          <a href="{{ notification.actor_handle }}">{{ notification.actor_name }}</a>
-          <span class="muted">{{ notification.actor_handle }}</span>
-        {% endif %}
-      </p>
-
-      {# Notification-specific content #}
+         Where a post title is interpolated, an untitled drawing used to render
+         the actor and then nothing at all, because the whole action line sat
+         behind `if post_title`. Falls back to the same "Untitled" the post
+         cards use. #}
       {% if notification.notification_type == "Comment" %}
-        {% if notification.post_title %}
-          <p class="notification-action">
-            {{ ftl_format_pattern("notification-action-commented-on", {"postTitle": notification.post_title}) }}
-          </p>
-        {% endif %}
-        {% if notification.comment_content_html %}
-          <div class="notification-preview">{{ notification.comment_content_html|safe }}</div>
-        {% elif notification.comment_content %}
-          <pre class="notification-preview">{{ notification.comment_content }}</pre>
-        {% endif %}
-
+        <a href="{{ post_url }}" class="notification-action">{{ ftl_format_pattern("notification-action-commented-on", {"postTitle": title}) }}</a>
       {% elif notification.notification_type == "Reaction" %}
-        {% if notification.post_title %}
-          <p class="notification-action">
-            {{ ftl_format_pattern("notification-action-reacted-to-post", {"emoji": notification.reaction_emoji, "postTitle": notification.post_title}) }}
-          </p>
-        {% endif %}
-
-      {% elif notification.notification_type == "Follow" %}
-        <p class="notification-action">
-          {{ ftl_get_message("notification-action-followed-you") }}
-        </p>
-
-      {% elif notification.notification_type == "GuestbookEntry" %}
-        <p class="notification-action">
-          {{ ftl_get_message("notification-action-wrote-guestbook") }}
-        </p>
-        {% if notification.guestbook_content %}
-          <pre class="notification-preview">{{ notification.guestbook_content }}</pre>
-        {% endif %}
-
-      {% elif notification.notification_type == "GuestbookReply" %}
-        <p class="notification-action">
-          {{ ftl_get_message("notification-action-replied-guestbook") }}
-        </p>
-        {% if notification.guestbook_content %}
-          <pre class="notification-preview">{{ notification.guestbook_content }}</pre>
-        {% endif %}
-
+        <a href="{{ post_url }}" class="notification-action">{{ ftl_format_pattern("notification-action-reacted-to-post", {"emoji": notification.reaction_emoji, "postTitle": title}) }}</a>
       {% elif notification.notification_type == "Mention" %}
-        {% if notification.post_title %}
-          <p class="notification-action">
-            {{ ftl_format_pattern("notification-action-mentioned-in-comment", {"postTitle": notification.post_title}) }}
-          </p>
-        {% endif %}
-        {% if notification.comment_content_html %}
-          <div class="notification-preview">{{ notification.comment_content_html|safe }}</div>
-        {% elif notification.comment_content %}
-          <pre class="notification-preview">{{ notification.comment_content }}</pre>
-        {% endif %}
-
+        <a href="{{ post_url }}" class="notification-action">{{ ftl_format_pattern("notification-action-mentioned-in-comment", {"postTitle": title}) }}</a>
+      {% elif notification.notification_type == "CommentReply" %}
+        <a href="{{ post_url }}" class="notification-action">{{ ftl_format_pattern("notification-action-replied-to-comment", {"postTitle": title}) }}</a>
       {% elif notification.notification_type == "PostReply" %}
-        <p class="notification-action">
-          {% if notification.post_title %}
+        <a href="{{ post_url }}" class="notification-action">
+          {%- if notification.post_title -%}
             {{ ftl_format_pattern("notification-action-replied-to-post-with-title", {"postTitle": notification.post_title}) }}
-          {% else %}
+          {%- else -%}
             {{ ftl_get_message("notification-action-replied-to-post") }}
-          {% endif %}
-        </p>
-
-      {% elif notification.notification_type == "CommentReply" %}
-        {% if notification.post_title %}
-          <p class="notification-action">
-            {{ ftl_format_pattern("notification-action-replied-to-comment", {"postTitle": notification.post_title}) }}
-          </p>
-        {% endif %}
-        {% if notification.comment_content_html %}
-          <div class="notification-preview">{{ notification.comment_content_html|safe }}</div>
-        {% elif notification.comment_content %}
-          <pre class="notification-preview">{{ notification.comment_content }}</pre>
-        {% endif %}
-
+          {%- endif -%}
+        </a>
       {% elif notification.notification_type == "CommunityPost" %}
-        <p class="notification-action">
-          {% if notification.post_title %}
+        <a href="{{ post_url }}" class="notification-action">
+          {%- if notification.post_title -%}
             {{ ftl_format_pattern("notification-action-posted-in-community-with-title", {"postTitle": notification.post_title}) }}
-          {% else %}
+          {%- else -%}
             {{ ftl_get_message("notification-action-posted-in-community") }}
-          {% endif %}
-        </p>
+          {%- endif -%}
+        </a>
+      {% elif notification.notification_type == "Follow" %}
+        <span class="notification-action">{{ ftl_get_message("notification-action-followed-you") }}</span>
+      {% elif notification.notification_type == "GuestbookEntry" %}
+        <span class="notification-action">{{ ftl_get_message("notification-action-wrote-guestbook") }}</span>
+      {% elif notification.notification_type == "GuestbookReply" %}
+        <span class="notification-action">{{ ftl_get_message("notification-action-replied-guestbook") }}</span>
       {% endif %}
+    </p>
+
+    {# Comment and guestbook bodies are the one thing here the sentence cannot
+       carry, so they stay — clamped, because a long comment used to set the
+       height of the row it arrived in. #}
+    {% if notification.comment_content_html %}
+      <div class="notification-preview">{{ notification.comment_content_html|safe }}</div>
+    {% elif notification.comment_content %}
+      <div class="notification-preview">{{ notification.comment_content }}</div>
+    {% elif notification.guestbook_content %}
+      <div class="notification-preview">{{ notification.guestbook_content }}</div>
+    {% endif %}
+  </div>
+
+  {# Time and controls share the row rather than taking one of their own. The
+     buttons stay visible instead of appearing on hover: hover does not exist
+     on touch, which is the same reason the post cards credit their artist in
+     the open. #}
+  <div class="notification-meta">
+    <time class="notification-time muted">{{ notification.created_at|datetimeformat(format="short", tz="Asia/Seoul") }}</time>
+    <div class="notification-actions">
+      {% if not notification.read_at %}
+        <button class="notification-mark-read"
+                title="{{ ftl_get_message('notification-mark-read') }}"
+                hx-post="/notifications/{{ notification.id }}/mark-read"
+                hx-target="closest .notification"
+                hx-swap="outerHTML">
+          {{ ftl_get_message("notification-mark-read") }}
+        </button>
+      {% endif %}
+      <button class="notification-delete"
+              title="{{ ftl_get_message('notification-delete') }}"
+              hx-delete="/notifications/{{ notification.id }}"
+              hx-target="closest .notification"
+              hx-swap="outerHTML"
+              hx-confirm="{{ ftl_get_message('notification-delete-confirm') }}">
+        {{ ftl_get_message("notification-delete") }}
+      </button>
     </div>
   </div>
 </div>

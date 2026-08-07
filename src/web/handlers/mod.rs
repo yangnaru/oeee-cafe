@@ -479,9 +479,31 @@ pub(crate) mod test_support {
         env.add_filter("cachebuster", |value: String| value);
         env.add_filter("markdown", |value: String| value);
         env.add_function("ftl_get_message", |_state: &State, id: String| id);
+        // The real function interpolates the arguments into the locale's
+        // pattern. This stub has no bundle to interpolate into, so it appends
+        // them as `id(name=value)` instead of dropping them: with the arguments
+        // discarded, a template that passes the wrong variable — or none —
+        // renders byte for byte like one that passes the right one, and no test
+        // can tell the difference.
         env.add_function(
             "ftl_format_pattern",
-            |_state: &State, id: String, _args: minijinja::Value| id,
+            |_state: &State, id: String, args: minijinja::Value| {
+                let mut pairs: Vec<String> = Vec::new();
+                if let Ok(keys) = args.try_iter() {
+                    for key in keys {
+                        if let Ok(value) = args.get_item(&key) {
+                            pairs.push(format!("{key}={value}"));
+                        }
+                    }
+                }
+                // Argument order is not guaranteed; sort so assertions are stable.
+                pairs.sort();
+                if pairs.is_empty() {
+                    id
+                } else {
+                    format!("{id}({})", pairs.join(","))
+                }
+            },
         );
         env.add_global("r2_public_endpoint_url", "https://example.test");
         env.add_global("base_url", "https://oeee.test");
