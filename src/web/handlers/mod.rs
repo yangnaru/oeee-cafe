@@ -604,8 +604,7 @@ mod social_meta_tests {
                 }),
                 community_id => "00000000-0000-0000-0000-000000000001",
                 domain => "oeee.test",
-                posts => Vec::<serde_json::Value>::new(),
-                comments => Vec::<serde_json::Value>::new(),
+                feed => context! { posts => Vec::<serde_json::Value>::new(), has_more => false },
                 ..chrome()
             })
             .expect("community renders");
@@ -636,8 +635,7 @@ mod social_meta_tests {
                 }),
                 community_id => "00000000-0000-0000-0000-000000000001",
                 domain => "oeee.test",
-                posts => Vec::<serde_json::Value>::new(),
-                comments => Vec::<serde_json::Value>::new(),
+                feed => context! { posts => Vec::<serde_json::Value>::new(), has_more => false },
                 ..chrome()
             })
             .expect("community renders");
@@ -692,6 +690,119 @@ mod social_meta_tests {
                 r#"<meta property="og:image" content="https://example.test/image/ab/abcdef.png" />"#
             ),
             "the banner is the profile's own image and should be the preview"
+        );
+    }
+}
+
+#[cfg(test)]
+mod community_page_tests {
+    use super::test_support;
+    use minijinja::context;
+    use serde_json::json;
+
+    /// Saving or cancelling the edit form asks for the header block alone, and
+    /// those handlers pass no feed. Reaching a block still walks the template
+    /// around it, so the drawing grid below has to survive the missing value —
+    /// the swap 500s if the grid reaches into `feed` without checking.
+    #[test]
+    fn the_header_block_renders_without_a_feed() {
+        let env = test_support::env();
+        let rendered = env
+            .get_template("community.jinja")
+            .expect("community template loads")
+            .eval_to_state(context! {
+                current_user => json!(null),
+                community => json!({
+                    "id": "00000000-0000-0000-0000-000000000001",
+                    "name": "Open Studio",
+                    "description": "Draw with us",
+                    "slug": "open",
+                    "visibility": "public",
+                    "owner_id": "00000000-0000-0000-0000-000000000002",
+                }),
+                community_id => "00000000-0000-0000-0000-000000000001",
+                domain => "oeee.test",
+                ftl_lang => "en",
+            })
+            .expect("template evaluates")
+            .render_block("community_edit_block")
+            .expect("the header block renders on its own");
+
+        assert!(rendered.contains("Open Studio"));
+        assert!(
+            !rendered.contains("posts-grid"),
+            "the block is the header only"
+        );
+    }
+
+    /// The grid is the shared feed fragment, so its sentinel points wherever
+    /// the handler said — and it must be this community's endpoint rather than
+    /// the home feed's, or scrolling a community page loads the front page.
+    #[test]
+    fn the_grid_continues_from_the_communitys_own_endpoint() {
+        use crate::models::post::SerializablePostForHome;
+        use crate::web::handlers::home::{feed_context, HOME_POSTS_PER_BATCH};
+
+        // A full batch, because that is what tells the feed there is more.
+        let posts = (0..HOME_POSTS_PER_BATCH)
+            .map(|i| SerializablePostForHome {
+                id: uuid::Uuid::from_u128(i as u128 + 1),
+                title: Some(format!("Drawing {i}")),
+                author_id: uuid::Uuid::from_u128(999),
+                user_login_name: "artist".to_string(),
+                paint_duration: "0".to_string(),
+                stroke_count: 1,
+                viewer_count: 0,
+                image_filename: "abcdef.png".to_string(),
+                image_width: 300,
+                image_height: 300,
+                replay_filename: None,
+                is_sensitive: false,
+                community_slug: Some("open".to_string()),
+                community_name: Some("Open Studio".to_string()),
+                published_at: Some(chrono::Utc::now()),
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            })
+            .collect();
+
+        let env = test_support::env();
+        let rendered = env
+            .get_template("community.jinja")
+            .expect("community template loads")
+            .render(context! {
+                current_user => json!(null),
+                messages => Vec::<serde_json::Value>::new(),
+                draft_post_count => 0,
+                unread_notification_count => 0,
+                community => json!({
+                    "id": "00000000-0000-0000-0000-000000000001",
+                    "name": "Open Studio",
+                    "description": "Draw with us",
+                    "slug": "open",
+                    "visibility": "public",
+                    "owner_id": "00000000-0000-0000-0000-000000000002",
+                }),
+                community_id => "00000000-0000-0000-0000-000000000001",
+                domain => "oeee.test",
+                feed => feed_context(posts, "/api/communities/@open/posts", 0),
+                ftl_lang => "en",
+            })
+            .expect("community renders");
+
+        // Minijinja escapes the slashes and the ampersand in an attribute; the
+        // browser reads them back as the URL, so assert against that.
+        let links_in = rendered.replace("&#x2f;", "/").replace("&amp;", "&");
+        assert!(
+            links_in.contains(&format!(
+                r#"hx-get="/api/communities/@open/posts?offset={}&limit={}""#,
+                HOME_POSTS_PER_BATCH, HOME_POSTS_PER_BATCH
+            )),
+            "the sentinel should ask this community for the next batch"
+        );
+        assert!(
+            rendered.contains(r#"id="post-feed-grid""#),
+            "the column control drives the grid by id"
         );
     }
 }

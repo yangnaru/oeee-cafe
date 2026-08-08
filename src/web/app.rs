@@ -32,7 +32,8 @@ use crate::web::handlers::community::{
     get_communities_list_json, get_community_invitations_json, get_community_members_json,
     get_members, get_public_communities_json, get_user_invitations_json, hx_delete_community,
     hx_do_edit_community, hx_edit_community, invite_user, invite_user_json, leave_community_json,
-    members_page, redirect_community_to_unified, remove_member, remove_member_json,
+    load_more_community_posts, members_page, redirect_community_to_unified, remove_member,
+    remove_member_json,
     retract_invitation, retract_invitation_json, search_public_communities_json,
     update_community_json,
 };
@@ -312,6 +313,10 @@ impl App {
             .route("/api/home/posts", get(load_more_public_posts))
             .route("/api/collaborate/posts", get(load_more_collaborative_posts))
             .route("/api/communities/cards", get(communities_fragment))
+            .route(
+                "/api/communities/@:slug/posts",
+                get(load_more_community_posts),
+            )
             .route("/api/v1/posts/public", get(load_more_public_posts_json))
             .route("/api/v1/posts/drafts", get(draft_posts_api))
             .route("/api/v1/posts/:post_id", get(get_post_details_json))

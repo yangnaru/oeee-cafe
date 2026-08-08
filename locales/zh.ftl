@@ -110,13 +110,10 @@ display-name = 昵称
 latest-active-public-community = 最近活跃的公开社区
 recent-drawings = 最近的作品
 recent-comments = 最近的评论
-view-all-comments = 查看所有评论
 no-comments-yet = 暂无评论
 
-community-stats = 社区统计
 community-stats-posts = 帖子
 community-stats-contributors = 贡献者
-community-stats-comments = 评论
 
 edit = 编辑
 edit-community-button = 移至社区

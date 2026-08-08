@@ -110,13 +110,10 @@ display-name = ニックネーム
 latest-active-public-community = 最近の活動公開コミュニティ
 recent-drawings = 最近のお絵かき
 recent-comments = 最近のコメント
-view-all-comments = すべてのコメントを見る
 no-comments-yet = まだコメントがありません
 
-community-stats = コミュニティ統計
 community-stats-posts = 投稿
 community-stats-contributors = 寄稿者
-community-stats-comments = コメント
 
 edit = 修正
 edit-community-button = コミュニティに移動

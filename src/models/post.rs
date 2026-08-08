@@ -437,6 +437,11 @@ pub async fn find_draft_posts_by_author_id(
         .collect())
 }
 
+/// One community's published drawings, newest first.
+///
+/// Returns the same row shape as the home feed so a community page can render
+/// the shared post card: the card credits each drawing to its author and its
+/// community, and both live here rather than being stitched on by the caller.
 pub async fn find_published_posts_by_community_id(
     tx: &mut Transaction<'_, Postgres>,
     community_id: Uuid,
@@ -444,7 +449,7 @@ pub async fn find_published_posts_by_community_id(
     offset: i64,
     viewer_user_id: Option<Uuid>,
     viewer_show_sensitive: bool,
-) -> Result<Vec<SerializablePost>> {
+) -> Result<Vec<SerializablePostForHome>> {
     let q = query!(
         "
             SELECT
@@ -460,12 +465,15 @@ pub async fn find_published_posts_by_community_id(
                 images.replay_filename,
                 posts.viewer_count,
                 (posts.is_sensitive OR posts.is_explicit) AS \"is_sensitive!\",
+                communities.slug AS community_slug,
+                communities.name AS community_name,
                 posts.published_at,
                 posts.created_at,
                 posts.updated_at
             FROM posts
             LEFT JOIN images ON posts.image_id = images.id
             LEFT JOIN users ON posts.author_id = users.id
+            JOIN communities ON posts.community_id = communities.id
             WHERE community_id = $1
             AND published_at IS NOT NULL
             AND posts.deleted_at IS NULL
@@ -482,11 +490,11 @@ pub async fn find_published_posts_by_community_id(
     let result = q.fetch_all(&mut **tx).await?;
     Ok(result
         .into_iter()
-        .map(|row| SerializablePost {
+        .map(|row| SerializablePostForHome {
             id: row.id,
             title: row.title,
             author_id: row.author_id,
-            user_login_name: Some(row.login_name),
+            user_login_name: row.login_name,
             paint_duration: row.paint_duration.microseconds.to_string(),
             stroke_count: row.stroke_count,
             image_filename: row.image_filename,
@@ -494,6 +502,8 @@ pub async fn find_published_posts_by_community_id(
             image_height: row.height,
             replay_filename: row.replay_filename,
             is_sensitive: row.is_sensitive,
+            community_slug: Some(row.community_slug),
+            community_name: Some(row.community_name),
             viewer_count: row.viewer_count,
             published_at: row.published_at,
             created_at: row.created_at,

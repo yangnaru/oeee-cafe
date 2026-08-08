@@ -18,14 +18,11 @@ use crate::models::notification::{
     create_notification, get_notification_by_id, get_unread_count, send_push_for_notification,
     CreateNotificationParams, NotificationType,
 };
-use crate::models::comment::find_latest_comments_in_community;
 use crate::models::post::{
     find_published_posts_by_author_id, find_published_public_posts_by_author_id,
-    find_published_posts_by_community_id,
 };
-use crate::models::community::{
-    find_community_by_slug, get_community_stats, is_user_member, CommunityVisibility,
-};
+use crate::models::community::{find_community_by_slug, CommunityVisibility};
+use crate::web::handlers::community::render_community_page;
 use crate::models::user::{find_user_by_id, find_user_by_login_name, AuthSession};
 use crate::web::context::CommonContext;
 use crate::web::handlers::home::LoadMoreQuery;
@@ -33,20 +30,18 @@ use crate::web::responses::{
     PaginationMeta, ProfileBanner, ProfileFollowing, ProfileFollowingsListResponse, ProfileLink,
     ProfilePost, ProfileResponse, ProfileUser,
 };
-use crate::web::handlers::render_403;
 use crate::web::state::AppState;
 use anyhow::Error;
 use aws_sdk_s3::config::{Credentials as AwsCredentials, Region, SharedCredentialsProvider};
 use aws_sdk_s3::types::{Delete, ObjectIdentifier};
 use aws_sdk_s3::Client;
 use axum::extract::{Path, Query};
-use axum::http::{uri::Uri, HeaderMap, HeaderValue};
-use axum::response::{IntoResponse, Redirect};
+use axum::http::{uri::Uri, HeaderMap};
+use axum::response::IntoResponse;
 use axum::{extract::State, http::StatusCode, response::Html, response::Json, Form};
 
 use minijinja::context;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::ExtractFtlLang;
@@ -346,95 +341,16 @@ pub async fn profile_or_community(
 
     // User not found - try to find a community by slug
     if let Some(community) = find_community_by_slug(&mut tx, slug.clone()).await? {
-        let community_uuid = community.id;
-
-        // Access control: verify access based on community visibility
-        match community.visibility {
-            CommunityVisibility::Private => {
-                // Private communities require authentication AND membership
-                match &auth_session.user {
-                    Some(user) => {
-                        // User is authenticated, check membership
-                        let is_member = is_user_member(&mut tx, user.id, community_uuid).await?;
-                        if !is_member {
-                            // Authenticated but not a member - show 403 forbidden
-                            return Ok(render_403(&auth_session, &state, ftl_lang).await?.into_response());
-                        }
-                    }
-                    None => {
-                        // Not authenticated - redirect to login with next URL
-                        let next_url = uri.path();
-                        return Ok(Redirect::to(&format!("/login?next={}", next_url)).into_response());
-                    }
-                }
-            }
-            CommunityVisibility::Public | CommunityVisibility::Unlisted => {
-                // Public and unlisted communities are accessible to everyone
-                // No authentication required
-            }
-        }
-
-        let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
-            (Some(user.id), user.show_sensitive_content)
-        } else {
-            (None, false)
-        };
-
-        let posts = find_published_posts_by_community_id(
+        return render_community_page(
             &mut tx,
-            community_uuid,
-            1000,
-            0,
-            viewer_user_id,
-            viewer_show_sensitive,
+            &state,
+            &auth_session,
+            &headers,
+            ftl_lang,
+            community,
+            uri.path(),
         )
-        .await?;
-        let comments = find_latest_comments_in_community(&mut tx, community_uuid, 5).await?;
-        let stats = get_community_stats(&mut tx, community_uuid).await?;
-        let common_ctx =
-            CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
-
-        let template: minijinja::Template<'_, '_> = state.env.get_template("community.jinja")?;
-
-        if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
-            let rendered = template
-                .eval_to_state(context! {
-                    current_user => auth_session.user,
-                    community => Some(&community),
-                    community_id => community.id.to_string(),
-                    domain => state.config.domain.clone(),
-                    ftl_lang
-                })?
-                .render_block("community_edit_block")?;
-            return Ok(Html(rendered).into_response());
-        } else {
-            let rendered = template.render(context! {
-                current_user => auth_session.user,
-                community => Some(community),
-                community_id => community_uuid.to_string(),
-                domain => state.config.domain.clone(),
-                unread_notification_count => common_ctx.unread_notification_count,
-                comments => comments,
-                stats => stats,
-                posts => posts.iter().map(|post| {
-                    HashMap::<String, String>::from_iter(vec![
-                        ("id".to_string(), post.id.to_string()),
-                        ("title".to_string(), post.title.clone().unwrap_or_default().to_string()),
-                        ("author_id".to_string(), post.author_id.to_string()),
-                        ("user_login_name".to_string(), post.user_login_name.clone().unwrap_or_default()),
-                        ("image_filename".to_string(), post.image_filename.to_string()),
-                        ("image_width".to_string(), post.image_width.to_string()),
-                        ("image_height".to_string(), post.image_height.to_string()),
-                        ("replay_filename".to_string(), post.replay_filename.clone().unwrap_or_default()),
-                        ("created_at".to_string(), post.created_at.to_string()),
-                        ("updated_at".to_string(), post.updated_at.to_string()),
-                        ])
-                    }).collect::<Vec<_>>(),
-                    draft_post_count => common_ctx.draft_post_count,
-                    ftl_lang,
-            })?;
-            return Ok(Html(rendered).into_response());
-        }
+        .await;
     }
 
     // Neither user nor community found - render 404 page

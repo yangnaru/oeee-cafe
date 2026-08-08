@@ -1790,42 +1790,6 @@ legend {
   user-select: all;
 }
 
-.community-stats-card {
-  border: 1px solid var(--main-border-color);
-  background-color: var(--main-nav-bg-color);
-  padding: var(--space-4);
-  margin-bottom: var(--space-6);
-  font-size: var(--text-sm);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.community-stats-content {
-  flex: 1;
-}
-
-.community-stats-draw-form {
-  flex-shrink: 0;
-}
-
-.community-stats-draw-form input[type="submit"] {
-  padding: var(--space-2) var(--space-4);
-  background-color: var(--main-bg-color);
-  border: 1px solid var(--main-border-color);
-  color: var(--main-text-color);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.community-stats-draw-form input[type="submit"]:hover {
-  background-color: var(--main-highlight-color);
-  border-color: var(--main-highlight-color);
-}
-
 .community-drawing-card {
   border: 1px solid var(--main-border-color);
   background-color: var(--main-bg-color);
@@ -1850,21 +1814,6 @@ legend {
   font-size: var(--text-sm);
   margin-bottom: var(--space-4);
   margin-top: -var(--space-1);
-}
-
-.community-section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-4);
-  margin-bottom: var(--space-3);
-}
-
-.community-section-link {
-  text-decoration: underline;
-  font-size: var(--text-sm);
-  flex-shrink: 0;
-  align-self: center;
 }
 
 .community-drawing-card form {

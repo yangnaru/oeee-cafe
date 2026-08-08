@@ -1,5 +1,4 @@
 {% extends "base.jinja" %}
-{% import "comment_card_macro.jinja" as comment_card_macro %}
 {% block title %}
   {{ super() }} | {{ community.name }}
 {% endblock title %}
@@ -24,6 +23,7 @@
   <link rel="alternate"
         type="application/activity+json"
         href="https://{{ domain }}/ap/communities/{{ community.id }}" />
+  {% include "post_feed_head.jinja" %}
 {% endblock head %}
 {% block content %}
   <div class="center">
@@ -34,77 +34,71 @@
           <p class="community-handle">@{{ community.slug }}@{{ domain }}</p>
         </div>
         <p class="community-description">{{ community.description }}</p>
-        {% if current_user %}
-          <div class="community-menu">
-            {% if current_user.id == community.owner_id %}
-              <button hx-get="/communities/{{ community_id }}/edit">{{ ftl_get_message("edit") }}</button>
-            {% endif %}
-            {# Opens the lobby with this community preselected, so the session's
-               saved drawing lands here. Goes through the lobby rather than
-               creating a session outright so the canvas size, title and
-               participant limit can still be chosen.
+        {# Shown to everyone, because the comments link is the only way left to
+           reach them: the page below is the drawing feed and nothing else. #}
+        <div class="community-menu">
+          {% if current_user and current_user.id == community.owner_id %}
+            <button hx-get="/communities/{{ community_id }}/edit">{{ ftl_get_message("edit") }}</button>
+          {% endif %}
+          {# Opens the lobby with this community preselected, so the session's
+             saved drawing lands here. Goes through the lobby rather than
+             creating a session outright so the canvas size, title and
+             participant limit can still be chosen.
 
-               Hidden for two-tone communities: they are excluded from the
-               postable set, so the option would not exist to be preselected
-               and the session would silently save with no community. They have
-               their own drawing card below. #}
-            {% if not community.background_color %}
-              <a href="/collaborate?community={{ community.slug }}" class="btn">
-                {{ ftl_get_message("community-draw-together") }}
-              </a>
-            {% endif %}
-            {% if community.visibility == "private" %}
-              <a href="/communities/@{{ community.slug }}/members" class="btn">{{ ftl_get_message("community-members") }}</a>
-            {% endif %}
-          </div>
-        {% endif %}
+             Hidden for two-tone communities: they are excluded from the
+             postable set, so the option would not exist to be preselected
+             and the session would silently save with no community. They have
+             their own drawing card below. #}
+          {% if current_user and not community.background_color %}
+            <a href="/collaborate?community={{ community.slug }}" class="btn">
+              {{ ftl_get_message("community-draw-together") }}
+            </a>
+          {% endif %}
+          <a href="/communities/@{{ community.slug }}/comments" class="btn">{{ ftl_get_message("recent-comments") }}</a>
+          {% if current_user and community.visibility == "private" %}
+            <a href="/communities/@{{ community.slug }}/members" class="btn">{{ ftl_get_message("community-members") }}</a>
+          {% endif %}
+        </div>
       </div>
     {% endblock community_edit_block %}
-    {% if stats %}
-      <div class="community-stats-card">
-        <div class="community-stats-content">
-          <strong>{{ ftl_get_message("community-stats") }}:</strong>
-          {{ stats.total_posts }} {{ ftl_get_message("community-stats-posts") }} ·
-          {{ stats.total_contributors }} {{ ftl_get_message("community-stats-contributors") }} ·
-          {{ stats.total_comments }} {{ ftl_get_message("community-stats-comments") }}
-        </div>
-        {% if current_user and community.background_color %}
-          <div class="community-drawing-card">
-            <form action="/collaborate/" method="get" onsubmit="setOrientationDimensions(event, this)">
-              <input type="hidden" name="offline" value="true" />
-              <input type="hidden" name="twoTone" value="true" />
-              <input type="hidden" name="backgroundColor" value="{{ community.background_color }}" />
-              <input type="hidden" name="foregroundColor" value="{{ community.foreground_color }}" />
-              <input type="hidden" name="community_id" value="{{ community_id }}" />
-              <input type="hidden" name="width" value="640" />
-              <input type="hidden" name="height" value="480" />
-              <fieldset>
-                <legend>{{ ftl_get_message('community-drawing-orientation') }}</legend>
-                <label>
-                  <input type="radio" name="orientation" value="landscape" checked />
-                  {{ ftl_get_message('community-drawing-landscape') }} (640 × 480)
-                </label>
-                <label>
-                  <input type="radio" name="orientation" value="portrait" />
-                  {{ ftl_get_message('community-drawing-portrait') }} (480 × 640)
-                </label>
-              </fieldset>
-              <input type="submit" value="{{ ftl_get_message('community-drawing-new') }}" />
-            </form>
-            <script>
-              function setOrientationDimensions(event, form) {
-                const orientation = form.querySelector('input[name="orientation"]:checked').value;
-                if (orientation === 'landscape') {
-                  form.querySelector('input[name="width"]').value = '640';
-                  form.querySelector('input[name="height"]').value = '480';
-                } else if (orientation === 'portrait') {
-                  form.querySelector('input[name="width"]').value = '480';
-                  form.querySelector('input[name="height"]').value = '640';
-                }
-              }
-            </script>
-          </div>
-        {% endif %}
+    {# Two-tone communities draw offline in the fixed pair of colours the
+       community was created with. This used to hang off the stats card, which
+       is gone; the form is what people came for, so it stands on its own. #}
+    {% if current_user and community.background_color %}
+      <div class="community-drawing-card">
+        <form action="/collaborate/" method="get" onsubmit="setOrientationDimensions(event, this)">
+          <input type="hidden" name="offline" value="true" />
+          <input type="hidden" name="twoTone" value="true" />
+          <input type="hidden" name="backgroundColor" value="{{ community.background_color }}" />
+          <input type="hidden" name="foregroundColor" value="{{ community.foreground_color }}" />
+          <input type="hidden" name="community_id" value="{{ community_id }}" />
+          <input type="hidden" name="width" value="640" />
+          <input type="hidden" name="height" value="480" />
+          <fieldset>
+            <legend>{{ ftl_get_message('community-drawing-orientation') }}</legend>
+            <label>
+              <input type="radio" name="orientation" value="landscape" checked />
+              {{ ftl_get_message('community-drawing-landscape') }} (640 × 480)
+            </label>
+            <label>
+              <input type="radio" name="orientation" value="portrait" />
+              {{ ftl_get_message('community-drawing-portrait') }} (480 × 640)
+            </label>
+          </fieldset>
+          <input type="submit" value="{{ ftl_get_message('community-drawing-new') }}" />
+        </form>
+        <script>
+          function setOrientationDimensions(event, form) {
+            const orientation = form.querySelector('input[name="orientation"]:checked').value;
+            if (orientation === 'landscape') {
+              form.querySelector('input[name="width"]').value = '640';
+              form.querySelector('input[name="height"]').value = '480';
+            } else if (orientation === 'portrait') {
+              form.querySelector('input[name="width"]').value = '480';
+              form.querySelector('input[name="height"]').value = '640';
+            }
+          }
+        </script>
       </div>
     {% endif %}
     {% if current_user and not community.background_color %}
@@ -151,38 +145,30 @@
         </form>
       </div>
     {% endif %}
-    {% if comments %}
-      <div class="community-section">
-        <div class="community-section-header">
-          <h3 class="community-section-title">{{ ftl_get_message("recent-comments") }}</h3>
-          {% if stats.total_comments > 5 %}
-            <a href="/communities/@{{ community.slug }}/comments"
-               class="community-section-link">{{ ftl_get_message("view-all-comments") }}</a>
-          {% endif %}
-        </div>
-        {% for comment in comments %}
-          {{ comment_card_macro.comment_card(comment, r2_public_endpoint_url, ftl_get_message) }}
-        {% endfor %}
+  </div>
+  {# The drawings are the page from here down, and they get the same chrome as
+     /: shared head, column control, grid and card fragment. Only the grid opts
+     into the wider column, so the header above it stays put. #}
+  {# `feed` is missing when a handler only wants the header block above: saving
+     or cancelling the edit form renders that block alone, and minijinja still
+     walks the rest of the template to reach it. #}
+  {% set feed_posts = feed.posts if feed is defined else [] %}
+  <div class="center-wide">
+    <section role="region" aria-labelledby="post-feed-heading">
+      <div class="feed-header">
+        <h2 id="post-feed-heading" class="home-section-title">{{ ftl_get_message("recent-drawings") }}</h2>
+        {# Only with posts to arrange: an empty feed has no columns to set. #}
+        {% if feed_posts %}
+          {% include "post_feed_controls.jinja" %}
+        {% endif %}
       </div>
-    {% endif %}
-    <div class="community-section">
-      <h3 class="community-section-title">{{ ftl_get_message("recent-drawings") }}</h3>
-      {% if posts %}
-        <div class="posts-grid">
-          {% for post in posts %}
-            <div class="posts-grid-item">
-              <a href="/@{{ community.slug }}/{{ post.id }}">
-                <img alt="{{ post.title }}"
-                     width="{{ post.image_width }}"
-                     height="{{ post.image_height }}"
-                     src="{{ r2_public_endpoint_url }}/image/{{ post.image_filename[:2] }}/{{ post.image_filename }}" />
-              </a>
-            </div>
-          {% endfor %}
+      {% if feed_posts %}
+        <div class="posts-grid" id="post-feed-grid">
+          {% include "post_feed_fragment.jinja" %}
         </div>
       {% else %}
         <p>{{ ftl_get_message("community-no-posts") }}</p>
       {% endif %}
-    </div>
+    </section>
   </div>
 {% endblock content %}

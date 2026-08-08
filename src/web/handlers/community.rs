@@ -12,12 +12,13 @@ use crate::models::community::{
     get_public_communities_paginated, get_user_role_in_community, is_user_member,
     leave_community, reject_invitation, remove_community_member, search_public_communities,
     slug_conflicts_with_user, soft_delete_community_with_activity,
-    update_community_with_activity, CommunityDraft, CommunityMemberRole, CommunityVisibility,
+    update_community_with_activity, Community, CommunityDraft, CommunityMemberRole,
+    CommunityVisibility,
 };
 use crate::models::notification::{format_community_invitation_message, get_user_language_preference};
 use crate::models::post::{find_published_posts_by_community_id, find_recent_posts_by_communities};
 use crate::models::user::{find_user_by_login_name, AuthSession};
-use crate::web::handlers::home::LoadMoreQuery;
+use crate::web::handlers::home::{feed_context, LoadMoreQuery, HOME_POSTS_PER_BATCH};
 use crate::web::handlers::{parse_id_with_legacy_support, ParsedId};
 use crate::web::responses::{
     CommunityComment, CommunityDetailResponse, CommunityInfo, CommunityInvitationResponse,
@@ -41,7 +42,7 @@ use axum::{
 use axum_messages::Messages;
 use minijinja::context;
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::web::context::CommonContext;
@@ -64,18 +65,13 @@ pub async fn community(
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
-    let (community, community_id) = if id.starts_with('@') {
+    let community = if id.starts_with('@') {
         // Handle @slug format
         let slug = id
             .strip_prefix('@')
             .ok_or_else(|| AppError::InvalidFormData("Invalid slug format".to_string()))?
             .to_string();
-        let community = find_community_by_slug(&mut tx, slug).await?;
-        if let Some(community) = community {
-            (Some(community.clone()), community.id.to_string())
-        } else {
-            (None, id)
-        }
+        find_community_by_slug(&mut tx, slug).await?
     } else {
         // Handle UUID format - redirect to @slug
         let uuid = match parse_id_with_legacy_support(&id, "/communities", &state)? {
@@ -88,11 +84,39 @@ pub async fn community(
             // Redirect UUID to @slug format
             return Ok(Redirect::to(&format!("/communities/@{}", community.slug)).into_response());
         } else {
-            (None, id)
+            None
         }
     };
 
     let community = community.ok_or_else(|| AppError::NotFound("Community".to_string()))?;
+
+    render_community_page(
+        &mut tx,
+        &state,
+        &auth_session,
+        &headers,
+        ftl_lang,
+        community,
+        uri.path(),
+    )
+    .await
+}
+
+/// Renders the community page: header, drawing form and the community's own
+/// post feed.
+///
+/// Shared by `/communities/:id` and the unified `/@:slug` route, which had a
+/// copy each and were only kept in step by hand. They differ solely in how the
+/// community was looked up, so everything past that point lives here.
+pub(crate) async fn render_community_page(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    state: &AppState,
+    auth_session: &AuthSession,
+    headers: &HeaderMap,
+    ftl_lang: String,
+    community: Community,
+    request_path: &str,
+) -> Result<axum::response::Response, AppError> {
     let community_uuid = community.id;
 
     // Access control: verify access based on community visibility
@@ -102,16 +126,19 @@ pub async fn community(
             match &auth_session.user {
                 Some(user) => {
                     // User is authenticated, check membership
-                    let is_member = is_user_member(&mut tx, user.id, community_uuid).await?;
+                    let is_member = is_user_member(tx, user.id, community_uuid).await?;
                     if !is_member {
                         // Authenticated but not a member - show 403 forbidden
-                        return Ok(render_403(&auth_session, &state, ftl_lang).await?.into_response());
+                        return Ok(render_403(auth_session, state, ftl_lang)
+                            .await?
+                            .into_response());
                     }
                 }
                 None => {
                     // Not authenticated - redirect to login with next URL
-                    let next_url = uri.path();
-                    return Ok(Redirect::to(&format!("/login?next={}", next_url)).into_response());
+                    return Ok(
+                        Redirect::to(&format!("/login?next={}", request_path)).into_response()
+                    );
                 }
             }
         }
@@ -121,6 +148,24 @@ pub async fn community(
         }
     }
 
+    let template: minijinja::Template<'_, '_> = state.env.get_template("community.jinja")?;
+
+    // Cancelling the edit form swaps the header back in on its own; the feed
+    // below it is untouched, so it is not worth a query. The template renders
+    // its grid from whatever `feed` holds, and copes with it being absent.
+    if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
+        let rendered = template
+            .eval_to_state(context! {
+                current_user => auth_session.user,
+                community => Some(&community),
+                community_id => community_uuid.to_string(),
+                domain => state.config.domain.clone(),
+                ftl_lang
+            })?
+            .render_block("community_edit_block")?;
+        return Ok(Html(rendered).into_response());
+    }
+
     let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
         (Some(user.id), user.show_sensitive_content)
     } else {
@@ -128,60 +173,84 @@ pub async fn community(
     };
 
     let posts = find_published_posts_by_community_id(
-        &mut tx,
+        tx,
         community_uuid,
-        1000,
+        HOME_POSTS_PER_BATCH,
         0,
         viewer_user_id,
         viewer_show_sensitive,
     )
     .await?;
-    let comments = find_latest_comments_in_community(&mut tx, community_uuid, 5).await?;
-    let stats = get_community_stats(&mut tx, community_uuid).await?;
-    let common_ctx =
-        CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let common_ctx = CommonContext::build(tx, auth_session.user.as_ref().map(|u| u.id)).await?;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("community.jinja")?;
-
-    if headers.get("HX-Request") == Some(&HeaderValue::from_static("true")) {
-        let rendered = template
-            .eval_to_state(context! {
-                current_user => auth_session.user,
-                community => Some(&community),
-                community_id => community.id.to_string(),
-                domain => state.config.domain.clone(),
-                ftl_lang
-            })?
-            .render_block("community_edit_block")?;
-        Ok(Html(rendered).into_response())
-    } else {
-        let rendered = template.render(context! {
+    let rendered = template.render(context! {
         current_user => auth_session.user,
-        community => Some(community),
-        community_id => community_id,
+        community => Some(&community),
+        community_id => community_uuid.to_string(),
         domain => state.config.domain.clone(),
         unread_notification_count => common_ctx.unread_notification_count,
-        comments => comments,
-        stats => stats,
-        posts => posts.iter().map(|post| {
-            HashMap::<String, String>::from_iter(vec![
-                ("id".to_string(), post.id.to_string()),
-                ("title".to_string(), post.title.clone().unwrap_or_default().to_string()),
-                ("author_id".to_string(), post.author_id.to_string()),
-                ("user_login_name".to_string(), post.user_login_name.clone().unwrap_or_default()),
-                ("image_filename".to_string(), post.image_filename.to_string()),
-                ("image_width".to_string(), post.image_width.to_string()),
-                ("image_height".to_string(), post.image_height.to_string()),
-                ("replay_filename".to_string(), post.replay_filename.clone().unwrap_or_default()),
-                ("created_at".to_string(), post.created_at.to_string()),
-                ("updated_at".to_string(), post.updated_at.to_string()),
-                ])
-            }).collect::<Vec<_>>(),
-            draft_post_count => common_ctx.draft_post_count,
-            ftl_lang,
+        feed => feed_context(posts, &community_posts_path(&community.slug), 0),
+        draft_post_count => common_ctx.draft_post_count,
+        ftl_lang,
     })?;
-        Ok(Html(rendered).into_response())
+    Ok(Html(rendered).into_response())
+}
+
+/// The load-more endpoint a community feed's sentinel points at. One function
+/// so the route and the URL the page emits cannot disagree.
+fn community_posts_path(slug: &str) -> String {
+    format!("/api/communities/@{}/posts", slug)
+}
+
+/// GET /api/communities/@:slug/posts — the next batch of a community's cards
+/// plus the sentinel that pulls the batch after it. Same shape as the home
+/// feed's loader, and it repeats the page's visibility check because the
+/// endpoint can be called on its own.
+pub async fn load_more_community_posts(
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    Query(query): Query<LoadMoreQuery>,
+) -> Result<impl IntoResponse, AppError> {
+    let db = &state.db_pool;
+    let mut tx = db.begin().await?;
+
+    let community = find_community_by_slug(&mut tx, slug.clone())
+        .await?
+        .ok_or_else(|| AppError::NotFound("Community".to_string()))?;
+
+    let (viewer_user_id, viewer_show_sensitive) = if let Some(ref user) = auth_session.user {
+        (Some(user.id), user.show_sensitive_content)
+    } else {
+        (None, false)
+    };
+
+    if community.visibility == CommunityVisibility::Private {
+        let user_id = viewer_user_id.ok_or(AppError::Unauthorized)?;
+        if !is_user_member(&mut tx, user_id, community.id).await? {
+            return Err(AppError::Forbidden);
+        }
     }
+
+    let posts = find_published_posts_by_community_id(
+        &mut tx,
+        community.id,
+        query.limit,
+        query.offset,
+        viewer_user_id,
+        viewer_show_sensitive,
+    )
+    .await?;
+    tx.commit().await?;
+
+    let template: minijinja::Template<'_, '_> =
+        state.env.get_template("post_feed_fragment.jinja")?;
+    let rendered = template.render(context! {
+        feed => feed_context(posts, &community_posts_path(&community.slug), query.offset),
+        r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
+    })?;
+
+    Ok(Html(rendered).into_response())
 }
 
 pub async fn community_iframe(
@@ -272,20 +341,7 @@ pub async fn community_iframe(
     let rendered = template.render(context! {
         current_user => auth_session.user,
         community => community,
-        posts => posts.iter().map(|post| {
-            HashMap::<String, String>::from_iter(vec![
-                ("id".to_string(), post.id.to_string()),
-                ("title".to_string(), post.title.clone().unwrap_or_default().to_string()),
-                ("author_id".to_string(), post.author_id.to_string()),
-                ("user_login_name".to_string(), post.user_login_name.clone().unwrap_or_default()),
-                ("image_filename".to_string(), post.image_filename.to_string()),
-                ("image_width".to_string(), post.image_width.to_string()),
-                ("image_height".to_string(), post.image_height.to_string()),
-                ("replay_filename".to_string(), post.replay_filename.clone().unwrap_or_default()),
-                ("created_at".to_string(), post.created_at.to_string()),
-                ("updated_at".to_string(), post.updated_at.to_string()),
-            ])
-        }).collect::<Vec<_>>(),
+        posts,
         ftl_lang,
     })?;
 
