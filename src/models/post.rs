@@ -1386,6 +1386,12 @@ pub async fn get_movable_communities(
     Ok(communities)
 }
 
+/// The public feed behind `/`, `/api/home/posts` and `/api/v1/posts/public`.
+///
+/// Drawings saved out of a collaborative session are left out: they have their
+/// own lobby (see `find_collaborative_posts`), and a session that ends with
+/// several people saving the same canvas would otherwise fill the front page
+/// with near-identical cards.
 pub async fn find_public_posts(
     tx: &mut Transaction<'_, Postgres>,
     limit: i64,
@@ -1422,6 +1428,9 @@ pub async fn find_public_posts(
             AND posts.published_at IS NOT NULL
             AND posts.deleted_at IS NULL
             AND ((posts.is_sensitive = false AND posts.is_explicit = false) OR $3 = true OR posts.author_id = $4)
+            AND NOT EXISTS (
+                SELECT 1 FROM collaborative_sessions cs WHERE cs.saved_post_id = posts.id
+            )
             ORDER BY posts.published_at DESC
             LIMIT $1
             OFFSET $2
