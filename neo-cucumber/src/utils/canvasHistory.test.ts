@@ -136,8 +136,9 @@ describe("canonical application", () => {
       ]),
       2
     );
-    // Dot at first point, then a segment continuing from it
-    expect(engine.ops).toEqual(["line:1,1-1,1:50", "line:1,1-3,3:50"]);
+    // Dot at first point, then a segment continuing from it. Segments run
+    // new -> previous, as NEO draws them.
+    expect(engine.ops).toEqual(["line:1,1-1,1:50", "line:3,3-1,1:50"]);
 
     await remote(history, encodeUndoPoint(REMOTE), 3);
     await remote(history, stroke(REMOTE, 5, 5, 60), 4);

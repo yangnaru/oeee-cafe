@@ -711,13 +711,16 @@ export class CanvasHistory {
     this.engine.setStrokeState(strokes.get(userId) ?? null);
     for (const p of points) {
       const prev = this.engine.getStrokeState();
-      const [fromX, fromY] = prev === null ? [p.x, p.y] : prev[1];
+      // Segments run new -> previous, as NEO draws them. The engine records
+      // prevLine as [first arg, second arg], so the most recent point of the
+      // last segment is prev[0].
+      const [fromX, fromY] = prev === null ? [p.x, p.y] : prev[0];
       this.engine.drawLine(
         layers[props.layer],
-        fromX,
-        fromY,
         p.x,
         p.y,
+        fromX,
+        fromY,
         props.brushSize,
         props.brushType,
         props.color.r,

@@ -245,12 +245,16 @@ export const useBaseDrawing = (
         effectiveOpacity
       );
       if (!remoteSyncRef.current) {
+        // Segments run from the NEW point back to the previous one, matching
+        // NEO (freeHandMoveHandler, and freeHandFast on replay). Bresenham is
+        // direction-sensitive, so drawing prev->new here would leave the live
+        // canvas a few pixels off from what the recorded replay renders.
         drawingEngineRef.current.drawLine(
           targetLayer,
-          coords.prevX,
-          coords.prevY,
           coords.x,
           coords.y,
+          coords.prevX,
+          coords.prevY,
           currentDrawingStateRef.current.brushSize,
           currentDrawingStateRef.current.brushType,
           r,

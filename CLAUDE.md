@@ -24,11 +24,33 @@ Always run and check linting:
 pnpm run lint
 ```
 
-Run the unit tests (vitest) after changing collaboration logic:
+Run the tests (vitest) after changing collaboration logic, the drawing engine,
+or replay recording:
 
 ```bash
-pnpm run test
+pnpm run test            # both projects
+pnpm run test:node       # pure logic (replay format, action bookkeeping)
+pnpm run test:browser    # real Chromium: canvas rasterisation, React hooks
 ```
+
+The browser project needs Chromium once: `pnpm exec playwright install chromium`.
+
+### Fidelity to NEO
+
+`./neo` is the canonical PaintBBS NEO implementation and is the reference for
+anything touching drawing or replay. `src/test/neoHarness.ts` loads
+`neo/src/painter.js` into the test page, so our engine and our `.pch` files are
+checked against NEO itself rather than against a description of it:
+
+- `src/DrawingEngine.browser.test.ts` — our rasterisation vs NEO's, pixel for pixel.
+- `src/utils/replayRoundTrip.browser.test.ts` — recorded replays re-rendered by NEO.
+- `src/hooks/offlineDrawing.browser.test.tsx` — real pointer events through the
+  offline hook, then the resulting replay re-rendered by NEO.
+
+A replay that renders differently from the canvas it was recorded on is the
+worst failure this codebase can produce. Prefer matching NEO's behaviour, quirks
+included, over "fixing" it — a divergence breaks every file we have already
+written.
 
 When extracting and compiling Lingui locales, use these commands:
 

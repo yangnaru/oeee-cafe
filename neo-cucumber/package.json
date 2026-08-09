@@ -10,7 +10,9 @@
     "test": "vitest run",
     "preview": "vite preview",
     "extract": "lingui extract",
-    "compile": "lingui compile --typescript"
+    "compile": "lingui compile --typescript",
+    "test:node": "vitest run --project node",
+    "test:browser": "vitest run --project browser"
   },
   "dependencies": {
     "@lingui/core": "^5.4.1",
@@ -32,10 +34,13 @@
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react-swc": "^4.1.0",
+    "@vitest/browser": "^4.1.10",
+    "@vitest/browser-playwright": "^4.1.10",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.4.0",
+    "playwright": "^1.62.1",
     "typescript": "~5.9.2",
     "typescript-eslint": "^8.39.1",
     "vite": "^7.1.7",

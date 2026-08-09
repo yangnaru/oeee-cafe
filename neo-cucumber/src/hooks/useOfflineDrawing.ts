@@ -83,7 +83,10 @@ export const useOfflineDrawing = (
           actionRecorderRef.current.step();
           hasCreatedStepRef.current = true;
 
-          // Neo format: coordinates are duplicated (fromX, fromY, fromX, fromY)
+          // A stroke normally opens with onDrawPoint, which writes the header
+          // with the press point duplicated. Reaching here means the header is
+          // being opened by a segment instead, which NEO's freeHandMove
+          // records as (previous, new) so the replay draws that first segment.
           actionRecorderRef.current.push(
             "freeHand",
             layer,
@@ -99,8 +102,8 @@ export const useOfflineDrawing = (
             lineType,
             Math.round(fromX),
             Math.round(fromY),
-            Math.round(fromX), // Duplicate starting position per Neo format
-            Math.round(fromY)  // Duplicate starting position per Neo format
+            Math.round(toX),
+            Math.round(toY)
           );
         } else {
           // Subsequent points - just record coordinates
