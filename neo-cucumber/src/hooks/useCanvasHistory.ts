@@ -23,15 +23,6 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
     background: null,
   });
 
-  // Helper function to compare two Uint8ClampedArray for equality
-  const arraysEqual = useCallback((a: Uint8ClampedArray, b: Uint8ClampedArray): boolean => {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) return false;
-    }
-    return true;
-  }, []);
-
   const saveState = useCallback((
     foreground: Uint8ClampedArray, 
     background: Uint8ClampedArray, 
@@ -46,16 +37,13 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
       return;
     }
 
-    // Check for duplicate data - compare with the most recent state
-    if (historyRef.current.length > 0) {
-      const recentState = historyRef.current[historyRef.current.length - 1];
-      // If both layers are identical to the most recent state, skip saving
-      if (arraysEqual(foreground, recentState.foreground) && 
-          arraysEqual(background, recentState.background)) {
-        console.log(`Skipping duplicate canvas state save`);
-        return;
-      }
-    }
+    // Every stroke gets an entry, even one that changed no pixels. Canonical
+    // Neo registers an undo step unconditionally at stroke start (tools.js
+    // freeHandDownHandler), and the action recorder likewise emits one frame
+    // per stroke. Skipping "duplicate" states here desynchronised the two: the
+    // recorder's head advanced while the history index did not, so undoing
+    // back past an inert stroke left the replay one stroke ahead of the canvas
+    // and of the saved PNG.
 
     const newState: CanvasState = {
       foreground: new Uint8ClampedArray(foreground),
@@ -91,7 +79,7 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
     } else {
       currentIndexRef.current = historyRef.current.length - 1;
     }
-  }, [maxHistorySize, arraysEqual]);
+  }, [maxHistorySize]);
 
   // Helper method to save both layers (for backward compatibility)
   const saveBothLayers = useCallback((foreground: Uint8ClampedArray, background: Uint8ClampedArray, isDrawingAction: boolean = true, isContentSnapshot: boolean = false) => {

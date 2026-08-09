@@ -287,7 +287,10 @@ export const useOfflineDrawing = (
     console.log("Canvas filled and updated");
 
     // Save canvas state to history after fill
-    history.saveState(engine.layers.background, engine.layers.foreground, "both", true);
+    // saveState takes (foreground, background) -- passing them the other way
+    // round stored the fill under the foreground layer, so undoing back to this
+    // entry left an opaque fill on top and hid every subsequent stroke.
+    history.saveState(engine.layers.foreground, engine.layers.background, "both", true);
     console.log("Saved canvas state to history after fill");
 
     // Record in replay - ABGR format
