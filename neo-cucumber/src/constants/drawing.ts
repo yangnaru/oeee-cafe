@@ -1,3 +1,14 @@
+// Brush size bounds, shared by the size slider and the [ / ] shortcuts
+export const MIN_BRUSH_SIZE = 1;
+export const MAX_BRUSH_SIZE = 30;
+
+// Two-tone mode gives each pen its own remembered size, like Tegaki does:
+// a thin foreground pen for drawing, a fat background pen for erasing.
+// Indices match the two-tone palette: 0 = background, 1 = foreground.
+export const TWO_TONE_BACKGROUND_PEN_INDEX = 0;
+export const TWO_TONE_FOREGROUND_PEN_INDEX = 1;
+export const TWO_TONE_INITIAL_PEN_SIZES = [10, 2];
+
 export const DEFAULT_PALETTE_COLORS = [
   "#ffffff",
   "#000000",

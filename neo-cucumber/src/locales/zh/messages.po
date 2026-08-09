@@ -17,6 +17,10 @@ msgstr ""
 #~ msgid "(you)"
 #~ msgstr "(您)"
 
+#: src/components/SimplifiedToolbox.tsx:140
+msgid "{minutes} min"
+msgstr "{minutes} 分钟"
+
 #: src/components/SessionExpiredModal.tsx:110
 #~ msgid "💾 Download PNG"
 #~ msgstr "💾 下载 PNG"
@@ -46,6 +50,10 @@ msgstr ""
 msgid "Authentication Failed"
 msgstr "验证失败"
 
+#: src/components/SimplifiedToolbox.tsx:58
+msgid "Background pen"
+msgstr "背景色画笔"
+
 #: src/components/SessionHeader.tsx:56
 msgid "by"
 msgstr "作者:"
@@ -54,12 +62,12 @@ msgstr "作者:"
 #~ msgid "Chat"
 #~ msgstr "聊天"
 
-#: src/components/SimplifiedToolbox.tsx:63
+#: src/components/SimplifiedToolbox.tsx:86
 msgid "Color"
-msgstr ""
+msgstr "颜色"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:382
+#: src/OfflineApp.tsx:432
 msgid "Community: {0}"
 msgstr "社区: {0}"
 
@@ -93,11 +101,11 @@ msgstr "已断开"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:412
+#: src/OfflineApp.tsx:462
 msgid "Download PNG"
 msgstr "下载 PNG"
 
-#: src/OfflineApp.tsx:419
+#: src/OfflineApp.tsx:469
 msgid "Download Replay"
 msgstr "下载回放"
 
@@ -110,11 +118,11 @@ msgstr "编辑调色板颜色 {0}"
 #~ msgid "Eraser"
 #~ msgstr "橡皮擦"
 
-#: src/OfflineApp.tsx:274
+#: src/OfflineApp.tsx:293
 msgid "Failed to download replay file."
 msgstr "下载回放文件失败。"
 
-#: src/OfflineApp.tsx:237
+#: src/OfflineApp.tsx:256
 msgid "Failed to save drawing. Please try again."
 msgstr "保存绘画失败。请重试。"
 
@@ -129,6 +137,10 @@ msgstr "保存会话失败。请尝试下载为 PNG。"
 #: src/components/ToolboxPanel.tsx:415
 msgid "Flip"
 msgstr "水平翻转"
+
+#: src/components/SimplifiedToolbox.tsx:57
+msgid "Foreground pen"
+msgstr "前景色画笔"
 
 #: src/components/modals/AuthErrorModal.tsx:28
 #: src/components/modals/RoomFullModal.tsx:35
@@ -167,7 +179,11 @@ msgstr "加载中..."
 #~ msgid "Oeee Cafe"
 #~ msgstr "黄瓜咖啡馆"
 
-#: src/OfflineApp.tsx:376
+#: src/components/SimplifiedToolbox.tsx:140
+msgid "Off"
+msgstr "关闭"
+
+#: src/OfflineApp.tsx:426
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "离线绘画 ({canvasWidth} × {canvasHeight})"
 
@@ -190,7 +206,7 @@ msgstr "调色板颜色 {0} (已选中 - 使用下方色彩选择器编辑)"
 #~ msgstr "平移"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:390
+#: src/OfflineApp.tsx:440
 msgid "Parent Post: {0}"
 msgstr "父帖子: {0}"
 
@@ -198,13 +214,22 @@ msgstr "父帖子: {0}"
 msgid "Participants"
 msgstr "参与者"
 
+#: src/components/SimplifiedToolbox.tsx:59
+msgid "Pen size"
+msgstr "画笔大小"
+
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
 msgstr "重新连接"
 
-#: src/components/SimplifiedToolbox.tsx:120
+#: src/components/SimplifiedToolbox.tsx:61
+#: src/components/SimplifiedToolbox.tsx:169
 msgid "Redo"
 msgstr "重做"
+
+#: src/components/SimplifiedToolbox.tsx:146
+msgid "Remaining: {remaining}"
+msgstr "剩余：{remaining}"
 
 #: src/App.tsx:2119
 #~ msgid "Reset"
@@ -223,8 +248,8 @@ msgstr "返回大厅"
 msgid "Save as PNG"
 msgstr "保存为 PNG"
 
-#: src/components/SimplifiedToolbox.tsx:131
-#: src/OfflineApp.tsx:403
+#: src/components/SimplifiedToolbox.tsx:180
+#: src/OfflineApp.tsx:453
 msgid "Save Drawing"
 msgstr "保存绘画"
 
@@ -239,9 +264,9 @@ msgid "Save to Gallery"
 msgstr "保存到画廊"
 
 #: src/components/SessionExpiredModal.tsx:113
-#: src/components/SimplifiedToolbox.tsx:131
+#: src/components/SimplifiedToolbox.tsx:180
 #: src/components/ToolboxPanel.tsx:442
-#: src/OfflineApp.tsx:403
+#: src/OfflineApp.tsx:453
 msgid "Saving..."
 msgstr "保存中..."
 
@@ -265,6 +290,10 @@ msgstr "会话即将结束。正在保存绘画到画廊..."
 msgid "Share"
 msgstr "分享"
 
+#: src/components/SimplifiedToolbox.tsx:186
+msgid "Shortcuts"
+msgstr "快捷键"
+
 #: src/components/ToolboxPanel.tsx:379
 #~ msgid "Show/hide background layer"
 #~ msgstr "显示/隐藏背景图层"
@@ -280,6 +309,10 @@ msgstr "分享"
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "实心"
+
+#: src/components/SimplifiedToolbox.tsx:56
+msgid "Swap pens"
+msgstr "切换画笔"
 
 #: src/components/SessionExpiredModal.tsx:88
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
@@ -305,6 +338,18 @@ msgstr "此会话已保存。您只能将其下载为 PNG。"
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "此会话已满（{currentUserCount}/{maxUsers} 位用户）。只有前 {maxUsers} 位用户可以加入会话。"
 
+#: src/OfflineApp.tsx:368
+msgid "Time's up."
+msgstr "设定时间已到。"
+
+#: src/components/SimplifiedToolbox.tsx:130
+msgid "Timer"
+msgstr "计时器"
+
+#: src/components/SimplifiedToolbox.tsx:148
+msgid "Timer off"
+msgstr "计时器已关闭"
+
 #: src/components/ToolboxPanel.tsx:411
 msgid "Toggle horizontal flip"
 msgstr "切换水平翻转"
@@ -317,7 +362,8 @@ msgstr "输入消息..."
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "无法验证您的会话。会话不存在或已过期。请返回大厅。"
 
-#: src/components/SimplifiedToolbox.tsx:112
+#: src/components/SimplifiedToolbox.tsx:60
+#: src/components/SimplifiedToolbox.tsx:161
 msgid "Undo"
 msgstr "撤销"
 

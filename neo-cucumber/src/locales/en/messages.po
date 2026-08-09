@@ -17,6 +17,10 @@ msgstr ""
 #~ msgid "(you)"
 #~ msgstr "(you)"
 
+#: src/components/SimplifiedToolbox.tsx:140
+msgid "{minutes} min"
+msgstr "{minutes} min"
+
 #: src/components/SessionExpiredModal.tsx:110
 #~ msgid "💾 Download PNG"
 #~ msgstr "💾 Download PNG"
@@ -46,6 +50,10 @@ msgstr ""
 msgid "Authentication Failed"
 msgstr "Authentication Failed"
 
+#: src/components/SimplifiedToolbox.tsx:58
+msgid "Background pen"
+msgstr "Background pen"
+
 #: src/components/SessionHeader.tsx:56
 msgid "by"
 msgstr "by"
@@ -54,12 +62,12 @@ msgstr "by"
 #~ msgid "Chat"
 #~ msgstr "Chat"
 
-#: src/components/SimplifiedToolbox.tsx:63
+#: src/components/SimplifiedToolbox.tsx:86
 msgid "Color"
 msgstr "Color"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:382
+#: src/OfflineApp.tsx:432
 msgid "Community: {0}"
 msgstr "Community: {0}"
 
@@ -93,11 +101,11 @@ msgstr "Disconnected"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:412
+#: src/OfflineApp.tsx:462
 msgid "Download PNG"
 msgstr "Download PNG"
 
-#: src/OfflineApp.tsx:419
+#: src/OfflineApp.tsx:469
 msgid "Download Replay"
 msgstr "Download Replay"
 
@@ -110,11 +118,11 @@ msgstr "Edit palette color {0}"
 #~ msgid "Eraser"
 #~ msgstr "Eraser"
 
-#: src/OfflineApp.tsx:274
+#: src/OfflineApp.tsx:293
 msgid "Failed to download replay file."
 msgstr "Failed to download replay file."
 
-#: src/OfflineApp.tsx:237
+#: src/OfflineApp.tsx:256
 msgid "Failed to save drawing. Please try again."
 msgstr "Failed to save drawing. Please try again."
 
@@ -129,6 +137,10 @@ msgstr "Failed to save session. Please try downloading as PNG instead."
 #: src/components/ToolboxPanel.tsx:415
 msgid "Flip"
 msgstr "Flip"
+
+#: src/components/SimplifiedToolbox.tsx:57
+msgid "Foreground pen"
+msgstr "Foreground pen"
 
 #: src/components/modals/AuthErrorModal.tsx:28
 #: src/components/modals/RoomFullModal.tsx:35
@@ -167,7 +179,11 @@ msgstr "LOADING..."
 #~ msgid "Oeee Cafe"
 #~ msgstr "Oeee Cafe"
 
-#: src/OfflineApp.tsx:376
+#: src/components/SimplifiedToolbox.tsx:140
+msgid "Off"
+msgstr "Off"
+
+#: src/OfflineApp.tsx:426
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "Offline Drawing ({canvasWidth} × {canvasHeight})"
 
@@ -190,7 +206,7 @@ msgstr "Palette color {0} (selected - edit with color picker below)"
 #~ msgstr "Pan"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:390
+#: src/OfflineApp.tsx:440
 msgid "Parent Post: {0}"
 msgstr "Parent Post: {0}"
 
@@ -198,13 +214,22 @@ msgstr "Parent Post: {0}"
 msgid "Participants"
 msgstr "Participants"
 
+#: src/components/SimplifiedToolbox.tsx:59
+msgid "Pen size"
+msgstr "Pen size"
+
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
 msgstr "Reconnect"
 
-#: src/components/SimplifiedToolbox.tsx:120
+#: src/components/SimplifiedToolbox.tsx:61
+#: src/components/SimplifiedToolbox.tsx:169
 msgid "Redo"
 msgstr "Redo"
+
+#: src/components/SimplifiedToolbox.tsx:146
+msgid "Remaining: {remaining}"
+msgstr "Remaining: {remaining}"
 
 #: src/App.tsx:2119
 #~ msgid "Reset"
@@ -223,8 +248,8 @@ msgstr "Return to Lobby"
 msgid "Save as PNG"
 msgstr "Save as PNG"
 
-#: src/components/SimplifiedToolbox.tsx:131
-#: src/OfflineApp.tsx:403
+#: src/components/SimplifiedToolbox.tsx:180
+#: src/OfflineApp.tsx:453
 msgid "Save Drawing"
 msgstr "Save Drawing"
 
@@ -239,9 +264,9 @@ msgid "Save to Gallery"
 msgstr "Save to Gallery"
 
 #: src/components/SessionExpiredModal.tsx:113
-#: src/components/SimplifiedToolbox.tsx:131
+#: src/components/SimplifiedToolbox.tsx:180
 #: src/components/ToolboxPanel.tsx:442
-#: src/OfflineApp.tsx:403
+#: src/OfflineApp.tsx:453
 msgid "Saving..."
 msgstr "Saving..."
 
@@ -265,6 +290,10 @@ msgstr "Session is ending. The drawing is being saved to the gallery..."
 msgid "Share"
 msgstr "Share"
 
+#: src/components/SimplifiedToolbox.tsx:186
+msgid "Shortcuts"
+msgstr "Shortcuts"
+
 #: src/components/ToolboxPanel.tsx:379
 #~ msgid "Show/hide background layer"
 #~ msgstr "Show/hide background layer"
@@ -280,6 +309,10 @@ msgstr "Share"
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "Solid"
+
+#: src/components/SimplifiedToolbox.tsx:56
+msgid "Swap pens"
+msgstr "Swap pens"
 
 #: src/components/SessionExpiredModal.tsx:88
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
@@ -305,6 +338,18 @@ msgstr "This session has already been saved. You can only download it as a PNG."
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 
+#: src/OfflineApp.tsx:368
+msgid "Time's up."
+msgstr "Time's up."
+
+#: src/components/SimplifiedToolbox.tsx:130
+msgid "Timer"
+msgstr "Timer"
+
+#: src/components/SimplifiedToolbox.tsx:148
+msgid "Timer off"
+msgstr "Timer off"
+
 #: src/components/ToolboxPanel.tsx:411
 msgid "Toggle horizontal flip"
 msgstr "Toggle horizontal flip"
@@ -317,7 +362,8 @@ msgstr "Type a message..."
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 
-#: src/components/SimplifiedToolbox.tsx:112
+#: src/components/SimplifiedToolbox.tsx:60
+#: src/components/SimplifiedToolbox.tsx:161
 msgid "Undo"
 msgstr "Undo"
 

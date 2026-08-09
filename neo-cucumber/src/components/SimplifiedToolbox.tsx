@@ -1,5 +1,12 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { CustomSlider } from "./CustomSlider";
+import { TIMER_DURATIONS_MINUTES } from "../hooks/useDrawingTimer";
+import {
+  MAX_BRUSH_SIZE,
+  MIN_BRUSH_SIZE,
+  TWO_TONE_BACKGROUND_PEN_INDEX,
+  TWO_TONE_FOREGROUND_PEN_INDEX,
+} from "../constants/drawing";
 
 interface SimplifiedToolboxProps {
   brushSize: number;
@@ -8,13 +15,20 @@ interface SimplifiedToolboxProps {
   canUndo: boolean;
   canRedo: boolean;
   isSaving: boolean;
+  timerMinutes: number;
+  timerRemainingSeconds: number;
   onBrushSizeChange: (size: number) => void;
-  onColorSelect: (color: string) => void;
-  onSetSelectedPaletteIndex: (index: number) => void;
+  onSelectPen: (index: number) => void;
+  onTimerChange: (minutes: number) => void;
   onUndo: () => void;
   onRedo: () => void;
   onSave: () => void;
 }
+
+const formatRemaining = (seconds: number): string => {
+  if (seconds > 60) return `${Math.ceil(seconds / 60)}m`;
+  return `${seconds}s`;
+};
 
 export const SimplifiedToolbox = ({
   brushSize,
@@ -23,20 +37,29 @@ export const SimplifiedToolbox = ({
   canUndo,
   canRedo,
   isSaving,
+  timerMinutes,
+  timerRemainingSeconds,
   onBrushSizeChange,
-  onColorSelect,
-  onSetSelectedPaletteIndex,
+  onSelectPen,
+  onTimerChange,
   onUndo,
   onRedo,
   onSave,
 }: SimplifiedToolboxProps) => {
-  const backgroundColor = paletteColors[0] || "#ffffff";
-  const foregroundColor = paletteColors[1] || "#000000";
+  const { t } = useLingui();
+  const backgroundColor = paletteColors[TWO_TONE_BACKGROUND_PEN_INDEX] || "#ffffff";
+  const foregroundColor = paletteColors[TWO_TONE_FOREGROUND_PEN_INDEX] || "#000000";
 
-  const handleColorClick = (index: number) => {
-    onSetSelectedPaletteIndex(index);
-    onColorSelect(paletteColors[index]);
-  };
+  const remaining = formatRemaining(timerRemainingSeconds);
+
+  const shortcuts: [string, string][] = [
+    ["X", t`Swap pens`],
+    ["P / B", t`Foreground pen`],
+    ["E", t`Background pen`],
+    ["[ / ]", t`Pen size`],
+    ["Ctrl+Z", t`Undo`],
+    ["Ctrl+Y", t`Redo`],
+  ];
 
   return (
     <div
@@ -50,8 +73,8 @@ export const SimplifiedToolbox = ({
       <div className="flex flex-col gap-2">
         <CustomSlider
           label={`Size: ${brushSize}`}
-          min={1}
-          max={30}
+          min={MIN_BRUSH_SIZE}
+          max={MAX_BRUSH_SIZE}
           value={brushSize}
           onChange={onBrushSizeChange}
         />
@@ -66,7 +89,7 @@ export const SimplifiedToolbox = ({
           {/* Background Color */}
           <div
             className="flex flex-col items-center gap-1 cursor-pointer"
-            onClick={() => handleColorClick(0)}
+            onClick={() => onSelectPen(TWO_TONE_BACKGROUND_PEN_INDEX)}
           >
             <div
               className="w-10 h-10 border border-main"
@@ -75,8 +98,8 @@ export const SimplifiedToolbox = ({
             <input
               type="radio"
               name="color-picker"
-              checked={selectedPaletteIndex === 0}
-              onChange={() => handleColorClick(0)}
+              checked={selectedPaletteIndex === TWO_TONE_BACKGROUND_PEN_INDEX}
+              onChange={() => onSelectPen(TWO_TONE_BACKGROUND_PEN_INDEX)}
               className="cursor-pointer"
             />
           </div>
@@ -84,7 +107,7 @@ export const SimplifiedToolbox = ({
           {/* Foreground Color */}
           <div
             className="flex flex-col items-center gap-1 cursor-pointer"
-            onClick={() => handleColorClick(1)}
+            onClick={() => onSelectPen(TWO_TONE_FOREGROUND_PEN_INDEX)}
           >
             <div
               className="w-10 h-10 border border-main"
@@ -93,11 +116,37 @@ export const SimplifiedToolbox = ({
             <input
               type="radio"
               name="color-picker"
-              checked={selectedPaletteIndex === 1}
-              onChange={() => handleColorClick(1)}
+              checked={selectedPaletteIndex === TWO_TONE_FOREGROUND_PEN_INDEX}
+              onChange={() => onSelectPen(TWO_TONE_FOREGROUND_PEN_INDEX)}
               className="cursor-pointer"
             />
           </div>
+        </div>
+      </div>
+
+      {/* Drawing Timer */}
+      <div className="flex flex-col gap-2">
+        <label htmlFor="drawing-timer" className="text-sm font-semibold text-main">
+          <Trans>Timer</Trans>
+        </label>
+        <select
+          id="drawing-timer"
+          value={timerMinutes}
+          onChange={(e) => onTimerChange(Number(e.target.value))}
+          className="border border-main bg-main text-main p-1 cursor-pointer"
+        >
+          {TIMER_DURATIONS_MINUTES.map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {minutes === 0 ? t`Off` : t`${minutes} min`}
+            </option>
+          ))}
+        </select>
+        <div className="text-sm text-main">
+          {timerMinutes > 0 ? (
+            <Trans>Remaining: {remaining}</Trans>
+          ) : (
+            <Trans>Timer off</Trans>
+          )}
         </div>
       </div>
 
@@ -130,6 +179,21 @@ export const SimplifiedToolbox = ({
       >
         {isSaving ? <Trans>Saving...</Trans> : <Trans>Save Drawing</Trans>}
       </button>
+
+      {/* Keyboard Shortcuts */}
+      <div className="flex flex-col gap-1 border-t border-main pt-3">
+        <span className="text-sm font-semibold text-main">
+          <Trans>Shortcuts</Trans>
+        </span>
+        <dl className="flex flex-col gap-1 text-xs text-main">
+          {shortcuts.map(([keys, description]) => (
+            <div key={keys} className="flex justify-between gap-2">
+              <dt className="font-mono">{keys}</dt>
+              <dd className="text-right">{description}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
     </div>
   );
 };

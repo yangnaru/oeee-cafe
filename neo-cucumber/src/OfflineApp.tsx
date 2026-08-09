@@ -5,6 +5,8 @@ import { ToolboxPanel } from "./components/ToolboxPanel";
 import { SimplifiedToolbox } from "./components/SimplifiedToolbox";
 import { useOfflineDrawing } from "./hooks/useOfflineDrawing";
 import { useDrawingState } from "./hooks/useDrawingState";
+import { useDrawingTimer } from "./hooks/useDrawingTimer";
+import { useTwoToneShortcuts } from "./hooks/useTwoToneShortcuts";
 import { useZoomControls } from "./hooks/useZoomControls";
 import { useOfflineCanvas } from "./hooks/useOfflineCanvas";
 import { compositeLayersToCanvas } from "./utils/canvasExport";
@@ -76,6 +78,10 @@ function OfflineApp() {
     updateColor,
     handleColorPickerChange,
     initializeForTwoTone,
+    selectPen,
+    swapPen,
+    setPenSize,
+    adjustPenSize,
   } = useDrawingState();
 
   // Initialize two-tone palette immediately if in two-tone mode
@@ -357,6 +363,37 @@ function OfflineApp() {
     }
   }, [drawingEngine, twoToneConfig, initializeTwoToneCanvas]);
 
+  // Drawing alarm, offered in two-tone mode
+  const handleTimerExpire = useCallback(() => {
+    alert(t`Time's up.`);
+  }, [t]);
+
+  const {
+    durationMinutes: timerMinutes,
+    remainingSeconds: timerRemainingSeconds,
+    startTimer,
+    stopTimer,
+  } = useDrawingTimer({ onExpire: handleTimerExpire });
+
+  const handleTimerChange = useCallback(
+    (minutes: number) => {
+      if (minutes === 0) {
+        stopTimer();
+      } else {
+        startTimer(minutes);
+      }
+    },
+    [startTimer, stopTimer]
+  );
+
+  // Tegaki-style pen shortcuts, two-tone mode only
+  useTwoToneShortcuts({
+    enabled: twoToneConfig !== null,
+    onSelectPen: selectPen,
+    onSwapPen: swapPen,
+    onAdjustPenSize: adjustPenSize,
+  });
+
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -483,11 +520,11 @@ function OfflineApp() {
                 canUndo={historyState.canUndo}
                 canRedo={historyState.canRedo}
                 isSaving={isSaving}
-                onBrushSizeChange={(size) =>
-                  setDrawingState((prev) => ({ ...prev, brushSize: size }))
-                }
-                onColorSelect={updateColor}
-                onSetSelectedPaletteIndex={setSelectedPaletteIndex}
+                timerMinutes={timerMinutes}
+                timerRemainingSeconds={timerRemainingSeconds}
+                onBrushSizeChange={setPenSize}
+                onSelectPen={selectPen}
+                onTimerChange={handleTimerChange}
                 onUndo={undo}
                 onRedo={redo}
                 onSave={handleSaveDrawing}

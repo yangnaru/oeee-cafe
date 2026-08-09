@@ -17,6 +17,10 @@ msgstr ""
 #~ msgid "(you)"
 #~ msgstr "（あなた）"
 
+#: src/components/SimplifiedToolbox.tsx:140
+msgid "{minutes} min"
+msgstr "{minutes}分"
+
 #: src/components/SessionExpiredModal.tsx:110
 #~ msgid "💾 Download PNG"
 #~ msgstr "💾 PNG をダウンロード"
@@ -46,6 +50,10 @@ msgstr ""
 msgid "Authentication Failed"
 msgstr "認証に失敗しました"
 
+#: src/components/SimplifiedToolbox.tsx:58
+msgid "Background pen"
+msgstr "背景色ペン"
+
 #: src/components/SessionHeader.tsx:56
 msgid "by"
 msgstr "作成者:"
@@ -54,12 +62,12 @@ msgstr "作成者:"
 #~ msgid "Chat"
 #~ msgstr "チャット"
 
-#: src/components/SimplifiedToolbox.tsx:63
+#: src/components/SimplifiedToolbox.tsx:86
 msgid "Color"
-msgstr ""
+msgstr "色"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:382
+#: src/OfflineApp.tsx:432
 msgid "Community: {0}"
 msgstr "コミュニティ: {0}"
 
@@ -93,11 +101,11 @@ msgstr "切断済み"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:412
+#: src/OfflineApp.tsx:462
 msgid "Download PNG"
 msgstr "PNG をダウンロード"
 
-#: src/OfflineApp.tsx:419
+#: src/OfflineApp.tsx:469
 msgid "Download Replay"
 msgstr "リプレイをダウンロード"
 
@@ -110,11 +118,11 @@ msgstr "パレットカラー {0} を編集"
 #~ msgid "Eraser"
 #~ msgstr "消しゴム"
 
-#: src/OfflineApp.tsx:274
+#: src/OfflineApp.tsx:293
 msgid "Failed to download replay file."
 msgstr "リプレイファイルのダウンロードに失敗しました。"
 
-#: src/OfflineApp.tsx:237
+#: src/OfflineApp.tsx:256
 msgid "Failed to save drawing. Please try again."
 msgstr "描画の保存に失敗しました。もう一度お試しください。"
 
@@ -129,6 +137,10 @@ msgstr "セッションの保存に失敗しました。代わりに PNG とし�
 #: src/components/ToolboxPanel.tsx:415
 msgid "Flip"
 msgstr "左右反転"
+
+#: src/components/SimplifiedToolbox.tsx:57
+msgid "Foreground pen"
+msgstr "描画色ペン"
 
 #: src/components/modals/AuthErrorModal.tsx:28
 #: src/components/modals/RoomFullModal.tsx:35
@@ -167,7 +179,11 @@ msgstr "読み込み中..."
 #~ msgid "Oeee Cafe"
 #~ msgstr "OEEEカフェ"
 
-#: src/OfflineApp.tsx:376
+#: src/components/SimplifiedToolbox.tsx:140
+msgid "Off"
+msgstr "オフ"
+
+#: src/OfflineApp.tsx:426
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "オフライン描画 ({canvasWidth} × {canvasHeight})"
 
@@ -190,7 +206,7 @@ msgstr "パレットカラー {0} (選択済み - 下のカラーピッカーで
 #~ msgstr "パン"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:390
+#: src/OfflineApp.tsx:440
 msgid "Parent Post: {0}"
 msgstr "親投稿: {0}"
 
@@ -198,13 +214,22 @@ msgstr "親投稿: {0}"
 msgid "Participants"
 msgstr "参加者"
 
+#: src/components/SimplifiedToolbox.tsx:59
+msgid "Pen size"
+msgstr "ペンサイズ"
+
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
 msgstr "再接続"
 
-#: src/components/SimplifiedToolbox.tsx:120
+#: src/components/SimplifiedToolbox.tsx:61
+#: src/components/SimplifiedToolbox.tsx:169
 msgid "Redo"
 msgstr "やり直し"
+
+#: src/components/SimplifiedToolbox.tsx:146
+msgid "Remaining: {remaining}"
+msgstr "残り: {remaining}"
 
 #: src/App.tsx:2119
 #~ msgid "Reset"
@@ -223,8 +248,8 @@ msgstr "ロビーに戻る"
 msgid "Save as PNG"
 msgstr "PNG として保存"
 
-#: src/components/SimplifiedToolbox.tsx:131
-#: src/OfflineApp.tsx:403
+#: src/components/SimplifiedToolbox.tsx:180
+#: src/OfflineApp.tsx:453
 msgid "Save Drawing"
 msgstr "描画を保存"
 
@@ -239,9 +264,9 @@ msgid "Save to Gallery"
 msgstr "ギャラリーに保存"
 
 #: src/components/SessionExpiredModal.tsx:113
-#: src/components/SimplifiedToolbox.tsx:131
+#: src/components/SimplifiedToolbox.tsx:180
 #: src/components/ToolboxPanel.tsx:442
-#: src/OfflineApp.tsx:403
+#: src/OfflineApp.tsx:453
 msgid "Saving..."
 msgstr "保存中..."
 
@@ -265,6 +290,10 @@ msgstr "セッションが終了します。描画をギャラリーに保存中
 msgid "Share"
 msgstr "共有"
 
+#: src/components/SimplifiedToolbox.tsx:186
+msgid "Shortcuts"
+msgstr "ショートカット"
+
 #: src/components/ToolboxPanel.tsx:379
 #~ msgid "Show/hide background layer"
 #~ msgstr "背景レイヤーの表示/非表示"
@@ -280,6 +309,10 @@ msgstr "共有"
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "ソリッド"
+
+#: src/components/SimplifiedToolbox.tsx:56
+msgid "Swap pens"
+msgstr "ペン入れ替え"
 
 #: src/components/SessionExpiredModal.tsx:88
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
@@ -305,6 +338,18 @@ msgstr "このセッションはすでに保存されています。PNG とし�
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "このセッションは満員です（{currentUserCount}/{maxUsers}ユーザー）。最初の{maxUsers}ユーザーのみがセッションに参加できます。"
 
+#: src/OfflineApp.tsx:368
+msgid "Time's up."
+msgstr "設定時間が経過しました。"
+
+#: src/components/SimplifiedToolbox.tsx:130
+msgid "Timer"
+msgstr "タイマー"
+
+#: src/components/SimplifiedToolbox.tsx:148
+msgid "Timer off"
+msgstr "タイマー：オフ"
+
 #: src/components/ToolboxPanel.tsx:411
 msgid "Toggle horizontal flip"
 msgstr "左右反転を切り替え"
@@ -317,7 +362,8 @@ msgstr "メッセージを入力..."
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "セッションを認証できません。セッションが存在しないか、期限切れです。ロビーに戻ってください。"
 
-#: src/components/SimplifiedToolbox.tsx:112
+#: src/components/SimplifiedToolbox.tsx:60
+#: src/components/SimplifiedToolbox.tsx:161
 msgid "Undo"
 msgstr "元に戻す"
 

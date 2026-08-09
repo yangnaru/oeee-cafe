@@ -17,6 +17,10 @@ msgstr ""
 #~ msgid "(you)"
 #~ msgstr "(나)"
 
+#: src/components/SimplifiedToolbox.tsx:140
+msgid "{minutes} min"
+msgstr "{minutes}분"
+
 #: src/components/SessionExpiredModal.tsx:110
 #~ msgid "💾 Download PNG"
 #~ msgstr "💾 PNG 다운로드"
@@ -46,6 +50,10 @@ msgstr ""
 msgid "Authentication Failed"
 msgstr "인증 실패"
 
+#: src/components/SimplifiedToolbox.tsx:58
+msgid "Background pen"
+msgstr "배경색 펜"
+
 #: src/components/SessionHeader.tsx:56
 msgid "by"
 msgstr "작성자:"
@@ -54,12 +62,12 @@ msgstr "작성자:"
 #~ msgid "Chat"
 #~ msgstr "채팅"
 
-#: src/components/SimplifiedToolbox.tsx:63
+#: src/components/SimplifiedToolbox.tsx:86
 msgid "Color"
-msgstr ""
+msgstr "색상"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:382
+#: src/OfflineApp.tsx:432
 msgid "Community: {0}"
 msgstr "커뮤니티: {0}"
 
@@ -93,11 +101,11 @@ msgstr "연결 끊어짐"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:412
+#: src/OfflineApp.tsx:462
 msgid "Download PNG"
 msgstr "PNG 다운로드"
 
-#: src/OfflineApp.tsx:419
+#: src/OfflineApp.tsx:469
 msgid "Download Replay"
 msgstr "리플레이 다운로드"
 
@@ -110,11 +118,11 @@ msgstr "팔레트 색상 {0} 편집"
 #~ msgid "Eraser"
 #~ msgstr "지우개"
 
-#: src/OfflineApp.tsx:274
+#: src/OfflineApp.tsx:293
 msgid "Failed to download replay file."
 msgstr "리플레이 파일 다운로드에 실패했습니다."
 
-#: src/OfflineApp.tsx:237
+#: src/OfflineApp.tsx:256
 msgid "Failed to save drawing. Please try again."
 msgstr "그림 저장에 실패했습니다. 다시 시도해 주세요."
 
@@ -129,6 +137,10 @@ msgstr "세션 저장에 실패했습니다. 대신 PNG로 다운로드해 보�
 #: src/components/ToolboxPanel.tsx:415
 msgid "Flip"
 msgstr "좌우 반전"
+
+#: src/components/SimplifiedToolbox.tsx:57
+msgid "Foreground pen"
+msgstr "전경색 펜"
 
 #: src/components/modals/AuthErrorModal.tsx:28
 #: src/components/modals/RoomFullModal.tsx:35
@@ -167,7 +179,11 @@ msgstr "로딩 중..."
 #~ msgid "Oeee Cafe"
 #~ msgstr "오이카페"
 
-#: src/OfflineApp.tsx:376
+#: src/components/SimplifiedToolbox.tsx:140
+msgid "Off"
+msgstr "끄기"
+
+#: src/OfflineApp.tsx:426
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "오프라인 그리기 ({canvasWidth} × {canvasHeight})"
 
@@ -190,7 +206,7 @@ msgstr "팔레트 색상 {0} (선택됨 - 아래 색상 선택기로 편집)"
 #~ msgstr "이동"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:390
+#: src/OfflineApp.tsx:440
 msgid "Parent Post: {0}"
 msgstr "부모 게시물: {0}"
 
@@ -198,13 +214,22 @@ msgstr "부모 게시물: {0}"
 msgid "Participants"
 msgstr "참여자"
 
+#: src/components/SimplifiedToolbox.tsx:59
+msgid "Pen size"
+msgstr "펜 크기"
+
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
 msgstr "재연결"
 
-#: src/components/SimplifiedToolbox.tsx:120
+#: src/components/SimplifiedToolbox.tsx:61
+#: src/components/SimplifiedToolbox.tsx:169
 msgid "Redo"
 msgstr "다시 실행"
+
+#: src/components/SimplifiedToolbox.tsx:146
+msgid "Remaining: {remaining}"
+msgstr "남은 시간: {remaining}"
 
 #: src/App.tsx:2119
 #~ msgid "Reset"
@@ -223,8 +248,8 @@ msgstr "로비로 돌아가기"
 msgid "Save as PNG"
 msgstr "PNG로 저장"
 
-#: src/components/SimplifiedToolbox.tsx:131
-#: src/OfflineApp.tsx:403
+#: src/components/SimplifiedToolbox.tsx:180
+#: src/OfflineApp.tsx:453
 msgid "Save Drawing"
 msgstr "그림 저장"
 
@@ -239,9 +264,9 @@ msgid "Save to Gallery"
 msgstr "갤러리에 저장"
 
 #: src/components/SessionExpiredModal.tsx:113
-#: src/components/SimplifiedToolbox.tsx:131
+#: src/components/SimplifiedToolbox.tsx:180
 #: src/components/ToolboxPanel.tsx:442
-#: src/OfflineApp.tsx:403
+#: src/OfflineApp.tsx:453
 msgid "Saving..."
 msgstr "저장 중..."
 
@@ -265,6 +290,10 @@ msgstr "세션이 종료됩니다. 그림을 갤러리에 저장 중..."
 msgid "Share"
 msgstr "공유"
 
+#: src/components/SimplifiedToolbox.tsx:186
+msgid "Shortcuts"
+msgstr "단축키"
+
 #: src/components/ToolboxPanel.tsx:379
 #~ msgid "Show/hide background layer"
 #~ msgstr "배경 레이어 표시/숨기기"
@@ -280,6 +309,10 @@ msgstr "공유"
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "실선"
+
+#: src/components/SimplifiedToolbox.tsx:56
+msgid "Swap pens"
+msgstr "펜 전환"
 
 #: src/components/SessionExpiredModal.tsx:88
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
@@ -305,6 +338,18 @@ msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 �
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "이 세션이 가득 찼습니다 ({currentUserCount}/{maxUsers}명). 처음 {maxUsers}명의 사용자만 세션에 참여할 수 있습니다."
 
+#: src/OfflineApp.tsx:368
+msgid "Time's up."
+msgstr "설정한 시간이 지났습니다."
+
+#: src/components/SimplifiedToolbox.tsx:130
+msgid "Timer"
+msgstr "타이머"
+
+#: src/components/SimplifiedToolbox.tsx:148
+msgid "Timer off"
+msgstr "타이머 꺼짐"
+
 #: src/components/ToolboxPanel.tsx:411
 msgid "Toggle horizontal flip"
 msgstr "좌우 반전 전환"
@@ -317,7 +362,8 @@ msgstr "메시지 입력..."
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "세션을 인증할 수 없습니다. 세션이 존재하지 않거나 만료되었습니다. 로비로 돌아가 주세요."
 
-#: src/components/SimplifiedToolbox.tsx:112
+#: src/components/SimplifiedToolbox.tsx:60
+#: src/components/SimplifiedToolbox.tsx:161
 msgid "Undo"
 msgstr "실행 취소"
 
