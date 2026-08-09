@@ -137,6 +137,9 @@ export const useBaseDrawing = (
   const currentDrawingStateRef = useRef(drawingState);
   const isDrawingDisabledRef = useRef(isDrawingDisabled);
   const remoteSyncRef = useRef(remoteSync);
+  // Settings captured at pointer down and held for the duration of the stroke,
+  // NEO's prepareDrawing. Null between strokes.
+  const strokeParamsRef = useRef<DrawingState | null>(null);
 
   useEffect(() => {
     currentDrawingStateRef.current = drawingState;
@@ -182,12 +185,21 @@ export const useBaseDrawing = (
   ) => {
     if (!drawingEngineRef.current) return;
 
-    const r = parseInt(currentDrawingStateRef.current.color.slice(1, 3), 16);
-    const g = parseInt(currentDrawingStateRef.current.color.slice(3, 5), 16);
-    const b = parseInt(currentDrawingStateRef.current.color.slice(5, 7), 16);
-    const effectiveOpacity = currentDrawingStateRef.current.opacity;
+    // A stroke is drawn with the settings it started with, as NEO does
+    // (prepareDrawing, called from freeHandDownHandler). Both the replay frame
+    // and the collaborative stroke message carry one set of parameters for the
+    // whole stroke, so reading live state here would let a mid-stroke change
+    // -- the [ / ] and pen hotkeys, or the toolbox -- alter the canvas in a way
+    // the recording cannot express. Such a change now applies to the next
+    // stroke.
+    const active = strokeParamsRef.current ?? currentDrawingStateRef.current;
 
-    const targetLayer = drawingEngineRef.current.layers[currentDrawingStateRef.current.layerType];
+    const r = parseInt(active.color.slice(1, 3), 16);
+    const g = parseInt(active.color.slice(3, 5), 16);
+    const b = parseInt(active.color.slice(5, 7), 16);
+    const effectiveOpacity = active.opacity;
+
+    const targetLayer = drawingEngineRef.current.layers[active.layerType];
 
     // Callbacks run before the local apply; in remote-sync mode they fully
     // own applying the stroke (via the canvas history), so the direct engine
@@ -209,8 +221,8 @@ export const useBaseDrawing = (
       callbacks?.onDrawPoint?.(
         coords.x,
         coords.y,
-        currentDrawingStateRef.current.brushSize,
-        currentDrawingStateRef.current.brushType,
+        active.brushSize,
+        active.brushType,
         r,
         g,
         b,
@@ -223,8 +235,8 @@ export const useBaseDrawing = (
           coords.y,
           coords.x,
           coords.y,
-          currentDrawingStateRef.current.brushSize,
-          currentDrawingStateRef.current.brushType,
+          active.brushSize,
+          active.brushType,
           r,
           g,
           b,
@@ -237,8 +249,8 @@ export const useBaseDrawing = (
         coords.prevY,
         coords.x,
         coords.y,
-        currentDrawingStateRef.current.brushSize,
-        currentDrawingStateRef.current.brushType,
+        active.brushSize,
+        active.brushType,
         r,
         g,
         b,
@@ -255,8 +267,8 @@ export const useBaseDrawing = (
           coords.y,
           coords.prevX,
           coords.prevY,
-          currentDrawingStateRef.current.brushSize,
-          currentDrawingStateRef.current.brushType,
+          active.brushSize,
+          active.brushType,
           r,
           g,
           b,
@@ -347,6 +359,9 @@ export const useBaseDrawing = (
         const coords = getCanvasCoordinates(e.clientX, e.clientY);
         isDrawingRef.current = true;
 
+        // Freeze the settings this stroke will be drawn and recorded with
+        strokeParamsRef.current = { ...currentDrawingStateRef.current };
+
         // Notify callback that drawing started
         callbacks?.onPointerDown?.();
 
@@ -381,6 +396,7 @@ export const useBaseDrawing = (
         drawingStateRef.current.isDrawing = false;
         drawingStateRef.current.isPanning = false;
         isDrawingRef.current = false;
+        strokeParamsRef.current = null;
 
         // Canonical Neo clears the joint-dedup state at the end of every
         // stroke (tools.js freeHandUpHandler) and again after each stroke on

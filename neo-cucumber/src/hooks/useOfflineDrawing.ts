@@ -23,6 +23,10 @@ export const useOfflineDrawing = (
   const startTimeRef = useRef<number>(Date.now());
   const isFirstPointRef = useRef<boolean>(false);
   const hasCreatedStepRef = useRef<boolean>(false);
+  // Layer captured at pointer down, alongside the settings useBaseDrawing
+  // freezes for the stroke, so the frame header cannot disagree with the
+  // layer the engine actually drew into.
+  const strokeLayerRef = useRef<number | null>(null);
 
   // Helper to map brushType to lineType
   const getLineType = (
@@ -45,7 +49,9 @@ export const useOfflineDrawing = (
       // The actual step() call will happen in onDrawLine/onDrawPoint when data is recorded
       isFirstPointRef.current = true;
       hasCreatedStepRef.current = false;
-    }, []),
+      strokeLayerRef.current =
+        drawingState.layerType === "foreground" ? 1 : 0;
+    }, [drawingState.layerType]),
 
     onDrawLine: useCallback(
       (
@@ -60,7 +66,9 @@ export const useOfflineDrawing = (
         b: number,
         opacity: number
       ) => {
-        const layer = drawingState.layerType === "foreground" ? 1 : 0;
+        const layer =
+          strokeLayerRef.current ??
+          (drawingState.layerType === "foreground" ? 1 : 0);
         // Opacity is already in [0, 255] range - clamp and ensure no NaN
         const alpha = Math.max(0, Math.min(255, Math.floor(opacity || 0)));
         const lineType = getLineType(brushType);
@@ -124,7 +132,9 @@ export const useOfflineDrawing = (
         b: number,
         opacity: number
       ) => {
-        const layer = drawingState.layerType === "foreground" ? 1 : 0;
+        const layer =
+          strokeLayerRef.current ??
+          (drawingState.layerType === "foreground" ? 1 : 0);
         // Opacity is already in [0, 255] range - clamp and ensure no NaN
         const alpha = Math.max(0, Math.min(255, Math.floor(opacity || 0)));
         const lineType = getLineType(brushType);
@@ -169,7 +179,9 @@ export const useOfflineDrawing = (
 
     onFill: useCallback(
       (x: number, y: number, r: number, g: number, b: number, opacity: number) => {
-        const layer = drawingState.layerType === "foreground" ? 1 : 0;
+        const layer =
+          strokeLayerRef.current ??
+          (drawingState.layerType === "foreground" ? 1 : 0);
         // Opacity is already in [0, 255] range - clamp and ensure no NaN
         const alpha = Math.max(0, Math.min(255, Math.floor(opacity || 0)));
 
@@ -199,6 +211,7 @@ export const useOfflineDrawing = (
     onPointerUp: useCallback(() => {
       isFirstPointRef.current = false;
       hasCreatedStepRef.current = false;
+      strokeLayerRef.current = null;
     }, []),
   };
 

@@ -46,6 +46,7 @@ function drawingState(overrides: Partial<DrawingState> = {}): DrawingState {
  */
 async function mountOfflineDrawing(state: DrawingState) {
   const captured: { api: OfflineApi | null } = { api: null };
+  let current = state;
 
   function Harness() {
     const appRef = useRef<HTMLDivElement>(null);
@@ -53,7 +54,7 @@ async function mountOfflineDrawing(state: DrawingState) {
     const api = useOfflineDrawing(
       canvasRef,
       appRef,
-      state,
+      current,
       undefined,
       100,
       W,
@@ -125,7 +126,32 @@ async function mountOfflineDrawing(state: DrawingState) {
     await send("pointerup", points[points.length - 1][0], points[points.length - 1][1]);
   };
 
-  return { api, container, strokeThrough };
+  /** Mimics the toolbox/hotkeys changing drawing state, including mid-stroke. */
+  const updateDrawingState = async (patch: Partial<DrawingState>) => {
+    current = { ...current, ...patch };
+    await act(async () => {
+      root.render(<Harness />);
+    });
+  };
+
+  const press = (x: number, y: number) => send("pointerdown", x, y);
+  const moveTo = async (x: number, y: number) => {
+    await act(async () => {
+      await sleep(MOVE_INTERVAL_MS);
+    });
+    await send("pointermove", x, y);
+  };
+  const release = (x: number, y: number) => send("pointerup", x, y);
+
+  return {
+    api,
+    container,
+    strokeThrough,
+    updateDrawingState,
+    press,
+    moveTo,
+    release,
+  };
 }
 
 async function replayThroughNeo(api: OfflineApi) {
@@ -205,6 +231,34 @@ describe("offline drawing end to end", () => {
       describeDifference(expected, replayed.background, W)
     ).toBe(-1);
     expectMatch(api, replayed);
+  });
+
+  it("matches when the pen size is changed mid-stroke", async () => {
+    const { api, updateDrawingState, press, moveTo, release } =
+      await mountOfflineDrawing(drawingState({ brushSize: 3 }));
+
+    await press(10, 10);
+    await moveTo(30, 22);
+    // The [ / ] hotkeys land here: drawing state changes while the pointer
+    // is still down.
+    await updateDrawingState({ brushSize: 14 });
+    await moveTo(55, 40);
+    await release(55, 40);
+
+    expectMatch(api, await replayThroughNeo(api));
+  });
+
+  it("matches when the pen color is changed mid-stroke", async () => {
+    const { api, updateDrawingState, press, moveTo, release } =
+      await mountOfflineDrawing(drawingState({ color: "#800000" }));
+
+    await press(10, 45);
+    await moveTo(32, 30);
+    await updateDrawingState({ color: "#313768" });
+    await moveTo(66, 14);
+    await release(66, 14);
+
+    expectMatch(api, await replayThroughNeo(api));
   });
 
   it("matches with a restore frame appended, as saving does", async () => {
