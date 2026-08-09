@@ -21,7 +21,6 @@ export const useOfflineDrawing = (
   // Initialize replay recording
   const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
   const startTimeRef = useRef<number>(Date.now());
-  const strokeCountRef = useRef<number>(0);
   const isFirstPointRef = useRef<boolean>(false);
   const hasCreatedStepRef = useRef<boolean>(false);
 
@@ -81,7 +80,6 @@ export const useOfflineDrawing = (
         // Only create action frame and push header once per stroke
         if (!hasCreatedStepRef.current) {
           // First point of stroke - create new action frame and record full header
-          strokeCountRef.current++;
           actionRecorderRef.current.step();
           hasCreatedStepRef.current = true;
 
@@ -141,7 +139,6 @@ export const useOfflineDrawing = (
 
         // Single point stroke - create new action frame
         if (!hasCreatedStepRef.current) {
-          strokeCountRef.current++;
           actionRecorderRef.current.step();
           hasCreatedStepRef.current = true;
         }
@@ -188,7 +185,6 @@ export const useOfflineDrawing = (
         const color = (alpha << 24) | (safeB << 16) | (safeG << 8) | safeR;
 
         if (!hasCreatedStepRef.current) {
-          strokeCountRef.current++;
           actionRecorderRef.current.step();
           hasCreatedStepRef.current = true;
         }
@@ -298,8 +294,6 @@ export const useOfflineDrawing = (
     const color = (255 << 24) | (b << 16) | (g << 8) | r;
     actionRecorderRef.current.step();
     actionRecorderRef.current.push("floodFill", 0, 0, 0, color);
-    strokeCountRef.current++;
-    console.log("Replay recorded, stroke count:", strokeCountRef.current);
   }, [baseDrawing.drawingEngine, baseDrawing.history]);
 
   // Return enhanced interface with replay functionality
@@ -310,7 +304,7 @@ export const useOfflineDrawing = (
     getReplayBlob: () =>
       actionRecorderRef.current.getReplayBlob(canvasWidth || 300, canvasHeight || 300),
     getStartTime: () => startTimeRef.current,
-    getStrokeCount: () => strokeCountRef.current,
+    getActionCount: () => actionRecorderRef.current.getActionCount(),
     addRestoreAction,
     initializeTwoToneCanvas,
   };

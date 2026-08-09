@@ -57,6 +57,14 @@ export class ActionRecorder {
    * This enables animation skip in Neo.Painter
    */
   addRestoreAction(bgDataURL: string, fgDataURL: string): void {
+    // Discard undone actions first, exactly as step() does. Without this the
+    // restore lands beyond the export window while head++ pulls an undone
+    // action into it, so saving after an undo replays the wrong strokes and
+    // ships no restore frame at all.
+    if (this.items.length > this.head) {
+      this.items.length = this.head;
+    }
+
     // Check if last action is already a restore action
     const lastItem = this.items.length > 0 ? this.items[this.items.length - 1] : null;
     if (lastItem && lastItem[0] === "restore") {
@@ -67,6 +75,15 @@ export class ActionRecorder {
       this.items.push(["restore", bgDataURL, fgDataURL]);
       this.head++;
     }
+  }
+
+  /**
+   * Number of actions that will be exported, i.e. everything up to head.
+   * Undone actions are excluded, so this is the honest basis for a stroke
+   * count rather than a counter that only ever increments.
+   */
+  getActionCount(): number {
+    return this.head;
   }
 
   /**

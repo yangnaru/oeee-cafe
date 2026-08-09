@@ -145,7 +145,7 @@ function OfflineApp() {
     drawingEngine,
     getReplayBlob,
     getStartTime,
-    getStrokeCount,
+    getActionCount,
     addRestoreAction,
     initializeTwoToneCanvas,
   } = useOfflineDrawing(
@@ -216,8 +216,10 @@ function OfflineApp() {
       // Use "cucumber" tool name for two-tone mode, otherwise "neo-cucumber-offline"
       formData.append("tool", twoToneConfig ? "cucumber" : "neo-cucumber-offline");
       formData.append("security_timer", getStartTime().toString());
-      // For two-tone mode: subtract 2 (initial fill + final restore) from stroke count
-      const strokeCount = twoToneConfig ? getStrokeCount() - 2 : getStrokeCount();
+      // Recorded actions minus the ones that aren't user strokes: the restore
+      // frame just added, plus two-tone's initial background fill.
+      const nonStrokeActions = twoToneConfig ? 2 : 1;
+      const strokeCount = Math.max(0, getActionCount() - nonStrokeActions);
       formData.append("security_count", strokeCount.toString());
 
       if (drawingContext.communityId) {
@@ -264,7 +266,7 @@ function OfflineApp() {
     canvasHeight,
     getReplayBlob,
     getStartTime,
-    getStrokeCount,
+    getActionCount,
     addRestoreAction,
     drawingContext,
     isSaving,

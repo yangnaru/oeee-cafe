@@ -377,6 +377,16 @@ export const useBaseDrawing = (
         drawingStateRef.current.isDrawing = false;
         drawingStateRef.current.isPanning = false;
         isDrawingRef.current = false;
+
+        // Canonical Neo clears the joint-dedup state at the end of every
+        // stroke (tools.js freeHandUpHandler) and again after each stroke on
+        // replay. Carrying it across strokes would suppress the opening dot of
+        // a stroke that starts where the last one ended, while the replay --
+        // which does reset -- still draws it. Remote-sync mode drives this
+        // state externally per user, so leave it alone there.
+        if (!remoteSyncRef.current) {
+          drawingEngineRef.current?.setStrokeState(null);
+        }
       }
     };
 
