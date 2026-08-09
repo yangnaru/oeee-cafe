@@ -12,7 +12,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::app_error::AppError;
-use crate::models::community::Community;
+use crate::models::community::{Community, CommunityVisibility};
 use crate::models::instance::{find_or_create_local_instance, upsert_instance};
 use crate::models::nodeinfo;
 use crate::models::user::{find_user_by_id, User};
@@ -529,6 +529,11 @@ pub async fn backfill_actors_for_existing_communities(
 
     let mut created_count = 0;
     for community in communities {
+        // Private communities don't federate, so they don't get an actor
+        if community.visibility == CommunityVisibility::Private {
+            continue;
+        }
+
         // Check if community already has an actor
         let existing_actor = query_as!(
             Actor,
