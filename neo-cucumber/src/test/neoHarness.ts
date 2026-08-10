@@ -8,6 +8,7 @@
  * stub and its primitives driven against real canvases.
  */
 import painterSource from "../../../neo/src/painter.js?raw";
+import toolsSource from "../../../neo/src/tools.js?raw";
 import { decompressFromUint8Array } from "lz-string";
 
 export const LINETYPE = {
@@ -32,6 +33,10 @@ export function loadNeo(): Any {
   if (cachedNeo) return cachedNeo;
   const Neo: Any = { config: {}, isMobile: () => false };
   new Function("Neo", painterSource)(Neo);
+  // tools.js reads Neo.Painter's constants at definition time, so it has to
+  // come second. Like painter.js it is only prototype assignments, with no
+  // top-level DOM or jQuery use.
+  new Function("Neo", toolsSource)(Neo);
   cachedNeo = Neo;
   return Neo;
 }
