@@ -28,6 +28,7 @@ import {
   type StrokeMessage,
 } from "./binaryProtocol";
 import { pngDataToLayer } from "./canvasSnapshot";
+import type { WireBrushType } from "../types/collaboration";
 
 type LayerName = "foreground" | "background";
 type StrokeState = [[number, number], [number, number]] | null;
@@ -65,7 +66,7 @@ interface ForkEntry {
 interface OpenBatch {
   layer: LayerName;
   brushSize: number;
-  brushType: "solid" | "halftone" | "eraser";
+  brushType: WireBrushType;
   color: { r: number; g: number; b: number; a: number };
   points: { x: number; y: number }[];
   area: { kind: "pixels"; layer: LayerName; x0: number; y0: number; x1: number; y1: number };
@@ -294,7 +295,7 @@ export class CanvasHistory {
   addLocalSegment(
     layer: LayerName,
     brushSize: number,
-    brushType: "solid" | "halftone" | "eraser",
+    brushType: WireBrushType,
     color: { r: number; g: number; b: number; a: number },
     x: number,
     y: number

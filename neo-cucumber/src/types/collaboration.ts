@@ -11,16 +11,27 @@ export type BrushType =
   | "pan";
 
 /**
- * The subset the collaborative wire format can carry: brushType is one byte
- * with three defined values. Until that is versioned, a shared session can
- * only offer these, so the boundary is a type rather than a convention.
+ * The drawing tools the collaborative wire format carries. Every brush type
+ * the engine rasterises has a code; fill and pan are excluded because neither
+ * travels as a stroke -- fill is its own message and pan draws nothing.
  */
-export type WireBrushType = "solid" | "halftone" | "eraser";
+export type WireBrushType =
+  | "solid"
+  | "halftone"
+  | "eraser"
+  | "brush"
+  | "dodge"
+  | "burn"
+  | "blur";
 
 export const WIRE_BRUSH_TYPES: readonly WireBrushType[] = [
   "solid",
   "halftone",
   "eraser",
+  "brush",
+  "dodge",
+  "burn",
+  "blur",
 ];
 
 export function isWireBrushType(type: string): type is WireBrushType {

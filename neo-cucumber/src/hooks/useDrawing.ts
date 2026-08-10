@@ -168,21 +168,9 @@ export const useDrawing = (
       const history = canvasHistoryRef?.current;
       if (!history || localIdRef?.current == null) return;
 
-      // fill and pan are not stroke tools -- fill goes as its own message and
-      // pan draws nothing -- so folding them into solid costs nothing. The
-      // engine can also rasterise brush, dodge, burn and blur, but the wire
-      // format has no code for them, and coercing one would show everyone else
-      // a different tool than the one in use. The shared toolbox therefore does
-      // not offer them; this is the backstop, not the policy.
-      if (
-        !isWireBrushType(brushType) &&
-        brushType !== "fill" &&
-        brushType !== "pan"
-      ) {
-        console.warn(
-          `brush type "${brushType}" cannot be sent to a shared session yet`
-        );
-      }
+      // Every drawing tool has a wire code now; fill and pan are the only
+      // things that reach here without one, and neither travels as a stroke --
+      // fill is its own message and pan draws nothing.
       const validBrushType: WireBrushType = isWireBrushType(brushType)
         ? brushType
         : "solid";

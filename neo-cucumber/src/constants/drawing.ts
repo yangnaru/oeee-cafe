@@ -100,11 +100,9 @@ export const ALL_TOOLS: readonly BrushType[] = [
   "pan",
 ];
 
-/** What a collaborative session can carry today. */
-export const SHARED_TOOLS: readonly BrushType[] = [
-  "solid",
-  "halftone",
-  "eraser",
-  "fill",
-  "pan",
-];
+/**
+ * What a collaborative session offers. Every drawing tool has a wire code, so
+ * this is the full set; it stays a separate constant because fill and pan are
+ * chrome rather than strokes and a session could still restrict tools later.
+ */
+export const SHARED_TOOLS: readonly BrushType[] = ALL_TOOLS;

@@ -50,11 +50,39 @@ export const LAYER = {
 } as const;
 
 // Brush type constants
+/**
+ * Wire codes for brush types. Append only: a client that predates a code has
+ * no way to learn it, so renumbering these would silently redraw history.
+ */
 export const BRUSH_TYPE = {
   SOLID: 0,
   HALFTONE: 1,
   ERASER: 2,
+  BRUSH: 3,
+  DODGE: 4,
+  BURN: 5,
+  BLUR: 6,
 } as const;
+
+const BRUSH_TYPE_TO_CODE: Record<WireBrushType, number> = {
+  solid: BRUSH_TYPE.SOLID,
+  halftone: BRUSH_TYPE.HALFTONE,
+  eraser: BRUSH_TYPE.ERASER,
+  brush: BRUSH_TYPE.BRUSH,
+  dodge: BRUSH_TYPE.DODGE,
+  burn: BRUSH_TYPE.BURN,
+  blur: BRUSH_TYPE.BLUR,
+};
+
+const CODE_TO_BRUSH_TYPE: Record<number, WireBrushType> = {
+  [BRUSH_TYPE.SOLID]: "solid",
+  [BRUSH_TYPE.HALFTONE]: "halftone",
+  [BRUSH_TYPE.ERASER]: "eraser",
+  [BRUSH_TYPE.BRUSH]: "brush",
+  [BRUSH_TYPE.DODGE]: "dodge",
+  [BRUSH_TYPE.BURN]: "burn",
+  [BRUSH_TYPE.BLUR]: "blur",
+};
 
 // Pointer type constants
 export const POINTER_TYPE = {
@@ -232,12 +260,7 @@ export function encodeStroke(
   buffer[1] = userId;
   buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
   buffer[3] = brushSize;
-  buffer[4] =
-    brushType === "solid"
-      ? BRUSH_TYPE.SOLID
-      : brushType === "halftone"
-      ? BRUSH_TYPE.HALFTONE
-      : BRUSH_TYPE.ERASER;
+  buffer[4] = BRUSH_TYPE_TO_CODE[brushType] ?? BRUSH_TYPE.SOLID;
   buffer[5] = r;
   buffer[6] = g;
   buffer[7] = b;
@@ -669,12 +692,10 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         userId: buffer[1],
         layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
         brushSize: buffer[3],
-        brushType:
-          buffer[4] === BRUSH_TYPE.SOLID
-            ? "solid"
-            : buffer[4] === BRUSH_TYPE.HALFTONE
-            ? "halftone"
-            : "eraser",
+        // An unrecognised code falls back to solid, not eraser: a client
+        // meeting a tool newer than itself should draw something harmless
+        // rather than delete the pixels underneath.
+        brushType: CODE_TO_BRUSH_TYPE[buffer[4]] ?? "solid",
         color: { r: buffer[5], g: buffer[6], b: buffer[7], a: buffer[8] },
         points,
       };

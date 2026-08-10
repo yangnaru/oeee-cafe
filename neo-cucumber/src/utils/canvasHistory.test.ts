@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { CanvasHistory } from "./canvasHistory";
 import {
+  BRUSH_TYPE,
   decodeMessage,
   encodeFill,
   encodeStroke,
@@ -8,6 +9,7 @@ import {
   encodeUndoPoint,
 } from "./binaryProtocol";
 import { type DrawingEngine } from "../DrawingEngine";
+import { WIRE_BRUSH_TYPES } from "../types/collaboration";
 
 vi.mock("./canvasSnapshot", () => ({
   pngDataToLayer: vi.fn(async () => new Uint8ClampedArray(SIZE * SIZE * 4).fill(7)),
@@ -403,5 +405,43 @@ describe("reconnect", () => {
     local(history, undo);
     await remote(history, undo);
     expect(red(engine, 2, 2)).toBe(0);
+  });
+});
+
+describe("brush type wire codes", () => {
+  it("round trips every drawing tool", () => {
+    for (const brushType of WIRE_BRUSH_TYPES) {
+      const bytes = encodeStroke(REMOTE, "foreground", 4, brushType, 1, 2, 3, 255, [
+        { x: 5, y: 6 },
+      ]);
+      const msg = decodeMessage(bytes);
+      expect(msg?.type).toBe("stroke");
+      expect(msg && msg.type === "stroke" && msg.brushType).toBe(brushType);
+    }
+  });
+
+  it("assigns codes that never move", () => {
+    // A client that predates a code cannot learn it, so renumbering these
+    // would silently redraw the history of any session it shares.
+    expect(BRUSH_TYPE).toEqual({
+      SOLID: 0,
+      HALFTONE: 1,
+      ERASER: 2,
+      BRUSH: 3,
+      DODGE: 4,
+      BURN: 5,
+      BLUR: 6,
+    });
+  });
+
+  it("falls back to solid, not eraser, on a code it does not know", () => {
+    // Forward compatibility: meeting a tool from a newer client should draw
+    // something harmless rather than delete what is underneath.
+    const bytes = encodeStroke(REMOTE, "foreground", 4, "solid", 1, 2, 3, 255, [
+      { x: 5, y: 6 },
+    ]);
+    new Uint8Array(bytes)[4] = 99;
+    const msg = decodeMessage(bytes);
+    expect(msg && msg.type === "stroke" && msg.brushType).toBe("solid");
   });
 });
