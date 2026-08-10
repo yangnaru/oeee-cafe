@@ -53,6 +53,13 @@ export class NeoPainter {
   readonly canvasCtx: CanvasRenderingContext2D[];
   readonly canvas: HTMLCanvasElement[];
 
+  /**
+   * Where layer-addressed operations draw. Defaults to this painter's own
+   * canvases; the painter points it at its layer buffers instead, so the
+   * region operations work on either without a second set of signatures.
+   */
+  surfaces: PixelSurface[];
+
   current = 0;
 
   _currentColor: [number, number, number, number] = [0, 0, 0, 255];
@@ -89,6 +96,8 @@ export class NeoPainter {
       this.canvas.push(canvas);
       this.canvasCtx.push(ctx);
     }
+
+    this.surfaces = this.canvasCtx;
 
     this.tempCanvas = document.createElement("canvas");
     this.tempCanvas.width = width;
@@ -879,17 +888,22 @@ export class NeoPainter {
   // ------------------------------------------------------------ region ops
 
   clearCanvas(): void {
-    for (let i = 0; i < 2; i++) {
-      this.canvasCtx[i].clearRect(0, 0, this.canvasWidth, this.canvasHeight);
-    }
+    this.eraseAll(0);
+    this.eraseAll(1);
   }
 
   eraseAll(layer: number): void {
-    this.canvasCtx[layer].clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+    // putImageData of a fresh (transparent) rectangle, rather than clearRect,
+    // so this works on a buffer as well as a canvas.
+    this.surfaces[layer].putImageData(
+      new ImageData(this.canvasWidth, this.canvasHeight),
+      0,
+      0
+    );
   }
 
   eraseRect(layer: number, x: number, y: number, width: number, height: number): void {
-    const ctx = this.canvasCtx[layer];
+    const ctx = this.surfaces[layer];
     x = Math.round(x);
     y = Math.round(y);
     width = Math.round(width);
@@ -915,7 +929,7 @@ export class NeoPainter {
   }
 
   flipH(layer: number, x: number, y: number, width: number, height: number): void {
-    const ctx = this.canvasCtx[layer];
+    const ctx = this.surfaces[layer];
     x = Math.round(x);
     y = Math.round(y);
     width = Math.round(width);
@@ -938,7 +952,7 @@ export class NeoPainter {
   }
 
   flipV(layer: number, x: number, y: number, width: number, height: number): void {
-    const ctx = this.canvasCtx[layer];
+    const ctx = this.surfaces[layer];
     x = Math.round(x);
     y = Math.round(y);
     width = Math.round(width);
@@ -969,7 +983,7 @@ export class NeoPainter {
     const imageData: ImageData[] = [];
     const buf8: Uint8ClampedArray[] = [];
     for (let i = 0; i < 2; i++) {
-      imageData[i] = this.canvasCtx[i].getImageData(x, y, width, height);
+      imageData[i] = this.surfaces[i].getImageData(x, y, width, height);
       buf8[i] = new Uint8ClampedArray(imageData[i].data.buffer);
     }
 
@@ -1014,12 +1028,12 @@ export class NeoPainter {
 
     for (let i = 0; i < 2; i++) {
       imageData[i].data.set(buf8[i]);
-      this.canvasCtx[i].putImageData(imageData[i], x, y);
+      this.surfaces[i].putImageData(imageData[i], x, y);
     }
   }
 
   blurRect(layer: number, x: number, y: number, width: number, height: number): void {
-    const ctx = this.canvasCtx[layer];
+    const ctx = this.surfaces[layer];
     x = Math.round(x);
     y = Math.round(y);
     width = Math.round(width);
@@ -1059,7 +1073,7 @@ export class NeoPainter {
   }
 
   copy(layer: number, x: number, y: number, width: number, height: number): void {
-    const imageData = this.canvasCtx[layer].getImageData(x, y, width, height);
+    const imageData = this.surfaces[layer].getImageData(x, y, width, height);
     const buf32 = new Uint32Array(imageData.data.buffer);
     const temp = new Uint32Array(buf32.length);
     for (let i = 0; i < buf32.length; i++) temp[i] = buf32[i];
@@ -1075,7 +1089,7 @@ export class NeoPainter {
     dx: number,
     dy: number
   ): void {
-    const ctx = this.canvasCtx[layer];
+    const ctx = this.surfaces[layer];
     const imageData = ctx.getImageData(x + dx, y + dy, width, height);
     const buf32 = new Uint32Array(imageData.data.buffer);
 
@@ -1087,7 +1101,7 @@ export class NeoPainter {
   }
 
   turn(layer: number, x: number, y: number, width: number, height: number): void {
-    const ctx = this.canvasCtx[layer];
+    const ctx = this.surfaces[layer];
 
     // NEO quirk (upstream comment says so outright): the region is first
     // smeared with its own top row, reproducing a bug in the turn tool.
@@ -1243,7 +1257,7 @@ export class NeoPainter {
     height: number,
     type: number
   ): void {
-    const ctx = this.canvasCtx[layer];
+    const ctx = this.surfaces[layer];
     const maskFunc = this.getMaskFunc(type);
 
     const imageData = ctx.getImageData(x, y, width, height);
