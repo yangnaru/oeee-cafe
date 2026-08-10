@@ -42,39 +42,91 @@ describe("production replay corpus", () => {
     expect(entries.length).toBeGreaterThan(0);
   });
 
-  for (const [path, url] of entries) {
+  // Files the archive cannot render at all, kept out of the mismatch count and
+  // reported on their own. Both are data faults, not rasterisation faults.
+  const undecodable: string[] = [];
+  const neoCannotReplay: string[] = [];
+
+  /** Replays one file through both implementations; returns a mismatch, or null. */
+  async function checkFile(path: string, url: string): Promise<string | null> {
     const name = path.split("/").pop() ?? path;
+    const bytes = await loadBytes(url);
+    const decoded = decodePCH(bytes);
+    if (!decoded) {
+      undecodable.push(name);
+      return null;
+    }
 
-    it(`reproduces ${name.slice(0, 12)} exactly`, async () => {
-      const bytes = await loadBytes(url);
-      const decoded = decodePCH(bytes);
-      expect(decoded, `${name} failed to decode`).not.toBeNull();
-      if (!decoded) return;
+    const { width, height } = decoded;
 
-      const { width, height } = decoded;
+    // Drop restore frames on both sides. They carry the finished drawing as a
+    // PNG, so applying them would overwrite the replayed strokes and make the
+    // comparison pass regardless of how the strokes rendered.
+    const items = decoded.items.filter((item) => item[0] !== "restore");
 
-      // Drop restore frames on both sides. They carry the finished drawing as
-      // a PNG, so applying them would overwrite the replayed strokes and make
-      // the comparison pass regardless of how the strokes rendered.
-      const items = decoded.items.filter((item) => item[0] !== "restore");
-
-      // Canonical NEO. Both sides consume the same fixPCH output.
-      const cp = createCanonicalPainter(width, height);
+    // Canonical NEO. Both sides consume the same fixPCH output. A damaged
+    // frame makes NEO itself throw -- those files are unplayable in the live
+    // viewer today, so there is nothing to compare against.
+    const cp = createCanonicalPainter(width, height);
+    try {
       replayWithNeo(cp, items);
+    } catch {
+      neoCannotReplay.push(name);
+      return null;
+    }
 
-      // The TypeScript port
-      const replay = new NeoReplay(width, height);
-      await replay.playAll(items);
+    // The TypeScript port
+    const replay = new NeoReplay(width, height);
+    await replay.playAll(items);
 
-      for (const layer of [0, 1]) {
-        const ours = replay.getLayerPixels(layer);
-        const neo = readPixels(cp.contexts[layer], width, height);
-        expect(
-          firstPixelDifference(ours, neo),
+    for (const layer of [0, 1]) {
+      const ours = replay.getLayerPixels(layer);
+      const neo = readPixels(cp.contexts[layer], width, height);
+      if (firstPixelDifference(ours, neo) !== -1) {
+        return (
           `${name} layer ${layer} (${width}x${height}, ${items.length} frames): ` +
-            describeDifference(ours, neo, width)
-        ).toBe(-1);
+          describeDifference(ours, neo, width)
+        );
       }
-    });
+    }
+    return null;
   }
+
+  // Batched so a full-archive sweep does not emit thousands of cases or hold
+  // thousands of canvases live. Every mismatch in a batch is reported, not
+  // just the first.
+  const BATCH = 25;
+  for (let start = 0; start < entries.length; start += BATCH) {
+    const batch = entries.slice(start, start + BATCH);
+    const last = Math.min(start + BATCH, entries.length);
+
+    it(`reproduces files ${start + 1}-${last} exactly`, async () => {
+      const problems: string[] = [];
+      for (const [path, url] of batch) {
+        problems.push(...[await checkFile(path, url)].filter((p) => p !== null));
+      }
+      expect(problems, problems.join("\n")).toEqual([]);
+    }, 120_000);
+  }
+
+  // Runs after the batches above. These are archive faults rather than port
+  // faults, so they are surfaced explicitly instead of failing the sweep.
+  it("reports files the archive itself cannot replay", () => {
+    if (undecodable.length > 0) {
+      console.warn(`undecodable (${undecodable.length}):`, undecodable.join(", "));
+    }
+    if (neoCannotReplay.length > 0) {
+      console.warn(
+        `damaged frames, NEO throws on these too (${neoCannotReplay.length}):`,
+        neoCannotReplay.join(", ")
+      );
+    }
+    // Exact, so a new unplayable file fails the sweep instead of hiding. The
+    // one remaining is a zero-byte upload with nothing to recover; the
+    // concatenated-frame file was repaired in the bucket, so NEO plays it now.
+    expect(neoCannotReplay).toEqual([]);
+    expect(undecodable).toEqual([
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.pch",
+    ]);
+  });
 });

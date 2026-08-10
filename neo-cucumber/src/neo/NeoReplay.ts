@@ -50,6 +50,8 @@ export function fixPCH(items: Frame[]): Frame[] {
     const item = items[i];
     const index = item.indexOf("eraseAll");
     if (index > 0) {
+      // Kept exactly as upstream, including inserting the tail *before* the
+      // head so the erase happens first.
       const tail = item.slice(index);
       const head = item.slice(0, index);
       items[i] = head;
@@ -57,6 +59,16 @@ export function fixPCH(items: Frame[]): Frame[] {
     }
   }
   return items;
+}
+
+/**
+ * Coordinates are numbers, or null which NEO's arithmetic treats as zero.
+ * Anything else means the frame is damaged. Not a repair -- just enough of a
+ * guard that a viewer degrades instead of throwing, which is what NEO does
+ * when it hands a string to getImageData.
+ */
+function isCoordinate(v: unknown): boolean {
+  return typeof v === "number" || v === null;
 }
 
 /** Loads a data: URL into an ImageBitmap-compatible image. */
@@ -110,6 +122,10 @@ export class NeoReplay {
           const y1 = y0;
           x0 = item[i + 0];
           y0 = item[i + 1];
+          // Stop at the first damaged coordinate rather than passing NaN into
+          // getImageData, which is what NEO does and it throws. Drawing the
+          // valid prefix cannot change any file whose coordinates are intact.
+          if (!isCoordinate(x0) || !isCoordinate(y0)) break;
           p.drawLine(p.canvasCtx[layer], x0, y0, x1, y1, lineType);
         }
         p.prevLine = null;
