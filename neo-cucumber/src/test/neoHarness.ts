@@ -85,6 +85,18 @@ export function createCanonicalPainter(
   // Display refresh only; the pixel state we compare lives in canvasCtx.
   painter.updateDestCanvas = () => {};
 
+  // copy() paints a selection preview here. It never feeds back into the
+  // layers, but it has to exist for the call to run.
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = width;
+  tempCanvas.height = height;
+  painter.tempCanvas = tempCanvas;
+  painter.tempCanvasCtx = tempCanvas.getContext("2d", {
+    willReadFrequently: true,
+  });
+  painter.tempX = 0;
+  painter.tempY = 0;
+
   return { painter, canvases, contexts, width, height };
 }
 

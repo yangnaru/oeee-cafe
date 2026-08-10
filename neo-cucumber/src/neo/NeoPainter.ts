@@ -36,6 +36,13 @@ export const ALPHATYPE = {
   BRUSH: 2,
 } as const;
 
+export const TOOLTYPE = {
+  RECT: 20,
+  RECTFILL: 21,
+  ELLIPSE: 22,
+  ELLIPSEFILL: 23,
+} as const;
+
 export type Point = [number, number];
 
 export class NeoPainter {
@@ -57,7 +64,8 @@ export class NeoPainter {
   private readonly roundData: Uint8Array[] = [];
   private readonly toneData: Uint8Array[] = [];
 
-  /** Clipboard for copy/paste. */
+  /** Clipboard for copy/paste, NEO's `temp`. */
+  private temp: Uint32Array | null = null;
   private clipboard: ImageData | null = null;
 
   constructor(width: number, height: number) {
@@ -771,5 +779,433 @@ export class NeoPainter {
 
   setClipboard(data: ImageData | null): void {
     this.clipboard = data;
+  }
+
+  // ------------------------------------------------------------ region ops
+
+  clearCanvas(): void {
+    for (let i = 0; i < 2; i++) {
+      this.canvasCtx[i].clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+    }
+  }
+
+  eraseAll(layer: number): void {
+    this.canvasCtx[layer].clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+  }
+
+  eraseRect(layer: number, x: number, y: number, width: number, height: number): void {
+    const ctx = this.canvasCtx[layer];
+    x = Math.round(x);
+    y = Math.round(y);
+    width = Math.round(width);
+    height = Math.round(height);
+
+    const imageData = ctx.getImageData(x, y, width, height);
+    const buf8 = new Uint8ClampedArray(imageData.data.buffer);
+
+    let index = 0;
+    let a = 1.0 - this._currentColor[3] / 255.0;
+    a = a !== 0 ? Math.ceil(2.0 / a) : 255;
+
+    for (let j = 0; j < height; j++) {
+      for (let i = 0; i < width; i++) {
+        if (!this.isMasked(buf8, index)) {
+          buf8[index + 3] -= a;
+        }
+        index += 4;
+      }
+    }
+    imageData.data.set(buf8);
+    ctx.putImageData(imageData, x, y);
+  }
+
+  flipH(layer: number, x: number, y: number, width: number, height: number): void {
+    const ctx = this.canvasCtx[layer];
+    x = Math.round(x);
+    y = Math.round(y);
+    width = Math.round(width);
+    height = Math.round(height);
+
+    const imageData = ctx.getImageData(x, y, width, height);
+    const buf32 = new Uint32Array(imageData.data.buffer);
+
+    const half = Math.floor(width / 2);
+    for (let j = 0; j < height; j++) {
+      const index = j * width;
+      const index2 = index + (width - 1);
+      for (let i = 0; i < half; i++) {
+        const value = buf32[index + i];
+        buf32[index + i] = buf32[index2 - i];
+        buf32[index2 - i] = value;
+      }
+    }
+    ctx.putImageData(imageData, x, y);
+  }
+
+  flipV(layer: number, x: number, y: number, width: number, height: number): void {
+    const ctx = this.canvasCtx[layer];
+    x = Math.round(x);
+    y = Math.round(y);
+    width = Math.round(width);
+    height = Math.round(height);
+
+    const imageData = ctx.getImageData(x, y, width, height);
+    const buf32 = new Uint32Array(imageData.data.buffer);
+
+    const half = Math.floor(height / 2);
+    for (let j = 0; j < half; j++) {
+      const index = j * width;
+      const index2 = (height - 1 - j) * width;
+      for (let i = 0; i < width; i++) {
+        const value = buf32[index + i];
+        buf32[index + i] = buf32[index2 + i];
+        buf32[index2 + i] = value;
+      }
+    }
+    ctx.putImageData(imageData, x, y);
+  }
+
+  merge(layer: number, x: number, y: number, width: number, height: number): void {
+    x = Math.round(x);
+    y = Math.round(y);
+    width = Math.round(width);
+    height = Math.round(height);
+
+    const imageData: ImageData[] = [];
+    const buf8: Uint8ClampedArray[] = [];
+    for (let i = 0; i < 2; i++) {
+      imageData[i] = this.canvasCtx[i].getImageData(x, y, width, height);
+      buf8[i] = new Uint8ClampedArray(imageData[i].data.buffer);
+    }
+
+    const dst = layer;
+    const src = dst === 1 ? 0 : 1;
+    const size = width * height;
+    let index = 0;
+
+    // NEO quirk: r/g/b are var-hoisted and only assigned when the composite
+    // alpha is positive, so a fully transparent pixel keeps whatever colour
+    // the previous pixel produced. Declared outside the loop to match.
+    let r: number | undefined;
+    let g: number | undefined;
+    let b: number | undefined;
+
+    for (let i = 0; i < size; i++) {
+      const r0 = buf8[0][index + 0];
+      const g0 = buf8[0][index + 1];
+      const b0 = buf8[0][index + 2];
+      const a0 = buf8[0][index + 3] / 255.0;
+      const r1 = buf8[1][index + 0];
+      const g1 = buf8[1][index + 1];
+      const b1 = buf8[1][index + 2];
+      const a1 = buf8[1][index + 3] / 255.0;
+
+      const a = a0 + a1 - a0 * a1;
+      if (a > 0) {
+        r = Math.floor((r1 * a1 + r0 * a0 * (1 - a1)) / a + 0.5);
+        g = Math.floor((g1 * a1 + g0 * a0 * (1 - a1)) / a + 0.5);
+        b = Math.floor((b1 * a1 + b0 * a0 * (1 - a1)) / a + 0.5);
+      }
+      buf8[src][index + 0] = 0;
+      buf8[src][index + 1] = 0;
+      buf8[src][index + 2] = 0;
+      buf8[src][index + 3] = 0;
+      buf8[dst][index + 0] = r as number;
+      buf8[dst][index + 1] = g as number;
+      buf8[dst][index + 2] = b as number;
+      buf8[dst][index + 3] = Math.floor(a * 255 + 0.5);
+      index += 4;
+    }
+
+    for (let i = 0; i < 2; i++) {
+      imageData[i].data.set(buf8[i]);
+      this.canvasCtx[i].putImageData(imageData[i], x, y);
+    }
+  }
+
+  blurRect(layer: number, x: number, y: number, width: number, height: number): void {
+    const ctx = this.canvasCtx[layer];
+    x = Math.round(x);
+    y = Math.round(y);
+    width = Math.round(width);
+    height = Math.round(height);
+
+    const imageData = ctx.getImageData(x, y, width, height);
+    const buf8 = new Uint8ClampedArray(imageData.data.buffer);
+
+    const tmp = new Uint8ClampedArray(buf8.length);
+    for (let i = 0; i < buf8.length; i++) tmp[i] = buf8[i];
+
+    let index = 0;
+    const blur = this._currentColor[3] / 255.0 / 12;
+
+    for (let j = 0; j < height; j++) {
+      for (let i = 0; i < width; i++) {
+        const rgba = [0, 0, 0, 0, 0];
+
+        this.addBlur(tmp, index, 1.0 - blur * 4, rgba);
+        if (i > 0) this.addBlur(tmp, index - 4, blur, rgba);
+        if (i < width - 1) this.addBlur(tmp, index + 4, blur, rgba);
+        if (j > 0) this.addBlur(tmp, index - width * 4, blur, rgba);
+        if (j < height - 1) this.addBlur(tmp, index + width * 4, blur, rgba);
+
+        const w = rgba[4];
+        buf8[index + 0] = Math.round(rgba[0]);
+        buf8[index + 1] = Math.round(rgba[1]);
+        buf8[index + 2] = Math.round(rgba[2]);
+        // NEO quirk: blurRect ceils the alpha where setBlurPoint rounds it
+        buf8[index + 3] = Math.ceil((rgba[3] / w) * 255.0);
+
+        index += 4;
+      }
+    }
+    imageData.data.set(buf8);
+    ctx.putImageData(imageData, x, y);
+  }
+
+  copy(layer: number, x: number, y: number, width: number, height: number): void {
+    const imageData = this.canvasCtx[layer].getImageData(x, y, width, height);
+    const buf32 = new Uint32Array(imageData.data.buffer);
+    const temp = new Uint32Array(buf32.length);
+    for (let i = 0; i < buf32.length; i++) temp[i] = buf32[i];
+    this.temp = temp;
+  }
+
+  paste(
+    layer: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    dx: number,
+    dy: number
+  ): void {
+    const ctx = this.canvasCtx[layer];
+    const imageData = ctx.getImageData(x + dx, y + dy, width, height);
+    const buf32 = new Uint32Array(imageData.data.buffer);
+
+    if (this.temp) {
+      for (let i = 0; i < buf32.length; i++) buf32[i] = this.temp[i];
+      ctx.putImageData(imageData, x + dx, y + dy);
+    }
+    this.temp = null;
+  }
+
+  turn(layer: number, x: number, y: number, width: number, height: number): void {
+    const ctx = this.canvasCtx[layer];
+
+    // NEO quirk (upstream comment says so outright): the region is first
+    // smeared with its own top row, reproducing a bug in the turn tool.
+    let imageData = ctx.getImageData(x, y, width, height);
+    let buf32 = new Uint32Array(imageData.data.buffer);
+    const temp = new Uint32Array(buf32.length);
+
+    let index = 0;
+    for (let j = 0; j < height; j++) {
+      for (let i = 0; i < width; i++) {
+        temp[index] = buf32[index];
+        if (index >= width) {
+          buf32[index] = buf32[index % width];
+        }
+        index++;
+      }
+    }
+    ctx.putImageData(imageData, x, y);
+
+    // then rotated 90 degrees and pasted back
+    imageData = ctx.getImageData(x, y, height, width);
+    buf32 = new Uint32Array(imageData.data.buffer);
+
+    index = 0;
+    for (let j = height - 1; j >= 0; j--) {
+      for (let i = 0; i < width; i++) {
+        buf32[i * height + j] = temp[index++];
+      }
+    }
+    ctx.putImageData(imageData, x, y);
+  }
+
+  // ------------------------------------------------------------------ fill
+
+  private fillHorizontalLine(
+    buf32: Uint32Array,
+    x0: number,
+    x1: number,
+    y: number,
+    color: number
+  ): void {
+    let index = y * this.canvasWidth + x0;
+    for (let x = x0; x <= x1; x++) buf32[index++] = color;
+  }
+
+  private scanLine(
+    x0: number,
+    x1: number,
+    y: number,
+    stack: { x: number; y: number }[]
+  ): void {
+    for (let x = x0; x <= x1; x++) stack.push({ x, y });
+  }
+
+  doFloodFill(layer: number, x: number, y: number, fillColor: number): void {
+    x = Math.round(x);
+    y = Math.round(y);
+    const ctx = this.canvasCtx[layer];
+
+    if (x < 0 || x >= this.canvasWidth || y < 0 || y >= this.canvasHeight) return;
+
+    const imageData = ctx.getImageData(0, 0, this.canvasWidth, this.canvasHeight);
+    const buf32 = new Uint32Array(imageData.data.buffer);
+    const width = imageData.width;
+    const stack: { x: number; y: number }[] = [{ x, y }];
+
+    const baseColor = buf32[y * width + x];
+
+    if ((baseColor & 0xff000000) === 0 || baseColor !== fillColor) {
+      while (stack.length > 0) {
+        if (stack.length > 1000000) break;
+        const point = stack.pop();
+        if (!point) break;
+        const px = point.x;
+        const py = point.y;
+        let x0 = px;
+        let x1 = px;
+        if (buf32[py * width + px] === fillColor) continue;
+        if (buf32[py * width + px] !== baseColor) continue;
+
+        for (; 0 < x0; x0--) {
+          if (buf32[py * width + (x0 - 1)] !== baseColor) break;
+        }
+        for (; x1 < this.canvasWidth - 1; x1++) {
+          if (buf32[py * width + (x1 + 1)] !== baseColor) break;
+        }
+        this.fillHorizontalLine(buf32, x0, x1, py, fillColor);
+
+        if (py + 1 < this.canvasHeight) this.scanLine(x0, x1, py + 1, stack);
+        if (py - 1 >= 0) this.scanLine(x0, x1, py - 1, stack);
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  private rectFillMask(): boolean {
+    return true;
+  }
+
+  private rectMask(x: number, y: number, width: number, height: number): boolean {
+    const d = this._currentWidth;
+    return x < d || x > width - 1 - d || y < d || y > height - 1 - d;
+  }
+
+  private ellipseFillMask(x: number, y: number, width: number, height: number): boolean {
+    const cx = (width - 1) / 2.0;
+    const cy = (height - 1) / 2.0;
+    const nx = (x - cx) / (cx + 1);
+    const ny = (y - cy) / (cy + 1);
+    return nx * nx + ny * ny < 1;
+  }
+
+  private ellipseMask(x: number, y: number, width: number, height: number): boolean {
+    const d = this._currentWidth;
+    const cx = (width - 1) / 2.0;
+    const cy = (height - 1) / 2.0;
+
+    if (cx <= d || cy <= d) return this.ellipseFillMask(x, y, width, height);
+
+    const x2 = (x - cx) / (cx - d + 1);
+    const y2 = (y - cy) / (cy - d + 1);
+    const nx = (x - cx) / (cx + 1);
+    const ny = (y - cy) / (cy + 1);
+
+    return nx * nx + ny * ny < 1 && x2 * x2 + y2 * y2 >= 1;
+  }
+
+  private getMaskFunc(
+    type: number
+  ): ((x: number, y: number, width: number, height: number) => boolean) | null {
+    switch (type) {
+      case TOOLTYPE.RECT:
+        return this.rectMask;
+      case TOOLTYPE.RECTFILL:
+        return this.rectFillMask;
+      case TOOLTYPE.ELLIPSE:
+        return this.ellipseMask;
+      case TOOLTYPE.ELLIPSEFILL:
+        return this.ellipseFillMask;
+    }
+    return null;
+  }
+
+  doFill(
+    layer: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    type: number
+  ): void {
+    const ctx = this.canvasCtx[layer];
+    const maskFunc = this.getMaskFunc(type);
+
+    const imageData = ctx.getImageData(x, y, width, height);
+    const buf8 = new Uint8ClampedArray(imageData.data.buffer);
+
+    let index = 0;
+
+    const r1 = this._currentColor[0];
+    const g1 = this._currentColor[1];
+    const b1 = this._currentColor[2];
+    // NEO quirk: upstream passes Neo.ALPHATYPE_FILL, but that constant only
+    // exists as Neo.Painter.ALPHATYPE_FILL. The argument is undefined, so
+    // getAlpha falls through its switch and returns the raw alpha with no
+    // curve applied. Archived fills depend on that.
+    const a1 = this.getAlpha(undefined as unknown as number);
+
+    // NEO quirk: same var-hoisting as merge -- r/g/b persist between pixels.
+    let r: number | undefined;
+    let g: number | undefined;
+    let b: number | undefined;
+
+    for (let j = 0; j < height; j++) {
+      for (let i = 0; i < width; i++) {
+        if (maskFunc && maskFunc.call(this, i, j, width, height)) {
+          // NEO comment: add/reverse-add masking is deliberately not applied
+          if (
+            this._currentMaskType >= MASKTYPE.ADD ||
+            !this.isMasked(buf8, index)
+          ) {
+            const r0 = buf8[index + 0];
+            const g0 = buf8[index + 1];
+            const b0 = buf8[index + 2];
+            const a0 = buf8[index + 3] / 255.0;
+
+            let a = a0 + a1 - a0 * a1;
+
+            if (a > 0) {
+              const a1x = a1;
+              const ax = 1 + a0 * (1 - a1x);
+
+              r = (r1 + r0 * a0 * (1 - a1x)) / ax;
+              g = (g1 + g0 * a0 * (1 - a1x)) / ax;
+              b = (b1 + b0 * a0 * (1 - a1x)) / ax;
+
+              r = r1 > r0 ? Math.ceil(r) : Math.floor(r);
+              g = g1 > g0 ? Math.ceil(g) : Math.floor(g);
+              b = b1 > b0 ? Math.ceil(b) : Math.floor(b);
+            }
+
+            a = Math.ceil(a * 255);
+
+            buf8[index + 0] = r as number;
+            buf8[index + 1] = g as number;
+            buf8[index + 2] = b as number;
+            buf8[index + 3] = a;
+          }
+        }
+        index += 4;
+      }
+    }
+    imageData.data.set(buf8);
+    ctx.putImageData(imageData, x, y);
   }
 }
