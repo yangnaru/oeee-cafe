@@ -168,8 +168,8 @@ msgid "Loading"
 msgstr "Loading"
 
 #: src/viewer/ViewerApp.tsx:133
-msgid "Loading replay..."
-msgstr "Loading replay..."
+#~ msgid "Loading replay..."
+#~ msgstr "Loading replay..."
 
 #: src/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
@@ -180,8 +180,8 @@ msgid "LOADING..."
 msgstr "LOADING..."
 
 #: src/viewer/ViewerApp.tsx:45
-msgid "No replay to show."
-msgstr "No replay to show."
+#~ msgid "No replay to show."
+#~ msgstr "No replay to show."
 
 #: src/App.tsx:917
 #~ msgid "Oeee Cafe"
@@ -223,16 +223,16 @@ msgid "Participants"
 msgstr "Participants"
 
 #: src/viewer/ViewerApp.tsx:153
-msgid "Pause"
-msgstr "Pause"
+#~ msgid "Pause"
+#~ msgstr "Pause"
 
 #: src/components/SimplifiedToolbox.tsx:59
 msgid "Pen size"
 msgstr "Pen size"
 
 #: src/viewer/ViewerApp.tsx:153
-msgid "Play"
-msgstr "Play"
+#~ msgid "Play"
+#~ msgstr "Play"
 
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
@@ -261,8 +261,8 @@ msgid "Return to Lobby"
 msgstr "Return to Lobby"
 
 #: src/viewer/ViewerApp.tsx:160
-msgid "Rewind"
-msgstr "Rewind"
+#~ msgid "Rewind"
+#~ msgstr "Rewind"
 
 #: src/components/SessionExpiredModal.tsx:154
 msgid "Save as PNG"
@@ -291,8 +291,8 @@ msgid "Saving..."
 msgstr "Saving..."
 
 #: src/viewer/ViewerApp.tsx:143
-msgid "Seek"
-msgstr "Seek"
+#~ msgid "Seek"
+#~ msgstr "Seek"
 
 #: src/components/Chat.tsx:267
 msgid "Send"
@@ -331,18 +331,16 @@ msgstr "Shortcuts"
 #~ msgstr "Size"
 
 #: src/viewer/ViewerApp.tsx:167
-msgid "Skip to end"
-msgstr "Skip to end"
+#~ msgid "Skip to end"
+#~ msgstr "Skip to end"
 
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "Solid"
 
-#. placeholder {0}: state.position
-#. placeholder {1}: state.total
 #: src/viewer/ViewerApp.tsx:191
-msgid "step {0} of {1}"
-msgstr "step {0} of {1}"
+#~ msgid "step {0} of {1}"
+#~ msgstr "step {0} of {1}"
 
 #: src/components/SimplifiedToolbox.tsx:56
 msgid "Swap pens"
@@ -361,8 +359,8 @@ msgid "This collaborative session has ended due to inactivity. You can save your
 msgstr "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 
 #: src/viewer/ViewerApp.tsx:81
-msgid "This drawing's replay could not be loaded."
-msgstr "This drawing's replay could not be loaded."
+#~ msgid "This drawing's replay could not be loaded."
+#~ msgstr "This drawing's replay could not be loaded."
 
 #: src/components/SessionExpiredModal.tsx:45
 msgid "This session has already been saved. You can only download it as a PNG."

@@ -168,8 +168,8 @@ msgid "Loading"
 msgstr "読み込み中"
 
 #: src/viewer/ViewerApp.tsx:133
-msgid "Loading replay..."
-msgstr "リプレイを読み込み中..."
+#~ msgid "Loading replay..."
+#~ msgstr "リプレイを読み込み中..."
 
 #: src/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
@@ -180,8 +180,8 @@ msgid "LOADING..."
 msgstr "読み込み中..."
 
 #: src/viewer/ViewerApp.tsx:45
-msgid "No replay to show."
-msgstr "表示するリプレイがありません。"
+#~ msgid "No replay to show."
+#~ msgstr "表示するリプレイがありません。"
 
 #: src/App.tsx:917
 #~ msgid "Oeee Cafe"
@@ -223,16 +223,16 @@ msgid "Participants"
 msgstr "参加者"
 
 #: src/viewer/ViewerApp.tsx:153
-msgid "Pause"
-msgstr "一時停止"
+#~ msgid "Pause"
+#~ msgstr "一時停止"
 
 #: src/components/SimplifiedToolbox.tsx:59
 msgid "Pen size"
 msgstr "ペンサイズ"
 
 #: src/viewer/ViewerApp.tsx:153
-msgid "Play"
-msgstr "再生"
+#~ msgid "Play"
+#~ msgstr "再生"
 
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
@@ -261,8 +261,8 @@ msgid "Return to Lobby"
 msgstr "ロビーに戻る"
 
 #: src/viewer/ViewerApp.tsx:160
-msgid "Rewind"
-msgstr "最初から"
+#~ msgid "Rewind"
+#~ msgstr "最初から"
 
 #: src/components/SessionExpiredModal.tsx:154
 msgid "Save as PNG"
@@ -291,8 +291,8 @@ msgid "Saving..."
 msgstr "保存中..."
 
 #: src/viewer/ViewerApp.tsx:143
-msgid "Seek"
-msgstr "シーク"
+#~ msgid "Seek"
+#~ msgstr "シーク"
 
 #: src/components/Chat.tsx:267
 msgid "Send"
@@ -331,18 +331,16 @@ msgstr "ショートカット"
 #~ msgstr "サイズ"
 
 #: src/viewer/ViewerApp.tsx:167
-msgid "Skip to end"
-msgstr "最後まで"
+#~ msgid "Skip to end"
+#~ msgstr "最後まで"
 
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "ソリッド"
 
-#. placeholder {0}: state.position
-#. placeholder {1}: state.total
 #: src/viewer/ViewerApp.tsx:191
-msgid "step {0} of {1}"
-msgstr "{1}ステップ中{0}ステップ"
+#~ msgid "step {0} of {1}"
+#~ msgstr "{1}ステップ中{0}ステップ"
 
 #: src/components/SimplifiedToolbox.tsx:56
 msgid "Swap pens"
@@ -361,8 +359,8 @@ msgid "This collaborative session has ended due to inactivity. You can save your
 msgstr "非アクティブのためコラボレーションセッションが終了しました。退出前にローカルに PNG として保存できます。"
 
 #: src/viewer/ViewerApp.tsx:81
-msgid "This drawing's replay could not be loaded."
-msgstr "この絵のリプレイを読み込めませんでした。"
+#~ msgid "This drawing's replay could not be loaded."
+#~ msgstr "この絵のリプレイを読み込めませんでした。"
 
 #: src/components/SessionExpiredModal.tsx:45
 msgid "This session has already been saved. You can only download it as a PNG."

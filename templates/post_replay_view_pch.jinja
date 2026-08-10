@@ -18,12 +18,15 @@
         <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
       </p>
     {% endif %}
-    <iframe id="viewer"
-            title="{{ ftl_get_message('post-replay') }}"
-            src="/collaborate/?viewer=true&amp;width={{ post.image_width }}&amp;height={{ post.image_height }}&amp;replay={{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}"
-            width="{{ post.image_width|int + 24 }}"
-            height="{{ post.image_height|int + 120 }}"
-            style="border: 0; max-width: 100%"></iframe>
+    <div id="viewer"></div>
+    <script src="{{ '/static/viewer/oeee-replay.js' | cachebuster | safe }}"></script>
+    <script>
+      OeeeReplay.mount(document.getElementById("viewer"), {
+        replay: "{{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}",
+        width: {{ post.image_width|int }},
+        height: {{ post.image_height|int }},
+      });
+    </script>
     <p>
       {{ ftl_get_message("post-title") }}:
       <a href="/@{{ post.community_slug if post.community_slug else post.login_name }}/{{ post_id }}">

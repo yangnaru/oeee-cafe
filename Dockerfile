@@ -58,6 +58,7 @@ COPY --from=rust-builder /app/oeee-cafe ./
 #   docker exec oeee-cafe ./cli -c config/config.toml set-role <login_name> admin
 COPY --from=rust-builder /app/cli ./
 COPY --from=node-builder-neo-cucumber /app/neo-cucumber/dist/ ./neo-cucumber/dist/
+COPY --from=node-builder-neo-cucumber /app/neo-cucumber/dist-viewer/ ./neo-cucumber/dist-viewer/
 
 # Versions the static asset URLs the server hands out, so a deploy invalidates
 # browser and CDN caches and nothing else does. Read at runtime and declared in

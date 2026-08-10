@@ -3,15 +3,26 @@ import { NeoReplay } from "../neo/NeoReplay";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Frame = any[];
 
-/** Delay per step, in milliseconds. NEO offers a comparable spread. */
+/**
+ * Steps per second, not milliseconds per step. Driving playback from a rate is
+ * what lets the labels mean what they say: browsers clamp setTimeout to about
+ * 4ms, so one-step-per-timer tops out near 250 steps/s and the faster settings
+ * would all collapse into each other.
+ *
+ * ×1 is 800 steps/s, which plays the median archived drawing (7,575 steps) in
+ * about ten seconds.
+ */
 export const SPEEDS = [
-  { label: "×4", delay: 0 },
-  { label: "×2", delay: 4 },
-  { label: "×1", delay: 12 },
-  { label: "×½", delay: 30 },
+  { label: "×4", rate: 3200 },
+  { label: "×2", rate: 1600 },
+  { label: "×1", rate: 800 },
+  { label: "×½", rate: 400 },
 ] as const;
 
 export const DEFAULT_SPEED_INDEX = 2;
+
+/** Ignore gaps longer than this, so returning to a background tab is not a jump. */
+const MAX_FRAME_SECONDS = 0.1;
 
 export interface PlayerState {
   position: number;
@@ -35,7 +46,9 @@ export class ReplayPlayer {
   private position = 0;
   private playing = false;
   private timer: number | null = null;
-  private delay: number = SPEEDS[DEFAULT_SPEED_INDEX].delay;
+  private rate: number = SPEEDS[DEFAULT_SPEED_INDEX].rate;
+  private carry = 0;
+  private lastFrame = 0;
   private disposed = false;
 
   private readonly items: Frame[];
@@ -102,31 +115,39 @@ export class ReplayPlayer {
   }
 
   private schedule(): void {
-    if (this.timer !== null) window.clearTimeout(this.timer);
-    this.timer = window.setTimeout(() => void this.tick(), this.delay);
+    if (this.timer !== null) cancelAnimationFrame(this.timer);
+    this.lastFrame = performance.now();
+    this.timer = requestAnimationFrame((now) => void this.tick(now));
   }
 
-  private async tick(): Promise<void> {
+  private async tick(now: number): Promise<void> {
     if (!this.playing || this.disposed) return;
 
-    // At the fastest setting a single timer callback would crawl, so batch
-    // until a frame's worth of time has gone by.
-    const started = performance.now();
+    const elapsed = Math.min((now - this.lastFrame) / 1000, MAX_FRAME_SECONDS);
+    this.lastFrame = now;
+
+    // Carry the fraction of a step across frames so the rate holds regardless
+    // of how often the browser calls us back.
+    this.carry += elapsed * this.rate;
+    const due = Math.floor(this.carry);
+    this.carry -= due;
+
     let drew = false;
-    do {
+    for (let i = 0; i < due; i++) {
       if (!(await this.advance())) break;
       drew = true;
-    } while (this.delay === 0 && performance.now() - started < 12);
+    }
 
-    this.paint();
+    if (drew) this.paint();
 
-    if (!drew || this.position >= this.total) {
+    if (this.position >= this.total) {
       this.playing = false;
       this.notify();
       return;
     }
-    this.notify();
-    this.schedule();
+    if (drew) this.notify();
+
+    this.timer = requestAnimationFrame((next) => void this.tick(next));
   }
 
   play(): void {
@@ -147,15 +168,17 @@ export class ReplayPlayer {
   pause(): void {
     this.playing = false;
     if (this.timer !== null) {
-      window.clearTimeout(this.timer);
+      cancelAnimationFrame(this.timer);
       this.timer = null;
     }
+    this.carry = 0;
     this.notify();
   }
 
-  setSpeed(delay: number): void {
-    this.delay = delay;
-    if (this.playing) this.schedule();
+  /** Steps per second. */
+  setSpeed(rate: number): void {
+    this.rate = rate;
+    this.carry = 0;
   }
 
   /** Jumps to a step, replaying from the start when moving backwards. */
@@ -187,6 +210,6 @@ export class ReplayPlayer {
   dispose(): void {
     this.disposed = true;
     this.playing = false;
-    if (this.timer !== null) window.clearTimeout(this.timer);
+    if (this.timer !== null) cancelAnimationFrame(this.timer);
   }
 }

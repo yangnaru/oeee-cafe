@@ -2,7 +2,6 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import OfflineApp from "./OfflineApp.tsx";
-import ViewerApp from "./viewer/ViewerApp.tsx";
 import { I18nProvider } from "@lingui/react";
 import { i18n } from "@lingui/core";
 import * as Sentry from "@sentry/react";
@@ -35,19 +34,10 @@ const isOfflineMode =
   window.location.pathname.includes('/draw') ||
   window.location.search.includes('offline=true');
 
-// Replay playback, embedded by the post replay page
-const isViewerMode = new URLSearchParams(window.location.search).get("viewer") === "true";
-
-const chooseApp = () => {
-  if (isViewerMode) return <ViewerApp />;
-  if (isOfflineMode) return <OfflineApp />;
-  return <App />;
-};
-
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <I18nProvider i18n={i18n} defaultComponent={DefaultI18n}>
-      {chooseApp()}
+      {isOfflineMode ? <OfflineApp /> : <App />}
     </I18nProvider>
   </StrictMode>
 );

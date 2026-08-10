@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && vite build --config vite.viewer.config.ts",
     "lint": "eslint .",
     "test": "vitest run",
     "preview": "vite preview",
     "extract": "lingui extract",
     "compile": "lingui compile --typescript",
     "test:node": "vitest run --project node",
-    "test:browser": "vitest run --project browser"
+    "test:browser": "vitest run --project browser",
+    "build:viewer": "vite build --config vite.viewer.config.ts"
   },
   "dependencies": {
     "@lingui/core": "^5.4.1",

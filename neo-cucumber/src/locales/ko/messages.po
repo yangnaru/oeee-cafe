@@ -168,8 +168,8 @@ msgid "Loading"
 msgstr "로딩 중"
 
 #: src/viewer/ViewerApp.tsx:133
-msgid "Loading replay..."
-msgstr "리플레이 불러오는 중..."
+#~ msgid "Loading replay..."
+#~ msgstr "리플레이 불러오는 중..."
 
 #: src/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
@@ -180,8 +180,8 @@ msgid "LOADING..."
 msgstr "로딩 중..."
 
 #: src/viewer/ViewerApp.tsx:45
-msgid "No replay to show."
-msgstr "표시할 리플레이가 없습니다."
+#~ msgid "No replay to show."
+#~ msgstr "표시할 리플레이가 없습니다."
 
 #: src/App.tsx:917
 #~ msgid "Oeee Cafe"
@@ -223,16 +223,16 @@ msgid "Participants"
 msgstr "참여자"
 
 #: src/viewer/ViewerApp.tsx:153
-msgid "Pause"
-msgstr "일시정지"
+#~ msgid "Pause"
+#~ msgstr "일시정지"
 
 #: src/components/SimplifiedToolbox.tsx:59
 msgid "Pen size"
 msgstr "펜 크기"
 
 #: src/viewer/ViewerApp.tsx:153
-msgid "Play"
-msgstr "재생"
+#~ msgid "Play"
+#~ msgstr "재생"
 
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
@@ -261,8 +261,8 @@ msgid "Return to Lobby"
 msgstr "로비로 돌아가기"
 
 #: src/viewer/ViewerApp.tsx:160
-msgid "Rewind"
-msgstr "처음으로"
+#~ msgid "Rewind"
+#~ msgstr "처음으로"
 
 #: src/components/SessionExpiredModal.tsx:154
 msgid "Save as PNG"
@@ -291,8 +291,8 @@ msgid "Saving..."
 msgstr "저장 중..."
 
 #: src/viewer/ViewerApp.tsx:143
-msgid "Seek"
-msgstr "탐색"
+#~ msgid "Seek"
+#~ msgstr "탐색"
 
 #: src/components/Chat.tsx:267
 msgid "Send"
@@ -331,18 +331,16 @@ msgstr "단축키"
 #~ msgstr "크기"
 
 #: src/viewer/ViewerApp.tsx:167
-msgid "Skip to end"
-msgstr "끝으로"
+#~ msgid "Skip to end"
+#~ msgstr "끝으로"
 
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "실선"
 
-#. placeholder {0}: state.position
-#. placeholder {1}: state.total
 #: src/viewer/ViewerApp.tsx:191
-msgid "step {0} of {1}"
-msgstr "{1}단계 중 {0}단계"
+#~ msgid "step {0} of {1}"
+#~ msgstr "{1}단계 중 {0}단계"
 
 #: src/components/SimplifiedToolbox.tsx:56
 msgid "Swap pens"
@@ -361,8 +359,8 @@ msgid "This collaborative session has ended due to inactivity. You can save your
 msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 떠나기 전에 작업을 PNG로 로컬에 저장할 수 있습니다."
 
 #: src/viewer/ViewerApp.tsx:81
-msgid "This drawing's replay could not be loaded."
-msgstr "이 그림의 리플레이를 불러올 수 없습니다."
+#~ msgid "This drawing's replay could not be loaded."
+#~ msgstr "이 그림의 리플레이를 불러올 수 없습니다."
 
 #: src/components/SessionExpiredModal.tsx:45
 msgid "This session has already been saved. You can only download it as a PNG."

@@ -2706,3 +2706,50 @@ legend {
 .notification-others {
   color: var(--main-text-muted-color);
 }
+
+/* Replay viewer (neo-cucumber/src/viewer/embed.ts) */
+.oeee-replay {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.5em;
+  max-width: 100%;
+}
+.oeee-replay-canvas {
+  display: block;
+  border: 1px solid var(--main-border-color, #888);
+  background: #fff;
+  max-width: 100%;
+  image-rendering: pixelated;
+}
+.oeee-replay-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+}
+.oeee-replay-seek {
+  width: 100%;
+  cursor: pointer;
+}
+.oeee-replay-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  flex-wrap: wrap;
+}
+.oeee-replay-speeds {
+  display: flex;
+  gap: 0.2em;
+  margin-left: auto;
+}
+.oeee-replay-button,
+.oeee-replay-speed {
+  padding: 0.2em 0.6em;
+  cursor: pointer;
+}
+.oeee-replay-speed[aria-pressed="true"] {
+  font-weight: bold;
+  text-decoration: underline;
+}
+.oeee-replay-status {
+  margin: 0;
+}

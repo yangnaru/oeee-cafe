@@ -168,8 +168,8 @@ msgid "Loading"
 msgstr "加载中"
 
 #: src/viewer/ViewerApp.tsx:133
-msgid "Loading replay..."
-msgstr "正在加载回放..."
+#~ msgid "Loading replay..."
+#~ msgstr "正在加载回放..."
 
 #: src/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
@@ -180,8 +180,8 @@ msgid "LOADING..."
 msgstr "加载中..."
 
 #: src/viewer/ViewerApp.tsx:45
-msgid "No replay to show."
-msgstr "没有可显示的回放。"
+#~ msgid "No replay to show."
+#~ msgstr "没有可显示的回放。"
 
 #: src/App.tsx:917
 #~ msgid "Oeee Cafe"
@@ -223,16 +223,16 @@ msgid "Participants"
 msgstr "参与者"
 
 #: src/viewer/ViewerApp.tsx:153
-msgid "Pause"
-msgstr "暂停"
+#~ msgid "Pause"
+#~ msgstr "暂停"
 
 #: src/components/SimplifiedToolbox.tsx:59
 msgid "Pen size"
 msgstr "画笔大小"
 
 #: src/viewer/ViewerApp.tsx:153
-msgid "Play"
-msgstr "播放"
+#~ msgid "Play"
+#~ msgstr "播放"
 
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
@@ -261,8 +261,8 @@ msgid "Return to Lobby"
 msgstr "返回大厅"
 
 #: src/viewer/ViewerApp.tsx:160
-msgid "Rewind"
-msgstr "重新开始"
+#~ msgid "Rewind"
+#~ msgstr "重新开始"
 
 #: src/components/SessionExpiredModal.tsx:154
 msgid "Save as PNG"
@@ -291,8 +291,8 @@ msgid "Saving..."
 msgstr "保存中..."
 
 #: src/viewer/ViewerApp.tsx:143
-msgid "Seek"
-msgstr "跳转"
+#~ msgid "Seek"
+#~ msgstr "跳转"
 
 #: src/components/Chat.tsx:267
 msgid "Send"
@@ -331,18 +331,16 @@ msgstr "快捷键"
 #~ msgstr "大小"
 
 #: src/viewer/ViewerApp.tsx:167
-msgid "Skip to end"
-msgstr "跳到结尾"
+#~ msgid "Skip to end"
+#~ msgstr "跳到结尾"
 
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "实心"
 
-#. placeholder {0}: state.position
-#. placeholder {1}: state.total
 #: src/viewer/ViewerApp.tsx:191
-msgid "step {0} of {1}"
-msgstr "第 {0} 步，共 {1} 步"
+#~ msgid "step {0} of {1}"
+#~ msgstr "第 {0} 步，共 {1} 步"
 
 #: src/components/SimplifiedToolbox.tsx:56
 msgid "Swap pens"
@@ -361,8 +359,8 @@ msgid "This collaborative session has ended due to inactivity. You can save your
 msgstr "由于无活动，此协作会话已结束。您可以在离开前将您的作品保存为 PNG。"
 
 #: src/viewer/ViewerApp.tsx:81
-msgid "This drawing's replay could not be loaded."
-msgstr "无法加载这幅画的回放。"
+#~ msgid "This drawing's replay could not be loaded."
+#~ msgstr "无法加载这幅画的回放。"
 
 #: src/components/SessionExpiredModal.tsx:45
 msgid "This session has already been saved. You can only download it as a PNG."

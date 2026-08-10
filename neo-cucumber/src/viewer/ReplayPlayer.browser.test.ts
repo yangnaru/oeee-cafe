@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ReplayPlayer } from "./ReplayPlayer";
+import { DEFAULT_SPEED_INDEX, ReplayPlayer, SPEEDS } from "./ReplayPlayer";
 import { NeoReplay } from "../neo/NeoReplay";
 import { describeDifference, firstPixelDifference } from "../test/neoHarness";
 
@@ -120,13 +120,40 @@ describe("ReplayPlayer", () => {
     expect(player.total).toBe(10);
   });
 
+  it("labels its speeds honestly", () => {
+    // The ×4 setting was once a batching branch rather than a faster rate, so
+    // it ran an order of magnitude past its label. Playback is driven from
+    // steps per second now, and the multipliers have to stay exact.
+    const base = SPEEDS[DEFAULT_SPEED_INDEX].rate;
+    expect(SPEEDS.map((s) => s.rate / base)).toEqual([4, 2, 1, 0.5]);
+    expect(SPEEDS[DEFAULT_SPEED_INDEX].label).toBe("×1");
+  });
+
+  it("advances roughly in proportion to the rate", async () => {
+    const run = async (rate: number) => {
+      const player = new ReplayPlayer(items, W, H, displayContext(), () => {});
+      player.setSpeed(rate);
+      player.play();
+      await new Promise((r) => setTimeout(r, 120));
+      const reached = player.getState().position;
+      player.dispose();
+      return reached;
+    };
+
+    // Generous bounds: this is real browser timing, not a fake clock. The
+    // point is that a faster setting is actually faster, which is what broke.
+    const slow = await run(40);
+    const fast = await run(400);
+    expect(fast).toBeGreaterThan(slow);
+  });
+
   it("plays to completion on its own", async () => {
     const ctx = displayContext();
     let finished = false;
     const player = new ReplayPlayer(items, W, H, ctx, (s) => {
       if (s.finished && !s.playing) finished = true;
     });
-    player.setSpeed(0);
+    player.setSpeed(100000); // effectively immediate
     player.play();
 
     const deadline = Date.now() + 5000;
