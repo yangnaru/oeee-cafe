@@ -20,9 +20,9 @@
     {% endif %}
     <iframe id="viewer"
             title="{{ ftl_get_message('post-replay') }}"
-            src="/collaborate/?viewer=true&amp;width={{ post.image_width }}&amp;height={{ post.image_height }}&amp;replay={{ r2_public_endpoint_url }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}"
-            width="{{ post.image_width + 24 }}"
-            height="{{ post.image_height + 120 }}"
+            src="/collaborate/?viewer=true&amp;width={{ post.image_width }}&amp;height={{ post.image_height }}&amp;replay={{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}"
+            width="{{ post.image_width|int + 24 }}"
+            height="{{ post.image_height|int + 120 }}"
             style="border: 0; max-width: 100%"></iframe>
     <p>
       {{ ftl_get_message("post-title") }}:

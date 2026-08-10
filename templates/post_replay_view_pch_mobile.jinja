@@ -24,6 +24,6 @@
 <body>
 <iframe id="viewer"
         title="Replay"
-        src="/collaborate/?viewer=true&amp;width={{ post.image_width }}&amp;height={{ post.image_height }}&amp;replay={{ r2_public_endpoint_url }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}"></iframe>
+        src="/collaborate/?viewer=true&amp;width={{ post.image_width }}&amp;height={{ post.image_height }}&amp;replay={{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}"></iframe>
 </body>
 </html>
