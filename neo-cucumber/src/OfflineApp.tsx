@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } fr
 import "./App.css";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ToolboxPanel } from "./components/ToolboxPanel";
+import { ALL_TOOLS } from "./constants/drawing";
 import { SimplifiedToolbox } from "./components/SimplifiedToolbox";
 import { useOfflineDrawing } from "./hooks/useOfflineDrawing";
 import { useDrawingState } from "./hooks/useDrawingState";
@@ -533,6 +534,9 @@ function OfflineApp() {
               />
             ) : (
               <ToolboxPanel
+                // An offline drawing records lineType straight into the .pch,
+                // which already has codes for every one of these.
+                tools={ALL_TOOLS}
                 drawingState={drawingState}
                 historyState={historyState}
                 paletteColors={paletteColors}

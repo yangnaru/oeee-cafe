@@ -361,3 +361,96 @@ describe("replay round trip through canonical NEO", () => {
     ).toBe(-1);
   });
 });
+
+describe("brush types the engine gained from the unified kernels", () => {
+  // The .pch format carries lineType directly, so an offline drawing can use
+  // every type NEO has without touching the collaborative wire format.
+  const TYPES: [string, number][] = [
+    ["solid", LINETYPE.PEN],
+    ["eraser", LINETYPE.ERASER],
+    ["brush", LINETYPE.BRUSH],
+    ["halftone", LINETYPE.TONE],
+    ["dodge", LINETYPE.DODGE],
+    ["burn", LINETYPE.BURN],
+    ["blur", LINETYPE.BLUR],
+  ];
+
+  for (const [brushType, lineType] of TYPES) {
+    it(`records ${brushType} as line type ${lineType} and replays it`, async () => {
+      const engine = new DrawingEngine(W, H);
+      const cp = createCanonicalPainter(W, H);
+
+      // Something to act on: dodge, burn, blur and the eraser need pixels
+      const underlay: [number, number][] = [
+        [4, 30],
+        [58, 30],
+      ];
+      for (const target of ["ours", "neo"] as const) {
+        const points = underlay;
+        if (target === "ours") {
+          engine.drawLine(
+            engine.layers.background, points[0][0], points[0][1],
+            points[0][0], points[0][1], 20, "solid", 120, 160, 200, 255
+          );
+          engine.drawLine(
+            engine.layers.background, points[1][0], points[1][1],
+            points[0][0], points[0][1], 20, "solid", 120, 160, 200, 255
+          );
+          engine.setStrokeState(null);
+        } else {
+          cp.painter._currentColor = [120, 160, 200, 255];
+          cp.painter._currentWidth = 20;
+          cp.painter.drawLine(cp.contexts[0], points[0][0], points[0][1], points[0][0], points[0][1], LINETYPE.PEN);
+          cp.painter.drawLine(cp.contexts[0], points[1][0], points[1][1], points[0][0], points[0][1], LINETYPE.PEN);
+          cp.painter.prevLine = null;
+        }
+      }
+
+      const stroke: [number, number][] = [
+        [12, 14],
+        [32, 30],
+        [50, 44],
+      ];
+
+      // Ours, through the painter's public entry point
+      for (let i = 0; i < stroke.length; i++) {
+        const [x, y] = stroke[i];
+        const [px, py] = i === 0 ? stroke[0] : stroke[i - 1];
+        engine.drawLine(
+          engine.layers.background, x, y, px, py, 9, brushType, 20, 20, 20, 255
+        );
+      }
+      engine.setStrokeState(null);
+
+      // Canonical NEO, driven by the line type the recorder would write
+      cp.painter._currentColor = [20, 20, 20, 255];
+      cp.painter._currentWidth = 9;
+      for (let i = 0; i < stroke.length; i++) {
+        const [x, y] = stroke[i];
+        const [px, py] = i === 0 ? stroke[0] : stroke[i - 1];
+        cp.painter.drawLine(cp.contexts[0], x, y, px, py, lineType);
+      }
+      cp.painter.prevLine = null;
+
+      // Canvas getImageData premultiplies, so a fully erased pixel loses its
+      // colour there but keeps it in a buffer. Unobservable either way.
+      const zeroTransparent = (px: Uint8ClampedArray) => {
+        const out = new Uint8ClampedArray(px);
+        for (let i = 0; i < out.length; i += 4) {
+          if (out[i + 3] === 0) {
+            out[i] = 0;
+            out[i + 1] = 0;
+            out[i + 2] = 0;
+          }
+        }
+        return out;
+      };
+      const ours = zeroTransparent(new Uint8ClampedArray(engine.layers.background));
+      const neo = zeroTransparent(readPixels(cp.contexts[0], W, H));
+      expect(
+        firstPixelDifference(ours, neo),
+        `${brushType}: ${describeDifference(ours, neo, W)}`
+      ).toBe(-1);
+    });
+  }
+});

@@ -1,3 +1,5 @@
+import type { BrushType } from "../types/collaboration";
+
 // Brush size bounds, shared by the size slider and the [ / ] shortcuts
 export const MIN_BRUSH_SIZE = 1;
 export const MAX_BRUSH_SIZE = 30;
@@ -85,3 +87,24 @@ export const initializeTones = (): { [key: string]: Uint8Array } => {
   
   return tone;
 };
+/** Everything the engine rasterises, in NEO's toolbar order. */
+export const ALL_TOOLS: readonly BrushType[] = [
+  "solid",
+  "brush",
+  "halftone",
+  "eraser",
+  "dodge",
+  "burn",
+  "blur",
+  "fill",
+  "pan",
+];
+
+/** What a collaborative session can carry today. */
+export const SHARED_TOOLS: readonly BrushType[] = [
+  "solid",
+  "halftone",
+  "eraser",
+  "fill",
+  "pan",
+];

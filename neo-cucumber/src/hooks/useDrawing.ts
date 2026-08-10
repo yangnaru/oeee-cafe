@@ -8,6 +8,11 @@ import {
   encodeUndoPoint,
 } from "../utils/binaryProtocol";
 import { type CanvasHistory } from "../utils/canvasHistory";
+import {
+  isWireBrushType,
+  type BrushType,
+  type WireBrushType,
+} from "../types/collaboration";
 
 // Stroke segments accumulate into one STROKE message and flush on this
 // cadence (or on pointer-up / when the batch grows large); this trades a
@@ -154,7 +159,7 @@ export const useDrawing = (
       x: number,
       y: number,
       brushSize: number,
-      brushType: "solid" | "halftone" | "eraser" | "fill" | "pan",
+      brushType: BrushType,
       r: number,
       g: number,
       b: number,
@@ -163,8 +168,24 @@ export const useDrawing = (
       const history = canvasHistoryRef?.current;
       if (!history || localIdRef?.current == null) return;
 
-      const validBrushType: "solid" | "halftone" | "eraser" =
-        brushType === "fill" || brushType === "pan" ? "solid" : brushType;
+      // fill and pan are not stroke tools -- fill goes as its own message and
+      // pan draws nothing -- so folding them into solid costs nothing. The
+      // engine can also rasterise brush, dodge, burn and blur, but the wire
+      // format has no code for them, and coercing one would show everyone else
+      // a different tool than the one in use. The shared toolbox therefore does
+      // not offer them; this is the backstop, not the policy.
+      if (
+        !isWireBrushType(brushType) &&
+        brushType !== "fill" &&
+        brushType !== "pan"
+      ) {
+        console.warn(
+          `brush type "${brushType}" cannot be sent to a shared session yet`
+        );
+      }
+      const validBrushType: WireBrushType = isWireBrushType(brushType)
+        ? brushType
+        : "solid";
 
       openStroke();
       const pending = history.addLocalSegment(
@@ -189,7 +210,7 @@ export const useDrawing = (
         toX: number,
         toY: number,
         brushSize: number,
-        brushType: "solid" | "halftone" | "eraser" | "fill" | "pan",
+        brushType: BrushType,
         r: number,
         g: number,
         b: number,
@@ -206,7 +227,7 @@ export const useDrawing = (
         x: number,
         y: number,
         brushSize: number,
-        brushType: "solid" | "halftone" | "eraser" | "fill" | "pan",
+        brushType: BrushType,
         r: number,
         g: number,
         b: number,

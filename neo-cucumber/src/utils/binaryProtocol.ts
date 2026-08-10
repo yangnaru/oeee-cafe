@@ -1,3 +1,4 @@
+import type { WireBrushType } from "../types/collaboration";
 /**
  * Binary WebSocket protocol for efficient collaborative drawing
  *
@@ -218,7 +219,7 @@ export function encodeStroke(
   userId: number,
   layer: "foreground" | "background",
   brushSize: number,
-  brushType: "solid" | "halftone" | "eraser",
+  brushType: WireBrushType,
   r: number,
   g: number,
   b: number,
@@ -419,7 +420,7 @@ export interface StrokeMessage {
   userId: number;
   layer: "foreground" | "background";
   brushSize: number;
-  brushType: "solid" | "halftone" | "eraser";
+  brushType: WireBrushType;
   color: { r: number; g: number; b: number; a: number };
   points: { x: number; y: number }[];
 }

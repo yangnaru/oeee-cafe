@@ -16,6 +16,9 @@ export const LINETYPE = {
   ERASER: 2,
   BRUSH: 3,
   TONE: 4,
+  DODGE: 5,
+  BURN: 6,
+  BLUR: 7,
 } as const;
 
 export const LAYER = { BACKGROUND: 0, FOREGROUND: 1 } as const;

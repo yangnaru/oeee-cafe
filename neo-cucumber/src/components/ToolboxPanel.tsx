@@ -5,7 +5,7 @@ import { ToolSelector } from "./ToolSelector";
 import { ColorPalette } from "./ColorPalette";
 import { CustomSlider } from "./CustomSlider";
 
-type BrushType = "solid" | "halftone" | "eraser" | "fill" | "pan";
+import type { BrushType } from "../types/collaboration";
 type LayerType = "foreground" | "background";
 
 interface DrawingState {
@@ -34,6 +34,8 @@ interface ToolboxPanelProps {
   selectedPaletteIndex: number;
   currentZoom: number;
   isOwner: boolean;
+  /** Tools to offer; defaults to the shared-session subset. */
+  tools?: readonly BrushType[];
   isSaving: boolean;
   sessionEnded: boolean;
   onUndo: () => void;
@@ -57,6 +59,7 @@ export const ToolboxPanel = ({
   selectedPaletteIndex,
   currentZoom,
   isOwner,
+  tools,
   isSaving,
   sessionEnded,
   onUndo,
@@ -264,6 +267,7 @@ export const ToolboxPanel = ({
 
           {/* Tool selection */}
           <ToolSelector
+            tools={tools}
             brushType={drawingState.brushType}
             onUpdateBrushType={onUpdateBrushType}
           />

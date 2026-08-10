@@ -1,22 +1,37 @@
 import { Icon } from "@iconify/react";
 
-type BrushType = "solid" | "halftone" | "eraser" | "fill" | "pan";
+import type { BrushType } from "../types/collaboration";
+import { SHARED_TOOLS } from "../constants/drawing";
 
 interface ToolSelectorProps {
   brushType: BrushType;
   onUpdateBrushType: (type: BrushType) => void;
+  /**
+   * Which tools to offer. A shared session is limited to what the wire format
+   * can carry, so it passes a smaller set than an offline drawing does.
+   */
+  tools?: readonly BrushType[];
 }
 
 export const ToolSelector = ({
   brushType,
   onUpdateBrushType,
+  tools = SHARED_TOOLS,
 }: ToolSelectorProps) => {
   const getToolIcon = (toolType: BrushType): string => {
     switch (toolType) {
       case "solid":
         return "material-symbols:brush";
+      case "brush":
+        return "material-symbols:water-drop";
       case "halftone":
         return "material-symbols:shower";
+      case "dodge":
+        return "material-symbols:light-mode";
+      case "burn":
+        return "material-symbols:dark-mode";
+      case "blur":
+        return "material-symbols:blur-on";
       case "eraser":
         return "material-symbols:ink-eraser";
       case "fill":
@@ -30,7 +45,7 @@ export const ToolSelector = ({
 
   return (
     <div className="flex flex-col gap-1">
-      {(["solid", "halftone", "eraser", "fill", "pan"] as BrushType[]).map(
+      {tools.map(
         (type) => (
           <label key={type} className="relative cursor-pointer">
             <input

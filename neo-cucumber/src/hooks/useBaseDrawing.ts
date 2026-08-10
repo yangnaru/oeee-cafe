@@ -1,12 +1,13 @@
 import { useEffect, useRef, useCallback } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { useCanvasHistory } from "./useCanvasHistory";
+import type { BrushType } from "../types/collaboration";
 
 export interface DrawingState {
   brushSize: number;
   opacity: number;
   color: string;
-  brushType: "solid" | "halftone" | "eraser" | "fill" | "pan";
+  brushType: BrushType;
   layerType: "foreground" | "background";
   fgVisible: boolean;
   bgVisible: boolean;
@@ -21,7 +22,7 @@ interface DrawingEventCallbacks {
     toX: number,
     toY: number,
     brushSize: number,
-    brushType: "solid" | "halftone" | "eraser" | "fill" | "pan",
+    brushType: BrushType,
     r: number,
     g: number,
     b: number,
@@ -31,7 +32,7 @@ interface DrawingEventCallbacks {
     x: number,
     y: number,
     brushSize: number,
-    brushType: "solid" | "halftone" | "eraser" | "fill" | "pan",
+    brushType: BrushType,
     r: number,
     g: number,
     b: number,

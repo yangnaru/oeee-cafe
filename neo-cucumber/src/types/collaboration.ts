@@ -1,8 +1,31 @@
-// The engine rasterises all seven of NEO's line types; this union is what the
-// UI and the collaborative wire format currently carry. Widening it means
-// assigning new protocol codes, which older clients would not understand, so
-// it happens with the tool work rather than on its own.
-export type BrushType = "solid" | "halftone" | "eraser" | "fill" | "pan";
+/** Everything the engine can rasterise, plus the two non-drawing tools. */
+export type BrushType =
+  | "solid"
+  | "brush"
+  | "halftone"
+  | "eraser"
+  | "dodge"
+  | "burn"
+  | "blur"
+  | "fill"
+  | "pan";
+
+/**
+ * The subset the collaborative wire format can carry: brushType is one byte
+ * with three defined values. Until that is versioned, a shared session can
+ * only offer these, so the boundary is a type rather than a convention.
+ */
+export type WireBrushType = "solid" | "halftone" | "eraser";
+
+export const WIRE_BRUSH_TYPES: readonly WireBrushType[] = [
+  "solid",
+  "halftone",
+  "eraser",
+];
+
+export function isWireBrushType(type: string): type is WireBrushType {
+  return (WIRE_BRUSH_TYPES as readonly string[]).includes(type);
+}
 export type LayerType = "foreground" | "background";
 
 export interface DrawingState {

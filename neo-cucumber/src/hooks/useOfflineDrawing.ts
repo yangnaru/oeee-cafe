@@ -1,6 +1,7 @@
 import { useRef, useCallback } from "react";
 import { useBaseDrawing, type DrawingState } from "./useBaseDrawing";
 import { ActionRecorder } from "../utils/ActionRecorder";
+import type { BrushType } from "../types/collaboration";
 
 // Constants matching Neo's LINETYPE values
 const LINETYPE_PEN = 1;
@@ -30,7 +31,7 @@ export const useOfflineDrawing = (
 
   // Helper to map brushType to lineType
   const getLineType = (
-    brushType: "solid" | "halftone" | "eraser" | "fill" | "pan"
+    brushType: BrushType
   ): number => {
     switch (brushType) {
       case "eraser":
@@ -60,7 +61,7 @@ export const useOfflineDrawing = (
         toX: number,
         toY: number,
         brushSize: number,
-        brushType: "solid" | "halftone" | "eraser" | "fill" | "pan",
+        brushType: BrushType,
         r: number,
         g: number,
         b: number,
@@ -126,7 +127,7 @@ export const useOfflineDrawing = (
         x: number,
         y: number,
         brushSize: number,
-        brushType: "solid" | "halftone" | "eraser" | "fill" | "pan",
+        brushType: BrushType,
         r: number,
         g: number,
         b: number,
