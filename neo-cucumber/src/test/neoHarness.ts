@@ -167,44 +167,128 @@ export async function decodePCH(blob: Blob): Promise<{
 export function replayWithNeo(cp: CanonicalPainter, items: Any[][]): void {
   const p = cp.painter;
 
+  const getCurrent = (item: Any[]) => {
+    p._currentColor = [item[2], item[3], item[4], item[5]];
+    p._currentMask = [item[6], item[7], item[8]];
+    p._currentWidth = item[9];
+    p._currentMaskType = item[10];
+  };
+
   for (const item of items) {
-    switch (item[0]) {
+    const verb = item[0];
+    // NEO's play() routes anything it has no handler for -- including frames
+    // whose head is not a string, which do occur in the archive -- to dummy.
+    if (typeof verb !== "string") continue;
+
+    switch (verb) {
       case "freeHand": {
-        const layer = item[1];
-        const ctx = cp.contexts[layer];
-
-        // getCurrent(): color, mask, width, maskType
-        p._currentColor = [item[2], item[3], item[4], item[5]];
-        p._currentMask = [item[6], item[7], item[8]];
-        p._currentWidth = item[9];
-        p._currentMaskType = item[10];
-
+        getCurrent(item);
         const lineType = item[11];
         let x0 = item[12];
         let y0 = item[13];
-
         for (let i = 14; i + 1 < item.length; i += 2) {
           const x1 = x0;
           const y1 = y0;
           x0 = item[i + 0];
           y0 = item[i + 1];
-          p.drawLine(ctx, x0, y0, x1, y1, lineType);
+          p.drawLine(cp.contexts[item[1]], x0, y0, x1, y1, lineType);
         }
         p.prevLine = null;
         break;
       }
 
-      case "floodFill": {
-        p.doFloodFill(item[1], item[2], item[3], item[4]);
+      case "line": {
+        getCurrent(item);
+        const x0 = item[12];
+        const y0 = item[13];
+        const x1 = item[14] === null ? x0 : item[14];
+        const y1 = item[15] === null ? y0 : item[15];
+        p.drawLine(cp.contexts[item[1]], x0, y0, x1, y1, item[11]);
         break;
       }
 
+      case "bezier":
+        getCurrent(item);
+        p.drawBezier(
+          cp.contexts[item[1]],
+          item[12], item[13], item[14], item[15],
+          item[16], item[17], item[18], item[19],
+          item[11],
+          true
+        );
+        break;
+
+      case "floodFill":
+        p.doFloodFill(item[1], item[2], item[3], item[4]);
+        break;
+
+      case "fill":
+        getCurrent(item);
+        p.doFill(item[1], item[11], item[12], item[13], item[14], item[15]);
+        break;
+
+      case "eraseAll":
+        cp.contexts[item[1]].clearRect(0, 0, cp.width, cp.height);
+        break;
+
+      case "clearCanvas":
+        cp.contexts[0].clearRect(0, 0, cp.width, cp.height);
+        cp.contexts[1].clearRect(0, 0, cp.width, cp.height);
+        break;
+
+      case "eraseRect":
+        p.eraseRect(item[1], item[2], item[3], item[4], item[5]);
+        break;
+
+      case "eraseRect2":
+        getCurrent(item);
+        p.eraseRect(item[1], item[11], item[12], item[13], item[14]);
+        break;
+
+      case "blurRect":
+        p.blurRect(item[1], item[2], item[3], item[4], item[5]);
+        break;
+
+      case "merge":
+        p.merge(item[1], item[2], item[3], item[4], item[5]);
+        break;
+
+      case "flipH":
+        p.flipH(item[1], item[2], item[3], item[4], item[5]);
+        break;
+
+      case "flipV":
+        p.flipV(item[1], item[2], item[3], item[4], item[5]);
+        break;
+
+      case "turn":
+        p.turn(item[1], item[2], item[3], item[4], item[5]);
+        break;
+
+      case "copy":
+        p.copy(item[1], item[2], item[3], item[4], item[5]);
+        break;
+
+      case "paste":
+        p.paste(item[1], item[2], item[3], item[4], item[5], item[6], item[7]);
+        break;
+
+      case "text":
+        p.doText(
+          item[1], item[2], item[3], item[4], item[5],
+          item[6], item[7], item[8]
+        );
+        break;
+
       case "restore":
-        // Final-state images; the strokes preceding it are what we verify.
+        // Final-state images. Applying them would overwrite the replayed
+        // strokes with a PNG and make any comparison trivially pass, so the
+        // strokes preceding it are what we verify.
         break;
 
       default:
-        throw new Error(`unhandled replay action: ${String(item[0])}`);
+        // Unknown verb: dummy, same as NEO
+        break;
     }
   }
 }

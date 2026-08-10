@@ -26,3 +26,6 @@ dist-ssr
 # Vitest browser mode
 .vitest-attachments/
 **/__screenshots__/
+
+# Real replay files fetched for the corpus test (see src/test/README.md)
+src/test/corpus/

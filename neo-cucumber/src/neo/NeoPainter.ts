@@ -68,6 +68,10 @@ export class NeoPainter {
   private temp: Uint32Array | null = null;
   private clipboard: ImageData | null = null;
 
+  /** Scratch surface used to rasterise text before compositing. */
+  private readonly tempCanvas: HTMLCanvasElement;
+  private readonly tempCanvasCtx: CanvasRenderingContext2D;
+
   constructor(width: number, height: number) {
     this.canvasWidth = width;
     this.canvasHeight = height;
@@ -83,6 +87,15 @@ export class NeoPainter {
       this.canvas.push(canvas);
       this.canvasCtx.push(ctx);
     }
+
+    this.tempCanvas = document.createElement("canvas");
+    this.tempCanvas.width = width;
+    this.tempCanvas.height = height;
+    const tempCtx = this.tempCanvas.getContext("2d", {
+      willReadFrequently: true,
+    });
+    if (!tempCtx) throw new Error("2d context unavailable");
+    this.tempCanvasCtx = tempCtx;
 
     this.initRoundData();
     this.initToneData();
@@ -773,6 +786,86 @@ export class NeoPainter {
     this.drawLine(ctx, x, y, x, y, type);
   }
 
+  private plot(point: Point, callback: (x: number, y: number) => void): void {
+    const x0 = point[0];
+    const y0 = point[1];
+    // Unlike bresenham, plot only compares against prevLine[0]
+    if (
+      this.prevLine === null ||
+      !(this.prevLine[0][0] === x0 && this.prevLine[0][1] === y0)
+    ) {
+      callback(x0, y0);
+    }
+    this.prevLine = [point, point];
+  }
+
+  private getBezierPoint(
+    t: number,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    x3: number,
+    y3: number
+  ): Point {
+    const a0 = (1 - t) * (1 - t) * (1 - t);
+    const a1 = (1 - t) * (1 - t) * t * 3;
+    const a2 = (1 - t) * t * t * 3;
+    const a3 = t * t * t;
+    return [
+      x0 * a0 + x1 * a1 + x2 * a2 + x3 * a3,
+      y0 * a0 + y1 * a1 + y2 * a2 + y3 * a3,
+    ];
+  }
+
+  drawBezier(
+    ctx: CanvasRenderingContext2D,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    x3: number,
+    y3: number,
+    type: number,
+    isPreview = false
+  ): void {
+    const points: Point[] = [
+      [x0, y0],
+      [x1, y1],
+      [x2, y2],
+      [x3, y3],
+    ];
+
+    this.draw(ctx, points, (left, top, width, height, buf8, imageData) => {
+      const n = Math.ceil((width + height) * 2.5);
+      const oType = this._currentMaskType;
+      const oAlpha = this._currentColor[3];
+
+      if (isPreview) {
+        this._currentMaskType = MASKTYPE.NONE;
+        this._currentColor[3] = 255;
+      }
+
+      for (let i = 0; i < n; i++) {
+        const t = (i * 1.0) / n;
+        const p = this.getBezierPoint(t, x0, y0, x1, y1, x2, y2, x3, y3);
+        p[0] = Math.round(p[0]);
+        p[1] = Math.round(p[1]);
+
+        this.plot(p, (x, y) => {
+          this.setPoint(buf8, imageData.width, x, y, left, top, type);
+        });
+      }
+      this._currentMaskType = oType;
+      this._currentColor[3] = oAlpha;
+      this.prevLine = null;
+    });
+  }
+
   getClipboard(): ImageData | null {
     return this.clipboard;
   }
@@ -1207,5 +1300,74 @@ export class NeoPainter {
     }
     imageData.data.set(buf8);
     ctx.putImageData(imageData, x, y);
+  }
+
+  // ------------------------------------------------------------------ text
+
+  doText(
+    layer: number,
+    x: number,
+    y: number,
+    color: number,
+    alpha: number,
+    text: string,
+    fontSize: string,
+    fontFamily: string
+  ): void {
+    if (text.length <= 0) return;
+
+    let ctx = this.tempCanvasCtx;
+    ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.font = fontSize + " " + fontFamily;
+    // NEO quirk: assigns the number 0 to fillStyle, which is not a valid
+    // colour, so the canvas keeps its default black. Kept literal.
+    (ctx as unknown as { fillStyle: unknown }).fillStyle = 0;
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+
+    // Binarised at alpha 0x60 rather than composited
+    const r = color & 0xff;
+    const g = (color & 0xff00) >> 8;
+    const b = (color & 0xff0000) >> 16;
+    const a = Math.round(alpha * 255.0);
+
+    const imageData = ctx.getImageData(0, 0, this.canvasWidth, this.canvasHeight);
+    const buf8 = new Uint8ClampedArray(imageData.data.buffer);
+    const length = this.canvasWidth * this.canvasHeight;
+    let index = 0;
+    for (let i = 0; i < length; i++) {
+      if (buf8[index + 3] >= 0x60) {
+        buf8[index + 0] = r;
+        buf8[index + 1] = g;
+        buf8[index + 2] = b;
+        buf8[index + 3] = a;
+      } else {
+        buf8[index + 0] = 0;
+        buf8[index + 1] = 0;
+        buf8[index + 2] = 0;
+        buf8[index + 3] = 0;
+      }
+      index += 4;
+    }
+    imageData.data.set(buf8);
+    ctx.putImageData(imageData, 0, 0);
+
+    ctx = this.canvasCtx[layer];
+    ctx.globalAlpha = 1.0;
+    ctx.drawImage(
+      this.tempCanvas,
+      0,
+      0,
+      this.canvasWidth,
+      this.canvasHeight,
+      0,
+      0,
+      this.canvasWidth,
+      this.canvasHeight
+    );
+
+    this.tempCanvasCtx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
   }
 }
