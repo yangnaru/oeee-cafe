@@ -12,6 +12,22 @@ When running psql commands, specify the database name like `psql oeee_cafe`.
 
 When creating SQLx migrations, use the command `sqlx migrate add`.
 
+### Templates
+
+Templates are loaded and evaluated at runtime, so `cargo check` says nothing
+about them — a mistake surfaces as a 500 when someone requests the page. After
+editing anything under `templates/`, run:
+
+```bash
+DATABASE_URL=postgresql:///oeee_cafe cargo test --lib template_tests
+```
+
+`every_template_parses` covers syntax for all of them. Parsing is not enough on
+its own: the context hands templates strings, so `{{ post.image_width + 24 }}`
+parses fine and fails at render. Catching that needs a fixture whose types
+match the real context, as in `replay_pages_render_and_mount_the_viewer`. Add
+one when a template starts doing more than interpolate.
+
 When connecting to PostgreSQL via command line, use `psql oeee_cafe`.
 
 ## neo-cucumber (`./neo-cucumber`)

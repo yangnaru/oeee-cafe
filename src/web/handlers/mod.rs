@@ -833,3 +833,151 @@ mod locale_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod template_tests {
+    //! Templates are loaded and evaluated at runtime, so `cargo check` says
+    //! nothing about them and a mistake only surfaces when someone requests the
+    //! page. These close that gap in two tiers: every template has to parse,
+    //! and the ones with fixtures have to actually render.
+    //!
+    //! Parsing alone would not have caught the outage these were written for --
+    //! `{{ post.image_width + 24 }}`, where the context hands templates strings
+    //! and minijinja refuses to add a number to one. Only rendering catches
+    //! that, which is why the fixtures mirror the real context's types rather
+    //! than using conveniently-typed stand-ins.
+
+    use super::test_support;
+    use minijinja::context;
+    use serde_json::json;
+    use std::collections::BTreeSet;
+    use std::path::PathBuf;
+
+    fn template_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates")
+    }
+
+    fn template_names() -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        for entry in std::fs::read_dir(template_dir()).expect("templates directory") {
+            let path = entry.expect("directory entry").path();
+            if path.extension().and_then(|e| e.to_str()) == Some("jinja") {
+                names.insert(
+                    path.file_name()
+                        .and_then(|n| n.to_str())
+                        .expect("template file name")
+                        .to_string(),
+                );
+            }
+        }
+        names
+    }
+
+    #[test]
+    fn every_template_parses() {
+        let env = test_support::env();
+        let names = template_names();
+        assert!(
+            names.len() > 20,
+            "expected to find the template set, found {}",
+            names.len()
+        );
+
+        for name in &names {
+            if let Err(error) = env.get_template(name) {
+                panic!("{name} does not parse: {error:#}");
+            }
+        }
+    }
+
+    fn chrome() -> minijinja::Value {
+        context! {
+            current_user => json!(null),
+            messages => Vec::<serde_json::Value>::new(),
+            draft_post_count => 0,
+            unread_notification_count => 0,
+            ftl_lang => "en",
+        }
+    }
+
+    /// Shaped like what the replay handler passes: a map whose values are all
+    /// strings, including the dimensions. Anything that does arithmetic on
+    /// those has to coerce first.
+    fn replay_post() -> serde_json::Value {
+        json!({
+            "id": "9c881320-2b43-4afa-b2bb-7128c8a3e985",
+            "title": "Tandemaus",
+            "content": "a description",
+            "image_width": "640",
+            "image_height": "480",
+            "image_filename": "abcdef0123.png",
+            "replay_filename": "30ca3f590dda85e21dbc94250199a692b4fa5c7d626ea3445acef3bcf3c1338a.pch",
+            "published_at": "2025-03-26 21:15:04",
+            "paint_duration": "00:14:58",
+            "community_slug": "tegaki",
+            "community_name": "Tegaki",
+            "login_name": "someone",
+        })
+    }
+
+    fn render_replay(template: &str) -> String {
+        let env = test_support::env();
+        env.get_template(template)
+            .unwrap_or_else(|e| panic!("{template} loads: {e:#}"))
+            .render(context! {
+                post => replay_post(),
+                post_id => "9c881320-2b43-4afa-b2bb-7128c8a3e985",
+                community_id => json!(null),
+                ..chrome()
+            })
+            .unwrap_or_else(|e| panic!("{template} renders: {e:#}"))
+    }
+
+    #[test]
+    fn replay_pages_render_and_mount_the_viewer() {
+        for template in [
+            "post_replay_view_pch.jinja",
+            "post_replay_view_pch_mobile.jinja",
+        ] {
+            let rendered = render_replay(template);
+
+            assert!(
+                rendered.contains("OeeeReplay.mount"),
+                "{template} should mount the viewer"
+            );
+            assert!(
+                rendered.contains("/static/viewer/oeee-replay.js"),
+                "{template} should load the viewer bundle"
+            );
+            // The dimensions reach the mount call as numbers, not as the
+            // strings the context holds.
+            assert!(
+                rendered.contains("width: 640") && rendered.contains("height: 480"),
+                "{template} should pass numeric dimensions, got: {}",
+                rendered
+                    .lines()
+                    .filter(|l| l.contains("width") || l.contains("height"))
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            );
+            assert!(
+                rendered.contains("/replay/30/30ca3f59"),
+                "{template} should build the replay URL from the filename"
+            );
+        }
+    }
+
+    #[test]
+    fn replay_pages_do_not_load_the_retired_applet() {
+        for template in [
+            "post_replay_view_pch.jinja",
+            "post_replay_view_pch_mobile.jinja",
+        ] {
+            let rendered = render_replay(template);
+            assert!(
+                !rendered.contains("neo.js"),
+                "{template} still loads the NEO applet"
+            );
+        }
+    }
+}
