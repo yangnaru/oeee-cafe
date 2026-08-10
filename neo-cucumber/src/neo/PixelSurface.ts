@@ -1,0 +1,70 @@
+/**
+ * The slice of a canvas context NEO's rasterisation actually uses.
+ *
+ * Every kernel reads a padded sub-rectangle, edits it, and writes it back, so
+ * a surface only has to offer those two operations. `CanvasRenderingContext2D`
+ * satisfies this structurally, which lets the same verified code render either
+ * onto a canvas (the replay viewer) or straight into a layer buffer (the
+ * painter) without a second implementation to keep in step.
+ */
+export interface PixelSurface {
+  getImageData(x: number, y: number, width: number, height: number): ImageData;
+  putImageData(data: ImageData, x: number, y: number): void;
+}
+
+/**
+ * A PixelSurface over a plain RGBA buffer.
+ *
+ * Reproduces the canvas semantics the kernels lean on: reading outside the
+ * bounds yields transparent pixels rather than throwing or wrapping, and
+ * writing outside them is clipped. The returned sub-rectangle keeps the width
+ * it was asked for, which matters -- blur walks its neighbours with
+ * `index ± width * 4`, so a surface that quietly returned a narrower row would
+ * blur against the wrong pixels.
+ */
+export class BufferSurface implements PixelSurface {
+  private readonly buffer: Uint8ClampedArray;
+  private readonly width: number;
+  private readonly height: number;
+
+  constructor(buffer: Uint8ClampedArray, width: number, height: number) {
+    this.buffer = buffer;
+    this.width = width;
+    this.height = height;
+  }
+
+  getImageData(x: number, y: number, width: number, height: number): ImageData {
+    const out = new ImageData(Math.max(1, width), Math.max(1, height));
+
+    const startX = Math.max(0, -x);
+    const startY = Math.max(0, -y);
+    const endX = Math.min(width, this.width - x);
+    const endY = Math.min(height, this.height - y);
+
+    // Row at a time: a per-pixel loop here costs more than the kernels do.
+    const span = (endX - startX) * 4;
+    if (span > 0) {
+      for (let row = startY; row < endY; row++) {
+        const src = ((y + row) * this.width + x + startX) * 4;
+        const dst = (row * width + startX) * 4;
+        out.data.set(this.buffer.subarray(src, src + span), dst);
+      }
+    }
+    return out;
+  }
+
+  putImageData(data: ImageData, x: number, y: number): void {
+    const startX = Math.max(0, -x);
+    const startY = Math.max(0, -y);
+    const endX = Math.min(data.width, this.width - x);
+    const endY = Math.min(data.height, this.height - y);
+
+    const span = (endX - startX) * 4;
+    if (span <= 0) return;
+    for (let row = startY; row < endY; row++) {
+      const src = (row * data.width + startX) * 4;
+      const dst = ((y + row) * this.width + x + startX) * 4;
+      this.buffer.set(data.data.subarray(src, src + span), dst);
+    }
+  }
+}

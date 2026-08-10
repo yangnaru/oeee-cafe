@@ -11,6 +11,8 @@
  * and neoReplay.browser.test.ts check this against the real thing.
  */
 
+import type { PixelSurface } from "./PixelSurface";
+
 export const LINETYPE = {
   NONE: 0,
   PEN: 1,
@@ -290,7 +292,7 @@ export class NeoPainter {
    * padding is what keeps brush stamps near the edges from wrapping.
    */
   private draw(
-    ctx: CanvasRenderingContext2D,
+    ctx: PixelSurface,
     points: Point[],
     callback: (
       left: number,
@@ -761,7 +763,7 @@ export class NeoPainter {
   // ------------------------------------------------------------ public ops
 
   drawLine(
-    ctx: CanvasRenderingContext2D,
+    ctx: PixelSurface,
     x0: number,
     y0: number,
     x1: number,
@@ -782,7 +784,7 @@ export class NeoPainter {
     this.prevLine = points;
   }
 
-  drawPoint(ctx: CanvasRenderingContext2D, x: number, y: number, type: number): void {
+  drawPoint(ctx: PixelSurface, x: number, y: number, type: number): void {
     this.drawLine(ctx, x, y, x, y, type);
   }
 
@@ -821,7 +823,7 @@ export class NeoPainter {
   }
 
   drawBezier(
-    ctx: CanvasRenderingContext2D,
+    ctx: PixelSurface,
     x0: number,
     y0: number,
     x1: number,
