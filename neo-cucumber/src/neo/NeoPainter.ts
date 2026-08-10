@@ -1142,10 +1142,14 @@ export class NeoPainter {
     for (let x = x0; x <= x1; x++) stack.push({ x, y });
   }
 
-  doFloodFill(layer: number, x: number, y: number, fillColor: number): void {
+  doFloodFill(
+    ctx: PixelSurface,
+    x: number,
+    y: number,
+    fillColor: number
+  ): void {
     x = Math.round(x);
     y = Math.round(y);
-    const ctx = this.canvasCtx[layer];
 
     if (x < 0 || x >= this.canvasWidth || y < 0 || y >= this.canvasHeight) return;
 

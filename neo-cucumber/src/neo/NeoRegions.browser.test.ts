@@ -132,8 +132,15 @@ describe("NeoPainter region operations vs canonical NEO", () => {
   });
 
   it("doFloodFill matches", () => {
-    compare(({ painter }) => painter.doFloodFill(0, 1, 1, 0xff2266aa));
-    compare(({ painter }) => painter.doFloodFill(1, 24, 24, 0xff11ff11));
+    // Ours takes a surface so the painter can fill a layer buffer directly;
+    // canonical NEO still addresses layers by index.
+    const fill = (layer: number, x: number, y: number, color: number) =>
+      ({ painter, ctxOf }: { painter: Any; ctxOf: (l: number) => CanvasRenderingContext2D }) => {
+        if (painter instanceof NeoPainter) painter.doFloodFill(ctxOf(layer), x, y, color);
+        else painter.doFloodFill(layer, x, y, color);
+      };
+    compare(fill(0, 1, 1, 0xff2266aa));
+    compare(fill(1, 24, 24, 0xff11ff11));
   });
 
   it("doFill matches for every shape mask", () => {

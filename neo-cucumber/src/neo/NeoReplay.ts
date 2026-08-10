@@ -157,7 +157,7 @@ export class NeoReplay {
       }
 
       case "floodFill":
-        p.doFloodFill(item[1], item[2], item[3], item[4]);
+        p.doFloodFill(p.canvasCtx[item[1]], item[2], item[3], item[4]);
         return true;
 
       case "fill": {

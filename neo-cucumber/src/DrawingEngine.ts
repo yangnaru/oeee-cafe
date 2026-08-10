@@ -1,4 +1,5 @@
-import { initializeBrushes, initializeTones } from "./constants/drawing";
+import { LINETYPE, NeoPainter } from "./neo/NeoPainter";
+import { BufferSurface } from "./neo/PixelSurface";
 
 export class DrawingEngine {
   public imageWidth: number;
@@ -22,36 +23,38 @@ export class DrawingEngine {
   private updateScheduled = false;
   private rafId: number | null = null;
 
-  private brush: { [key: number]: Uint8Array } = {};
-  private tone: { [key: string]: Uint8Array } = {};
-  private aerr = 0;
-  private prevLine: [[number, number], [number, number]] | null = null;
+  /** The verified NEO transcription; all pixel work goes through it. */
+  private readonly neo: NeoPainter;
+  private readonly backgroundSurface: BufferSurface;
+  private readonly foregroundSurface: BufferSurface;
+
+  /** Mask settings, applied to every stroke. NEO's MASKTYPE_NONE by default. */
+  public maskType = 0;
+  public maskColor: [number, number, number] = [0, 0, 0];
 
   // Stroke continuation state accessors: collaborative replay tracks a
   // per-user stroke state externally so line-joint deduplication is a
   // deterministic function of the canonical message sequence
   public getStrokeState(): [[number, number], [number, number]] | null {
-    return this.prevLine === null
+    const prev = this.neo.prevLine;
+    return prev === null
       ? null
       : [
-          [this.prevLine[0][0], this.prevLine[0][1]],
-          [this.prevLine[1][0], this.prevLine[1][1]],
+          [prev[0][0], prev[0][1]],
+          [prev[1][0], prev[1][1]],
         ];
   }
 
   public setStrokeState(
     state: [[number, number], [number, number]] | null
   ): void {
-    this.prevLine = state;
+    this.neo.prevLine = state;
   }
   private panOffsetX = 0;
   private panOffsetY = 0;
   private isFlippedHorizontal = false;
 
   // Alpha calculation constants
-  private static readonly ALPHATYPE_PEN = 0;
-  private static readonly ALPHATYPE_FILL = 1;
-  private static readonly ALPHATYPE_BRUSH = 2;
 
   constructor(width: number = 500, height: number = 500) {
     this.imageWidth = width;
@@ -67,8 +70,9 @@ export class DrawingEngine {
     // Initialize offscreen canvases for hardware acceleration
     this.initializeOffscreenCanvases();
 
-    this.brush = initializeBrushes();
-    this.tone = initializeTones();
+    this.neo = new NeoPainter(width, height);
+    this.backgroundSurface = new BufferSurface(this.layers.background, width, height);
+    this.foregroundSurface = new BufferSurface(this.layers.foreground, width, height);
   }
 
   private initializeOffscreenCanvases() {
@@ -89,54 +93,6 @@ export class DrawingEngine {
 
 
   // Function to get tone data based on alpha value
-  private getToneData(alpha: number): Uint8Array {
-    const alphaTable = [
-      23, 47, 69, 92, 114, 114, 114, 138, 161, 184, 184, 207, 230, 230, 253,
-    ];
-    for (let i = 0; i < alphaTable.length; i++) {
-      if (alpha < alphaTable[i]) {
-        return this.tone[i] as Uint8Array;
-      }
-    }
-    return this.tone[alphaTable.length] as Uint8Array;
-  }
-
-  private getAlpha(type: number, opacity: number): number {
-    let a1 = opacity / 255.0;
-
-    switch (type) {
-      case DrawingEngine.ALPHATYPE_PEN:
-        if (a1 > 0.5) {
-          a1 = 1.0 / 16 + ((a1 - 0.5) * 30.0) / 16;
-        } else {
-          a1 = Math.sqrt(2 * a1) / 16.0;
-        }
-        a1 = Math.min(1, Math.max(0, a1));
-        break;
-
-      case DrawingEngine.ALPHATYPE_FILL:
-        a1 = -0.00056 * a1 + 0.0042 / (1.0 - a1) - 0.0042;
-        a1 = Math.min(1.0, Math.max(0, a1 * 10));
-        break;
-
-      case DrawingEngine.ALPHATYPE_BRUSH:
-        a1 = -0.00056 * a1 + 0.0042 / (1.0 - a1) - 0.0042;
-        a1 = Math.min(1.0, Math.max(0, a1));
-        break;
-    }
-
-    if (a1 < 1.0 / 255) {
-      this.aerr += a1;
-      a1 = 0;
-      while (this.aerr > 1.0 / 255) {
-        a1 = 1.0 / 255;
-        this.aerr -= 1.0 / 255;
-      }
-    }
-
-    return a1;
-  }
-
   // Function to composite layers with FG on top of BG
   public compositeLayers(fgVisible: boolean = true, bgVisible: boolean = true) {
     for (let i = 0; i < this.compositeBuffer.length; i += 4) {
@@ -366,172 +322,33 @@ export class DrawingEngine {
     actualContainer.style.transform = transform;
   }
 
-  public drawPoint(
-    ctx: Uint8ClampedArray,
-    px: number,
-    py: number,
-    size: number,
-    r: number,
-    g: number,
-    b: number,
-    a: number,
-    updatePrevLine: boolean = true
-  ) {
-    const d = size;
-    const r0 = Math.floor(d / 2);
-    const x = px - r0;
-    const y = py - r0;
-
-    const shape = this.brush[d];
-    let shapeIndex = 0;
-
-    const r1 = r;
-    const g1 = g;
-    const b1 = b;
-    const a1 = a;
-
-    if (a1 === 0) return;
-
-    for (let i = 0; i < d; i++) {
-      for (let j = 0; j < d; j++) {
-        const currentX = x + j;
-        const currentY = y + i;
-
-        if (
-          currentX >= 0 &&
-          currentX < this.imageWidth &&
-          currentY >= 0 &&
-          currentY < this.imageHeight &&
-          shape[shapeIndex]
-        ) {
-          const index = (currentY * this.imageWidth + currentX) * 4;
-
-          const r0 = ctx[index + 0];
-          const g0 = ctx[index + 1];
-          const b0 = ctx[index + 2];
-          const a0 = ctx[index + 3] / 255.0;
-
-          const alpha = a0 + a1 - a0 * a1;
-          if (alpha > 0) {
-            const a1x = Math.max(a1, 1.0 / 255);
-
-            let r = (r1 * a1x + r0 * a0 * (1 - a1x)) / alpha;
-            let g = (g1 * a1x + g0 * a0 * (1 - a1x)) / alpha;
-            let b = (b1 * a1x + b0 * a0 * (1 - a1x)) / alpha;
-
-            r = r1 > r0 ? Math.ceil(r) : Math.floor(r);
-            g = g1 > g0 ? Math.ceil(g) : Math.floor(g);
-            b = b1 > b0 ? Math.ceil(b) : Math.floor(b);
-
-            const finalAlpha = Math.ceil(alpha * 255);
-
-            ctx[index + 0] = r;
-            ctx[index + 1] = g;
-            ctx[index + 2] = b;
-            ctx[index + 3] = finalAlpha;
-          }
-        }
-        shapeIndex++;
-      }
-    }
-
-    // Update prevLine to track this point (used for standalone point drawing)
-    if (updatePrevLine) {
-      this.prevLine = [
-        [px, py],
-        [px, py],
-      ];
+  /** Maps the painter's brush names onto NEO's line types. */
+  private static lineTypeFor(brushType: string): number {
+    switch (brushType) {
+      case "eraser":
+        return LINETYPE.ERASER;
+      case "halftone":
+        return LINETYPE.TONE;
+      case "brush":
+        return LINETYPE.BRUSH;
+      case "dodge":
+        return LINETYPE.DODGE;
+      case "burn":
+        return LINETYPE.BURN;
+      case "blur":
+        return LINETYPE.BLUR;
+      default:
+        // solid, and the non-drawing tools that still stamp a pixel
+        return LINETYPE.PEN;
     }
   }
 
-  private erasePoint(
-    ctx: Uint8ClampedArray,
-    px: number,
-    py: number,
-    size: number,
-    a: number,
-    updatePrevLine: boolean = true
-  ) {
-    const d = size;
-    const r0 = Math.floor(d / 2);
-    const x = px - r0;
-    const y = py - r0;
-
-    const shape = this.brush[d];
-    let shapeIndex = 0;
-    const eraserAlpha = Math.floor(a * 255); // Convert to 0-255 range
-
-    for (let i = 0; i < d; i++) {
-      for (let j = 0; j < d; j++) {
-        const currentX = x + j;
-        const currentY = y + i;
-
-        if (
-          currentX >= 0 &&
-          currentX < this.imageWidth &&
-          currentY >= 0 &&
-          currentY < this.imageHeight &&
-          shape[shapeIndex]
-        ) {
-          const index = (currentY * this.imageWidth + currentX) * 4;
-
-          // Neo.Painter eraser algorithm
-          ctx[index + 3] -= eraserAlpha / ((d * (255.0 - eraserAlpha)) / 255.0);
-
-          // Clamp alpha to valid range
-          ctx[index + 3] = Math.max(0, Math.min(255, ctx[index + 3]));
-        }
-        shapeIndex++;
-      }
-    }
-
-    // Update prevLine to track this point (used for standalone point drawing)
-    if (updatePrevLine) {
-      this.prevLine = [
-        [px, py],
-        [px, py],
-      ];
-    }
-
-    // Queue DOM canvas update if layer is attached
-    const layerName = ctx === this.layers.background ? "background" : "foreground";
-    this.queueLayerUpdate(layerName);
+  private surfaceFor(ctx: Uint8ClampedArray): BufferSurface {
+    return ctx === this.layers.background
+      ? this.backgroundSurface
+      : this.foregroundSurface;
   }
 
-  // Helper function to fill a horizontal line with direct replacement
-  private fillHorizontalLine(
-    buf8: Uint8ClampedArray,
-    x0: number,
-    x1: number,
-    y: number,
-    r: number,
-    g: number,
-    b: number,
-    a: number
-  ) {
-    const width = this.imageWidth;
-    for (let x = x0; x <= x1; x++) {
-      const index = (y * width + x) * 4;
-      buf8[index] = r;
-      buf8[index + 1] = g;
-      buf8[index + 2] = b;
-      buf8[index + 3] = a;
-    }
-  }
-
-  // Helper function to scan a line for connected pixels (Neo.Painter version)
-  private scanLine(
-    x0: number,
-    x1: number,
-    y: number,
-    stack: { x: number; y: number }[]
-  ) {
-    for (let x = x0; x <= x1; x++) {
-      stack.push({ x: x, y: y });
-    }
-  }
-
-  // Neo.Painter flood fill algorithm with alpha support
   public doFloodFill(
     ctx: Uint8ClampedArray,
     startX: number,
@@ -541,145 +358,16 @@ export class DrawingEngine {
     fillB: number,
     fillA: number
   ) {
-    const x = Math.round(startX);
-    const y = Math.round(startY);
+    // NEO packs the fill colour ABGR
+    const color =
+      ((fillA & 0xff) << 24) |
+      ((fillB & 0xff) << 16) |
+      ((fillG & 0xff) << 8) |
+      (fillR & 0xff);
+    this.neo.doFloodFill(this.surfaceFor(ctx), startX, startY, color);
 
-    if (x < 0 || x >= this.imageWidth || y < 0 || y >= this.imageHeight) {
-      return;
-    }
-
-    const width = this.imageWidth;
-    const stack: { x: number; y: number }[] = [{ x: x, y: y }];
-
-    // Get starting pixel color
-    const startIndex = (y * width + x) * 4;
-    const baseR = ctx[startIndex];
-    const baseG = ctx[startIndex + 1];
-    const baseB = ctx[startIndex + 2];
-    const baseA = ctx[startIndex + 3];
-
-    // Don't fill if colors are the same
-    if (
-      baseR === fillR &&
-      baseG === fillG &&
-      baseB === fillB &&
-      baseA === fillA
-    ) {
-      return;
-    }
-
-    // Scale stack limit proportionally to canvas size
-    // Base limit of 1M for a 500x500 canvas, scale proportionally
-    const baseCanvasSize = 500 * 500;
-    const currentCanvasSize = this.imageWidth * this.imageHeight;
-    const scaleFactor = currentCanvasSize / baseCanvasSize;
-    const maxStackSize = Math.floor(1000000 * scaleFactor);
-
-    while (stack.length > 0) {
-      if (stack.length > maxStackSize) {
-        break;
-      }
-
-      const point = stack.pop()!;
-      const px = point.x;
-      const py = point.y;
-      let x0 = px;
-      let x1 = px;
-
-      const pixelIndex = (py * width + px) * 4;
-
-      // Check if pixel matches base color
-      if (
-        ctx[pixelIndex] !== baseR ||
-        ctx[pixelIndex + 1] !== baseG ||
-        ctx[pixelIndex + 2] !== baseB ||
-        ctx[pixelIndex + 3] !== baseA
-      )
-        continue;
-
-      // Expand left
-      for (; x0 > 0; x0--) {
-        const leftIndex = (py * width + (x0 - 1)) * 4;
-        if (
-          ctx[leftIndex] !== baseR ||
-          ctx[leftIndex + 1] !== baseG ||
-          ctx[leftIndex + 2] !== baseB ||
-          ctx[leftIndex + 3] !== baseA
-        )
-          break;
-      }
-
-      // Expand right
-      for (; x1 < this.imageWidth - 1; x1++) {
-        const rightIndex = (py * width + (x1 + 1)) * 4;
-        if (
-          ctx[rightIndex] !== baseR ||
-          ctx[rightIndex + 1] !== baseG ||
-          ctx[rightIndex + 2] !== baseB ||
-          ctx[rightIndex + 3] !== baseA
-        )
-          break;
-      }
-
-      this.fillHorizontalLine(ctx, x0, x1, py, fillR, fillG, fillB, fillA);
-
-      if (py + 1 < this.imageHeight) {
-        this.scanLine(x0, x1, py + 1, stack);
-      }
-      if (py - 1 >= 0) {
-        this.scanLine(x0, x1, py - 1, stack);
-      }
-    }
-
-    // Queue DOM canvas update if layer is attached
     const layerName = ctx === this.layers.background ? "background" : "foreground";
     this.queueLayerUpdate(layerName);
-  }
-
-  private drawTone(
-    buf8: Uint8ClampedArray,
-    x0: number,
-    y0: number,
-    d: number,
-    r: number,
-    g: number,
-    b: number,
-    a: number
-  ) {
-    const r0 = Math.floor(d / 2);
-
-    const x = x0 - r0;
-    const y = y0 - r0;
-
-    const shape = this.brush[d];
-    let shapeIndex = 0;
-
-    const toneData = this.getToneData(a);
-
-    for (let i = 0; i < d; i++) {
-      for (let j = 0; j < d; j++) {
-        const currentX = x + j;
-        const currentY = y + i;
-
-        if (
-          currentX >= 0 &&
-          currentX < this.imageWidth &&
-          currentY >= 0 &&
-          currentY < this.imageHeight &&
-          shape[shapeIndex]
-        ) {
-          // Use absolute screen coordinates for tone pattern
-          if (toneData[(currentY % 4) * 4 + (currentX % 4)]) {
-            const index = (currentY * this.imageWidth + currentX) * 4;
-            buf8[index + 0] = r;
-            buf8[index + 1] = g;
-            buf8[index + 2] = b;
-            buf8[index + 3] = 255;
-          }
-        }
-        shapeIndex++;
-      }
-    }
   }
 
   public drawLine(
@@ -695,64 +383,20 @@ export class DrawingEngine {
     b: number,
     opacity: number
   ) {
-    this.aerr = 0;
-    const dx = Math.abs(x1 - x0);
-    const sx = x0 < x1 ? 1 : -1;
-    const dy = Math.abs(y1 - y0);
-    const sy = y0 < y1 ? 1 : -1;
-    let err = (dx > dy ? dx : -dy) / 2;
+    this.neo._currentColor = [r, g, b, opacity];
+    this.neo._currentWidth = brushSize;
+    this.neo._currentMaskType = this.maskType;
+    this.neo._currentMask = this.maskColor;
 
-    let currentX = x0;
-    let currentY = y0;
+    this.neo.drawLine(
+      this.surfaceFor(ctx),
+      x0,
+      y0,
+      x1,
+      y1,
+      DrawingEngine.lineTypeFor(brushType)
+    );
 
-    let a = 1;
-    if (brushType === "solid") {
-      a = this.getAlpha(DrawingEngine.ALPHATYPE_PEN, opacity);
-    } else if (brushType === "halftone") {
-      a = opacity / 255.0;
-    } else if (brushType === "eraser") {
-      a = opacity / 255.0;
-    }
-
-    while (true) {
-      // Check if this point should be plotted (avoid double-plotting)
-      if (
-        this.prevLine === null ||
-        !(
-          (this.prevLine[0][0] === currentX &&
-            this.prevLine[0][1] === currentY) ||
-          (this.prevLine[1][0] === currentX && this.prevLine[1][1] === currentY)
-        )
-      ) {
-        if (brushType === "solid") {
-          this.drawPoint(ctx, currentX, currentY, brushSize, r, g, b, a, false);
-        } else if (brushType === "halftone") {
-          this.drawTone(ctx, currentX, currentY, brushSize, r, g, b, a * 255);
-        } else if (brushType === "eraser") {
-          this.erasePoint(ctx, currentX, currentY, brushSize, a, false);
-        }
-      }
-
-      if (currentX === x1 && currentY === y1) break;
-
-      const e2 = err;
-      if (e2 > -dx) {
-        err -= dy;
-        currentX += sx;
-      }
-      if (e2 < dy) {
-        err += dx;
-        currentY += sy;
-      }
-    }
-
-    // Update prevLine to track this line segment
-    this.prevLine = [
-      [x0, y0],
-      [x1, y1],
-    ];
-
-    // Queue DOM canvas update if layer is attached
     const layerName = ctx === this.layers.background ? "background" : "foreground";
     this.queueLayerUpdate(layerName);
   }
