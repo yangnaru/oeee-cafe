@@ -244,6 +244,52 @@ export class NeoReplay {
     }
   }
 
+  /**
+   * How many steps a frame takes to draw. Strokes animate one segment at a
+   * time; everything else lands in one step.
+   */
+  static stepsFor(item: Frame): number {
+    if (!Array.isArray(item) || item[0] !== "freeHand") return 1;
+    const pairs = Math.floor((item.length - 14) / 2);
+    return Math.max(1, pairs);
+  }
+
+  /**
+   * Draws one segment of a stroke, or the whole of any other frame.
+   *
+   * NEO animates strokes segment by segment too, but clears prevLine between
+   * segments, so its animated playback double-plots shared endpoints and ends
+   * up slightly darker than its own skip-to-end path. We keep the fast-path
+   * semantics -- the ones the corpus sweep verifies -- so what you watch being
+   * drawn matches what you are left with.
+   */
+  async applyStep(item: Frame, step: number): Promise<void> {
+    if (!Array.isArray(item) || item[0] !== "freeHand") {
+      if (step === 0) await this.apply(item);
+      return;
+    }
+
+    const p = this.painter;
+    const layer = item[1];
+    this.getCurrent(item);
+    const lineType = item[11];
+
+    const i = 14 + step * 2;
+    if (i + 1 >= item.length) return;
+
+    const x1 = step === 0 ? item[12] : item[i - 2];
+    const y1 = step === 0 ? item[13] : item[i - 1];
+    const x0 = item[i + 0];
+    const y0 = item[i + 1];
+
+    if (!isCoordinate(x0) || !isCoordinate(y0)) return;
+    if (!isCoordinate(x1) || !isCoordinate(y1)) return;
+
+    p.drawLine(p.canvasCtx[layer], x0, y0, x1, y1, lineType);
+
+    if (step === NeoReplay.stepsFor(item) - 1) p.prevLine = null;
+  }
+
   /** Applies every frame in order. */
   async playAll(items: Frame[]): Promise<void> {
     for (const item of items) {

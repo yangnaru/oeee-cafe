@@ -67,7 +67,7 @@ msgid "Color"
 msgstr "颜色"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:432
+#: src/OfflineApp.tsx:434
 msgid "Community: {0}"
 msgstr "社区: {0}"
 
@@ -101,11 +101,11 @@ msgstr "已断开"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:462
+#: src/OfflineApp.tsx:464
 msgid "Download PNG"
 msgstr "下载 PNG"
 
-#: src/OfflineApp.tsx:469
+#: src/OfflineApp.tsx:471
 msgid "Download Replay"
 msgstr "下载回放"
 
@@ -118,11 +118,11 @@ msgstr "编辑调色板颜色 {0}"
 #~ msgid "Eraser"
 #~ msgstr "橡皮擦"
 
-#: src/OfflineApp.tsx:293
+#: src/OfflineApp.tsx:295
 msgid "Failed to download replay file."
 msgstr "下载回放文件失败。"
 
-#: src/OfflineApp.tsx:256
+#: src/OfflineApp.tsx:258
 msgid "Failed to save drawing. Please try again."
 msgstr "保存绘画失败。请重试。"
 
@@ -167,6 +167,10 @@ msgstr "左键选择图层，右键切换可见性"
 msgid "Loading"
 msgstr "加载中"
 
+#: src/viewer/ViewerApp.tsx:133
+msgid "Loading replay..."
+msgstr "正在加载回放..."
+
 #: src/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
 msgstr "加载中..."
@@ -174,6 +178,10 @@ msgstr "加载中..."
 #: src/components/modals/ConnectionStatusModal.tsx:25
 msgid "LOADING..."
 msgstr "加载中..."
+
+#: src/viewer/ViewerApp.tsx:45
+msgid "No replay to show."
+msgstr "没有可显示的回放。"
 
 #: src/App.tsx:917
 #~ msgid "Oeee Cafe"
@@ -183,7 +191,7 @@ msgstr "加载中..."
 msgid "Off"
 msgstr "关闭"
 
-#: src/OfflineApp.tsx:426
+#: src/OfflineApp.tsx:428
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "离线绘画 ({canvasWidth} × {canvasHeight})"
 
@@ -206,7 +214,7 @@ msgstr "调色板颜色 {0} (已选中 - 使用下方色彩选择器编辑)"
 #~ msgstr "平移"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:440
+#: src/OfflineApp.tsx:442
 msgid "Parent Post: {0}"
 msgstr "父帖子: {0}"
 
@@ -214,9 +222,17 @@ msgstr "父帖子: {0}"
 msgid "Participants"
 msgstr "参与者"
 
+#: src/viewer/ViewerApp.tsx:153
+msgid "Pause"
+msgstr "暂停"
+
 #: src/components/SimplifiedToolbox.tsx:59
 msgid "Pen size"
 msgstr "画笔大小"
+
+#: src/viewer/ViewerApp.tsx:153
+msgid "Play"
+msgstr "播放"
 
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
@@ -244,12 +260,16 @@ msgstr "重试"
 msgid "Return to Lobby"
 msgstr "返回大厅"
 
+#: src/viewer/ViewerApp.tsx:160
+msgid "Rewind"
+msgstr "重新开始"
+
 #: src/components/SessionExpiredModal.tsx:154
 msgid "Save as PNG"
 msgstr "保存为 PNG"
 
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/OfflineApp.tsx:453
+#: src/OfflineApp.tsx:455
 msgid "Save Drawing"
 msgstr "保存绘画"
 
@@ -266,9 +286,13 @@ msgstr "保存到画廊"
 #: src/components/SessionExpiredModal.tsx:113
 #: src/components/SimplifiedToolbox.tsx:180
 #: src/components/ToolboxPanel.tsx:442
-#: src/OfflineApp.tsx:453
+#: src/OfflineApp.tsx:455
 msgid "Saving..."
 msgstr "保存中..."
+
+#: src/viewer/ViewerApp.tsx:143
+msgid "Seek"
+msgstr "跳转"
 
 #: src/components/Chat.tsx:267
 msgid "Send"
@@ -306,9 +330,19 @@ msgstr "快捷键"
 #~ msgid "Size"
 #~ msgstr "大小"
 
+#: src/viewer/ViewerApp.tsx:167
+msgid "Skip to end"
+msgstr "跳到结尾"
+
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "实心"
+
+#. placeholder {0}: state.position
+#. placeholder {1}: state.total
+#: src/viewer/ViewerApp.tsx:191
+msgid "step {0} of {1}"
+msgstr "第 {0} 步，共 {1} 步"
 
 #: src/components/SimplifiedToolbox.tsx:56
 msgid "Swap pens"
@@ -326,6 +360,10 @@ msgstr "由于无活动，此协作会话已结束。会话已保存到画廊，
 msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 msgstr "由于无活动，此协作会话已结束。您可以在离开前将您的作品保存为 PNG。"
 
+#: src/viewer/ViewerApp.tsx:81
+msgid "This drawing's replay could not be loaded."
+msgstr "无法加载这幅画的回放。"
+
 #: src/components/SessionExpiredModal.tsx:45
 msgid "This session has already been saved. You can only download it as a PNG."
 msgstr "此会话已保存。您只能将其下载为 PNG。"
@@ -338,7 +376,7 @@ msgstr "此会话已保存。您只能将其下载为 PNG。"
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "此会话已满（{currentUserCount}/{maxUsers} 位用户）。只有前 {maxUsers} 位用户可以加入会话。"
 
-#: src/OfflineApp.tsx:368
+#: src/OfflineApp.tsx:370
 msgid "Time's up."
 msgstr "设定时间已到。"
 

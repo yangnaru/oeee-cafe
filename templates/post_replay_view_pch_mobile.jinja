@@ -4,57 +4,26 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
     <title>Replay</title>
-    <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css"/>
-    <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}" charset="utf-8"></script>
     <style>
         body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             background-color: #ddd;
             overflow: hidden;
         }
-        #viewer-container {
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        #viewer {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: 0;
         }
     </style>
 </head>
 <body>
-<div id="viewer-container">
-    <input type="hidden" id="viewer"/>
-</div>
-<script>
-    document.write(`
-        <applet-dummy name="pch" width="{{ post.image_width }}" height="{{ post.image_height }}">
-        </applet-dummy>
-    `);
-
-    const url = "{{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}";
-
-    fetch(url)
-        .then((response) => response.arrayBuffer())
-        .then((result) => {
-            const pch = Neo.decodePCH(result);
-            const container = document.getElementById('viewer-container');
-            container.style.width = `${pch.width}px`;
-            container.style.height = `${pch.height}px`;
-            
-            const viewerElement = document.getElementById('viewer');
-            
-            Neo.createViewer(viewerElement);
-            Neo.config.width = pch.width;
-            Neo.config.height = pch.height;
-            Neo.initViewer(pch);
-            Neo.startViewer();
-        })
-        .catch(err => {
-            console.error("Failed to load replay data:", err);
-            document.body.innerHTML = 'Failed to load replay data.';
-        });
-</script>
+<iframe id="viewer"
+        title="Replay"
+        src="/collaborate/?viewer=true&amp;width={{ post.image_width }}&amp;height={{ post.image_height }}&amp;replay={{ r2_public_endpoint_url }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}"></iframe>
 </body>
 </html>

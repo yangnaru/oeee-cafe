@@ -67,7 +67,7 @@ msgid "Color"
 msgstr "Color"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:432
+#: src/OfflineApp.tsx:434
 msgid "Community: {0}"
 msgstr "Community: {0}"
 
@@ -101,11 +101,11 @@ msgstr "Disconnected"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:462
+#: src/OfflineApp.tsx:464
 msgid "Download PNG"
 msgstr "Download PNG"
 
-#: src/OfflineApp.tsx:469
+#: src/OfflineApp.tsx:471
 msgid "Download Replay"
 msgstr "Download Replay"
 
@@ -118,11 +118,11 @@ msgstr "Edit palette color {0}"
 #~ msgid "Eraser"
 #~ msgstr "Eraser"
 
-#: src/OfflineApp.tsx:293
+#: src/OfflineApp.tsx:295
 msgid "Failed to download replay file."
 msgstr "Failed to download replay file."
 
-#: src/OfflineApp.tsx:256
+#: src/OfflineApp.tsx:258
 msgid "Failed to save drawing. Please try again."
 msgstr "Failed to save drawing. Please try again."
 
@@ -167,6 +167,10 @@ msgstr "Left click to select layer, right click to toggle visibility"
 msgid "Loading"
 msgstr "Loading"
 
+#: src/viewer/ViewerApp.tsx:133
+msgid "Loading replay..."
+msgstr "Loading replay..."
+
 #: src/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
 msgstr "Loading..."
@@ -174,6 +178,10 @@ msgstr "Loading..."
 #: src/components/modals/ConnectionStatusModal.tsx:25
 msgid "LOADING..."
 msgstr "LOADING..."
+
+#: src/viewer/ViewerApp.tsx:45
+msgid "No replay to show."
+msgstr "No replay to show."
 
 #: src/App.tsx:917
 #~ msgid "Oeee Cafe"
@@ -183,7 +191,7 @@ msgstr "LOADING..."
 msgid "Off"
 msgstr "Off"
 
-#: src/OfflineApp.tsx:426
+#: src/OfflineApp.tsx:428
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "Offline Drawing ({canvasWidth} × {canvasHeight})"
 
@@ -206,7 +214,7 @@ msgstr "Palette color {0} (selected - edit with color picker below)"
 #~ msgstr "Pan"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:440
+#: src/OfflineApp.tsx:442
 msgid "Parent Post: {0}"
 msgstr "Parent Post: {0}"
 
@@ -214,9 +222,17 @@ msgstr "Parent Post: {0}"
 msgid "Participants"
 msgstr "Participants"
 
+#: src/viewer/ViewerApp.tsx:153
+msgid "Pause"
+msgstr "Pause"
+
 #: src/components/SimplifiedToolbox.tsx:59
 msgid "Pen size"
 msgstr "Pen size"
+
+#: src/viewer/ViewerApp.tsx:153
+msgid "Play"
+msgstr "Play"
 
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
@@ -244,12 +260,16 @@ msgstr "Retry"
 msgid "Return to Lobby"
 msgstr "Return to Lobby"
 
+#: src/viewer/ViewerApp.tsx:160
+msgid "Rewind"
+msgstr "Rewind"
+
 #: src/components/SessionExpiredModal.tsx:154
 msgid "Save as PNG"
 msgstr "Save as PNG"
 
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/OfflineApp.tsx:453
+#: src/OfflineApp.tsx:455
 msgid "Save Drawing"
 msgstr "Save Drawing"
 
@@ -266,9 +286,13 @@ msgstr "Save to Gallery"
 #: src/components/SessionExpiredModal.tsx:113
 #: src/components/SimplifiedToolbox.tsx:180
 #: src/components/ToolboxPanel.tsx:442
-#: src/OfflineApp.tsx:453
+#: src/OfflineApp.tsx:455
 msgid "Saving..."
 msgstr "Saving..."
+
+#: src/viewer/ViewerApp.tsx:143
+msgid "Seek"
+msgstr "Seek"
 
 #: src/components/Chat.tsx:267
 msgid "Send"
@@ -306,9 +330,19 @@ msgstr "Shortcuts"
 #~ msgid "Size"
 #~ msgstr "Size"
 
+#: src/viewer/ViewerApp.tsx:167
+msgid "Skip to end"
+msgstr "Skip to end"
+
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "Solid"
+
+#. placeholder {0}: state.position
+#. placeholder {1}: state.total
+#: src/viewer/ViewerApp.tsx:191
+msgid "step {0} of {1}"
+msgstr "step {0} of {1}"
 
 #: src/components/SimplifiedToolbox.tsx:56
 msgid "Swap pens"
@@ -326,6 +360,10 @@ msgstr "This collaborative session has ended due to inactivity. The session has 
 msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 msgstr "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 
+#: src/viewer/ViewerApp.tsx:81
+msgid "This drawing's replay could not be loaded."
+msgstr "This drawing's replay could not be loaded."
+
 #: src/components/SessionExpiredModal.tsx:45
 msgid "This session has already been saved. You can only download it as a PNG."
 msgstr "This session has already been saved. You can only download it as a PNG."
@@ -338,7 +376,7 @@ msgstr "This session has already been saved. You can only download it as a PNG."
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 
-#: src/OfflineApp.tsx:368
+#: src/OfflineApp.tsx:370
 msgid "Time's up."
 msgstr "Time's up."
 

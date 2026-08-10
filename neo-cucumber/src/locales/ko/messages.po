@@ -67,7 +67,7 @@ msgid "Color"
 msgstr "색상"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:432
+#: src/OfflineApp.tsx:434
 msgid "Community: {0}"
 msgstr "커뮤니티: {0}"
 
@@ -101,11 +101,11 @@ msgstr "연결 끊어짐"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:462
+#: src/OfflineApp.tsx:464
 msgid "Download PNG"
 msgstr "PNG 다운로드"
 
-#: src/OfflineApp.tsx:469
+#: src/OfflineApp.tsx:471
 msgid "Download Replay"
 msgstr "리플레이 다운로드"
 
@@ -118,11 +118,11 @@ msgstr "팔레트 색상 {0} 편집"
 #~ msgid "Eraser"
 #~ msgstr "지우개"
 
-#: src/OfflineApp.tsx:293
+#: src/OfflineApp.tsx:295
 msgid "Failed to download replay file."
 msgstr "리플레이 파일 다운로드에 실패했습니다."
 
-#: src/OfflineApp.tsx:256
+#: src/OfflineApp.tsx:258
 msgid "Failed to save drawing. Please try again."
 msgstr "그림 저장에 실패했습니다. 다시 시도해 주세요."
 
@@ -167,6 +167,10 @@ msgstr "왼쪽 클릭으로 레이어 선택, 오른쪽 클릭으로 표시 전�
 msgid "Loading"
 msgstr "로딩 중"
 
+#: src/viewer/ViewerApp.tsx:133
+msgid "Loading replay..."
+msgstr "리플레이 불러오는 중..."
+
 #: src/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
 msgstr "로딩 중..."
@@ -174,6 +178,10 @@ msgstr "로딩 중..."
 #: src/components/modals/ConnectionStatusModal.tsx:25
 msgid "LOADING..."
 msgstr "로딩 중..."
+
+#: src/viewer/ViewerApp.tsx:45
+msgid "No replay to show."
+msgstr "표시할 리플레이가 없습니다."
 
 #: src/App.tsx:917
 #~ msgid "Oeee Cafe"
@@ -183,7 +191,7 @@ msgstr "로딩 중..."
 msgid "Off"
 msgstr "끄기"
 
-#: src/OfflineApp.tsx:426
+#: src/OfflineApp.tsx:428
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "오프라인 그리기 ({canvasWidth} × {canvasHeight})"
 
@@ -206,7 +214,7 @@ msgstr "팔레트 색상 {0} (선택됨 - 아래 색상 선택기로 편집)"
 #~ msgstr "이동"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:440
+#: src/OfflineApp.tsx:442
 msgid "Parent Post: {0}"
 msgstr "부모 게시물: {0}"
 
@@ -214,9 +222,17 @@ msgstr "부모 게시물: {0}"
 msgid "Participants"
 msgstr "참여자"
 
+#: src/viewer/ViewerApp.tsx:153
+msgid "Pause"
+msgstr "일시정지"
+
 #: src/components/SimplifiedToolbox.tsx:59
 msgid "Pen size"
 msgstr "펜 크기"
+
+#: src/viewer/ViewerApp.tsx:153
+msgid "Play"
+msgstr "재생"
 
 #: src/components/modals/ConnectionStatusModal.tsx:43
 msgid "Reconnect"
@@ -244,12 +260,16 @@ msgstr "다시 시도"
 msgid "Return to Lobby"
 msgstr "로비로 돌아가기"
 
+#: src/viewer/ViewerApp.tsx:160
+msgid "Rewind"
+msgstr "처음으로"
+
 #: src/components/SessionExpiredModal.tsx:154
 msgid "Save as PNG"
 msgstr "PNG로 저장"
 
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/OfflineApp.tsx:453
+#: src/OfflineApp.tsx:455
 msgid "Save Drawing"
 msgstr "그림 저장"
 
@@ -266,9 +286,13 @@ msgstr "갤러리에 저장"
 #: src/components/SessionExpiredModal.tsx:113
 #: src/components/SimplifiedToolbox.tsx:180
 #: src/components/ToolboxPanel.tsx:442
-#: src/OfflineApp.tsx:453
+#: src/OfflineApp.tsx:455
 msgid "Saving..."
 msgstr "저장 중..."
+
+#: src/viewer/ViewerApp.tsx:143
+msgid "Seek"
+msgstr "탐색"
 
 #: src/components/Chat.tsx:267
 msgid "Send"
@@ -306,9 +330,19 @@ msgstr "단축키"
 #~ msgid "Size"
 #~ msgstr "크기"
 
+#: src/viewer/ViewerApp.tsx:167
+msgid "Skip to end"
+msgstr "끝으로"
+
 #: src/App.tsx:1911
 #~ msgid "Solid"
 #~ msgstr "실선"
+
+#. placeholder {0}: state.position
+#. placeholder {1}: state.total
+#: src/viewer/ViewerApp.tsx:191
+msgid "step {0} of {1}"
+msgstr "{1}단계 중 {0}단계"
 
 #: src/components/SimplifiedToolbox.tsx:56
 msgid "Swap pens"
@@ -326,6 +360,10 @@ msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 세�
 msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 떠나기 전에 작업을 PNG로 로컬에 저장할 수 있습니다."
 
+#: src/viewer/ViewerApp.tsx:81
+msgid "This drawing's replay could not be loaded."
+msgstr "이 그림의 리플레이를 불러올 수 없습니다."
+
 #: src/components/SessionExpiredModal.tsx:45
 msgid "This session has already been saved. You can only download it as a PNG."
 msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 수 있습니다."
@@ -338,7 +376,7 @@ msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 �
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "이 세션이 가득 찼습니다 ({currentUserCount}/{maxUsers}명). 처음 {maxUsers}명의 사용자만 세션에 참여할 수 있습니다."
 
-#: src/OfflineApp.tsx:368
+#: src/OfflineApp.tsx:370
 msgid "Time's up."
 msgstr "설정한 시간이 지났습니다."
 

@@ -9,9 +9,6 @@
   ({{ ftl_get_message("post-replay") }})
 {% endblock title %}
 {% block content %}
-  <link rel="stylesheet" href="/static/neo/dist/neo.css" type="text/css" />
-  <script src="{{ '/static/neo/dist/neo.js' | cachebuster | safe }}"
-          charset="utf-8"></script>
   <div class="center">
     <p>{{ ftl_get_message("post-published-at") }}: {{ post.published_at }}</p>
     <p>{{ ftl_get_message("post-duration") }}: {{ post.paint_duration }}</p>
@@ -21,7 +18,12 @@
         <a href="/communities/@{{ post.community_slug }}">{{ post.community_name }}</a>
       </p>
     {% endif %}
-    <input type="hidden" id="viewer" />
+    <iframe id="viewer"
+            title="{{ ftl_get_message('post-replay') }}"
+            src="/collaborate/?viewer=true&amp;width={{ post.image_width }}&amp;height={{ post.image_height }}&amp;replay={{ r2_public_endpoint_url }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}"
+            width="{{ post.image_width + 24 }}"
+            height="{{ post.image_height + 120 }}"
+            style="border: 0; max-width: 100%"></iframe>
     <p>
       {{ ftl_get_message("post-title") }}:
       <a href="/@{{ post.community_slug if post.community_slug else post.login_name }}/{{ post_id }}">
@@ -34,25 +36,4 @@
     </p>
     <p>{{ ftl_get_message("post-description") }}: {{ post.content }}</p>
   </div>
-  <script>
-  document.write(`
-      <applet-dummy name="pch" width="{{ post.image_width }}" height="{{ post.image_height }}">
-      </applet-dummy>
-    `);
-
-  const url =
-    "{{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}";
-
-  fetch(url)
-    .then((response) => response.arrayBuffer())
-    .then((result) => {
-      const pch = Neo.decodePCH(result);
-
-      Neo.createViewer(document.querySelector("#viewer"));
-      Neo.config.width = pch.width;
-      Neo.config.height = pch.height;
-      Neo.initViewer(pch);
-      Neo.startViewer();
-    });
-  </script>
 {% endblock content %}
