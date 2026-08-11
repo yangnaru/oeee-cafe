@@ -155,3 +155,33 @@ describe("the preview overlay", () => {
     expect(px.some((v) => v !== 0)).toBe(false);
   });
 });
+
+describe("eraseAll, which acts on the press itself", () => {
+  it("clears the layer and records it", async () => {
+    // Draw something first, so there is anything to clear
+    const drawing = await mountWithTool("rectFill");
+    await drawing.send("pointerdown", 6, 6);
+    await act(async () => { await sleep(20); });
+    await drawing.send("pointermove", 40, 30);
+    await drawing.send("pointerup", 40, 30);
+    const layer = drawing.api.drawingEngine!.layers.background;
+    expect(layer.some((v) => v !== 0)).toBe(true);
+
+    // Selecting eraseAll and clicking wipes it, with no drag involved
+    const { api, previews, send } = await mountWithTool("eraseAll");
+    const target = api.drawingEngine!.layers.background;
+    target.fill(200);
+
+    await send("pointerdown", 12, 12);
+    await send("pointerup", 12, 12);
+
+    expect(target.every((v) => v === 0)).toBe(true);
+    // No rubber band: it is not a region tool
+    expect(previews).toEqual([]);
+
+    const bytes = new Uint8Array(await api.getReplayBlob().arrayBuffer());
+    const { decodePCH } = await import("./NeoReplay");
+    const frame = decodePCH(bytes)!.items.at(-1)!;
+    expect(frame).toEqual(["eraseAll", 0]);
+  });
+});

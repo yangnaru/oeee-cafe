@@ -2,7 +2,13 @@ import { useEffect, useRef, useCallback } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { useCanvasHistory } from "./useCanvasHistory";
 import type { BrushType } from "../types/collaboration";
-import { brushTypeFor, isRegionTool, type RegionTool, type ToolId } from "../neo/tools";
+import {
+  brushTypeFor,
+  isImmediateTool,
+  isRegionTool,
+  type RegionTool,
+  type ToolId,
+} from "../neo/tools";
 import { RegionDrag, type RegionRect } from "../neo/regionDrag";
 
 export interface DrawingState {
@@ -51,6 +57,8 @@ interface DrawingEventCallbacks {
   onPointerUp?: () => void;
   /** The rubber-band rectangle as it is dragged, or null when it ends. */
   onRegionPreview?: (rect: RegionRect | null) => void;
+  /** A tool that acts on click was used; record it. */
+  onEraseAll?: (layer: "foreground" | "background") => void;
   /** A region tool was released over `rect`; record it. */
   onRegionCommit?: (
     tool: RegionTool,
@@ -376,6 +384,19 @@ export const useBaseDrawing = (
 
         // Freeze the settings this stroke will be drawn and recorded with
         strokeParamsRef.current = { ...currentDrawingStateRef.current };
+
+        // Acts on the press itself, with nothing to drag out
+        if (isImmediateTool(strokeParamsRef.current.brushType)) {
+          const layer = strokeParamsRef.current.layerType;
+          if (!remoteSyncRef.current) {
+            drawingEngineRef.current?.eraseAll(layer);
+            saveToHistory();
+          }
+          callbacks?.onEraseAll?.(layer);
+          onDrawingChangeRef.current?.();
+          cleanupPointerState(e.pointerId);
+          return;
+        }
 
         // Region tools drag out a rectangle and act on release, so they take
         // none of the stroke path below.

@@ -460,6 +460,12 @@ export class DrawingEngine {
     this.queueLayerUpdate("foreground");
   }
 
+  /** Clears a whole layer, NEO's EraseAllTool. */
+  public eraseAll(layer: "foreground" | "background"): void {
+    this.neo.eraseAll(layer === "foreground" ? 1 : 0);
+    this.queueLayerUpdate(layer);
+  }
+
   public initialize(ctx?: CanvasRenderingContext2D) {
     // Store the canvas reference
     if (ctx) {

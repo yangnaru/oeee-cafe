@@ -52,6 +52,8 @@ export const ToolSelector = ({
         return "material-symbols:rotate-90-degrees-cw";
       case "merge":
         return "material-symbols:layers";
+      case "eraseAll":
+        return "material-symbols:delete-sweep";
       case "eraser":
         return "material-symbols:ink-eraser";
       case "fill":

@@ -215,6 +215,15 @@ export const useOfflineDrawing = (
 
     onRegionPreview,
 
+    /** NEO records a cleared layer as ["eraseAll", layer]. */
+    onEraseAll: useCallback((layer: "foreground" | "background") => {
+      actionRecorderRef.current.step();
+      actionRecorderRef.current.push(
+        "eraseAll",
+        layer === "foreground" ? 1 : 0
+      );
+    }, []),
+
     /**
      * A region tool was applied; record it as its own frame. The verb and
      * whether it carries the drawing state come from the tool table, since

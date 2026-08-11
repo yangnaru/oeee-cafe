@@ -37,7 +37,17 @@ export type RegionTool =
   | "ellipse"
   | "ellipseFill";
 
-export type ToolId = BrushType | RegionTool;
+/**
+ * Tools that act the moment you click, with neither a stroke nor a rectangle.
+ * NEO's EraseAllTool is the only one.
+ */
+export type ImmediateTool = "eraseAll";
+
+export type ToolId = BrushType | RegionTool | ImmediateTool;
+
+export function isImmediateTool(tool: ToolId): tool is ImmediateTool {
+  return tool === "eraseAll";
+}
 
 const REGION_TOOLS: readonly RegionTool[] = [
   "eraseRect",
@@ -57,12 +67,12 @@ export function isRegionTool(tool: ToolId): tool is RegionTool {
 }
 
 /**
- * The brush type a tool rasterises with. Region tools have none; callers that
- * need a brush type for one are asking the wrong question, so they get the
+ * The brush type a tool rasterises with. Region and immediate tools have none;
+ * callers asking for one are asking the wrong question, so they get the
  * harmless default rather than a lie about which brush is in use.
  */
 export function brushTypeFor(tool: ToolId): BrushType {
-  return isRegionTool(tool) ? "solid" : tool;
+  return isRegionTool(tool) || isImmediateTool(tool) ? "solid" : tool;
 }
 
 export interface RegionRect {
