@@ -1,16 +1,16 @@
 import { Icon } from "@iconify/react";
 
-import type { BrushType } from "../types/collaboration";
+import type { ToolId } from "../neo/tools";
 import { SHARED_TOOLS } from "../constants/drawing";
 
 interface ToolSelectorProps {
-  brushType: BrushType;
-  onUpdateBrushType: (type: BrushType) => void;
+  brushType: ToolId;
+  onUpdateBrushType: (type: ToolId) => void;
   /**
    * Which tools to offer. A shared session is limited to what the wire format
    * can carry, so it passes a smaller set than an offline drawing does.
    */
-  tools?: readonly BrushType[];
+  tools?: readonly ToolId[];
 }
 
 export const ToolSelector = ({
@@ -18,7 +18,7 @@ export const ToolSelector = ({
   onUpdateBrushType,
   tools = SHARED_TOOLS,
 }: ToolSelectorProps) => {
-  const getToolIcon = (toolType: BrushType): string => {
+  const getToolIcon = (toolType: ToolId): string => {
     switch (toolType) {
       case "solid":
         return "material-symbols:brush";
@@ -32,6 +32,26 @@ export const ToolSelector = ({
         return "material-symbols:dark-mode";
       case "blur":
         return "material-symbols:blur-on";
+      case "rect":
+        return "material-symbols:rectangle-outline";
+      case "rectFill":
+        return "material-symbols:rectangle";
+      case "ellipse":
+        return "material-symbols:circle-outline";
+      case "ellipseFill":
+        return "material-symbols:circle";
+      case "eraseRect":
+        return "material-symbols:select-all";
+      case "blurRect":
+        return "material-symbols:deblur";
+      case "flipH":
+        return "material-symbols:flip";
+      case "flipV":
+        return "material-symbols:flip-camera-android";
+      case "turn":
+        return "material-symbols:rotate-90-degrees-cw";
+      case "merge":
+        return "material-symbols:layers";
       case "eraser":
         return "material-symbols:ink-eraser";
       case "fill":

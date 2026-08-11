@@ -12,6 +12,8 @@ import { useZoomControls } from "./hooks/useZoomControls";
 import { useOfflineCanvas } from "./hooks/useOfflineCanvas";
 import { compositeLayersToCanvas } from "./utils/canvasExport";
 import { NativeBridge } from "./utils/nativeBridge";
+import { drawRegionPreview } from "./neo/regionPreview";
+import type { RegionRect } from "./neo/regionDrag";
 
 // Validation constants
 const MIN_DIMENSION = 100;
@@ -120,6 +122,16 @@ function OfflineApp() {
   const [isSaving, setIsSaving] = useState(false);
 
   const appRef = useRef<HTMLDivElement>(null);
+  /**
+   * The rubber band a region tool is being dragged out over. Its own canvas
+   * above the layers: it is a cursor, not part of the drawing, so it must not
+   * touch the pixels or be recorded.
+   */
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const handleRegionPreview = useCallback((rect: RegionRect | null) => {
+    const ctx = previewCanvasRef.current?.getContext("2d");
+    if (ctx) drawRegionPreview(ctx, rect);
+  }, []);
   const tempCanvasContainerRef = useRef<HTMLDivElement>(null);
   const tempLocalUserCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -158,7 +170,8 @@ function OfflineApp() {
     canvasWidth,
     canvasHeight,
     handleLocalDrawingChange,
-    tempCanvasContainerRef
+    tempCanvasContainerRef,
+    handleRegionPreview
   );
 
   // Zoom controls
@@ -514,6 +527,17 @@ function OfflineApp() {
                 }}
               />
               {/* Layer canvases will be dynamically created here */}
+              <canvas
+                ref={previewCanvasRef}
+                width={canvasWidth}
+                height={canvasHeight}
+                className="absolute top-0 left-0 pointer-events-none"
+                style={{
+                  width: `${canvasWidth}px`,
+                  height: `${canvasHeight}px`,
+                  zIndex: 10,
+                }}
+              />
             </div>
             {twoToneConfig ? (
               <SimplifiedToolbox

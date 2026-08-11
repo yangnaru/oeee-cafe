@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { type BrushType, type DrawingState } from "../types/collaboration";
+import { type DrawingState } from "../types/collaboration";
+import type { ToolId } from "../neo/tools";
 import {
   DEFAULT_PALETTE_COLORS,
   MAX_BRUSH_SIZE,
@@ -27,7 +28,7 @@ export const useDrawingState = () => {
     isFlippedHorizontal: false,
   });
 
-  const updateBrushType = useCallback((type: BrushType) => {
+  const updateBrushType = useCallback((type: ToolId) => {
     setDrawingState((prev) => {
       let newOpacity = prev.opacity;
       if (type === "halftone") newOpacity = 23;

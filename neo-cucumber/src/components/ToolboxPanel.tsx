@@ -5,14 +5,14 @@ import { ToolSelector } from "./ToolSelector";
 import { ColorPalette } from "./ColorPalette";
 import { CustomSlider } from "./CustomSlider";
 
-import type { BrushType } from "../types/collaboration";
+import type { ToolId } from "../neo/tools";
 type LayerType = "foreground" | "background";
 
 interface DrawingState {
   brushSize: number;
   opacity: number;
   color: string;
-  brushType: BrushType;
+  brushType: ToolId;
   layerType: LayerType;
   zoomLevel: number;
   fgVisible: boolean;
@@ -35,12 +35,12 @@ interface ToolboxPanelProps {
   currentZoom: number;
   isOwner: boolean;
   /** Tools to offer; defaults to the shared-session subset. */
-  tools?: readonly BrushType[];
+  tools?: readonly ToolId[];
   isSaving: boolean;
   sessionEnded: boolean;
   onUndo: () => void;
   onRedo: () => void;
-  onUpdateBrushType: (type: BrushType) => void;
+  onUpdateBrushType: (type: ToolId) => void;
   onUpdateDrawingState: React.Dispatch<React.SetStateAction<DrawingState>>;
   onUpdateColor: (color: string) => void;
   onColorPickerChange: (color: string) => void;

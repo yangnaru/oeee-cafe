@@ -67,7 +67,7 @@ msgid "Color"
 msgstr "Color"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:434
+#: src/OfflineApp.tsx:448
 msgid "Community: {0}"
 msgstr "Community: {0}"
 
@@ -101,11 +101,11 @@ msgstr "Disconnected"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:464
+#: src/OfflineApp.tsx:478
 msgid "Download PNG"
 msgstr "Download PNG"
 
-#: src/OfflineApp.tsx:471
+#: src/OfflineApp.tsx:485
 msgid "Download Replay"
 msgstr "Download Replay"
 
@@ -118,11 +118,11 @@ msgstr "Edit palette color {0}"
 #~ msgid "Eraser"
 #~ msgstr "Eraser"
 
-#: src/OfflineApp.tsx:295
+#: src/OfflineApp.tsx:309
 msgid "Failed to download replay file."
 msgstr "Failed to download replay file."
 
-#: src/OfflineApp.tsx:258
+#: src/OfflineApp.tsx:272
 msgid "Failed to save drawing. Please try again."
 msgstr "Failed to save drawing. Please try again."
 
@@ -134,7 +134,7 @@ msgstr "Failed to save session. Please try downloading as PNG instead."
 #~ msgid "Fill"
 #~ msgstr "Fill"
 
-#: src/components/ToolboxPanel.tsx:415
+#: src/components/ToolboxPanel.tsx:419
 msgid "Flip"
 msgstr "Flip"
 
@@ -159,7 +159,7 @@ msgstr "Initialization Failed"
 msgid "Initializing collaboration session..."
 msgstr "Initializing collaboration session..."
 
-#: src/components/ToolboxPanel.tsx:336
+#: src/components/ToolboxPanel.tsx:340
 msgid "Left click to select layer, right click to toggle visibility"
 msgstr "Left click to select layer, right click to toggle visibility"
 
@@ -191,7 +191,7 @@ msgstr "LOADING..."
 msgid "Off"
 msgstr "Off"
 
-#: src/OfflineApp.tsx:428
+#: src/OfflineApp.tsx:442
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "Offline Drawing ({canvasWidth} × {canvasHeight})"
 
@@ -214,7 +214,7 @@ msgstr "Palette color {0} (selected - edit with color picker below)"
 #~ msgstr "Pan"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:442
+#: src/OfflineApp.tsx:456
 msgid "Parent Post: {0}"
 msgstr "Parent Post: {0}"
 
@@ -269,24 +269,24 @@ msgid "Save as PNG"
 msgstr "Save as PNG"
 
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/OfflineApp.tsx:455
+#: src/OfflineApp.tsx:469
 msgid "Save Drawing"
 msgstr "Save Drawing"
 
-#: src/components/ToolboxPanel.tsx:429
-#: src/components/ToolboxPanel.tsx:430
+#: src/components/ToolboxPanel.tsx:433
+#: src/components/ToolboxPanel.tsx:434
 msgid "Save drawing to gallery"
 msgstr "Save drawing to gallery"
 
 #: src/components/SessionExpiredModal.tsx:122
-#: src/components/ToolboxPanel.tsx:447
+#: src/components/ToolboxPanel.tsx:451
 msgid "Save to Gallery"
 msgstr "Save to Gallery"
 
 #: src/components/SessionExpiredModal.tsx:113
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/components/ToolboxPanel.tsx:442
-#: src/OfflineApp.tsx:455
+#: src/components/ToolboxPanel.tsx:446
+#: src/OfflineApp.tsx:469
 msgid "Saving..."
 msgstr "Saving..."
 
@@ -374,7 +374,7 @@ msgstr "This session has already been saved. You can only download it as a PNG."
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 
-#: src/OfflineApp.tsx:370
+#: src/OfflineApp.tsx:384
 msgid "Time's up."
 msgstr "Time's up."
 
@@ -386,7 +386,7 @@ msgstr "Timer"
 msgid "Timer off"
 msgstr "Timer off"
 
-#: src/components/ToolboxPanel.tsx:411
+#: src/components/ToolboxPanel.tsx:415
 msgid "Toggle horizontal flip"
 msgstr "Toggle horizontal flip"
 

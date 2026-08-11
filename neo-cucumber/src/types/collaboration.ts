@@ -1,3 +1,5 @@
+import type { ToolId } from "../neo/tools";
+
 /** Everything the engine can rasterise, plus the two non-drawing tools. */
 export type BrushType =
   | "solid"
@@ -43,7 +45,7 @@ export interface DrawingState {
   brushSize: number;
   opacity: number;
   color: string;
-  brushType: BrushType;
+  brushType: ToolId;
   layerType: LayerType;
   zoomLevel: number;
   fgVisible: boolean;

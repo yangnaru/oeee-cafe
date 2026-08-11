@@ -1,4 +1,4 @@
-import type { BrushType } from "../types/collaboration";
+import type { ToolId } from "../neo/tools";
 
 // Brush size bounds, shared by the size slider and the [ / ] shortcuts
 export const MIN_BRUSH_SIZE = 1;
@@ -88,7 +88,7 @@ export const initializeTones = (): { [key: string]: Uint8Array } => {
   return tone;
 };
 /** Everything the engine rasterises, in NEO's toolbar order. */
-export const ALL_TOOLS: readonly BrushType[] = [
+export const ALL_TOOLS: readonly ToolId[] = [
   "solid",
   "brush",
   "halftone",
@@ -97,6 +97,17 @@ export const ALL_TOOLS: readonly BrushType[] = [
   "burn",
   "blur",
   "fill",
+  // Dragged out over a rectangle rather than stroked
+  "rect",
+  "rectFill",
+  "ellipse",
+  "ellipseFill",
+  "eraseRect",
+  "blurRect",
+  "flipH",
+  "flipV",
+  "turn",
+  "merge",
   "pan",
 ];
 
@@ -105,4 +116,4 @@ export const ALL_TOOLS: readonly BrushType[] = [
  * this is the full set; it stays a separate constant because fill and pan are
  * chrome rather than strokes and a session could still restrict tools later.
  */
-export const SHARED_TOOLS: readonly BrushType[] = ALL_TOOLS;
+export const SHARED_TOOLS: readonly ToolId[] = ALL_TOOLS;
