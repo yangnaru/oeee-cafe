@@ -113,6 +113,30 @@ export class ActionRecorder {
   }
 
   /**
+   * Records a straight line. NEO pushes the drawing state first, so lineType
+   * lands at slot 11 and the endpoints at 12..15.
+   */
+  pushLine(
+    layer: number,
+    lineType: number,
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    color: { r: number; g: number; b: number; a: number },
+    brushSize: number
+  ): void {
+    this.step();
+    this.push(
+      "line", layer,
+      color.r, color.g, color.b, color.a,
+      0, 0, 0,
+      brushSize, 0,
+      lineType,
+      Math.round(from.x), Math.round(from.y),
+      Math.round(to.x), Math.round(to.y)
+    );
+  }
+
+  /**
    * Number of actions that will be exported, i.e. everything up to head.
    * Undone actions are excluded, so this is the honest basis for a stroke
    * count rather than a counter that only ever increments.

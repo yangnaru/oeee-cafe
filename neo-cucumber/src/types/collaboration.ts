@@ -1,4 +1,4 @@
-import type { ToolId } from "../neo/tools";
+import type { DrawType, ToolId } from "../neo/tools";
 
 /** Everything the engine can rasterise, plus the two non-drawing tools. */
 export type BrushType =
@@ -46,6 +46,8 @@ export interface DrawingState {
   opacity: number;
   color: string;
   brushType: ToolId;
+  /** How the tool lays marks down; defaults to freehand. */
+  drawType?: DrawType;
   layerType: LayerType;
   zoomLevel: number;
   fgVisible: boolean;

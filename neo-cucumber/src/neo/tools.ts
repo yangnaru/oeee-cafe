@@ -43,6 +43,13 @@ export type RegionTool =
  */
 export type ImmediateTool = "eraseAll";
 
+/**
+ * How a drawing tool lays its marks down. NEO's DRAWTYPE_FREEHAND, _LINE and
+ * _BEZIER: an axis across every brush rather than more tools, so any of the
+ * seven can be stroked freehand, drawn as a straight line, or curved.
+ */
+export type DrawType = "freehand" | "line" | "bezier";
+
 export type ToolId = BrushType | RegionTool | ImmediateTool;
 
 export function isImmediateTool(tool: ToolId): tool is ImmediateTool {

@@ -7,6 +7,7 @@ import {
   isImmediateTool,
   isRegionTool,
   type RegionTool,
+  type DrawType,
   type ToolId,
 } from "../neo/tools";
 import { RegionDrag, type RegionRect } from "../neo/regionDrag";
@@ -16,6 +17,7 @@ export interface DrawingState {
   opacity: number;
   color: string;
   brushType: ToolId;
+  drawType?: DrawType;
   layerType: "foreground" | "background";
   fgVisible: boolean;
   bgVisible: boolean;
@@ -57,6 +59,20 @@ interface DrawingEventCallbacks {
   onPointerUp?: () => void;
   /** The rubber-band rectangle as it is dragged, or null when it ends. */
   onRegionPreview?: (rect: RegionRect | null) => void;
+  /** A straight line was drawn from `from` to `to`. */
+  onLine?: (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    brushSize: number,
+    brushType: BrushType,
+    color: { r: number; g: number; b: number; a: number },
+    layer: "foreground" | "background"
+  ) => void;
+  /** Endpoints while a line is dragged out, or null when it ends. */
+  onLinePreview?: (
+    from: { x: number; y: number } | null,
+    to: { x: number; y: number } | null
+  ) => void;
   /** A tool that acts on click was used; record it. */
   onEraseAll?: (layer: "foreground" | "background") => void;
   /** A region tool was released over `rect`; record it. */
@@ -163,6 +179,8 @@ export const useBaseDrawing = (
   const strokeParamsRef = useRef<DrawingState | null>(null);
   /** Live rectangle drag for the region tools. */
   const regionDragRef = useRef<RegionDrag | null>(null);
+  /** Press point while a straight line is being dragged out. */
+  const lineStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     currentDrawingStateRef.current = drawingState;
@@ -398,6 +416,17 @@ export const useBaseDrawing = (
           return;
         }
 
+        // A drawing tool in line mode takes two points and commits on
+        // release, so it also skips the freehand path.
+        if (
+          strokeParamsRef.current.drawType === "line" &&
+          !isRegionTool(strokeParamsRef.current.brushType)
+        ) {
+          lineStartRef.current = coords;
+          callbacks?.onLinePreview?.(coords, coords);
+          return;
+        }
+
         // Region tools drag out a rectangle and act on release, so they take
         // none of the stroke path below.
         if (isRegionTool(strokeParamsRef.current.brushType)) {
@@ -446,6 +475,10 @@ export const useBaseDrawing = (
         drawingStateRef.current.isPanning = false;
         isDrawingRef.current = false;
         strokeParamsRef.current = null;
+        if (lineStartRef.current) {
+          lineStartRef.current = null;
+          callbacks?.onLinePreview?.(null, null);
+        }
         if (regionDragRef.current) {
           regionDragRef.current.cancel();
           regionDragRef.current = null;
@@ -468,6 +501,38 @@ export const useBaseDrawing = (
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
       if (isDrawingDisabledRef.current && !drawingStateRef.current.isPanning) return;
+
+      const from = lineStartRef.current;
+      if (from) {
+        const to = getCanvasCoordinates(e.clientX, e.clientY);
+        lineStartRef.current = null;
+        callbacks?.onLinePreview?.(null, null);
+
+        const params = strokeParamsRef.current;
+        if (params) {
+          const color = {
+            r: parseInt(params.color.slice(1, 3), 16),
+            g: parseInt(params.color.slice(3, 5), 16),
+            b: parseInt(params.color.slice(5, 7), 16),
+            a: params.opacity,
+          };
+          const brush = brushTypeFor(params.brushType);
+          if (!remoteSyncRef.current && drawingEngineRef.current) {
+            // Drawn new -> previous, as NEO draws every segment
+            drawingEngineRef.current.drawLine(
+              drawingEngineRef.current.layers[params.layerType],
+              to.x, to.y, from.x, from.y,
+              params.brushSize, brush, color.r, color.g, color.b, color.a
+            );
+            drawingEngineRef.current.setStrokeState(null);
+            saveToHistory();
+          }
+          callbacks?.onLine?.(from, to, params.brushSize, brush, color, params.layerType);
+          onDrawingChangeRef.current?.();
+        }
+        cleanupPointerState(e.pointerId);
+        return;
+      }
 
       const drag = regionDragRef.current;
       if (drag?.active) {
@@ -560,6 +625,22 @@ export const useBaseDrawing = (
 
         drawingStateRef.current.panLastX = e.clientX;
         drawingStateRef.current.panLastY = e.clientY;
+        return;
+      }
+
+      if (lineStartRef.current) {
+        callbacks?.onLinePreview?.(
+          lineStartRef.current,
+          getCanvasCoordinates(e.clientX, e.clientY)
+        );
+        return;
+      }
+
+      if (lineStartRef.current) {
+        callbacks?.onLinePreview?.(
+          lineStartRef.current,
+          getCanvasCoordinates(e.clientX, e.clientY)
+        );
         return;
       }
 

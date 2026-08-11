@@ -13,7 +13,7 @@ const H = 40;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Mounts the real offline stack with a region tool selected. */
-async function mountWithTool(tool: string) {
+async function mountWithTool(tool: string, extra: Partial<DrawingState> = {}) {
   const previews: (RegionRect | null)[] = [];
   const captured: { api: ReturnType<typeof useOfflineDrawing> | null } = { api: null };
 
@@ -22,6 +22,7 @@ async function mountWithTool(tool: string) {
     brushType: tool as DrawingState["brushType"],
     layerType: "background", zoomLevel: 100,
     fgVisible: true, bgVisible: true, isFlippedHorizontal: false,
+    ...extra,
   };
 
   function Harness() {
@@ -183,5 +184,66 @@ describe("eraseAll, which acts on the press itself", () => {
     const { decodePCH } = await import("./NeoReplay");
     const frame = decodePCH(bytes)!.items.at(-1)!;
     expect(frame).toEqual(["eraseAll", 0]);
+  });
+});
+
+describe("the line draw type", () => {
+  it("draws a straight line on release and records it", async () => {
+    const { api, send, previews } = await mountWithTool("solid", { drawType: "line" });
+    const layer = api.drawingEngine!.layers.background;
+
+    await send("pointerdown", 8, 8);
+    await act(async () => { await sleep(20); });
+    await send("pointermove", 40, 30);
+    await send("pointerup", 40, 30);
+
+    // Painted along the line, not just at the endpoints
+    const at = (x: number, y: number) => layer[(y * W + x) * 4 + 3];
+    expect(at(8, 8)).toBeGreaterThan(0);
+    expect(at(40, 30)).toBeGreaterThan(0);
+    expect(at(24, 19)).toBeGreaterThan(0);
+    // and nothing where a freehand path would not have gone either
+    expect(at(2, 36)).toBe(0);
+    // A straight line is not a region drag, so no rubber band
+    expect(previews).toEqual([]);
+
+    const bytes = new Uint8Array(await api.getReplayBlob().arrayBuffer());
+    const { decodePCH } = await import("./NeoReplay");
+    const frame = decodePCH(bytes)!.items.at(-1)!;
+    expect(frame[0]).toBe("line");
+    // pushCurrent occupies 2..10; lineType then the endpoints
+    expect(frame[11]).toBe(1);
+    expect(frame.slice(12, 16)).toEqual([8, 8, 40, 30]);
+  });
+
+  it("replays to the same pixels it drew", async () => {
+    const { api, send } = await mountWithTool("solid", { drawType: "line" });
+    await send("pointerdown", 6, 30);
+    await act(async () => { await sleep(20); });
+    await send("pointermove", 50, 6);
+    await send("pointerup", 50, 6);
+
+    const { decodePCH, NeoReplay } = await import("./NeoReplay");
+    const decoded = decodePCH(
+      new Uint8Array(await api.getReplayBlob().arrayBuffer())
+    )!;
+    const replay = new NeoReplay(W, H);
+    const buffers = [new Uint8ClampedArray(W * H * 4), new Uint8ClampedArray(W * H * 4)];
+    const { BufferSurface } = await import("./PixelSurface");
+    replay.painter.surfaces = [
+      new BufferSurface(buffers[0], W, H),
+      new BufferSurface(buffers[1], W, H),
+    ];
+    // The replay draws strokes through canvasCtx, so read those instead
+    await replay.playAll(decoded.items);
+
+    const ours = api.drawingEngine!.layers.background;
+    const theirs = replay.getLayerPixels(0);
+    let painted = 0;
+    for (let i = 3; i < ours.length; i += 4) {
+      if (ours[i] > 0 && theirs[i] > 0) painted++;
+    }
+    // The same line is there in both
+    expect(painted).toBeGreaterThan(30);
   });
 });

@@ -34,3 +34,24 @@ export function drawRegionPreview(
   );
   ctx.restore();
 }
+
+/** The straight line being dragged out, drawn the same legible way. */
+export function drawLinePreview(
+  ctx: CanvasRenderingContext2D,
+  from: { x: number; y: number } | null,
+  to: { x: number; y: number } | null,
+  scale = 1
+): void {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (!from || !to) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "difference";
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(from.x * scale + 0.5, from.y * scale + 0.5);
+  ctx.lineTo(to.x * scale + 0.5, to.y * scale + 0.5);
+  ctx.stroke();
+  ctx.restore();
+}

@@ -12,7 +12,7 @@ import { useZoomControls } from "./hooks/useZoomControls";
 import { useOfflineCanvas } from "./hooks/useOfflineCanvas";
 import { compositeLayersToCanvas } from "./utils/canvasExport";
 import { NativeBridge } from "./utils/nativeBridge";
-import { drawRegionPreview } from "./neo/regionPreview";
+import { drawLinePreview, drawRegionPreview } from "./neo/regionPreview";
 import type { RegionRect } from "./neo/regionDrag";
 
 // Validation constants
@@ -132,6 +132,16 @@ function OfflineApp() {
     const ctx = previewCanvasRef.current?.getContext("2d");
     if (ctx) drawRegionPreview(ctx, rect);
   }, []);
+  const handleLinePreview = useCallback(
+    (
+      from: { x: number; y: number } | null,
+      to: { x: number; y: number } | null
+    ) => {
+      const ctx = previewCanvasRef.current?.getContext("2d");
+      if (ctx) drawLinePreview(ctx, from, to);
+    },
+    []
+  );
   const tempCanvasContainerRef = useRef<HTMLDivElement>(null);
   const tempLocalUserCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -171,7 +181,8 @@ function OfflineApp() {
     canvasHeight,
     handleLocalDrawingChange,
     tempCanvasContainerRef,
-    handleRegionPreview
+    handleRegionPreview,
+    handleLinePreview
   );
 
   // Zoom controls

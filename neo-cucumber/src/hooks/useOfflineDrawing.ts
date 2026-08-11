@@ -21,7 +21,12 @@ export const useOfflineDrawing = (
   onDrawingChange?: () => void,
   containerRef?: React.RefObject<HTMLDivElement | null>,
   /** Called with the rubber-band rectangle while a region tool is dragged. */
-  onRegionPreview?: (rect: RegionRect | null) => void
+  onRegionPreview?: (rect: RegionRect | null) => void,
+  /** Called with the endpoints while a straight line is dragged out. */
+  onLinePreview?: (
+    from: { x: number; y: number } | null,
+    to: { x: number; y: number } | null
+  ) => void
 ) => {
   // Initialize replay recording
   const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
@@ -214,6 +219,28 @@ export const useOfflineDrawing = (
     ),
 
     onRegionPreview,
+    onLinePreview,
+
+    onLine: useCallback(
+      (
+        from: { x: number; y: number },
+        to: { x: number; y: number },
+        brushSize: number,
+        brushType: BrushType,
+        color: { r: number; g: number; b: number; a: number },
+        layer: "foreground" | "background"
+      ) => {
+        actionRecorderRef.current.pushLine(
+          layer === "foreground" ? 1 : 0,
+          getLineType(brushType),
+          from,
+          to,
+          color,
+          brushSize
+        );
+      },
+      []
+    ),
 
     /** NEO records a cleared layer as ["eraseAll", layer]. */
     onEraseAll: useCallback((layer: "foreground" | "background") => {
