@@ -28,6 +28,7 @@ import {
   type StrokeMessage,
 } from "./binaryProtocol";
 import { pngDataToLayer } from "./canvasSnapshot";
+import { extentFor, fontSizeForBrush, TEXT_FONT_FAMILY } from "../neo/tools";
 import type { WireBrushType } from "../types/collaboration";
 
 type LayerName = "foreground" | "background";
@@ -122,6 +123,55 @@ function affectedArea(msg: DecodedMessage): Area {
         y1: y1 + pad,
       };
     }
+    case "region": {
+      // The tool table already knows what each op reads and writes -- turn
+      // squares off the rectangle, blur reaches a pixel past it, merge takes
+      // both layers. Deriving it here again would let the two drift.
+      const extent = extentFor(msg.tool, msg.layer === "foreground" ? 1 : 0, msg.rect);
+      if (extent.layers.length > 1) {
+        // merge: both layers, and Area names only one
+        return { kind: "everything" };
+      }
+      return {
+        kind: "pixels",
+        // copy writes nothing, but it *reads* the rectangle, so it still has
+        // to stay ordered against writes to it
+        layer: msg.layer,
+        x0: extent.x0,
+        y0: extent.y0,
+        x1: extent.x1,
+        y1: extent.y1,
+      };
+    }
+    case "line":
+      return {
+        kind: "pixels",
+        layer: msg.layer,
+        x0: Math.min(msg.from.x, msg.to.x) - msg.brushSize,
+        y0: Math.min(msg.from.y, msg.to.y) - msg.brushSize,
+        x1: Math.max(msg.from.x, msg.to.x) + msg.brushSize,
+        y1: Math.max(msg.from.y, msg.to.y) + msg.brushSize,
+      };
+    case "bezier": {
+      // The control polygon bounds the curve, so its box padded by the brush
+      // is a superset of what the curve can touch.
+      const xs = msg.points.filter((_, i) => i % 2 === 0);
+      const ys = msg.points.filter((_, i) => i % 2 === 1);
+      return {
+        kind: "pixels",
+        layer: msg.layer,
+        x0: Math.min(...xs) - msg.brushSize,
+        y0: Math.min(...ys) - msg.brushSize,
+        x1: Math.max(...xs) + msg.brushSize,
+        y1: Math.max(...ys) + msg.brushSize,
+      };
+    }
+    case "text":
+      // Glyph metrics are the font's business, not ours, and guessing a box
+      // too small would let a concurrent op reorder through it. Take the
+      // layer.
+      return { kind: "pixels", layer: msg.layer, x0: -Infinity, y0: -Infinity, x1: Infinity, y1: Infinity };
+    case "eraseAll":
     case "fill":
     case "snapshot":
       // Fills depend on (and snapshots replace) the whole layer
@@ -144,6 +194,11 @@ function isHistoryMessage(msg: DecodedMessage): boolean {
   switch (msg.type) {
     case "stroke":
     case "fill":
+    case "region":
+    case "line":
+    case "bezier":
+    case "eraseAll":
+    case "text":
     case "snapshot":
     case "undoPoint":
     case "undo":
@@ -165,6 +220,8 @@ export class CanvasHistory {
   private openBatch: OpenBatch | null = null;
   // Per-user stroke continuation state of the currently rendered canvas
   private liveStrokes: StrokeStates = new Map();
+  /** One clipboard per user, so a paste replays the sender's copy. */
+  private readonly clipboards = new Map<number, ImageData | null>();
   private snapshotCache = new WeakMap<SnapshotMessage, Uint8ClampedArray>();
 
   constructor(
@@ -694,7 +751,61 @@ export class CanvasHistory {
           msg.color.a
         );
         break;
+      case "region": {
+        // The clipboard belongs to whoever copied. Every client keeps one per
+        // user and swaps it in around the op, so a paste reproduces what the
+        // sender copied rather than whatever the receiver last copied -- which
+        // is usually nothing.
+        const targets = this.buffersFor(layers);
+        this.engine.setClipboard(this.clipboards.get(msg.userId) ?? null);
+        this.engine.applyRegionTool(
+          msg.tool, msg.layer, msg.rect, msg.color, msg.brushSize, targets
+        );
+        if (msg.tool === "copy") {
+          this.clipboards.set(msg.userId, this.engine.getClipboard());
+        }
+        break;
+      }
+      case "line":
+        this.engine.drawLine(
+          layers[msg.layer],
+          // Drawn new -> previous, as NEO draws every segment
+          msg.to.x, msg.to.y, msg.from.x, msg.from.y,
+          msg.brushSize, msg.brushType,
+          msg.color.r, msg.color.g, msg.color.b, msg.color.a
+        );
+        this.engine.setStrokeState(null);
+        break;
+      case "bezier":
+        this.engine.drawBezier(
+          msg.layer,
+          msg.points as [number, number, number, number, number, number, number, number],
+          msg.brushSize, msg.brushType, msg.color,
+          layers[msg.layer]
+        );
+        break;
+      case "eraseAll":
+        this.engine.eraseAll(msg.layer, this.buffersFor(layers));
+        break;
+      case "text":
+        this.engine.drawText(
+          msg.layer, msg.x, msg.y,
+          msg.color, msg.color.a / 255, msg.text,
+          String(fontSizeForBrush(msg.brushSize)), TEXT_FONT_FAMILY,
+          layers[msg.layer]
+        );
+        break;
     }
+  }
+
+  /**
+   * Names a layer record as a buffer pair, so ops that reach through
+   * `neo.surfaces` (merge needs both at once) can be pointed at a fork.
+   */
+  private buffersFor(
+    layers: Record<string, Uint8ClampedArray>
+  ): { foreground: Uint8ClampedArray; background: Uint8ClampedArray } {
+    return { foreground: layers.foreground, background: layers.background };
   }
 
   /**

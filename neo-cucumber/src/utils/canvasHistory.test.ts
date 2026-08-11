@@ -3,8 +3,13 @@ import { CanvasHistory } from "./canvasHistory";
 import {
   BRUSH_TYPE,
   decodeMessage,
+  encodeBezier,
+  encodeEraseAll,
   encodeFill,
+  encodeLine,
+  encodeRegion,
   encodeStroke,
+  encodeText,
   encodeUndo,
   encodeUndoPoint,
 } from "./binaryProtocol";
@@ -61,6 +66,69 @@ class FakeEngine {
   }
 
   queueLayerUpdate() {}
+
+  // Region ops record what they were asked to do, and which buffers they were
+  // pointed at, so a test can tell a fork apart from the live layers.
+  clipboard: ImageData | null = null;
+  getClipboard() {
+    return this.clipboard;
+  }
+  setClipboard(data: ImageData | null) {
+    this.clipboard = data;
+  }
+  applyRegionTool(
+    tool: string,
+    layer: string,
+    rect: { x: number; y: number; width: number; height: number },
+    color: { r: number; g: number; b: number; a: number },
+    _size: number,
+    targets?: { foreground: Uint8ClampedArray; background: Uint8ClampedArray }
+  ) {
+    if (tool === "copy") {
+      // Stand-in for the copied pixels: the red value under the rectangle
+      const buf = (targets ?? this.layers)[layer as "foreground"];
+      this.clipboard = { pasted: buf[(rect.y * SIZE + rect.x) * 4] } as unknown as ImageData;
+    } else if (tool === "paste") {
+      const buf = (targets ?? this.layers)[layer as "foreground"];
+      const value = (this.clipboard as unknown as { pasted: number } | null)?.pasted ?? -1;
+      buf[(rect.y * SIZE + rect.x) * 4] = value;
+    } else {
+      const buf = (targets ?? this.layers)[layer as "foreground"];
+      buf[(rect.y * SIZE + rect.x) * 4] = color.r;
+    }
+    this.ops.push(`region:${tool}:${targets ? "fork" : "live"}`);
+  }
+  eraseAll(layer: string, targets?: { foreground: Uint8ClampedArray; background: Uint8ClampedArray }) {
+    (targets ?? this.layers)[layer as "foreground"].fill(0);
+    this.ops.push(`eraseAll:${layer}`);
+  }
+  drawBezier(
+    layer: string,
+    points: number[],
+    _size: number,
+    _brush: string,
+    color: { r: number; g: number; b: number; a: number },
+    target?: Uint8ClampedArray
+  ) {
+    const buf = target ?? this.layers[layer];
+    buf[(points[1] * SIZE + points[0]) * 4] = color.r;
+    this.ops.push(`bezier:${points.join(",")}`);
+  }
+  drawText(
+    layer: string,
+    x: number,
+    y: number,
+    color: { r: number; g: number; b: number },
+    _alpha: number,
+    text: string,
+    _fontSize: string,
+    _family: string,
+    into?: Uint8ClampedArray
+  ) {
+    const buf = into ?? this.layers[layer];
+    buf[(y * SIZE + x) * 4] = color.r;
+    this.ops.push(`text:${text}`);
+  }
 
   getStrokeState(): StrokeState {
     return this.strokeState;
@@ -443,5 +511,69 @@ describe("brush type wire codes", () => {
     new Uint8Array(bytes)[4] = 99;
     const msg = decodeMessage(bytes);
     expect(msg && msg.type === "stroke" && msg.brushType).toBe("solid");
+  });
+});
+
+
+describe("the tool messages through history", () => {
+  it("pastes what the sender copied, not what the receiver did", async () => {
+    const { engine, history } = setup();
+
+    // Two users copy different pixels. Seed each source first.
+    engine.layers.foreground[(1 * SIZE + 1) * 4] = 111;
+    engine.layers.foreground[(2 * SIZE + 2) * 4] = 222;
+
+    const copy = (user: number, x: number, y: number) =>
+      encodeRegion(user, "foreground", "copy",
+        { x, y, width: 1, height: 1 }, { r: 0, g: 0, b: 0, a: 255 }, 1);
+
+    await remote(history, copy(LOCAL, 1, 1), 1);
+    await remote(history, copy(REMOTE, 2, 2), 2);
+
+    // LOCAL copied last on this client, but it is REMOTE that pastes
+    await remote(history, encodeRegion(REMOTE, "foreground", "paste",
+      { x: 8, y: 8, width: 1, height: 1 }, { r: 0, g: 0, b: 0, a: 255 }, 1), 3);
+    expect(red(engine, 8, 8)).toBe(222);
+
+    // and LOCAL's own paste still gets LOCAL's clipboard
+    await remote(history, encodeRegion(LOCAL, "foreground", "paste",
+      { x: 9, y: 9, width: 1, height: 1 }, { r: 0, g: 0, b: 0, a: 255 }, 1), 4);
+    expect(red(engine, 9, 9)).toBe(111);
+  });
+
+  it("treats every tool message as undoable history", async () => {
+    const { engine, history } = setup();
+    const color = { r: 42, g: 0, b: 0, a: 255 };
+
+    await remote(history, encodeUndoPoint(LOCAL), 1);
+    await remote(history, encodeRegion(LOCAL, "foreground", "rectFill",
+      { x: 3, y: 3, width: 2, height: 2 }, color, 1), 2);
+    expect(red(engine, 3, 3)).toBe(42);
+    expect(history.canUndo()).toBe(true);
+
+    // Undo only lands once the server echoes it back
+    const undo = encodeUndo(LOCAL, false);
+    local(history, undo);
+    await remote(history, undo, 3);
+    expect(red(engine, 3, 3)).toBe(0);
+  });
+
+  it("replays a remote bezier, line, eraseAll and text", async () => {
+    const { engine, history } = setup();
+    const color = { r: 77, g: 0, b: 0, a: 255 };
+
+    await remote(history, encodeBezier(REMOTE, "foreground", 2, "solid", color,
+      [4, 5, 0, 0, 0, 0, 9, 9]), 1);
+    expect(red(engine, 4, 5)).toBe(77);
+
+    await remote(history, encodeText(REMOTE, "foreground", 6, 6, "hi", color, 4), 2);
+    expect(red(engine, 6, 6)).toBe(77);
+
+    await remote(history, encodeLine(REMOTE, "foreground", 1, "solid", color,
+      { x: 1, y: 1 }, { x: 2, y: 2 }), 3);
+
+    await remote(history, encodeEraseAll(REMOTE, "foreground"), 4);
+    expect(red(engine, 4, 5)).toBe(0);
+    expect(engine.ops).toContain("eraseAll:foreground");
   });
 });

@@ -2,6 +2,12 @@ import { LINETYPE, NeoPainter } from "./neo/NeoPainter";
 import { BufferSurface } from "./neo/PixelSurface";
 import { fillToolTypeFor, type RegionTool } from "./neo/tools";
 
+/** A pair of layer buffers an operation can be pointed at. */
+export interface LayerBuffers {
+  foreground: Uint8ClampedArray;
+  background: Uint8ClampedArray;
+}
+
 export class DrawingEngine {
   public imageWidth: number;
   public imageHeight: number;
@@ -26,6 +32,8 @@ export class DrawingEngine {
 
   /** The verified NEO transcription; all pixel work goes through it. */
   private readonly neo: NeoPainter;
+  /** Surfaces over buffers we do not own, kept so replay does not reallocate. */
+  private readonly foreignSurfaces = new WeakMap<Uint8ClampedArray, BufferSurface>();
   private readonly backgroundSurface: BufferSurface;
   private readonly foregroundSurface: BufferSurface;
 
@@ -348,10 +356,54 @@ export class DrawingEngine {
     }
   }
 
+  /**
+   * Wraps a pixel buffer so a kernel can draw into it.
+   *
+   * The two live layers get their standing surfaces. Anything else is a
+   * buffer canvasHistory owns -- it replays history into temporary forks when
+   * compacting -- and it gets a surface over *that* buffer. Falling through
+   * to the foreground surface instead, as this used to, meant a compaction
+   * drew its replay onto the live canvas.
+   */
   private surfaceFor(ctx: Uint8ClampedArray): BufferSurface {
-    return ctx === this.layers.background
-      ? this.backgroundSurface
-      : this.foregroundSurface;
+    if (ctx === this.layers.background) return this.backgroundSurface;
+    if (ctx === this.layers.foreground) return this.foregroundSurface;
+    let surface = this.foreignSurfaces.get(ctx);
+    if (!surface) {
+      surface = new BufferSurface(ctx, this.imageWidth, this.imageHeight);
+      this.foreignSurfaces.set(ctx, surface);
+    }
+    return surface;
+  }
+
+  /**
+   * Runs an operation against buffers other than the live layers.
+   *
+   * Region ops reach their pixels through `neo.surfaces` rather than through
+   * an argument -- merge needs both layers at once -- so redirecting them
+   * means swapping that pair for the duration and putting it back after.
+   */
+  private withTargets<T>(
+    targets: LayerBuffers | undefined,
+    run: () => T
+  ): T {
+    if (!targets) return run();
+    const saved = this.neo.surfaces;
+    this.neo.surfaces = [
+      this.surfaceFor(targets.background),
+      this.surfaceFor(targets.foreground),
+    ];
+    try {
+      return run();
+    } finally {
+      this.neo.surfaces = saved;
+    }
+  }
+
+  /** Only our own buffers are on screen; a fork's repaint would be a lie. */
+  private queueUpdateIfLive(ctx: Uint8ClampedArray): void {
+    if (ctx === this.layers.background) this.queueLayerUpdate("background");
+    else if (ctx === this.layers.foreground) this.queueLayerUpdate("foreground");
   }
 
   public doFloodFill(
@@ -371,8 +423,7 @@ export class DrawingEngine {
       (fillR & 0xff);
     this.neo.doFloodFill(this.surfaceFor(ctx), startX, startY, color);
 
-    const layerName = ctx === this.layers.background ? "background" : "foreground";
-    this.queueLayerUpdate(layerName);
+    this.queueUpdateIfLive(ctx);
   }
 
   public drawLine(
@@ -402,8 +453,7 @@ export class DrawingEngine {
       DrawingEngine.lineTypeFor(brushType)
     );
 
-    const layerName = ctx === this.layers.background ? "background" : "foreground";
-    this.queueLayerUpdate(layerName);
+    this.queueUpdateIfLive(ctx);
   }
 
   /**
@@ -418,7 +468,8 @@ export class DrawingEngine {
     layer: "foreground" | "background",
     rect: { x: number; y: number; width: number; height: number },
     color: { r: number; g: number; b: number; a: number },
-    brushSize: number
+    brushSize: number,
+    targets?: LayerBuffers
   ): void {
     const index = layer === "foreground" ? 1 : 0;
     const { x, y, width, height } = rect;
@@ -429,6 +480,7 @@ export class DrawingEngine {
     this.neo._currentMask = this.maskColor;
 
     const fillType = fillToolTypeFor(tool);
+    this.withTargets(targets, () => {
     if (fillType !== null) {
       this.neo.doFill(index, x, y, width, height, fillType);
     } else {
@@ -462,17 +514,34 @@ export class DrawingEngine {
           break;
       }
     }
+    });
 
+    if (targets) return;
     // merge writes both layers; the rest write one, but queueing both costs a
     // repaint rather than a correctness problem.
     this.queueLayerUpdate("background");
     this.queueLayerUpdate("foreground");
   }
 
+  /**
+   * The clipboard copy/paste works through. Exposed because a collaborative
+   * session keeps one per user rather than one per client: the pixels a paste
+   * needs are the ones the *sender* copied.
+   */
+  public getClipboard(): ImageData | null {
+    return this.neo.getClipboard();
+  }
+
+  public setClipboard(data: ImageData | null): void {
+    this.neo.setClipboard(data);
+  }
+
   /** Clears a whole layer, NEO's EraseAllTool. */
-  public eraseAll(layer: "foreground" | "background"): void {
-    this.neo.eraseAll(layer === "foreground" ? 1 : 0);
-    this.queueLayerUpdate(layer);
+  public eraseAll(layer: "foreground" | "background", targets?: LayerBuffers): void {
+    this.withTargets(targets, () =>
+      this.neo.eraseAll(layer === "foreground" ? 1 : 0)
+    );
+    if (!targets) this.queueLayerUpdate(layer);
   }
 
   /**
@@ -490,7 +559,8 @@ export class DrawingEngine {
     alpha: number,
     text: string,
     fontSize: string,
-    fontFamily: string
+    fontFamily: string,
+    into?: Uint8ClampedArray
   ): void {
     if (!text) return;
     const scratch = this.neo.canvasCtx[0];
@@ -501,7 +571,7 @@ export class DrawingEngine {
     this.neo.doText(0, x, y, packed, alpha, text, fontSize, fontFamily);
 
     const drawn = scratch.getImageData(0, 0, this.imageWidth, this.imageHeight).data;
-    const target = this.layers[layer];
+    const target = into ?? this.layers[layer];
     for (let i = 0; i < target.length; i += 4) {
       const a1 = drawn[i + 3] / 255;
       if (a1 === 0) continue;
@@ -513,7 +583,7 @@ export class DrawingEngine {
       target[i + 3] = Math.round(a * 255);
     }
     scratch.clearRect(0, 0, this.imageWidth, this.imageHeight);
-    this.queueLayerUpdate(layer);
+    if (!into) this.queueLayerUpdate(layer);
   }
 
   /** Draws a cubic bezier through the four control points. */
@@ -522,20 +592,21 @@ export class DrawingEngine {
     points: [number, number, number, number, number, number, number, number],
     brushSize: number,
     brushType: string,
-    color: { r: number; g: number; b: number; a: number }
+    color: { r: number; g: number; b: number; a: number },
+    target?: Uint8ClampedArray
   ): void {
     this.neo._currentColor = [color.r, color.g, color.b, color.a];
     this.neo._currentWidth = brushSize;
     this.neo._currentMaskType = this.maskType;
     this.neo._currentMask = this.maskColor;
     this.neo.drawBezier(
-      this.surfaceFor(this.layers[layer]),
+      this.surfaceFor(target ?? this.layers[layer]),
       points[0], points[1], points[2], points[3],
       points[4], points[5], points[6], points[7],
       DrawingEngine.lineTypeFor(brushType)
     );
     this.neo.prevLine = null;
-    this.queueLayerUpdate(layer);
+    if (!target) this.queueLayerUpdate(layer);
   }
 
   public initialize(ctx?: CanvasRenderingContext2D) {

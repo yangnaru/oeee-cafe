@@ -3,10 +3,16 @@ import { useBaseDrawing, type DrawingState } from "./useBaseDrawing";
 import {
   decodeMessage,
   encodeFill,
+  encodeRegion,
+  encodeLine,
+  encodeBezier,
+  encodeEraseAll,
+  encodeText,
   encodePointerUp,
   encodeUndo,
   encodeUndoPoint,
 } from "../utils/binaryProtocol";
+import type { RegionTool } from "../neo/tools";
 import { type CanvasHistory } from "../utils/canvasHistory";
 import {
   isWireBrushType,
@@ -258,6 +264,99 @@ export const useDrawing = (
       [localIdRef, drawingState.layerType, dispatchLocalMessage, openStroke]
     ),
 
+    /**
+     * Region tools, straight lines, beziers, clears and text all travel as
+     * one message describing the whole operation, rather than as the pixels
+     * it produced. Each is complete on its own, so the stroke batch closes
+     * immediately the way a fill does.
+     */
+    onRegionCommit: useCallback(
+      (
+        tool: RegionTool,
+        layer: "foreground" | "background",
+        rect: { x: number; y: number; width: number; height: number },
+        color: { r: number; g: number; b: number; a: number },
+        brushSize: number
+      ) => {
+        if (localIdRef?.current == null) return;
+        try {
+          openStroke();
+          dispatchLocalMessage(
+            encodeRegion(localIdRef.current, layer, tool, rect, color, brushSize)
+          );
+          strokeOpenRef.current = false;
+        } catch (error) {
+          console.error("Failed to encode/send region event:", error);
+        }
+      },
+      [localIdRef, dispatchLocalMessage, openStroke]
+    ),
+
+    onLine: useCallback(
+      (
+        from: { x: number; y: number },
+        to: { x: number; y: number },
+        brushSize: number,
+        brushType: BrushType,
+        color: { r: number; g: number; b: number; a: number },
+        layer: "foreground" | "background"
+      ) => {
+        if (localIdRef?.current == null) return;
+        try {
+          openStroke();
+          dispatchLocalMessage(
+            encodeLine(
+              localIdRef.current, layer, brushSize,
+              brushType as WireBrushType, color, from, to
+            )
+          );
+          strokeOpenRef.current = false;
+        } catch (error) {
+          console.error("Failed to encode/send line event:", error);
+        }
+      },
+      [localIdRef, dispatchLocalMessage, openStroke]
+    ),
+
+    onBezier: useCallback(
+      (
+        points: number[],
+        brushSize: number,
+        brushType: BrushType,
+        color: { r: number; g: number; b: number; a: number },
+        layer: "foreground" | "background"
+      ) => {
+        if (localIdRef?.current == null) return;
+        try {
+          openStroke();
+          dispatchLocalMessage(
+            encodeBezier(
+              localIdRef.current, layer, brushSize,
+              brushType as WireBrushType, color, points
+            )
+          );
+          strokeOpenRef.current = false;
+        } catch (error) {
+          console.error("Failed to encode/send bezier event:", error);
+        }
+      },
+      [localIdRef, dispatchLocalMessage, openStroke]
+    ),
+
+    onEraseAll: useCallback(
+      (layer: "foreground" | "background") => {
+        if (localIdRef?.current == null) return;
+        try {
+          openStroke();
+          dispatchLocalMessage(encodeEraseAll(localIdRef.current, layer));
+          strokeOpenRef.current = false;
+        } catch (error) {
+          console.error("Failed to encode/send eraseAll event:", error);
+        }
+      },
+      [localIdRef, dispatchLocalMessage, openStroke]
+    ),
+
     onPointerUp: useCallback(() => {
       strokeOpenRef.current = false;
       flushStroke();
@@ -306,6 +405,32 @@ export const useDrawing = (
     }
   }, [canvasHistoryRef, localIdRef, dispatchLocalMessage]);
 
+  /**
+   * Commits text at a point. Unlike the other operations this is not driven
+   * by a pointer callback -- the editor is a DOM box the app owns, and it
+   * decides when Enter means commit -- so the app calls this directly.
+   */
+  const sendText = useCallback(
+    (
+      x: number,
+      y: number,
+      text: string,
+      color: { r: number; g: number; b: number; a: number },
+      brushSize: number,
+      layer: "foreground" | "background"
+    ) => {
+      if (!text || localIdRef?.current == null) return;
+      try {
+        dispatchLocalMessage(
+          encodeText(localIdRef.current, layer, x, y, text, color, brushSize)
+        );
+      } catch (error) {
+        console.error("Failed to encode/send text event:", error);
+      }
+    },
+    [localIdRef, dispatchLocalMessage]
+  );
+
   const handleRedo = useCallback(() => {
     const history = canvasHistoryRef?.current;
     if (!history || !history.canRedo() || localIdRef?.current == null) return;
@@ -320,5 +445,6 @@ export const useDrawing = (
     ...baseDrawing,
     undo: handleUndo,
     redo: handleRedo,
+    sendText,
   };
 };

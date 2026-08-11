@@ -1,4 +1,5 @@
 import type { WireBrushType } from "../types/collaboration";
+import type { RegionTool } from "../neo/tools";
 /**
  * Binary WebSocket protocol for efficient collaborative drawing
  *
@@ -41,7 +42,56 @@ export const MSG_TYPE = {
   UNDO: 0x15,
   // A batch of contiguous polyline points sharing one set of brush properties
   STROKE: 0x16,
+  // A region tool applied to a dragged-out rectangle
+  REGION: 0x17,
+  // A straight line between two points
+  LINE: 0x18,
+  // A cubic bezier through four control points
+  BEZIER: 0x19,
+  // A layer cleared in one go
+  ERASE_ALL: 0x1a,
+  // Text committed at a point
+  TEXT: 0x1b,
 } as const;
+
+/**
+ * Wire codes for region tools. Append only, for the same reason brush codes
+ * are: a client that predates a code cannot learn it, and renumbering would
+ * silently reinterpret history as a different tool.
+ */
+export const REGION_TOOL = {
+  ERASE_RECT: 0,
+  BLUR_RECT: 1,
+  MERGE: 2,
+  FLIP_H: 3,
+  FLIP_V: 4,
+  TURN: 5,
+  RECT: 6,
+  RECT_FILL: 7,
+  ELLIPSE: 8,
+  ELLIPSE_FILL: 9,
+  COPY: 10,
+  PASTE: 11,
+} as const;
+
+const REGION_TOOL_TO_CODE: Record<RegionTool, number> = {
+  eraseRect: REGION_TOOL.ERASE_RECT,
+  blurRect: REGION_TOOL.BLUR_RECT,
+  merge: REGION_TOOL.MERGE,
+  flipH: REGION_TOOL.FLIP_H,
+  flipV: REGION_TOOL.FLIP_V,
+  turn: REGION_TOOL.TURN,
+  rect: REGION_TOOL.RECT,
+  rectFill: REGION_TOOL.RECT_FILL,
+  ellipse: REGION_TOOL.ELLIPSE,
+  ellipseFill: REGION_TOOL.ELLIPSE_FILL,
+  copy: REGION_TOOL.COPY,
+  paste: REGION_TOOL.PASTE,
+};
+
+const CODE_TO_REGION_TOOL: Record<number, RegionTool> = Object.fromEntries(
+  Object.entries(REGION_TOOL_TO_CODE).map(([tool, code]) => [code, tool])
+) as Record<number, RegionTool>;
 
 // Layer constants
 export const LAYER = {
@@ -409,6 +459,145 @@ export function encodePointerUp(userId: number): ArrayBuffer {
 }
 
 // Decoded message types
+/**
+ * Encode REGION message (0x17)
+ * Format: [0x17][id:1][layer:1][tool:1][x:2][y:2][w:2][h:2][rgba:4][size:1]
+ *
+ * The rectangle is sent already clipped and derived, so every client applies
+ * the identical rect rather than re-deriving it from a drag it never saw.
+ */
+export function encodeRegion(
+  userId: number,
+  layer: "foreground" | "background",
+  tool: RegionTool,
+  rect: { x: number; y: number; width: number; height: number },
+  color: { r: number; g: number; b: number; a: number },
+  brushSize: number
+): ArrayBuffer {
+  const buffer = new Uint8Array(17);
+  buffer[0] = MSG_TYPE.REGION;
+  buffer[1] = userId;
+  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[3] = REGION_TOOL_TO_CODE[tool];
+  writeInt16LE(buffer, 4, Math.round(rect.x));
+  writeInt16LE(buffer, 6, Math.round(rect.y));
+  writeInt16LE(buffer, 8, Math.round(rect.width));
+  writeInt16LE(buffer, 10, Math.round(rect.height));
+  buffer[12] = color.r;
+  buffer[13] = color.g;
+  buffer[14] = color.b;
+  buffer[15] = color.a;
+  buffer[16] = brushSize;
+  return buffer.buffer;
+}
+
+/**
+ * Encode LINE message (0x18)
+ * Format: [0x18][id:1][layer:1][brush:1][size:1][rgba:4][x0:2][y0:2][x1:2][y1:2]
+ */
+export function encodeLine(
+  userId: number,
+  layer: "foreground" | "background",
+  brushSize: number,
+  brushType: WireBrushType,
+  color: { r: number; g: number; b: number; a: number },
+  from: { x: number; y: number },
+  to: { x: number; y: number }
+): ArrayBuffer {
+  const buffer = new Uint8Array(17);
+  buffer[0] = MSG_TYPE.LINE;
+  buffer[1] = userId;
+  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[3] = BRUSH_TYPE_TO_CODE[brushType] ?? BRUSH_TYPE.SOLID;
+  buffer[4] = brushSize;
+  buffer[5] = color.r;
+  buffer[6] = color.g;
+  buffer[7] = color.b;
+  buffer[8] = color.a;
+  writeInt16LE(buffer, 9, Math.round(from.x));
+  writeInt16LE(buffer, 11, Math.round(from.y));
+  writeInt16LE(buffer, 13, Math.round(to.x));
+  writeInt16LE(buffer, 15, Math.round(to.y));
+  return buffer.buffer;
+}
+
+/**
+ * Encode BEZIER message (0x19)
+ * Format: [0x19][id:1][layer:1][brush:1][size:1][rgba:4][8 x int16]
+ * Points are in NEO's order: start, both handles, end.
+ */
+export function encodeBezier(
+  userId: number,
+  layer: "foreground" | "background",
+  brushSize: number,
+  brushType: WireBrushType,
+  color: { r: number; g: number; b: number; a: number },
+  points: number[]
+): ArrayBuffer {
+  const buffer = new Uint8Array(25);
+  buffer[0] = MSG_TYPE.BEZIER;
+  buffer[1] = userId;
+  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[3] = BRUSH_TYPE_TO_CODE[brushType] ?? BRUSH_TYPE.SOLID;
+  buffer[4] = brushSize;
+  buffer[5] = color.r;
+  buffer[6] = color.g;
+  buffer[7] = color.b;
+  buffer[8] = color.a;
+  for (let i = 0; i < 8; i++) {
+    writeInt16LE(buffer, 9 + i * 2, Math.round(points[i] ?? 0));
+  }
+  return buffer.buffer;
+}
+
+/**
+ * Encode ERASE_ALL message (0x1a)
+ * Format: [0x1a][id:1][layer:1]
+ */
+export function encodeEraseAll(
+  userId: number,
+  layer: "foreground" | "background"
+): ArrayBuffer {
+  const buffer = new Uint8Array(3);
+  buffer[0] = MSG_TYPE.ERASE_ALL;
+  buffer[1] = userId;
+  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  return buffer.buffer;
+}
+
+/**
+ * Encode TEXT message (0x1b)
+ * Format: [0x1b][id:1][layer:1][size:1][rgba:4][x:2][y:2][len:2][utf8:variable]
+ *
+ * The pen size travels rather than a font size, because the receiver derives
+ * one from the other exactly as NEO does; sending both invites them to drift.
+ */
+export function encodeText(
+  userId: number,
+  layer: "foreground" | "background",
+  x: number,
+  y: number,
+  text: string,
+  color: { r: number; g: number; b: number; a: number },
+  brushSize: number
+): ArrayBuffer {
+  const encoded = new TextEncoder().encode(text);
+  const buffer = new Uint8Array(14 + encoded.length);
+  buffer[0] = MSG_TYPE.TEXT;
+  buffer[1] = userId;
+  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[3] = brushSize;
+  buffer[4] = color.r;
+  buffer[5] = color.g;
+  buffer[6] = color.b;
+  buffer[7] = color.a;
+  writeInt16LE(buffer, 8, Math.round(x));
+  writeInt16LE(buffer, 10, Math.round(y));
+  writeUint16LE(buffer, 12, encoded.length);
+  buffer.set(encoded, 14);
+  return buffer.buffer;
+}
+
 export interface JoinMessage {
   type: "join";
   userId: string;
@@ -455,6 +644,54 @@ export interface FillMessage {
   x: number;
   y: number;
   color: { r: number; g: number; b: number; a: number };
+}
+
+export interface RegionMessage {
+  type: "region";
+  userId: number;
+  layer: "foreground" | "background";
+  tool: RegionTool;
+  rect: { x: number; y: number; width: number; height: number };
+  color: { r: number; g: number; b: number; a: number };
+  brushSize: number;
+}
+
+export interface LineMessage {
+  type: "line";
+  userId: number;
+  layer: "foreground" | "background";
+  brushSize: number;
+  brushType: WireBrushType;
+  color: { r: number; g: number; b: number; a: number };
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+}
+
+export interface BezierMessage {
+  type: "bezier";
+  userId: number;
+  layer: "foreground" | "background";
+  brushSize: number;
+  brushType: WireBrushType;
+  color: { r: number; g: number; b: number; a: number };
+  points: number[];
+}
+
+export interface EraseAllMessage {
+  type: "eraseAll";
+  userId: number;
+  layer: "foreground" | "background";
+}
+
+export interface TextMessage {
+  type: "text";
+  userId: number;
+  layer: "foreground" | "background";
+  x: number;
+  y: number;
+  text: string;
+  color: { r: number; g: number; b: number; a: number };
+  brushSize: number;
 }
 
 export interface ChatMessage {
@@ -510,6 +747,11 @@ export interface LeaveMessage {
 }
 
 export type DecodedMessage =
+  | RegionMessage
+  | LineMessage
+  | BezierMessage
+  | EraseAllMessage
+  | TextMessage
   | JoinMessage
   | LayersMessage
   | WelcomeMessage
@@ -548,6 +790,82 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
   const msgType = buffer[0];
 
   switch (msgType) {
+    case MSG_TYPE.REGION: {
+      if (buffer.length < 17) return null;
+      const tool = CODE_TO_REGION_TOOL[buffer[3]];
+      // A tool code this client predates: drop it rather than guess, since
+      // applying the wrong region op is worse than applying none.
+      if (!tool) return null;
+      return {
+        type: "region",
+        userId: buffer[1],
+        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
+        tool,
+        rect: {
+          x: readInt16LE(buffer, 4),
+          y: readInt16LE(buffer, 6),
+          width: readInt16LE(buffer, 8),
+          height: readInt16LE(buffer, 10),
+        },
+        color: { r: buffer[12], g: buffer[13], b: buffer[14], a: buffer[15] },
+        brushSize: buffer[16],
+      };
+    }
+
+    case MSG_TYPE.LINE: {
+      if (buffer.length < 17) return null;
+      return {
+        type: "line",
+        userId: buffer[1],
+        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
+        brushType: CODE_TO_BRUSH_TYPE[buffer[3]] ?? "solid",
+        brushSize: buffer[4],
+        color: { r: buffer[5], g: buffer[6], b: buffer[7], a: buffer[8] },
+        from: { x: readInt16LE(buffer, 9), y: readInt16LE(buffer, 11) },
+        to: { x: readInt16LE(buffer, 13), y: readInt16LE(buffer, 15) },
+      };
+    }
+
+    case MSG_TYPE.BEZIER: {
+      if (buffer.length < 25) return null;
+      const points: number[] = [];
+      for (let i = 0; i < 8; i++) points.push(readInt16LE(buffer, 9 + i * 2));
+      return {
+        type: "bezier",
+        userId: buffer[1],
+        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
+        brushType: CODE_TO_BRUSH_TYPE[buffer[3]] ?? "solid",
+        brushSize: buffer[4],
+        color: { r: buffer[5], g: buffer[6], b: buffer[7], a: buffer[8] },
+        points,
+      };
+    }
+
+    case MSG_TYPE.ERASE_ALL: {
+      if (buffer.length < 3) return null;
+      return {
+        type: "eraseAll",
+        userId: buffer[1],
+        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
+      };
+    }
+
+    case MSG_TYPE.TEXT: {
+      if (buffer.length < 14) return null;
+      const textLength = readUint16LE(buffer, 12);
+      if (buffer.length < 14 + textLength) return null;
+      return {
+        type: "text",
+        userId: buffer[1],
+        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
+        brushSize: buffer[3],
+        color: { r: buffer[4], g: buffer[5], b: buffer[6], a: buffer[7] },
+        x: readInt16LE(buffer, 8),
+        y: readInt16LE(buffer, 10),
+        text: new TextDecoder().decode(buffer.slice(14, 14 + textLength)),
+      };
+    }
+
     case MSG_TYPE.JOIN: {
       // Format: [0x01][UUID:16][timestamp:8][usernameLength:2][username:variable]
       if (buffer.length < 27) return null; // Minimum: 1 + 16 + 8 + 2 + 0
