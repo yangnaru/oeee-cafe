@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BufferSurface } from "./PixelSurface";
+import { BufferSurface, canvasRoundTrip } from "./PixelSurface";
 import { LINETYPE, MASKTYPE, NeoPainter } from "./NeoPainter";
 import { describeDifference, firstPixelDifference } from "../test/neoHarness";
 
@@ -192,6 +192,56 @@ describe("BufferSurface matches a canvas context", () => {
         firstPixelDifference(canvasPixels, bufferPixels),
         `width ${width}: ${describeDifference(canvasPixels, bufferPixels, W)}`
       ).toBe(-1);
+    }
+  });
+});
+
+describe("partial-alpha results, which the equivalence tests above never reach", () => {
+  // Those draw onto an opaque underlay or at alpha 255, so every result is
+  // opaque and premultiplication happens to be lossless. The interesting case
+  // is a translucent stroke on an empty layer.
+  it("matches a canvas when the result itself is translucent", () => {
+    for (const alpha of [30, 47, 128, 190, 220, 239, 254]) {
+      const { canvasPixels, bufferPixels } = bothSurfaces([
+        {
+          color: [40, 90, 200, alpha],
+          width: 12,
+          lineType: LINETYPE.PEN,
+          points: [
+            [4, 40],
+            [44, 6],
+          ],
+        },
+      ]);
+      expect(
+        firstPixelDifference(canvasPixels, bufferPixels),
+        `alpha ${alpha}: ${describeDifference(canvasPixels, bufferPixels, W)}`
+      ).toBe(-1);
+    }
+  });
+
+  it("reproduces the canvas round trip exactly, value by value", () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+
+    for (const alpha of [0, 1, 2, 47, 128, 190, 239, 254, 255]) {
+      const img = ctx.createImageData(256, 1);
+      for (let c = 0; c < 256; c++) {
+        img.data[c * 4] = c;
+        img.data[c * 4 + 1] = c;
+        img.data[c * 4 + 2] = c;
+        img.data[c * 4 + 3] = alpha;
+      }
+      ctx.putImageData(img, 0, 0);
+      const back = ctx.getImageData(0, 0, 256, 1).data;
+
+      for (let c = 0; c < 256; c++) {
+        expect(canvasRoundTrip(c, alpha), `value ${c} at alpha ${alpha}`).toBe(
+          back[c * 4]
+        );
+      }
     }
   });
 });

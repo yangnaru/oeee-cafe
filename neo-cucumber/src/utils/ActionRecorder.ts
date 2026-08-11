@@ -78,6 +78,41 @@ export class ActionRecorder {
   }
 
   /**
+   * Records a region tool as its own action.
+   *
+   * Verbs that carry the drawing state write pushCurrent's nine slots first --
+   * colour, mask, width, mask type -- which is why their geometry starts at
+   * slot 11 rather than slot 2. Getting that boundary wrong shifts every
+   * following field, so the shape comes from the tool table rather than from
+   * each call site.
+   */
+  pushRegion(
+    verb: string,
+    carriesDrawingState: boolean,
+    layer: number,
+    rect: { x: number; y: number; width: number; height: number },
+    color: { r: number; g: number; b: number; a: number },
+    brushSize: number,
+    trailing: number[] = []
+  ): void {
+    this.step();
+    if (carriesDrawingState) {
+      this.push(
+        verb,
+        layer,
+        color.r, color.g, color.b, color.a,
+        0, 0, 0,
+        brushSize,
+        0,
+        rect.x, rect.y, rect.width, rect.height,
+        ...trailing
+      );
+    } else {
+      this.push(verb, layer, rect.x, rect.y, rect.width, rect.height, ...trailing);
+    }
+  }
+
+  /**
    * Number of actions that will be exported, i.e. everything up to head.
    * Undone actions are excluded, so this is the honest basis for a stroke
    * count rather than a counter that only ever increments.

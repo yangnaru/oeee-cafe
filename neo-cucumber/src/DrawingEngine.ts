@@ -1,5 +1,6 @@
 import { LINETYPE, NeoPainter } from "./neo/NeoPainter";
 import { BufferSurface } from "./neo/PixelSurface";
+import { fillToolTypeFor, type RegionTool } from "./neo/tools";
 
 export class DrawingEngine {
   public imageWidth: number;
@@ -73,6 +74,10 @@ export class DrawingEngine {
     this.neo = new NeoPainter(width, height);
     this.backgroundSurface = new BufferSurface(this.layers.background, width, height);
     this.foregroundSurface = new BufferSurface(this.layers.foreground, width, height);
+    // Layer-addressed operations (the region tools) resolve through this, so
+    // it has to point at the engine's buffers rather than the painter's own
+    // canvases, which nothing here draws to.
+    this.neo.surfaces = [this.backgroundSurface, this.foregroundSurface];
   }
 
   private initializeOffscreenCanvases() {
@@ -399,6 +404,60 @@ export class DrawingEngine {
 
     const layerName = ctx === this.layers.background ? "background" : "foreground";
     this.queueLayerUpdate(layerName);
+  }
+
+  /**
+   * Applies a region tool to a rectangle, in the layer the caller names.
+   *
+   * One entry point rather than a switch at every call site: the painter, the
+   * replay recorder and the collaborative history all need the same mapping
+   * from tool to kernel, and three copies of it would eventually disagree.
+   */
+  public applyRegionTool(
+    tool: RegionTool,
+    layer: "foreground" | "background",
+    rect: { x: number; y: number; width: number; height: number },
+    color: { r: number; g: number; b: number; a: number },
+    brushSize: number
+  ): void {
+    const index = layer === "foreground" ? 1 : 0;
+    const { x, y, width, height } = rect;
+
+    this.neo._currentColor = [color.r, color.g, color.b, color.a];
+    this.neo._currentWidth = brushSize;
+    this.neo._currentMaskType = this.maskType;
+    this.neo._currentMask = this.maskColor;
+
+    const fillType = fillToolTypeFor(tool);
+    if (fillType !== null) {
+      this.neo.doFill(index, x, y, width, height, fillType);
+    } else {
+      switch (tool) {
+        case "eraseRect":
+          this.neo.eraseRect(index, x, y, width, height);
+          break;
+        case "blurRect":
+          this.neo.blurRect(index, x, y, width, height);
+          break;
+        case "merge":
+          this.neo.merge(index, x, y, width, height);
+          break;
+        case "flipH":
+          this.neo.flipH(index, x, y, width, height);
+          break;
+        case "flipV":
+          this.neo.flipV(index, x, y, width, height);
+          break;
+        case "turn":
+          this.neo.turn(index, x, y, width, height);
+          break;
+      }
+    }
+
+    // merge writes both layers; the rest write one, but queueing both costs a
+    // repaint rather than a correctness problem.
+    this.queueLayerUpdate("background");
+    this.queueLayerUpdate("foreground");
   }
 
   public initialize(ctx?: CanvasRenderingContext2D) {
