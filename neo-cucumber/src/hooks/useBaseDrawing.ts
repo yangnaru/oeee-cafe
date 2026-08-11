@@ -2,12 +2,14 @@ import { useEffect, useRef, useCallback } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { useCanvasHistory } from "./useCanvasHistory";
 import type { BrushType } from "../types/collaboration";
+import { brushTypeFor, isRegionTool, type RegionTool, type ToolId } from "../neo/tools";
+import { RegionDrag, type RegionRect } from "../neo/regionDrag";
 
 export interface DrawingState {
   brushSize: number;
   opacity: number;
   color: string;
-  brushType: BrushType;
+  brushType: ToolId;
   layerType: "foreground" | "background";
   fgVisible: boolean;
   bgVisible: boolean;
@@ -47,6 +49,16 @@ interface DrawingEventCallbacks {
     opacity: number
   ) => void;
   onPointerUp?: () => void;
+  /** The rubber-band rectangle as it is dragged, or null when it ends. */
+  onRegionPreview?: (rect: RegionRect | null) => void;
+  /** A region tool was released over `rect`; record it. */
+  onRegionCommit?: (
+    tool: RegionTool,
+    layer: "foreground" | "background",
+    rect: RegionRect,
+    color: { r: number; g: number; b: number; a: number },
+    brushSize: number
+  ) => void;
 }
 
 export const useBaseDrawing = (
@@ -141,6 +153,8 @@ export const useBaseDrawing = (
   // Settings captured at pointer down and held for the duration of the stroke,
   // NEO's prepareDrawing. Null between strokes.
   const strokeParamsRef = useRef<DrawingState | null>(null);
+  /** Live rectangle drag for the region tools. */
+  const regionDragRef = useRef<RegionDrag | null>(null);
 
   useEffect(() => {
     currentDrawingStateRef.current = drawingState;
@@ -223,7 +237,7 @@ export const useBaseDrawing = (
         coords.x,
         coords.y,
         active.brushSize,
-        active.brushType,
+        brushTypeFor(active.brushType),
         r,
         g,
         b,
@@ -237,7 +251,7 @@ export const useBaseDrawing = (
           coords.x,
           coords.y,
           active.brushSize,
-          active.brushType,
+          brushTypeFor(active.brushType),
           r,
           g,
           b,
@@ -251,7 +265,7 @@ export const useBaseDrawing = (
         coords.x,
         coords.y,
         active.brushSize,
-        active.brushType,
+        brushTypeFor(active.brushType),
         r,
         g,
         b,
@@ -269,7 +283,7 @@ export const useBaseDrawing = (
           coords.prevX,
           coords.prevY,
           active.brushSize,
-          active.brushType,
+          brushTypeFor(active.brushType),
           r,
           g,
           b,
@@ -363,6 +377,19 @@ export const useBaseDrawing = (
         // Freeze the settings this stroke will be drawn and recorded with
         strokeParamsRef.current = { ...currentDrawingStateRef.current };
 
+        // Region tools drag out a rectangle and act on release, so they take
+        // none of the stroke path below.
+        if (isRegionTool(strokeParamsRef.current.brushType)) {
+          const drag = new RegionDrag(
+            drawingEngineRef.current?.imageWidth ?? 0,
+            drawingEngineRef.current?.imageHeight ?? 0
+          );
+          drag.begin(coords);
+          regionDragRef.current = drag;
+          callbacks?.onRegionPreview?.(drag.current());
+          return;
+        }
+
         // Notify callback that drawing started
         callbacks?.onPointerDown?.();
 
@@ -398,6 +425,11 @@ export const useBaseDrawing = (
         drawingStateRef.current.isPanning = false;
         isDrawingRef.current = false;
         strokeParamsRef.current = null;
+        if (regionDragRef.current) {
+          regionDragRef.current.cancel();
+          regionDragRef.current = null;
+          callbacks?.onRegionPreview?.(null);
+        }
 
         // Canonical Neo clears the joint-dedup state at the end of every
         // stroke (tools.js freeHandUpHandler) and again after each stroke on
@@ -415,6 +447,43 @@ export const useBaseDrawing = (
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
       if (isDrawingDisabledRef.current && !drawingStateRef.current.isPanning) return;
+
+      const drag = regionDragRef.current;
+      if (drag?.active) {
+        const rect = drag.commit(getCanvasCoordinates(e.clientX, e.clientY));
+        regionDragRef.current = null;
+        callbacks?.onRegionPreview?.(null);
+
+        const params = strokeParamsRef.current;
+        if (rect && params && isRegionTool(params.brushType)) {
+          const color = {
+            r: parseInt(params.color.slice(1, 3), 16),
+            g: parseInt(params.color.slice(3, 5), 16),
+            b: parseInt(params.color.slice(5, 7), 16),
+            a: params.opacity,
+          };
+          if (!remoteSyncRef.current) {
+            drawingEngineRef.current?.applyRegionTool(
+              params.brushType,
+              params.layerType,
+              rect,
+              color,
+              params.brushSize
+            );
+            saveToHistory();
+          }
+          callbacks?.onRegionCommit?.(
+            params.brushType,
+            params.layerType,
+            rect,
+            color,
+            params.brushSize
+          );
+          onDrawingChangeRef.current?.();
+        }
+        cleanupPointerState(e.pointerId);
+        return;
+      }
 
       if (e.button === 1 || drawingStateRef.current.isPanning) {
         drawingStateRef.current.isPanning = false;
@@ -470,6 +539,13 @@ export const useBaseDrawing = (
 
         drawingStateRef.current.panLastX = e.clientX;
         drawingStateRef.current.panLastY = e.clientY;
+        return;
+      }
+
+      const drag = regionDragRef.current;
+      if (drag?.active) {
+        drag.move(getCanvasCoordinates(e.clientX, e.clientY));
+        callbacks?.onRegionPreview?.(drag.current());
         return;
       }
 

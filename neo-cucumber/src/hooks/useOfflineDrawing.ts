@@ -2,6 +2,8 @@ import { useRef, useCallback } from "react";
 import { useBaseDrawing, type DrawingState } from "./useBaseDrawing";
 import { ActionRecorder } from "../utils/ActionRecorder";
 import type { BrushType } from "../types/collaboration";
+import { frameShapeFor, type RegionTool } from "../neo/tools";
+import type { RegionRect } from "../neo/regionDrag";
 
 // Constants matching Neo's LINETYPE values
 const LINETYPE_PEN = 1;
@@ -17,7 +19,9 @@ export const useOfflineDrawing = (
   canvasWidth?: number,
   canvasHeight?: number,
   onDrawingChange?: () => void,
-  containerRef?: React.RefObject<HTMLDivElement | null>
+  containerRef?: React.RefObject<HTMLDivElement | null>,
+  /** Called with the rubber-band rectangle while a region tool is dragged. */
+  onRegionPreview?: (rect: RegionRect | null) => void
 ) => {
   // Initialize replay recording
   const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
@@ -207,6 +211,35 @@ export const useOfflineDrawing = (
         actionRecorderRef.current.push("floodFill", layer, Math.round(x), Math.round(y), color);
       },
       [drawingState.layerType]
+    ),
+
+    onRegionPreview,
+
+    /**
+     * A region tool was applied; record it as its own frame. The verb and
+     * whether it carries the drawing state come from the tool table, since
+     * getting that boundary wrong shifts every field after it.
+     */
+    onRegionCommit: useCallback(
+      (
+        tool: RegionTool,
+        layer: "foreground" | "background",
+        rect: RegionRect,
+        color: { r: number; g: number; b: number; a: number },
+        brushSize: number
+      ) => {
+        const shape = frameShapeFor(tool);
+        if (!shape) return;
+        actionRecorderRef.current.pushRegion(
+          shape.verb,
+          shape.carriesDrawingState,
+          layer === "foreground" ? 1 : 0,
+          rect,
+          color,
+          brushSize
+        );
+      },
+      []
     ),
 
     onPointerUp: useCallback(() => {
