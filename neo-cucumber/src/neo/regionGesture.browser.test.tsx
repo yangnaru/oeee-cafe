@@ -247,3 +247,49 @@ describe("the line draw type", () => {
     expect(painted).toBeGreaterThan(30);
   });
 });
+
+describe("copy and paste", () => {
+  it("copies a region and pastes it elsewhere", async () => {
+    const { api, send } = await mountWithTool("rectFill");
+    const layer = api.drawingEngine!.layers.background;
+
+    // Something to copy, in the top-left
+    await send("pointerdown", 4, 4);
+    await act(async () => { await sleep(20); });
+    await send("pointermove", 16, 16);
+    await send("pointerup", 16, 16);
+    const at = (x: number, y: number) => layer[(y * W + x) * 4 + 3];
+    expect(at(10, 10)).toBeGreaterThan(0);
+    expect(at(40, 26)).toBe(0);
+
+    // Copy leaves the canvas untouched
+    const before = new Uint8ClampedArray(layer);
+    api.drawingEngine!.applyRegionTool(
+      "copy", "background", { x: 4, y: 4, width: 13, height: 13 },
+      { r: 0, g: 0, b: 0, a: 255 }, 1
+    );
+    expect(Array.from(layer)).toEqual(Array.from(before));
+
+    // Paste drops it at the destination
+    api.drawingEngine!.applyRegionTool(
+      "paste", "background", { x: 34, y: 20, width: 13, height: 13 },
+      { r: 0, g: 0, b: 0, a: 255 }, 1
+    );
+    expect(at(40, 26)).toBeGreaterThan(0);
+  });
+
+  it("records paste with the offset slots NEO reads", async () => {
+    const { api, send } = await mountWithTool("paste");
+    await send("pointerdown", 5, 5);
+    await act(async () => { await sleep(20); });
+    await send("pointermove", 20, 18);
+    await send("pointerup", 20, 18);
+
+    const { decodePCH } = await import("./NeoReplay");
+    const frame = decodePCH(
+      new Uint8Array(await api.getReplayBlob().arrayBuffer())
+    )!.items.at(-1)!;
+    // ["paste", layer, x, y, w, h, dx, dy]
+    expect(frame).toEqual(["paste", 0, 5, 5, 16, 14, 0, 0]);
+  });
+});

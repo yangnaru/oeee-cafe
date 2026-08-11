@@ -451,6 +451,15 @@ export class DrawingEngine {
         case "turn":
           this.neo.turn(index, x, y, width, height);
           break;
+        case "copy":
+          // Reads into the clipboard; writes nothing
+          this.neo.copy(index, x, y, width, height);
+          break;
+        case "paste":
+          // Dropped at the dragged rectangle rather than offset from the
+          // source, so the destination is the drag and dx/dy are zero.
+          this.neo.paste(index, x, y, width, height, 0, 0);
+          break;
       }
     }
 

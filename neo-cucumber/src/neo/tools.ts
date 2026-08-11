@@ -35,7 +35,9 @@ export type RegionTool =
   | "rect"
   | "rectFill"
   | "ellipse"
-  | "ellipseFill";
+  | "ellipseFill"
+  | "copy"
+  | "paste";
 
 /**
  * Tools that act the moment you click, with neither a stroke nor a rectangle.
@@ -67,6 +69,8 @@ const REGION_TOOLS: readonly RegionTool[] = [
   "rectFill",
   "ellipse",
   "ellipseFill",
+  "copy",
+  "paste",
 ];
 
 export function isRegionTool(tool: ToolId): tool is RegionTool {
@@ -118,6 +122,11 @@ export function extentFor(
     case "rectFill":
     case "ellipse":
     case "ellipseFill":
+      return fillExtent(layer, x, y, w, h);
+    case "copy":
+      // Reads pixels into the clipboard and writes none
+      return { layers: [], x0: x, y0: y, x1: x + w - 1, y1: y + h - 1 };
+    case "paste":
       return fillExtent(layer, x, y, w, h);
   }
 }
@@ -172,5 +181,9 @@ export function frameShapeFor(tool: RegionTool): RegionFrameShape | null {
     case "ellipse":
     case "ellipseFill":
       return { verb: "fill", carriesDrawingState: true };
+    case "copy":
+      return { verb: "copy", carriesDrawingState: false };
+    case "paste":
+      return { verb: "paste", carriesDrawingState: false };
   }
 }

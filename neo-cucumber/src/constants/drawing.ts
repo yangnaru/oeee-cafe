@@ -108,6 +108,8 @@ export const ALL_TOOLS: readonly ToolId[] = [
   "flipV",
   "turn",
   "merge",
+  "copy",
+  "paste",
   "eraseAll",
   "pan",
 ];

@@ -54,6 +54,10 @@ export const ToolSelector = ({
         return "material-symbols:layers";
       case "eraseAll":
         return "material-symbols:delete-sweep";
+      case "copy":
+        return "material-symbols:content-copy";
+      case "paste":
+        return "material-symbols:content-paste";
       case "eraser":
         return "material-symbols:ink-eraser";
       case "fill":

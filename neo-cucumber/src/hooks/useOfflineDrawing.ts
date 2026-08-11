@@ -272,7 +272,10 @@ export const useOfflineDrawing = (
           layer === "foreground" ? 1 : 0,
           rect,
           color,
-          brushSize
+          brushSize,
+          // paste's frame ends with the offset it was dropped at; we drop it
+          // where it was dragged, so that offset is zero.
+          tool === "paste" ? [0, 0] : []
         );
       },
       []
