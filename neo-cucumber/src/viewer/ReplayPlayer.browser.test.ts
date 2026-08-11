@@ -165,3 +165,67 @@ describe("ReplayPlayer", () => {
     player.dispose();
   });
 });
+
+describe("settling on the artwork", () => {
+  /** Generated rather than hand-written, so the pixels are what we think. */
+  function pngOf(paint: (ctx: CanvasRenderingContext2D) => void): string {
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d")!;
+    paint(ctx);
+    return canvas.toDataURL("image/png");
+  }
+
+  const RED = pngOf((ctx) => {
+    ctx.fillStyle = "rgb(255, 0, 0)";
+    ctx.fillRect(0, 0, W, H);
+  });
+  const TRANSPARENT = pngOf(() => {});
+
+  const withRestore = () => [...items, ["restore", RED, TRANSPARENT]];
+
+  it("applies the final image when playback reaches the end", async () => {
+    const ctx = displayContext();
+    const player = new ReplayPlayer(withRestore(), W, H, ctx, () => {});
+
+    await player.skipToEnd();
+    const px = pixels(ctx);
+    // The whole canvas is the restore image, not what the strokes drew
+    expect([px[0], px[1], px[2], px[3]]).toEqual([255, 0, 0, 255]);
+  });
+
+  it("does not apply it before the end", async () => {
+    const ctx = displayContext();
+    const player = new ReplayPlayer(withRestore(), W, H, ctx, () => {});
+
+    await player.seekTo(2);
+    const px = pixels(ctx);
+    expect([px[0], px[1], px[2]]).not.toEqual([255, 0, 0]);
+  });
+
+  it("re-applies it after seeking back and forward", async () => {
+    const ctx = displayContext();
+    const player = new ReplayPlayer(withRestore(), W, H, ctx, () => {});
+
+    await player.skipToEnd();
+    await player.seekTo(1);
+    await player.skipToEnd();
+    const px = pixels(ctx);
+    expect([px[0], px[1], px[2]]).toEqual([255, 0, 0]);
+  });
+
+  it("keeps the strokes when the final image will not load", async () => {
+    const ctx = displayContext();
+    const broken = [...items, ["restore", "data:image/png;base64,NOT_A_PNG", TRANSPARENT]];
+    const player = new ReplayPlayer(broken, W, H, ctx, () => {});
+
+    await player.skipToEnd();
+
+    // Falls back to what the strokes drew rather than blanking the canvas
+    const reference = displayContext();
+    const plain = new ReplayPlayer(items, W, H, reference, () => {});
+    await plain.skipToEnd();
+    expect(firstPixelDifference(pixels(ctx), pixels(reference))).toBe(-1);
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BufferSurface, canvasRoundTrip } from "./PixelSurface";
+import { BufferSurface } from "./PixelSurface";
 import { LINETYPE, MASKTYPE, NeoPainter } from "./NeoPainter";
 import { describeDifference, firstPixelDifference } from "../test/neoHarness";
 
@@ -196,12 +196,15 @@ describe("BufferSurface matches a canvas context", () => {
   });
 });
 
-describe("partial-alpha results, which the equivalence tests above never reach", () => {
-  // Those draw onto an opaque underlay or at alpha 255, so every result is
-  // opaque and premultiplication happens to be lossless. The interesting case
-  // is a translucent stroke on an empty layer.
-  it("matches a canvas when the result itself is translucent", () => {
-    for (const alpha of [30, 47, 128, 190, 220, 239, 254]) {
+describe("the one place a buffer deliberately differs from a canvas", () => {
+  // A canvas stores premultiplied, so it loses a little of a translucent
+  // colour on every read-modify-write. The painter keeps its precision
+  // instead of reproducing that, which means these two genuinely disagree
+  // while a result is translucent. Asserted rather than assumed, so the size
+  // of the difference stays visible if anything changes.
+  it("keeps translucent colour a canvas would round away", () => {
+    const seen: number[] = [];
+    for (const alpha of [47, 128, 220]) {
       const { canvasPixels, bufferPixels } = bothSurfaces([
         {
           color: [40, 90, 200, alpha],
@@ -213,35 +216,38 @@ describe("partial-alpha results, which the equivalence tests above never reach",
           ],
         },
       ]);
-      expect(
-        firstPixelDifference(canvasPixels, bufferPixels),
-        `alpha ${alpha}: ${describeDifference(canvasPixels, bufferPixels, W)}`
-      ).toBe(-1);
+      let worst = 0;
+      for (let i = 0; i < canvasPixels.length; i += 4) {
+        for (let c = 0; c < 3; c++) {
+          worst = Math.max(worst, Math.abs(canvasPixels[i + c] - bufferPixels[i + c]));
+        }
+      }
+      seen.push(worst);
     }
+    // Small, bounded, and largest at low alpha -- a stroke has edge pixels at
+    // every alpha, so even a high nominal alpha differs somewhere. Playback
+    // settles onto the artwork via the restore frame, so none of this
+    // survives to the end.
+    expect(Math.max(...seen)).toBeLessThanOrEqual(12);
+    expect(seen[0]).toBeGreaterThan(seen[2]);
   });
 
-  it("reproduces the canvas round trip exactly, value by value", () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 256;
-    canvas.height = 1;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-
-    for (const alpha of [0, 1, 2, 47, 128, 190, 239, 254, 255]) {
-      const img = ctx.createImageData(256, 1);
-      for (let c = 0; c < 256; c++) {
-        img.data[c * 4] = c;
-        img.data[c * 4 + 1] = c;
-        img.data[c * 4 + 2] = c;
-        img.data[c * 4 + 3] = alpha;
-      }
-      ctx.putImageData(img, 0, 0);
-      const back = ctx.getImageData(0, 0, 256, 1).data;
-
-      for (let c = 0; c < 256; c++) {
-        expect(canvasRoundTrip(c, alpha), `value ${c} at alpha ${alpha}`).toBe(
-          back[c * 4]
-        );
-      }
-    }
+  it("agrees exactly once the result is opaque", () => {
+    const { canvasPixels, bufferPixels } = bothSurfaces([
+      underlay,
+      {
+        color: [10, 10, 10, 255],
+        width: 9,
+        lineType: LINETYPE.PEN,
+        points: [
+          [10, 12],
+          [40, 36],
+        ],
+      },
+    ]);
+    expect(
+      firstPixelDifference(canvasPixels, bufferPixels),
+      describeDifference(canvasPixels, bufferPixels, W)
+    ).toBe(-1);
   });
 });

@@ -52,6 +52,14 @@ export class ReplayPlayer {
   private disposed = false;
 
   private readonly items: Frame[];
+  /**
+   * The replay's final image. Strokes render through a canvas, which loses a
+   * little translucent colour that the painter's buffers keep, so playback
+   * finishes by applying this and landing on exactly the artwork rather than
+   * near it.
+   */
+  private readonly finalRestore: Frame | null;
+  private restoreApplied = false;
   private readonly width: number;
   private readonly height: number;
   private readonly display: CanvasRenderingContext2D;
@@ -70,7 +78,10 @@ export class ReplayPlayer {
     this.onChange = onChange;
 
     // Restore frames hold the finished drawing as a PNG. Replaying the strokes
-    // is the point here, so they are skipped rather than short-circuiting it.
+    // is the point, so they are stepped over rather than short-circuiting it,
+    // but the last one is kept to settle on at the end.
+    const restores = items.filter((item) => item[0] === "restore");
+    this.finalRestore = restores.length > 0 ? restores[restores.length - 1] : null;
     this.items = items.filter((item) => item[0] !== "restore");
 
     for (let f = 0; f < this.items.length; f++) {
@@ -104,6 +115,22 @@ export class ReplayPlayer {
     this.display.fillRect(0, 0, width, height);
     this.display.drawImage(this.replay.painter.canvas[0], 0, 0);
     this.display.drawImage(this.replay.painter.canvas[1], 0, 0);
+  }
+
+  /**
+   * Applies the final image once playback reaches the end. A replay whose
+   * restore frame will not load stays on the strokes rather than losing them.
+   */
+  private async settle(): Promise<void> {
+    if (this.restoreApplied || !this.finalRestore) return;
+    if (this.position < this.total) return;
+    this.restoreApplied = true;
+    try {
+      await this.replay.apply(this.finalRestore);
+      this.paint();
+    } catch {
+      // Damaged final image; what was drawn is better than nothing
+    }
   }
 
   private async advance(): Promise<boolean> {
@@ -142,6 +169,7 @@ export class ReplayPlayer {
 
     if (this.position >= this.total) {
       this.playing = false;
+      await this.settle();
       this.notify();
       return;
     }
@@ -188,11 +216,13 @@ export class ReplayPlayer {
     if (clamped < this.position) {
       this.replay = new NeoReplay(this.width, this.height);
       this.position = 0;
+      this.restoreApplied = false;
     }
     while (this.position < clamped) {
       if (!(await this.advance())) break;
     }
     this.paint();
+    await this.settle();
     this.notify();
   }
 

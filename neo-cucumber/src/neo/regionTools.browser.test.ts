@@ -10,15 +10,10 @@ import {
   type RegionTool,
 } from "./tools";
 import { extentContains } from "./extents";
-import {
-  LAYER,
-  createCanonicalPainter,
-  decodePCH,
-  describeDifference,
-  firstPixelDifference,
-  readPixels,
-  replayWithNeo,
-} from "../test/neoHarness";
+import { NeoPainter } from "./NeoPainter";
+import { BufferSurface } from "./PixelSurface";
+import { NeoReplay, decodePCH as decodeReplay } from "./NeoReplay";
+import { describeDifference, firstPixelDifference } from "../test/neoHarness";
 
 const W = 48;
 const H = 48;
@@ -26,10 +21,28 @@ const H = 48;
 const COLOR = { r: 30, g: 200, b: 90, a: 255 };
 const SIZE = 3;
 
-/** An engine and a canonical painter carrying the same starting picture. */
+/**
+ * An engine and a reference painter carrying the same starting picture.
+ *
+ * The reference is buffer-backed rather than canvas-backed on purpose. A
+ * canvas loses a little translucent colour on every write and the painter
+ * deliberately does not, so comparing against one here would measure storage
+ * precision rather than whether the tool was mapped to the right kernel.
+ * NeoRegions.browser.test.ts holds the kernels themselves to canonical NEO,
+ * canvas against canvas, where that difference does not arise.
+ */
 function seeded() {
   const engine = new DrawingEngine(W, H);
-  const cp = createCanonicalPainter(W, H);
+  const refLayers = [
+    new Uint8ClampedArray(W * H * 4),
+    new Uint8ClampedArray(W * H * 4),
+  ];
+  const reference = new NeoPainter(W, H);
+  reference.surfaces = [
+    new BufferSurface(refLayers[0], W, H),
+    new BufferSurface(refLayers[1], W, H),
+  ];
+  const cp = { painter: reference, contexts: reference.surfaces, layers: refLayers };
 
   const strokes: [number, [number, number, number, number], number, [number, number][]][] = [
     [0, [200, 60, 40, 255], 16, [[2, 8], [46, 40]]],
@@ -118,7 +131,7 @@ describe("the tool model", () => {
   });
 });
 
-describe("region tools through the engine", () => {
+describe("region tools through the engine map to the right kernel", () => {
   const cases: [RegionTool, (cp: ReturnType<typeof seeded>["cp"]) => void][] = [
     ["eraseRect", ({ painter }) => painter.eraseRect(0, RECT.x, RECT.y, RECT.width, RECT.height)],
     ["blurRect", ({ painter }) => painter.blurRect(0, RECT.x, RECT.y, RECT.width, RECT.height)],
@@ -131,7 +144,7 @@ describe("region tools through the engine", () => {
   ];
 
   for (const [tool, applyToNeo] of cases) {
-    it(`${tool} matches canonical NEO`, () => {
+    it(`${tool} matches the kernel it should call`, () => {
       const { engine, cp } = seeded();
 
       cp.painter._currentColor = [COLOR.r, COLOR.g, COLOR.b, COLOR.a];
@@ -145,7 +158,7 @@ describe("region tools through the engine", () => {
         const ours = zeroTransparent(
           new Uint8ClampedArray(layer === 0 ? engine.layers.background : engine.layers.foreground)
         );
-        const neo = zeroTransparent(readPixels(cp.contexts[layer], W, H));
+        const neo = zeroTransparent(new Uint8ClampedArray(cp.layers[layer]));
         expect(
           firstPixelDifference(ours, neo),
           `${tool} layer ${layer}: ${describeDifference(ours, neo, W)}`
@@ -184,7 +197,7 @@ describe("region tools through the engine", () => {
 });
 
 describe("eraseRect end to end", () => {
-  it("records a frame NEO replays back to the same pixels", async () => {
+  it("records a frame that replays back to the same pixels", async () => {
     const { engine } = seeded();
     const recorder = new ActionRecorder();
 
@@ -212,17 +225,29 @@ describe("eraseRect end to end", () => {
     engine.applyRegionTool("eraseRect", "background", RECT, COLOR, SIZE);
     recorder.pushRegion(shape.verb, shape.carriesDrawingState, 0, RECT, COLOR, SIZE);
 
-    const decoded = await decodePCH(recorder.getReplayBlob(W, H));
+    const decoded = decodeReplay(
+      new Uint8Array(await recorder.getReplayBlob(W, H).arrayBuffer())
+    )!;
     const frame = decoded.items[decoded.items.length - 1];
     expect(frame[0]).toBe("eraseRect2");
     // pushCurrent occupies 2..10, so the rectangle starts at 11
     expect(frame.slice(11, 15)).toEqual([RECT.x, RECT.y, RECT.width, RECT.height]);
 
-    const cp = createCanonicalPainter(W, H);
-    replayWithNeo(cp, decoded.items);
+    // Replay, and compare against doing the same operations directly -- both
+    // canvas-backed, so this measures whether the recorded frame reproduces
+    // the operation, not how the painter stores pixels.
+    const replay = new NeoReplay(W, H);
+    await replay.playAll(decoded.items);
 
-    const ours = zeroTransparent(new Uint8ClampedArray(engine.layers.background));
-    const neo = zeroTransparent(readPixels(cp.contexts[LAYER.BACKGROUND], W, H));
+    const direct = new NeoReplay(W, H);
+    await direct.playAll(decoded.items.slice(0, -1));
+    direct.painter._currentColor = [COLOR.r, COLOR.g, COLOR.b, COLOR.a];
+    direct.painter._currentWidth = SIZE;
+    direct.painter._currentMaskType = 0;
+    direct.painter.eraseRect(0, RECT.x, RECT.y, RECT.width, RECT.height);
+
+    const ours = zeroTransparent(direct.getLayerPixels(0));
+    const neo = zeroTransparent(replay.getLayerPixels(0));
     expect(
       firstPixelDifference(ours, neo),
       describeDifference(ours, neo, W)
