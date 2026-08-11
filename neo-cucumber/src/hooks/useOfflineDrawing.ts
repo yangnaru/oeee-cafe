@@ -28,7 +28,9 @@ export const useOfflineDrawing = (
     to: { x: number; y: number } | null
   ) => void,
   /** Called when the text tool is clicked, to open an editor there. */
-  onTextPlace?: (x: number, y: number) => void
+  onTextPlace?: (x: number, y: number) => void,
+  /** Called with the curve so far while a bezier is being built. */
+  onBezierPreview?: (points: number[] | null) => void
 ) => {
   // Initialize replay recording
   const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
@@ -223,6 +225,26 @@ export const useOfflineDrawing = (
     onRegionPreview,
     onLinePreview,
     onTextPlace,
+    onBezierPreview,
+
+    onBezier: useCallback(
+      (
+        points: number[],
+        brushSize: number,
+        brushType: BrushType,
+        color: { r: number; g: number; b: number; a: number },
+        layer: "foreground" | "background"
+      ) => {
+        actionRecorderRef.current.pushBezier(
+          layer === "foreground" ? 1 : 0,
+          getLineType(brushType),
+          points,
+          color,
+          brushSize
+        );
+      },
+      []
+    ),
 
     onLine: useCallback(
       (

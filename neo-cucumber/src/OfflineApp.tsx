@@ -12,7 +12,7 @@ import { useZoomControls } from "./hooks/useZoomControls";
 import { useOfflineCanvas } from "./hooks/useOfflineCanvas";
 import { compositeLayersToCanvas } from "./utils/canvasExport";
 import { NativeBridge } from "./utils/nativeBridge";
-import { drawLinePreview, drawRegionPreview } from "./neo/regionPreview";
+import { drawBezierPreview, drawLinePreview, drawRegionPreview } from "./neo/regionPreview";
 import type { RegionRect } from "./neo/regionDrag";
 import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 
@@ -155,6 +155,11 @@ function OfflineApp() {
     },
     []
   );
+  const handleBezierPreview = useCallback((points: number[] | null) => {
+    const ctx = previewCanvasRef.current?.getContext("2d");
+    if (ctx) drawBezierPreview(ctx, points);
+  }, []);
+
   const tempCanvasContainerRef = useRef<HTMLDivElement>(null);
   const tempLocalUserCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -197,7 +202,8 @@ function OfflineApp() {
     tempCanvasContainerRef,
     handleRegionPreview,
     handleLinePreview,
-    handleTextPlace
+    handleTextPlace,
+    handleBezierPreview
   );
 
   // Focus the box as soon as it appears, so typing just works

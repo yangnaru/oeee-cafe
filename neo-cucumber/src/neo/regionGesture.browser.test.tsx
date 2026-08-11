@@ -248,6 +248,103 @@ describe("the line draw type", () => {
   });
 });
 
+describe("the bezier draw type", () => {
+  /** NEO's gesture: drag out the chord, then click each handle in turn. */
+  async function buildCurve(
+    send: (t: string, x: number, y: number) => Promise<void>,
+    c1: [number, number],
+    c2: [number, number]
+  ) {
+    await send("pointerdown", 8, 30);
+    await act(async () => { await sleep(20); });
+    await send("pointermove", 50, 30);
+    await send("pointerup", 50, 30);          // endpoints set
+
+    await send("pointerdown", ...c1);
+    await send("pointerup", ...c1);           // first handle
+
+    await send("pointerdown", ...c2);
+    await send("pointerup", ...c2);           // second handle, commits
+  }
+
+  it("commits only on the third release, and records NEO's frame", async () => {
+    const { api, send } = await mountWithTool("solid", { drawType: "bezier" });
+    const layer = api.drawingEngine!.layers.background;
+    const at = (x: number, y: number) => layer[(y * W + x) * 4 + 3];
+
+    await send("pointerdown", 8, 30);
+    await act(async () => { await sleep(20); });
+    await send("pointermove", 50, 30);
+    await send("pointerup", 50, 30);
+    // The chord is only a preview so far -- nothing on the canvas yet
+    expect(at(29, 30)).toBe(0);
+
+    await send("pointerdown", 16, 6);
+    await send("pointerup", 16, 6);
+    expect(at(29, 30)).toBe(0);
+
+    await send("pointerdown", 42, 6);
+    await send("pointerup", 42, 6);
+    // Third release commits
+    expect(at(29, 12)).toBeGreaterThan(0);
+
+    const bytes = new Uint8Array(await api.getReplayBlob().arrayBuffer());
+    const { decodePCH } = await import("./NeoReplay");
+    const frame = decodePCH(bytes)!.items.at(-1)!;
+    expect(frame[0]).toBe("bezier");
+    // pushCurrent occupies 2..10, then lineType and the four points in
+    // NEO's order: start, both handles, end.
+    expect(frame[11]).toBe(1);
+    expect(frame.slice(12, 20)).toEqual([8, 30, 16, 6, 42, 6, 50, 30]);
+  });
+
+  it("bows away from the chord, so it is a curve and not a line", async () => {
+    const { api, send } = await mountWithTool("solid", { drawType: "bezier" });
+    const layer = api.drawingEngine!.layers.background;
+    const at = (x: number, y: number) => layer[(y * W + x) * 4 + 3];
+
+    await buildCurve(send, [16, 6], [42, 6]);
+
+    // Handles pull the middle up, away from the straight chord at y=30
+    expect(at(29, 30)).toBe(0);
+    let bowed = false;
+    for (let y = 8; y < 22; y++) if (at(29, y) > 0) bowed = true;
+    expect(bowed).toBe(true);
+    // Both endpoints are still on the curve
+    expect(at(8, 30)).toBeGreaterThan(0);
+    expect(at(50, 30)).toBeGreaterThan(0);
+  });
+
+  it("replays to the same pixels it drew", async () => {
+    const { api, send } = await mountWithTool("solid", { drawType: "bezier" });
+    await buildCurve(send, [14, 4], [44, 8]);
+
+    const { decodePCH, NeoReplay } = await import("./NeoReplay");
+    const { BufferSurface } = await import("./PixelSurface");
+    const decoded = decodePCH(
+      new Uint8Array(await api.getReplayBlob().arrayBuffer())
+    )!;
+    const replay = new NeoReplay(W, H);
+    const buffers = [new Uint8ClampedArray(W * H * 4), new Uint8ClampedArray(W * H * 4)];
+    replay.painter.surfaces = [
+      new BufferSurface(buffers[0], W, H),
+      new BufferSurface(buffers[1], W, H),
+    ];
+    await replay.playAll(decoded.items);
+
+    const ours = api.drawingEngine!.layers.background;
+    const theirs = replay.getLayerPixels(0);
+    let painted = 0;
+    let disagreed = 0;
+    for (let i = 3; i < ours.length; i += 4) {
+      if (ours[i] > 0 && theirs[i] > 0) painted++;
+      if (ours[i] > 0 !== theirs[i] > 0) disagreed++;
+    }
+    expect(painted).toBeGreaterThan(40);
+    expect(disagreed).toBe(0);
+  });
+});
+
 describe("copy and paste", () => {
   it("copies a region and pastes it elsewhere", async () => {
     const { api, send } = await mountWithTool("rectFill");

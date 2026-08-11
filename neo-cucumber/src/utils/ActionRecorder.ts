@@ -137,6 +137,28 @@ export class ActionRecorder {
   }
 
   /**
+   * Records a bezier. Like `line`, it pushes the drawing state first, so
+   * lineType lands at slot 11 and the eight control coordinates at 12..19.
+   */
+  pushBezier(
+    layer: number,
+    lineType: number,
+    points: number[],
+    color: { r: number; g: number; b: number; a: number },
+    brushSize: number
+  ): void {
+    this.step();
+    this.push(
+      "bezier", layer,
+      color.r, color.g, color.b, color.a,
+      0, 0, 0,
+      brushSize, 0,
+      lineType,
+      ...points.map((v) => Math.round(v))
+    );
+  }
+
+  /**
    * Number of actions that will be exported, i.e. everything up to head.
    * Undone actions are excluded, so this is the honest basis for a stroke
    * count rather than a counter that only ever increments.

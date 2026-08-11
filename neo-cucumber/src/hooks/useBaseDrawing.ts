@@ -13,6 +13,14 @@ import {
 } from "../neo/tools";
 import { RegionDrag, type RegionRect } from "../neo/regionDrag";
 
+/**
+ * Copies the control points so a preview can move a handle without writing it
+ * back into the gesture state. Order is NEO's own: start, both handles, end.
+ */
+function bezierPreviewPoints(points: number[]): number[] {
+  return points.slice();
+}
+
 export interface DrawingState {
   brushSize: number;
   opacity: number;
@@ -76,6 +84,14 @@ interface DrawingEventCallbacks {
   ) => void;
   /** The text tool was clicked; open an editor at this canvas point. */
   onTextPlace?: (x: number, y: number) => void;
+  onBezier?: (
+    points: number[],
+    brushSize: number,
+    brushType: BrushType,
+    color: { r: number; g: number; b: number; a: number },
+    layerType: "foreground" | "background"
+  ) => void;
+  onBezierPreview?: (points: number[] | null) => void;
   /** A tool that acts on click was used; record it. */
   onEraseAll?: (layer: "foreground" | "background") => void;
   /** A region tool was released over `rect`; record it. */
@@ -183,6 +199,16 @@ export const useBaseDrawing = (
   /** Live rectangle drag for the region tools. */
   const regionDragRef = useRef<RegionDrag | null>(null);
   /** Press point while a straight line is being dragged out. */
+  // A bezier is built across three separate press/release cycles, so unlike
+  // every other gesture its state has to survive pointer-up. NEO's step
+  // counter, verbatim: 0 = dragging the chord, 1 = placing the first handle,
+  // 2 = placing the second, which commits.
+  const bezierRef = useRef<{
+    step: number;
+    points: number[];
+    params: DrawingState | null;
+  }>({ step: 0, points: [], params: null });
+
   const lineStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -427,6 +453,22 @@ export const useBaseDrawing = (
           return;
         }
 
+        // Bezier spans three gestures. Only the first press seeds the curve
+        // and freezes the settings; the two that follow are handled entirely
+        // on release, so they must not disturb what is already in flight.
+        if (
+          strokeParamsRef.current.drawType === "bezier" &&
+          !isRegionTool(strokeParamsRef.current.brushType)
+        ) {
+          const bezier = bezierRef.current;
+          if (bezier.step === 0) {
+            bezier.points = [coords.x, coords.y];
+            bezier.params = strokeParamsRef.current;
+            callbacks?.onBezierPreview?.([coords.x, coords.y, coords.x, coords.y]);
+          }
+          return;
+        }
+
         // A drawing tool in line mode takes two points and commits on
         // release, so it also skips the freehand path.
         if (
@@ -512,6 +554,62 @@ export const useBaseDrawing = (
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
       if (isDrawingDisabledRef.current && !drawingStateRef.current.isPanning) return;
+
+      const bezier = bezierRef.current;
+      if (bezier.params && bezier.points.length > 0) {
+        const at = getCanvasCoordinates(e.clientX, e.clientY);
+        const params = bezier.params;
+        bezier.step++;
+
+        if (bezier.step === 1) {
+          // The drag set both endpoints; the handles start on top of them so
+          // the preview reads as a straight chord until one is moved.
+          bezier.points = [
+            bezier.points[0], bezier.points[1],
+            bezier.points[0], bezier.points[1],
+            at.x, at.y,
+            at.x, at.y,
+          ];
+          callbacks?.onBezierPreview?.(bezierPreviewPoints(bezier.points));
+          cleanupPointerState(e.pointerId);
+          return;
+        }
+
+        if (bezier.step === 2) {
+          bezier.points[2] = at.x;
+          bezier.points[3] = at.y;
+          callbacks?.onBezierPreview?.(bezierPreviewPoints(bezier.points));
+          cleanupPointerState(e.pointerId);
+          return;
+        }
+
+        // Third release: the second handle lands and the curve commits.
+        bezier.points[4] = at.x;
+        bezier.points[5] = at.y;
+        const points = bezierPreviewPoints(bezier.points);
+        bezierRef.current = { step: 0, points: [], params: null };
+        callbacks?.onBezierPreview?.(null);
+
+        const color = {
+          r: parseInt(params.color.slice(1, 3), 16),
+          g: parseInt(params.color.slice(3, 5), 16),
+          b: parseInt(params.color.slice(5, 7), 16),
+          a: params.opacity,
+        };
+        const brush = brushTypeFor(params.brushType);
+        if (!remoteSyncRef.current && drawingEngineRef.current) {
+          drawingEngineRef.current.drawBezier(
+            params.layerType,
+            points as [number, number, number, number, number, number, number, number],
+            params.brushSize, brush, color
+          );
+          saveToHistory();
+        }
+        callbacks?.onBezier?.(points, params.brushSize, brush, color, params.layerType);
+        onDrawingChangeRef.current?.();
+        cleanupPointerState(e.pointerId);
+        return;
+      }
 
       const from = lineStartRef.current;
       if (from) {
@@ -639,11 +737,22 @@ export const useBaseDrawing = (
         return;
       }
 
-      if (lineStartRef.current) {
-        callbacks?.onLinePreview?.(
-          lineStartRef.current,
-          getCanvasCoordinates(e.clientX, e.clientY)
-        );
+      const bezierMove = bezierRef.current;
+      if (bezierMove.params) {
+        const at = getCanvasCoordinates(e.clientX, e.clientY);
+        if (bezierMove.step === 0) {
+          callbacks?.onBezierPreview?.([
+            bezierMove.points[0], bezierMove.points[1], at.x, at.y,
+          ]);
+        } else {
+          // Show the handle that is currently under the pointer without
+          // committing it, so the curve tracks the cursor.
+          const preview = bezierPreviewPoints(bezierMove.points);
+          const slot = bezierMove.step === 1 ? 2 : 4;
+          preview[slot] = at.x;
+          preview[slot + 1] = at.y;
+          callbacks?.onBezierPreview?.(preview);
+        }
         return;
       }
 

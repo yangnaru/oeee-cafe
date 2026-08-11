@@ -55,3 +55,34 @@ export function drawLinePreview(
   ctx.stroke();
   ctx.restore();
 }
+
+/** The bezier being built, drawn the same legible way as the other previews. */
+export function drawBezierPreview(
+  ctx: CanvasRenderingContext2D,
+  points: number[] | null,
+  scale = 1
+): void {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (!points || points.length < 4) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "difference";
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const s = (v: number) => v * scale + 0.5;
+  if (points.length === 4) {
+    // Only the chord so far: its two endpoints
+    ctx.moveTo(s(points[0]), s(points[1]));
+    ctx.lineTo(s(points[2]), s(points[3]));
+  } else {
+    ctx.moveTo(s(points[0]), s(points[1]));
+    ctx.bezierCurveTo(
+      s(points[2]), s(points[3]),
+      s(points[4]), s(points[5]),
+      s(points[6]), s(points[7])
+    );
+  }
+  ctx.stroke();
+  ctx.restore();
+}

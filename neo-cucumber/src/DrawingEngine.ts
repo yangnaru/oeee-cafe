@@ -516,6 +516,28 @@ export class DrawingEngine {
     this.queueLayerUpdate(layer);
   }
 
+  /** Draws a cubic bezier through the four control points. */
+  public drawBezier(
+    layer: "foreground" | "background",
+    points: [number, number, number, number, number, number, number, number],
+    brushSize: number,
+    brushType: string,
+    color: { r: number; g: number; b: number; a: number }
+  ): void {
+    this.neo._currentColor = [color.r, color.g, color.b, color.a];
+    this.neo._currentWidth = brushSize;
+    this.neo._currentMaskType = this.maskType;
+    this.neo._currentMask = this.maskColor;
+    this.neo.drawBezier(
+      this.surfaceFor(this.layers[layer]),
+      points[0], points[1], points[2], points[3],
+      points[4], points[5], points[6], points[7],
+      DrawingEngine.lineTypeFor(brushType)
+    );
+    this.neo.prevLine = null;
+    this.queueLayerUpdate(layer);
+  }
+
   public initialize(ctx?: CanvasRenderingContext2D) {
     // Store the canvas reference
     if (ctx) {
