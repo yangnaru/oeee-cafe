@@ -26,7 +26,9 @@ export const useOfflineDrawing = (
   onLinePreview?: (
     from: { x: number; y: number } | null,
     to: { x: number; y: number } | null
-  ) => void
+  ) => void,
+  /** Called when the text tool is clicked, to open an editor there. */
+  onTextPlace?: (x: number, y: number) => void
 ) => {
   // Initialize replay recording
   const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
@@ -220,6 +222,7 @@ export const useOfflineDrawing = (
 
     onRegionPreview,
     onLinePreview,
+    onTextPlace,
 
     onLine: useCallback(
       (
@@ -397,6 +400,24 @@ export const useOfflineDrawing = (
       actionRecorderRef.current.getReplayBlob(canvasWidth || 300, canvasHeight || 300),
     getStartTime: () => startTimeRef.current,
     getActionCount: () => actionRecorderRef.current.getActionCount(),
+    /** NEO's frame: ["text", layer, x, y, color, alpha, string, size, family] */
+    recordText: (
+      layer: "foreground" | "background",
+      x: number,
+      y: number,
+      packedColor: number,
+      alpha: number,
+      text: string,
+      fontSize: string,
+      fontFamily: string
+    ) => {
+      actionRecorderRef.current.step();
+      actionRecorderRef.current.push(
+        "text",
+        layer === "foreground" ? 1 : 0,
+        x, y, packedColor, alpha, text, fontSize, fontFamily
+      );
+    },
     addRestoreAction,
     initializeTwoToneCanvas,
   };

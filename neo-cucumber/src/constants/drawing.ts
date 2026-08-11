@@ -111,6 +111,7 @@ export const ALL_TOOLS: readonly ToolId[] = [
   "copy",
   "paste",
   "eraseAll",
+  "text",
   "pan",
 ];
 

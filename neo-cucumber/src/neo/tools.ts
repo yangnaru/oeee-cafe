@@ -46,13 +46,31 @@ export type RegionTool =
 export type ImmediateTool = "eraseAll";
 
 /**
+ * Clicking places an editable box on the canvas and typing goes straight into
+ * it; Enter commits, Escape abandons. NEO has no font pickers because it does
+ * not need them -- the pen size *is* the font size, and the family is fixed.
+ */
+export type TextTool = "text";
+
+export function isTextTool(tool: ToolId): tool is TextTool {
+  return tool === "text";
+}
+
+/** NEO's updateInputText: font size derived from the brush size. */
+export function fontSizeForBrush(brushSize: number): number {
+  return Math.round((brushSize * 55) / 28 + 7);
+}
+
+export const TEXT_FONT_FAMILY = "Arial";
+
+/**
  * How a drawing tool lays its marks down. NEO's DRAWTYPE_FREEHAND, _LINE and
  * _BEZIER: an axis across every brush rather than more tools, so any of the
  * seven can be stroked freehand, drawn as a straight line, or curved.
  */
 export type DrawType = "freehand" | "line" | "bezier";
 
-export type ToolId = BrushType | RegionTool | ImmediateTool;
+export type ToolId = BrushType | RegionTool | ImmediateTool | TextTool;
 
 export function isImmediateTool(tool: ToolId): tool is ImmediateTool {
   return tool === "eraseAll";
@@ -83,7 +101,9 @@ export function isRegionTool(tool: ToolId): tool is RegionTool {
  * harmless default rather than a lie about which brush is in use.
  */
 export function brushTypeFor(tool: ToolId): BrushType {
-  return isRegionTool(tool) || isImmediateTool(tool) ? "solid" : tool;
+  return isRegionTool(tool) || isImmediateTool(tool) || isTextTool(tool)
+    ? "solid"
+    : tool;
 }
 
 export interface RegionRect {

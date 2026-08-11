@@ -14,6 +14,7 @@ import { compositeLayersToCanvas } from "./utils/canvasExport";
 import { NativeBridge } from "./utils/nativeBridge";
 import { drawLinePreview, drawRegionPreview } from "./neo/regionPreview";
 import type { RegionRect } from "./neo/regionDrag";
+import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 
 // Validation constants
 const MIN_DIMENSION = 100;
@@ -132,6 +133,18 @@ function OfflineApp() {
     const ctx = previewCanvasRef.current?.getContext("2d");
     if (ctx) drawRegionPreview(ctx, rect);
   }, []);
+  /**
+   * Where the text tool was clicked, if an editor is open there. NEO puts an
+   * editable box straight on the canvas rather than in a dialog: you type in
+   * place, Enter commits and Escape abandons. There are no font controls
+   * because the pen size is the font size and the family is fixed.
+   */
+  const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
+  const textBoxRef = useRef<HTMLDivElement>(null);
+  const handleTextPlace = useCallback((x: number, y: number) => {
+    setTextAt({ x, y });
+  }, []);
+
   const handleLinePreview = useCallback(
     (
       from: { x: number; y: number } | null,
@@ -171,6 +184,7 @@ function OfflineApp() {
     getActionCount,
     addRestoreAction,
     initializeTwoToneCanvas,
+    recordText,
   } = useOfflineDrawing(
     tempLocalUserCanvasRef,
     appRef,
@@ -182,7 +196,65 @@ function OfflineApp() {
     handleLocalDrawingChange,
     tempCanvasContainerRef,
     handleRegionPreview,
-    handleLinePreview
+    handleLinePreview,
+    handleTextPlace
+  );
+
+  // Focus the box as soon as it appears, so typing just works
+  useEffect(() => {
+    if (textAt && textBoxRef.current) {
+      textBoxRef.current.textContent = "";
+      textBoxRef.current.focus();
+    }
+  }, [textAt]);
+
+  /** Enter commits the text, Escape abandons it -- NEO's keys. */
+  const handleTextKey = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setTextAt(null);
+        return;
+      }
+      if (e.key !== "Enter" || e.shiftKey) return;
+      e.preventDefault();
+
+      const value = textBoxRef.current?.textContent ?? "";
+      if (!textAt || !drawingEngine || !value) {
+        setTextAt(null);
+        return;
+      }
+
+      const r = parseInt(drawingState.color.slice(1, 3), 16);
+      const g = parseInt(drawingState.color.slice(3, 5), 16);
+      const b = parseInt(drawingState.color.slice(5, 7), 16);
+      const size = `${fontSizeForBrush(drawingState.brushSize)}px`;
+
+      drawingEngine.drawText(
+        drawingState.layerType,
+        textAt.x,
+        textAt.y,
+        { r, g, b },
+        drawingState.opacity / 255,
+        value,
+        size,
+        TEXT_FONT_FAMILY
+      );
+      // NEO packs the colour with red in the low byte
+      recordText(
+        drawingState.layerType,
+        textAt.x,
+        textAt.y,
+        r | (g << 8) | (b << 16),
+        drawingState.opacity / 255,
+        value,
+        size,
+        TEXT_FONT_FAMILY
+      );
+      domCanvasUpdateRef.current();
+      setTextAt(null);
+    },
+    [textAt, drawingEngine, drawingState, recordText]
   );
 
   // Zoom controls
@@ -538,6 +610,28 @@ function OfflineApp() {
                 }}
               />
               {/* Layer canvases will be dynamically created here */}
+              {textAt && (
+                <div
+                  ref={textBoxRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onKeyDown={handleTextKey}
+                  onBlur={() => setTextAt(null)}
+                  className="absolute outline-none whitespace-pre"
+                  style={{
+                    left: `${textAt.x}px`,
+                    // fillText draws from the baseline, so lift the box to sit
+                    // where the glyphs will land
+                    top: `${textAt.y - fontSizeForBrush(drawingState.brushSize)}px`,
+                    fontFamily: TEXT_FONT_FAMILY,
+                    fontSize: `${fontSizeForBrush(drawingState.brushSize)}px`,
+                    lineHeight: `${fontSizeForBrush(drawingState.brushSize)}px`,
+                    color: drawingState.color,
+                    zIndex: 20,
+                    minWidth: "1em",
+                  }}
+                />
+              )}
               <canvas
                 ref={previewCanvasRef}
                 width={canvasWidth}

@@ -475,6 +475,47 @@ export class DrawingEngine {
     this.queueLayerUpdate(layer);
   }
 
+  /**
+   * Draws text onto a layer.
+   *
+   * NEO rasterises text through a scratch canvas and composites the result, so
+   * this does the same and then blends that canvas into the layer buffer --
+   * fillText has no buffer equivalent to call.
+   */
+  public drawText(
+    layer: "foreground" | "background",
+    x: number,
+    y: number,
+    color: { r: number; g: number; b: number },
+    alpha: number,
+    text: string,
+    fontSize: string,
+    fontFamily: string
+  ): void {
+    if (!text) return;
+    const scratch = this.neo.canvasCtx[0];
+    scratch.clearRect(0, 0, this.imageWidth, this.imageHeight);
+
+    // NEO packs the colour with red in the low byte
+    const packed = color.r | (color.g << 8) | (color.b << 16);
+    this.neo.doText(0, x, y, packed, alpha, text, fontSize, fontFamily);
+
+    const drawn = scratch.getImageData(0, 0, this.imageWidth, this.imageHeight).data;
+    const target = this.layers[layer];
+    for (let i = 0; i < target.length; i += 4) {
+      const a1 = drawn[i + 3] / 255;
+      if (a1 === 0) continue;
+      const a0 = target[i + 3] / 255;
+      const a = a0 + a1 - a0 * a1;
+      target[i] = (drawn[i] * a1 + target[i] * a0 * (1 - a1)) / a;
+      target[i + 1] = (drawn[i + 1] * a1 + target[i + 1] * a0 * (1 - a1)) / a;
+      target[i + 2] = (drawn[i + 2] * a1 + target[i + 2] * a0 * (1 - a1)) / a;
+      target[i + 3] = Math.round(a * 255);
+    }
+    scratch.clearRect(0, 0, this.imageWidth, this.imageHeight);
+    this.queueLayerUpdate(layer);
+  }
+
   public initialize(ctx?: CanvasRenderingContext2D) {
     // Store the canvas reference
     if (ctx) {

@@ -58,6 +58,8 @@ export const ToolSelector = ({
         return "material-symbols:content-copy";
       case "paste":
         return "material-symbols:content-paste";
+      case "text":
+        return "material-symbols:title";
       case "eraser":
         return "material-symbols:ink-eraser";
       case "fill":

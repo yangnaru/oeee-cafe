@@ -293,3 +293,39 @@ describe("copy and paste", () => {
     expect(frame).toEqual(["paste", 0, 5, 5, 16, 14, 0, 0]);
   });
 });
+
+describe("the text tool", () => {
+  it("takes its font size from the pen, with no picker", async () => {
+    const { fontSizeForBrush, TEXT_FONT_FAMILY } = await import("./tools");
+    // NEO's updateInputText: round(d * 55 / 28 + 7)
+    expect(fontSizeForBrush(1)).toBe(9);
+    expect(fontSizeForBrush(28)).toBe(62);
+    expect(TEXT_FONT_FAMILY).toBe("Arial");
+  });
+
+  it("draws text onto the layer and records NEO's frame", async () => {
+    const { api } = await mountWithTool("text");
+    const engine = api.drawingEngine!;
+    const layer = engine.layers.background;
+    expect(layer.every((v) => v === 0)).toBe(true);
+
+    engine.drawText(
+      "background", 4, 20, { r: 0, g: 0, b: 0 }, 1, "Hi", "20px", "Arial"
+    );
+    expect(layer.some((v) => v !== 0)).toBe(true);
+
+    api.recordText("background", 4, 20, 0x000000, 1, "Hi", "20px", "Arial");
+    const { decodePCH } = await import("./NeoReplay");
+    const frame = decodePCH(
+      new Uint8Array(await api.getReplayBlob().arrayBuffer())
+    )!.items.at(-1)!;
+    expect(frame).toEqual(["text", 0, 4, 20, 0, 1, "Hi", "20px", "Arial"]);
+  });
+
+  it("draws nothing for empty text", async () => {
+    const { api } = await mountWithTool("text");
+    const engine = api.drawingEngine!;
+    engine.drawText("background", 4, 20, { r: 0, g: 0, b: 0 }, 1, "", "20px", "Arial");
+    expect(engine.layers.background.every((v) => v === 0)).toBe(true);
+  });
+});

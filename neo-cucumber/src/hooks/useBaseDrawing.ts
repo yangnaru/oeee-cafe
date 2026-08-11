@@ -6,6 +6,7 @@ import {
   brushTypeFor,
   isImmediateTool,
   isRegionTool,
+  isTextTool,
   type RegionTool,
   type DrawType,
   type ToolId,
@@ -73,6 +74,8 @@ interface DrawingEventCallbacks {
     from: { x: number; y: number } | null,
     to: { x: number; y: number } | null
   ) => void;
+  /** The text tool was clicked; open an editor at this canvas point. */
+  onTextPlace?: (x: number, y: number) => void;
   /** A tool that acts on click was used; record it. */
   onEraseAll?: (layer: "foreground" | "background") => void;
   /** A region tool was released over `rect`; record it. */
@@ -402,6 +405,14 @@ export const useBaseDrawing = (
 
         // Freeze the settings this stroke will be drawn and recorded with
         strokeParamsRef.current = { ...currentDrawingStateRef.current };
+
+        // Opens an editor at the click and commits on Enter, so the pointer
+        // does nothing else here.
+        if (isTextTool(strokeParamsRef.current.brushType)) {
+          callbacks?.onTextPlace?.(coords.x, coords.y);
+          cleanupPointerState(e.pointerId);
+          return;
+        }
 
         // Acts on the press itself, with nothing to drag out
         if (isImmediateTool(strokeParamsRef.current.brushType)) {
