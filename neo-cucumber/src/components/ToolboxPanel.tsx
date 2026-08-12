@@ -2,6 +2,7 @@ import "../styles/neoChrome.css";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
+import { NeoSizeSlider } from "./NeoSizeSlider";
 import { ToolSelector } from "./ToolSelector";
 import { ColorPalette } from "./ColorPalette";
 import { CustomSlider } from "./CustomSlider";
@@ -284,19 +285,30 @@ export const ToolboxPanel = ({
         </div>
 
         <div className="flex flex-col gap-1">
-          {/* Brush size gauge */}
-          <CustomSlider
-            value={drawingState.brushSize}
-            min={1}
-            max={30}
-            label={`Size: ${drawingState.brushSize}`}
-            onChange={(value) =>
-              onUpdateDrawingState((prev) => ({
-                ...prev,
-                brushSize: value,
-              }))
-            }
-          />
+          {/* Brush size. NEO's own slider in the retro chrome; the generic
+              one elsewhere, since the collaborative panel is not styled for it. */}
+          {retro ? (
+            <NeoSizeSlider
+              value={drawingState.brushSize}
+              color={drawingState.color}
+              onChange={(value) =>
+                onUpdateDrawingState((prev) => ({ ...prev, brushSize: value }))
+              }
+            />
+          ) : (
+            <CustomSlider
+              value={drawingState.brushSize}
+              min={1}
+              max={30}
+              label={`Size: ${drawingState.brushSize}`}
+              onChange={(value) =>
+                onUpdateDrawingState((prev) => ({
+                  ...prev,
+                  brushSize: value,
+                }))
+              }
+            />
+          )}
 
           {/* Opacity gauge */}
           <CustomSlider
