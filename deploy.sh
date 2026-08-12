@@ -10,7 +10,7 @@ export COMPOSE_DOCKER_CLI_BUILD=1
 # Cleanup function
 cleanup() {
     echo "==> Cleaning up build database..."
-    docker rm -f oeee-cafe-build-db 2>/dev/null || true
+    docker rm -fv oeee-cafe-build-db 2>/dev/null || true
 }
 
 # Set trap to cleanup on exit
