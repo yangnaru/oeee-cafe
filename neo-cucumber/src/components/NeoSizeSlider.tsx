@@ -12,11 +12,10 @@ interface NeoSizeSliderProps {
 const WIDTH = 48;
 const BAR = 33;
 const OFFSET = 4;
+// The pointer target is its own 48x41 box sitting 4px *above* the bar, which
+// is exactly where the "y - 4" in the drag formula comes from.
 const HIT_HEIGHT = 41;
-// NEO hangs the label below its 33px bar and lets the surrounding layout
-// absorb it. Ours is a self-contained box, so it reserves the room instead --
-// otherwise the text spills out over whatever sits underneath.
-const LABEL_HEIGHT = 14;
+const HIT_TOP = -4;
 
 /** NEO's SizeSlider.update: bar height is the value scaled onto 33px. */
 function heightFor(value: number): number {
@@ -56,6 +55,8 @@ export function NeoSizeSlider({ value, color, onChange }: NeoSizeSliderProps) {
     [onChange]
   );
 
+  // Measured against the hit area, not the bar: NEO's formula assumes an
+  // origin 4px above the bar's top edge.
   const yFrom = (clientY: number) => {
     const rect = ref.current?.getBoundingClientRect();
     return clientY - (rect?.top ?? 0);
@@ -84,33 +85,18 @@ export function NeoSizeSlider({ value, color, onChange }: NeoSizeSliderProps) {
   };
 
   return (
+    // NEO's .sizeSlider: 48x33 with 4px above it. The label overlaps the
+    // bottom of the bar and hangs 3px past it -- it does not sit underneath,
+    // and giving it its own row is what made this too tall before.
     <div
-      ref={ref}
       className="relative select-none"
-      style={{
-        width: `${WIDTH}px`,
-        height: `${HIT_HEIGHT + LABEL_HEIGHT}px`,
-        cursor: "ns-resize",
-      }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={stop}
-      onPointerCancel={stop}
-      role="slider"
-      aria-label="Brush size"
-      aria-valuemin={MIN_BRUSH_SIZE}
-      aria-valuemax={MAX_BRUSH_SIZE}
-      aria-valuenow={value}
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "ArrowUp") onChange(clamp(value + 1));
-        if (e.key === "ArrowDown") onChange(clamp(value - 1));
-      }}
+      style={{ width: `${WIDTH}px`, height: `${BAR}px`, marginTop: `${OFFSET}px` }}
     >
+      {/* The trough */}
       <div
         style={{
           position: "absolute",
-          top: `${OFFSET}px`,
+          top: 0,
           left: 0,
           width: "100%",
           height: `${BAR}px`,
@@ -119,10 +105,11 @@ export function NeoSizeSlider({ value, color, onChange }: NeoSizeSliderProps) {
           boxSizing: "border-box",
         }}
       />
+      {/* NEO's .slider, filling downward from the top in the current colour */}
       <div
         style={{
           position: "absolute",
-          top: `${OFFSET}px`,
+          top: 0,
           left: 0,
           width: "100%",
           height: `${heightFor(value).toFixed(2)}px`,
@@ -131,21 +118,50 @@ export function NeoSizeSlider({ value, color, onChange }: NeoSizeSliderProps) {
           pointerEvents: "none",
         }}
       />
+      {/* NEO's .label: left 2px, bottom -3px, over the bar */}
       <div
         style={{
           position: "absolute",
           left: "2px",
-          top: `${OFFSET + BAR - 2}px`,
+          bottom: "-3px",
           fontSize: "12px",
-          lineHeight: `${LABEL_HEIGHT}px`,
           fontFamily: "Arial",
           letterSpacing: 0,
+          verticalAlign: "middle",
           whiteSpace: "nowrap",
           pointerEvents: "none",
         }}
       >
         {value}px
       </div>
+      {/* NEO's .hit: the pointer target, 48x41 starting 4px higher */}
+      <div
+        ref={ref}
+        style={{
+          position: "absolute",
+          top: `${HIT_TOP}px`,
+          left: 0,
+          width: `${WIDTH}px`,
+          height: `${HIT_HEIGHT}px`,
+          backgroundColor: "white",
+          opacity: 0.01,
+          cursor: "ns-resize",
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={stop}
+        onPointerCancel={stop}
+        role="slider"
+        aria-label="Brush size"
+        aria-valuemin={MIN_BRUSH_SIZE}
+        aria-valuemax={MAX_BRUSH_SIZE}
+        aria-valuenow={value}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp") onChange(clamp(value + 1));
+          if (e.key === "ArrowDown") onChange(clamp(value - 1));
+        }}
+      />
     </div>
   );
 }
