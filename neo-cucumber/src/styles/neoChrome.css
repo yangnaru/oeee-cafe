@@ -194,19 +194,35 @@
 .neo-chrome .neo-tool-face {
   position: relative;
   display: block;
-  width: 48px;
-  height: 19px;
+  width: 46px;
+  height: 18px;
+  overflow: visible;
 }
 
+/* The 3px of air above and below is what the label's -4px hangs into */
+.neo-chrome .neo-tool,
+.neo-chrome .neo-tool-selected {
+  margin-top: 3px;
+  margin-bottom: 3px;
+}
+
+/*
+ * NEO's .toolTip .label, which is not the same rule as the sliders' label.
+ * The two properties I left out are the ones doing the work: letter-spacing
+ * of -1px tightens the text enough to fit 46px, and overflow:hidden clips
+ * what still does not. Without them long names spill out of the button.
+ */
 .neo-chrome .neo-tool-label {
   position: absolute;
-  left: 2px;
-  bottom: -3px;
+  left: 1px;
+  bottom: -4px;
+  width: 46px;
   font-size: 12px;
   font-family: "Arial";
-  letter-spacing: 0;
+  letter-spacing: -1px;
   line-height: 12px;
   white-space: nowrap;
+  overflow: hidden;
   pointer-events: none;
   color: var(--neo-tool-text);
 }

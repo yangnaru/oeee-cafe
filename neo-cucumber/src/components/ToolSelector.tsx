@@ -142,7 +142,7 @@ export const ToolSelector = ({
             className={`flex items-center justify-center border p-0 ${
               selected ? "neo-tool-selected" : "neo-tool"
             }`}
-            style={{ width: "48px", height: "19px" }}
+            style={{ width: "46px", height: "18px" }}
             onClick={() => activate(group, false)}
             onContextMenu={(e) => {
               e.preventDefault();
@@ -176,7 +176,7 @@ export const ToolSelector = ({
           type="button"
           title={`${drawType} — click to cycle (freehand, line, bezier)`}
           className="flex items-center justify-center border p-0 neo-tool"
-          style={{ width: "48px", height: "19px" }}
+          style={{ width: "46px", height: "18px" }}
           onClick={() => onCycleDrawType(false)}
           onContextMenu={(e) => {
             e.preventDefault();

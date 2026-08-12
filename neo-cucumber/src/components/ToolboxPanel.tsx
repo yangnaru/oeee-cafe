@@ -362,7 +362,7 @@ export const ToolboxPanel = ({
           <button
             type="button"
             className="neo-tool"
-            style={{ width: "48px", height: "19px", position: "relative" }}
+            style={{ width: "46px", height: "18px", position: "relative" }}
             title="Switch layer (right-click to hide)"
             onClick={() =>
               onUpdateDrawingState((prev) => ({
