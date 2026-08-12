@@ -13,6 +13,7 @@ import {
   encodeUndoPoint,
 } from "../utils/binaryProtocol";
 import type { RegionTool } from "../neo/tools";
+import type { RegionRect } from "../neo/regionDrag";
 import { type CanvasHistory } from "../utils/canvasHistory";
 import {
   isWireBrushType,
@@ -40,7 +41,18 @@ export const useDrawing = (
   isCatchingUp: boolean = false,
   connectionState: "connecting" | "connected" | "disconnected" = "connected",
   containerRef?: React.RefObject<HTMLDivElement | null>,
-  canvasHistoryRef?: React.RefObject<CanvasHistory | null>
+  canvasHistoryRef?: React.RefObject<CanvasHistory | null>,
+  /** Called with the rubber-band rectangle while a region tool is dragged. */
+  onRegionPreview?: (rect: RegionRect | null) => void,
+  /** Called with the endpoints while a straight line is dragged out. */
+  onLinePreview?: (
+    from: { x: number; y: number } | null,
+    to: { x: number; y: number } | null
+  ) => void,
+  /** Called with the curve so far while a bezier is being built. */
+  onBezierPreview?: (points: number[] | null) => void,
+  /** Called when the text tool is clicked, to open an editor there. */
+  onTextPlace?: (x: number, y: number) => void
 ) => {
   // WebSocket-specific state
   const outboundMessageQueue = useRef<ArrayBuffer[]>([]);
@@ -356,6 +368,11 @@ export const useDrawing = (
       },
       [localIdRef, dispatchLocalMessage, openStroke]
     ),
+
+    onRegionPreview,
+    onLinePreview,
+    onBezierPreview,
+    onTextPlace,
 
     onPointerUp: useCallback(() => {
       strokeOpenRef.current = false;

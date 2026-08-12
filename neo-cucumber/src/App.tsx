@@ -27,6 +27,13 @@ import {
 } from "./utils/binaryProtocol";
 import { CanvasHistory } from "./utils/canvasHistory";
 import { layerToPngBlob } from "./utils/canvasSnapshot";
+import {
+  drawBezierPreview,
+  drawLinePreview,
+  drawRegionPreview,
+} from "./neo/regionPreview";
+import type { RegionRect } from "./neo/regionDrag";
+import { fontSizeForBrush, TEXT_FONT_FAMILY } from "./neo/tools";
 
 // Function to get session ID from URL
 const getSessionId = (): string => {
@@ -214,6 +221,36 @@ function App() {
   const tempCanvasContainerRef = useRef<HTMLDivElement>(null);
   const tempLocalUserCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Region drags, straight lines and beziers all preview on one overlay
+  // canvas that sits above the layers and takes no pointer events.
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const handleRegionPreview = useCallback((rect: RegionRect | null) => {
+    const ctx = previewCanvasRef.current?.getContext("2d");
+    if (ctx) drawRegionPreview(ctx, rect);
+  }, []);
+  const handleLinePreview = useCallback(
+    (
+      from: { x: number; y: number } | null,
+      to: { x: number; y: number } | null
+    ) => {
+      const ctx = previewCanvasRef.current?.getContext("2d");
+      if (ctx) drawLinePreview(ctx, from, to);
+    },
+    []
+  );
+  const handleBezierPreview = useCallback((points: number[] | null) => {
+    const ctx = previewCanvasRef.current?.getContext("2d");
+    if (ctx) drawBezierPreview(ctx, points);
+  }, []);
+
+  // Text is typed into a box on the canvas, as NEO does it: no font pickers,
+  // because the pen size is the font size and the family is fixed.
+  const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
+  const textBoxRef = useRef<HTMLDivElement>(null);
+  const handleTextPlace = useCallback((x: number, y: number) => {
+    setTextAt({ x, y });
+  }, []);
+
   // Create a stable wsRef that will be populated by useWebSocket
   const drawingWsRef = useRef<WebSocket | null>(null);
 
@@ -227,7 +264,7 @@ function App() {
   const lastSeqRef = useRef<number>(0);
 
   // Use the drawing hook with stable wsRef
-  const { undo, redo, drawingEngine, isDrawingRef } = useDrawing(
+  const { undo, redo, drawingEngine, isDrawingRef, sendText } = useDrawing(
     tempLocalUserCanvasRef,
     appRef,
     drawingState,
@@ -241,7 +278,54 @@ function App() {
     isCatchingUp,
     connectionState,
     tempCanvasContainerRef,
-    canvasHistoryRef
+    canvasHistoryRef,
+    handleRegionPreview,
+    handleLinePreview,
+    handleBezierPreview,
+    handleTextPlace
+  );
+
+  // Focus the box as soon as it appears, so typing just works
+  useEffect(() => {
+    if (textAt && textBoxRef.current) textBoxRef.current.focus();
+  }, [textAt]);
+
+  /**
+   * Enter commits, Escape abandons. Unlike the offline painter this does not
+   * draw -- it sends, and the history applies what comes back, so every
+   * participant gets the text from the same message rather than from two
+   * code paths that could disagree.
+   */
+  const handleTextKey = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setTextAt(null);
+        return;
+      }
+      if (e.key !== "Enter" || e.shiftKey) return;
+      e.preventDefault();
+
+      const value = textBoxRef.current?.textContent ?? "";
+      if (textAt && value) {
+        sendText(
+          textAt.x,
+          textAt.y,
+          value,
+          {
+            r: parseInt(drawingState.color.slice(1, 3), 16),
+            g: parseInt(drawingState.color.slice(3, 5), 16),
+            b: parseInt(drawingState.color.slice(5, 7), 16),
+            a: drawingState.opacity,
+          },
+          drawingState.brushSize,
+          drawingState.layerType
+        );
+      }
+      setTextAt(null);
+    },
+    [textAt, sendText, drawingState.color, drawingState.opacity,
+     drawingState.brushSize, drawingState.layerType]
   );
 
   // Zoom controls
@@ -807,6 +891,39 @@ function App() {
                     }
                   />
                   {/* Layer canvases for all users (including local) will be dynamically created here */}
+                  {textAt && (
+                    <div
+                      ref={textBoxRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onKeyDown={handleTextKey}
+                      onBlur={() => setTextAt(null)}
+                      className="absolute outline-none whitespace-pre"
+                      style={{
+                        left: `${textAt.x}px`,
+                        // fillText draws from the baseline, so lift the box to
+                        // sit where the glyphs will land
+                        top: `${textAt.y - fontSizeForBrush(drawingState.brushSize)}px`,
+                        fontFamily: TEXT_FONT_FAMILY,
+                        fontSize: `${fontSizeForBrush(drawingState.brushSize)}px`,
+                        lineHeight: `${fontSizeForBrush(drawingState.brushSize)}px`,
+                        color: drawingState.color,
+                        zIndex: 20,
+                        minWidth: "1em",
+                      }}
+                    />
+                  )}
+                  <canvas
+                    ref={previewCanvasRef}
+                    width={canvasMeta.width}
+                    height={canvasMeta.height}
+                    className="absolute top-0 left-0 pointer-events-none"
+                    style={{
+                      width: `${canvasMeta.width}px`,
+                      height: `${canvasMeta.height}px`,
+                      zIndex: 10,
+                    }}
+                  />
                 </div>
               )}
               <ToolboxPanel
