@@ -138,34 +138,19 @@ export const ToolSelector = ({
                 ? `${shown} — click again to cycle (${group.tools.join(", ")})`
                 : shown
             }
-            className={`flex items-center justify-center border p-0 ${
-              selected ? "neo-tool-selected" : "neo-tool"
-            }`}
-            style={{ width: "46px", height: "18px" }}
+            className={selected ? "toolTipOn" : "toolTipOff"}
             onClick={() => activate(group, false)}
             onContextMenu={(e) => {
               e.preventDefault();
               activate(group, true);
             }}
           >
-            <span className="neo-tool-face">
-              {neoIconFor(shown) ? (
-                <span
-                  className="neo-tool-art"
-                  role="img"
-                  aria-label={shown}
-                  style={{
-                    WebkitMaskImage: `url(${neoIconFor(shown)})`,
-                    maskImage: `url(${neoIconFor(shown)})`,
-                  }}
-                />
-              ) : (
-                <Icon icon={getToolIcon(shown)} width={16} height={16} />
-              )}
-              <span className="neo-tool-label">
-                {NEO_TOOL_LABELS[shown] ?? shown}
-              </span>
-            </span>
+            {neoIconFor(shown) ? (
+              <img src={neoIconFor(shown)!} alt="" />
+            ) : (
+              <Icon icon={getToolIcon(shown)} width={16} height={16} />
+            )}
+            <div className="label">{NEO_TOOL_LABELS[shown] ?? shown}</div>
           </button>
         );
       })}
@@ -174,28 +159,15 @@ export const ToolSelector = ({
         <button
           type="button"
           title={`${drawType} — click to cycle (freehand, line, bezier)`}
-          className="flex items-center justify-center border p-0 neo-tool"
-          style={{ width: "46px", height: "18px" }}
+          className="toolTipFixed"
           onClick={() => onCycleDrawType(false)}
           onContextMenu={(e) => {
             e.preventDefault();
             onCycleDrawType(true);
           }}
         >
-          <span className="neo-tool-face">
-            <span
-              className="neo-tool-art"
-              role="img"
-              aria-label={drawType}
-              style={{
-                WebkitMaskImage: `url(${neoIconFor(drawType)})`,
-                maskImage: `url(${neoIconFor(drawType)})`,
-              }}
-            />
-            <span className="neo-tool-label">
-              {NEO_TOOL_LABELS[drawType] ?? drawType}
-            </span>
-          </span>
+          <img src={neoIconFor(drawType)!} alt="" />
+          <div className="label">{NEO_TOOL_LABELS[drawType] ?? drawType}</div>
         </button>
       )}
     </div>

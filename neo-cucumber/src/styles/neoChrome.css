@@ -171,3 +171,23 @@
   outline: 2px solid var(--neo-selected);
   outline-offset: -2px;
 }
+
+/*
+ * NEO draws each tool's artwork into a <canvas> and positions it with
+ * ".toolTipOff canvas". We render the sprite as an <img> instead -- there is
+ * nothing to draw at runtime, since we do not tint -- so the same rule has to
+ * reach img. This is a bridge to NEO's stylesheet, not a restyling of it.
+ */
+.NEO .toolTipOff img,
+.NEO .toolTipOn img,
+.NEO .toolTipFixed img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+/* The tool column stacks its buttons; NEO's #toolSet is a plain block. */
+.NEO #toolSet {
+  width: 48px;
+}
