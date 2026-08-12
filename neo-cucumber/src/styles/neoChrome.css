@@ -24,6 +24,7 @@
   --neo-tool-bar: #ddddff;    /* tool_color_bar */
   --neo-tool-text: #773333;   /* tool_color_text */
   --neo-tool-button: #e8dfae; /* tool_color_button */
+  --neo-tool-frame: #000000;  /* tool_color_frame */
 
   background-color: var(--neo-face);
   color: var(--neo-text);
@@ -208,4 +209,42 @@
   white-space: nowrap;
   pointer-events: none;
   color: var(--neo-tool-text);
+}
+
+/*
+ * The app's own theme classes leak through the chrome: bg-main and
+ * border-main resolve to the dark palette, which is why the swatch grid sat
+ * on a black backing inside a lavender panel.
+ */
+.neo-chrome .bg-main {
+  background-color: var(--neo-face);
+}
+
+.neo-chrome .border-main {
+  border-color: var(--neo-shadow);
+}
+
+/*
+ * NEO has no colour picker -- it picks colour with the four channel sliders
+ * and the fourteen swatches. Ours rendered as a large black rectangle under
+ * the palette, which is the single biggest thing that did not belong.
+ */
+.neo-chrome input[type="color"] {
+  display: none;
+}
+
+/*
+ * NEO tints its icons: tintImage keeps each pixel's alpha and replaces the
+ * colour, so the artwork reads as a solid silhouette rather than whatever
+ * the PNG happens to contain. A mask does the same thing in CSS.
+ */
+.neo-chrome .neo-tool-art {
+  width: 48px;
+  height: 19px;
+  display: block;
+  background-color: var(--neo-tool-frame, #000000);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
 }

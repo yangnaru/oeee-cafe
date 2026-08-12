@@ -355,7 +355,41 @@ export const ToolboxPanel = ({
             />
           )}
 
-        {/* Layer selection */}
+        {/* Layer selection. NEO shows one button naming the current layer --
+            "LayerBG" -- rather than a pair; clicking swaps, right-clicking
+            toggles that layer's visibility. */}
+        {retro ? (
+          <button
+            type="button"
+            className="neo-tool"
+            style={{ width: "48px", height: "19px", position: "relative" }}
+            title="Switch layer (right-click to hide)"
+            onClick={() =>
+              onUpdateDrawingState((prev) => ({
+                ...prev,
+                layerType:
+                  prev.layerType === "foreground" ? "background" : "foreground",
+              }))
+            }
+            onContextMenu={(e) => {
+              e.preventDefault();
+              onUpdateDrawingState((prev) =>
+                prev.layerType === "foreground"
+                  ? { ...prev, fgVisible: !prev.fgVisible }
+                  : { ...prev, bgVisible: !prev.bgVisible }
+              );
+            }}
+          >
+            <span className="neo-tool-label" style={{ opacity:
+              (drawingState.layerType === "foreground"
+                ? drawingState.fgVisible
+                : drawingState.bgVisible)
+                ? 1
+                : 0.4 }}>
+              Layer{drawingState.layerType === "foreground" ? "FG" : "BG"}
+            </span>
+          </button>
+        ) : (
         <div className="flex flex-row">
           {(["foreground", "background"] as LayerType[]).map((layer, index) => (
             <button
@@ -422,8 +456,9 @@ export const ToolboxPanel = ({
             </button>
           ))}
         </div>
-
+        )}
 </>)}
+
 {showExtras && (<>
         {/* Zoom controls */}
         <div className="flex flex-row">

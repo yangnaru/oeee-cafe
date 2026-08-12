@@ -151,12 +151,14 @@ export const ToolSelector = ({
           >
             <span className="neo-tool-face">
               {neoIconFor(shown) ? (
-                <img
-                  src={neoIconFor(shown)!}
-                  alt=""
-                  width={48}
-                  height={19}
-                  style={{ imageRendering: "pixelated", display: "block" }}
+                <span
+                  className="neo-tool-art"
+                  role="img"
+                  aria-label={shown}
+                  style={{
+                    WebkitMaskImage: `url(${neoIconFor(shown)})`,
+                    maskImage: `url(${neoIconFor(shown)})`,
+                  }}
                 />
               ) : (
                 <Icon icon={getToolIcon(shown)} width={16} height={16} />
@@ -182,12 +184,14 @@ export const ToolSelector = ({
           }}
         >
           <span className="neo-tool-face">
-            <img
-              src={neoIconFor(drawType)!}
-              alt=""
-              width={48}
-              height={19}
-              style={{ imageRendering: "pixelated", display: "block" }}
+            <span
+              className="neo-tool-art"
+              role="img"
+              aria-label={drawType}
+              style={{
+                WebkitMaskImage: `url(${neoIconFor(drawType)})`,
+                maskImage: `url(${neoIconFor(drawType)})`,
+              }}
             />
             <span className="neo-tool-label">
               {NEO_TOOL_LABELS[drawType] ?? drawType}
