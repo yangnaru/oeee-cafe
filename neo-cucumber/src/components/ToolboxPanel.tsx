@@ -256,16 +256,6 @@ export const ToolboxPanel = ({
         </div>
 
         <div className="flex flex-row gap-2">
-          {/* Color palette and picker */}
-          <ColorPalette
-            paletteColors={paletteColors}
-            selectedPaletteIndex={selectedPaletteIndex}
-            currentColor={drawingState.color}
-            onSetSelectedPaletteIndex={onSetSelectedPaletteIndex}
-            onUpdateColor={onUpdateColor}
-            onColorPickerChange={onColorPickerChange}
-          />
-
           {/* Tool selection */}
           <ToolSelector
             tools={tools}
@@ -285,6 +275,34 @@ export const ToolboxPanel = ({
         </div>
 
         <div className="flex flex-col gap-1">
+          {/* Color palette and picker */}
+          <ColorPalette
+            paletteColors={paletteColors}
+            selectedPaletteIndex={selectedPaletteIndex}
+            currentColor={drawingState.color}
+            onSetSelectedPaletteIndex={onSetSelectedPaletteIndex}
+            onUpdateColor={onUpdateColor}
+            onColorPickerChange={onColorPickerChange}
+          />
+
+          {/* Opacity gauge */}
+          <CustomSlider
+            value={drawingState.opacity}
+            min={1}
+            max={255}
+            label={`Opacity: ${Math.max(
+              1,
+              Math.round((drawingState.opacity / 255) * 100)
+            )}%`}
+            onChange={(value) =>
+              onUpdateDrawingState((prev) => ({
+                ...prev,
+                opacity: value,
+              }))
+            }
+          />
+        </div>
+
           {/* Brush size. NEO's own slider in the retro chrome; the generic
               one elsewhere, since the collaborative panel is not styled for it. */}
           {retro ? (
@@ -309,24 +327,6 @@ export const ToolboxPanel = ({
               }
             />
           )}
-
-          {/* Opacity gauge */}
-          <CustomSlider
-            value={drawingState.opacity}
-            min={1}
-            max={255}
-            label={`Opacity: ${Math.max(
-              1,
-              Math.round((drawingState.opacity / 255) * 100)
-            )}%`}
-            onChange={(value) =>
-              onUpdateDrawingState((prev) => ({
-                ...prev,
-                opacity: value,
-              }))
-            }
-          />
-        </div>
 
         {/* Layer selection */}
         <div className="flex flex-row">

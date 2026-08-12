@@ -90,7 +90,15 @@ export function NeoSizeSlider({ value, color, onChange }: NeoSizeSliderProps) {
     // and giving it its own row is what made this too tall before.
     <div
       className="relative select-none"
-      style={{ width: `${WIDTH}px`, height: `${BAR}px`, marginTop: `${OFFSET}px` }}
+      style={{
+        width: `${WIDTH}px`,
+        height: `${BAR}px`,
+        marginTop: `${OFFSET}px`,
+        // NEO puts a .reserveControl with margin-top:4px directly after the
+        // slider, and that is the room the label's -3px hangs into. Without
+        // something below it the text has nowhere to go.
+        marginBottom: `${OFFSET}px`,
+      }}
     >
       {/* The trough */}
       <div
