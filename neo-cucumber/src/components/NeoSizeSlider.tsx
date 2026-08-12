@@ -7,15 +7,12 @@ interface NeoSizeSliderProps {
   onChange: (value: number) => void;
 }
 
-// NEO's geometry, from neo.css and SizeSlider in widgets.js: a 48x33 bar that
-// fills downward from the top, sitting 4px below the top of its hit area.
-const WIDTH = 48;
+// Geometry lives in neo.css now. These two remain because the *arithmetic*
+// needs them: the bar is 33px tall, and the hit area starts 4px above it,
+// which is where the "y - 4" in NEO's drag formula comes from.
 const BAR = 33;
 const OFFSET = 4;
-// The pointer target is its own 48x41 box sitting 4px *above* the bar, which
-// is exactly where the "y - 4" in the drag formula comes from.
 const HIT_HEIGHT = 41;
-const HIT_TOP = -4;
 
 /** NEO's SizeSlider.update: bar height is the value scaled onto 33px. */
 function heightFor(value: number): number {
@@ -85,76 +82,20 @@ export function NeoSizeSlider({ value, color, onChange }: NeoSizeSliderProps) {
   };
 
   return (
-    // NEO's .sizeSlider: 48x33 with 4px above it. The label overlaps the
-    // bottom of the bar and hangs 3px past it -- it does not sit underneath,
-    // and giving it its own row is what made this too tall before.
-    <div
-      className="relative select-none"
-      style={{
-        width: `${WIDTH}px`,
-        height: `${BAR}px`,
-        marginTop: `${OFFSET}px`,
-        // NEO puts a .reserveControl with margin-top:4px directly after the
-        // slider, and that is the room the label's -3px hangs into. Without
-        // something below it the text has nowhere to go.
-        marginBottom: `${OFFSET}px`,
-      }}
-    >
-      {/* The trough */}
+    // NEO's .sizeSlider: the stylesheet owns the geometry now, so the only
+    // thing set here is what NEO also sets from script -- the fill's height.
+    <div className="sizeSlider">
       <div
+        className="slider"
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: `${BAR}px`,
-          backgroundColor: "#ffffff",
-          border: "1px solid #9397b2",
-          boxSizing: "border-box",
-        }}
-      />
-      {/* NEO's .slider, filling downward from the top in the current colour */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
           height: `${heightFor(value).toFixed(2)}px`,
           backgroundColor: color,
-          boxShadow: "0 -1px 0 0px rgba(0, 0, 0, 0.3) inset",
-          pointerEvents: "none",
         }}
       />
-      {/* NEO's .label: left 2px, bottom -3px, over the bar */}
-      <div
-        style={{
-          position: "absolute",
-          left: "2px",
-          bottom: "-3px",
-          fontSize: "12px",
-          fontFamily: "Arial",
-          letterSpacing: 0,
-          verticalAlign: "middle",
-          whiteSpace: "nowrap",
-          pointerEvents: "none",
-        }}
-      >
-        {value}px
-      </div>
-      {/* NEO's .hit: the pointer target, 48x41 starting 4px higher */}
+      <div className="label">{value}px</div>
       <div
         ref={ref}
-        style={{
-          position: "absolute",
-          top: `${HIT_TOP}px`,
-          left: 0,
-          width: `${WIDTH}px`,
-          height: `${HIT_HEIGHT}px`,
-          backgroundColor: "white",
-          opacity: 0.01,
-          cursor: "ns-resize",
-        }}
+        className="hit"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={stop}

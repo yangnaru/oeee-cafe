@@ -1,4 +1,8 @@
 import "../styles/neoChrome.css";
+// NEO's own stylesheet, plus the rules it builds at runtime. Both are scoped
+// under .NEO, so they apply exactly where we render its markup.
+import "../styles/neo.css";
+import "../styles/neoSkin.css";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
@@ -223,7 +227,7 @@ export const ToolboxPanel = ({
     <div
       ref={panelRef}
       className={`fixed flex flex-col touch-auto select-auto shadow-lg ${
-        retro ? "neo-chrome neo-raised" : "border border-main bg-main"
+        retro ? "NEO neo-chrome neo-raised" : "border border-main bg-main"
       }`}
       style={{
         left: `${position.x}px`,

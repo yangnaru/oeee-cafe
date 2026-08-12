@@ -118,9 +118,8 @@ export const ToolSelector = ({
 
   return (
     // Two across, like NEO's 52px tool column, rather than a wide grid
-    // NEO's icons are 48x19 with their label drawn in, one per row -- which
-    // is exactly why its tool column is 52px wide.
-    <div className="flex flex-col gap-px" style={{ width: "50px" }}>
+    // NEO's own #toolSet, so neo.css and the generated skin apply to it
+    <div id="toolSet">
       {groups.map((group) => {
         const held = group.tools.indexOf(brushType);
         // Show the held tool when this group owns the selection, otherwise

@@ -1,9 +1,6 @@
 import { useCallback, useMemo, useRef } from "react";
 
-// NEO's .colorSlider: 48x13 with 3px above it, filling left to right.
-const WIDTH = 48;
-const HEIGHT = 13;
-const GAP = 3;
+// Geometry lives in neo.css; only the fill arithmetic is here.
 
 interface NeoColorSlidersProps {
   /** "#rrggbb" */
@@ -67,18 +64,14 @@ export function NeoColorSliders({ color, alpha, onChange }: NeoColorSlidersProps
       {CHANNELS.map(({ key, prefix }) => {
         const value = channels[key];
         return (
+          // NEO's .colorSlider; only the fill width is set from script, as
+          // NEO sets it
           <div
             key={key}
             ref={(el) => {
               refs.current[key] = el;
             }}
-            className="relative select-none"
-            style={{
-              width: `${WIDTH}px`,
-              height: `${HEIGHT}px`,
-              marginTop: `${GAP}px`,
-              cursor: "ew-resize",
-            }}
+            className="colorSlider"
             role="slider"
             aria-label={prefix}
             aria-valuemin={0}
@@ -106,48 +99,19 @@ export function NeoColorSliders({ color, alpha, onChange }: NeoColorSlidersProps
             }}
           >
             <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: "var(--neo-tool-bar, #ddddff)",
-                border: "1px solid var(--neo-shadow, #8f8fb3)",
-                boxSizing: "border-box",
-              }}
+              className="slider"
+              style={{ width: `${widthFor(value).toFixed(2)}px` }}
             />
-            <div
-              style={{
-                position: "absolute",
-                left: 0,
-                top: 0,
-                height: "100%",
-                width: `${widthFor(value).toFixed(2)}px`,
-                backgroundColor: "#fa9696",
-                boxShadow: "-1px 0 0 0px rgba(0, 0, 0, 0.3) inset",
-                pointerEvents: "none",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                left: "2px",
-                bottom: "-3px",
-                fontSize: "12px",
-                fontFamily: "Arial",
-                letterSpacing: 0,
-                color: "var(--neo-tool-text, #773333)",
-                whiteSpace: "nowrap",
-                pointerEvents: "none",
-              }}
-            >
+            <div className="label">
               {prefix}
               {value.toFixed(0)}
             </div>
           </div>
         );
       })}
-      {/* NEO's reserveControl sits after the sliders and gives the last
-          label's -3px somewhere to hang */}
-      <div style={{ height: "4px" }} />
+      {/* NEO's reserveControl, which gives the last label's -3px somewhere
+          to hang */}
+      <div className="reserveControl" />
     </div>
   );
 }

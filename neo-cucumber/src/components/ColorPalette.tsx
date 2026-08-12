@@ -32,7 +32,7 @@ export const ColorPalette = ({
         <div
           className={
             retro
-              ? "grid grid-cols-2"
+              ? "colorTips grid grid-cols-2"
               : "grid grid-cols-2 grid-rows-7 grid-flow-col-dense gap-0.5"
           }
           style={retro ? { gap: "1px" } : undefined}
