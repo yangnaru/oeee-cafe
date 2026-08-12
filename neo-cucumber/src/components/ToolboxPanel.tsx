@@ -1,3 +1,4 @@
+import "../styles/neoChrome.css";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
@@ -8,19 +9,9 @@ import { CustomSlider } from "./CustomSlider";
 import type { ToolId } from "../neo/tools";
 type LayerType = "foreground" | "background";
 
-interface DrawingState {
-  brushSize: number;
-  opacity: number;
-  color: string;
-  brushType: ToolId;
-  layerType: LayerType;
-  zoomLevel: number;
-  fgVisible: boolean;
-  bgVisible: boolean;
-  isFlippedHorizontal: boolean;
-  pendingPanDeltaX?: number;
-  pendingPanDeltaY?: number;
-}
+// The shared type rather than a local copy: the copy had already drifted,
+// missing drawType, which is why the panel could not offer line or bezier.
+import type { DrawingState } from "../types/collaboration";
 
 interface HistoryState {
   canUndo: boolean;
@@ -28,6 +19,8 @@ interface HistoryState {
 }
 
 interface ToolboxPanelProps {
+  /** NEO's beveled chrome instead of the flat panel. */
+  retro?: boolean;
   drawingState: DrawingState;
   historyState: HistoryState;
   paletteColors: string[];
@@ -73,6 +66,7 @@ export const ToolboxPanel = ({
   onZoomOut,
   onZoomReset,
   onSaveCollaborativeDrawing,
+  retro = false,
   initialPosition,
 }: ToolboxPanelProps) => {
   const { t } = useLingui();
@@ -216,7 +210,9 @@ export const ToolboxPanel = ({
   return (
     <div
       ref={panelRef}
-      className="fixed flex flex-col border border-main bg-main touch-auto select-auto shadow-lg"
+      className={`fixed flex flex-col touch-auto select-auto shadow-lg ${
+        retro ? "neo-chrome neo-raised" : "border border-main bg-main"
+      }`}
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
@@ -224,7 +220,11 @@ export const ToolboxPanel = ({
     >
       {/* Drag handle */}
       <div
-        className="flex items-center justify-center p-2 bg-main border-b border-main cursor-grab active:cursor-grabbing hover:bg-gray-100 touch-none"
+        className={`flex items-center justify-center p-2 cursor-grab active:cursor-grabbing touch-none ${
+          retro
+            ? "neo-titlebar"
+            : "bg-main border-b border-main hover:bg-gray-100"
+        }`}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
@@ -270,6 +270,16 @@ export const ToolboxPanel = ({
             tools={tools}
             brushType={drawingState.brushType}
             onUpdateBrushType={onUpdateBrushType}
+            drawType={drawingState.drawType ?? "freehand"}
+            onCycleDrawType={(backwards) => {
+              const types = ["freehand", "line", "bezier"] as const;
+              onUpdateDrawingState((prev) => {
+                const at = types.indexOf(prev.drawType ?? "freehand");
+                const next =
+                  (at + (backwards ? -1 : 1) + types.length) % types.length;
+                return { ...prev, drawType: types[next] };
+              });
+            }}
           />
         </div>
 

@@ -8,6 +8,11 @@ import { useOfflineDrawing } from "./hooks/useOfflineDrawing";
 import { useDrawingState } from "./hooks/useDrawingState";
 import { useDrawingTimer } from "./hooks/useDrawingTimer";
 import { useTwoToneShortcuts } from "./hooks/useTwoToneShortcuts";
+import { usePainterShortcuts } from "./hooks/usePainterShortcuts";
+import { isSandbox, sandboxBridge } from "./sandbox/bridge";
+import { ShortcutHelp } from "./components/ShortcutHelp";
+import type { ShortcutAction } from "./constants/shortcuts";
+import { MAX_BRUSH_SIZE, MIN_BRUSH_SIZE } from "./constants/drawing";
 import { useZoomControls } from "./hooks/useZoomControls";
 import { useOfflineCanvas } from "./hooks/useOfflineCanvas";
 import { compositeLayersToCanvas } from "./utils/canvasExport";
@@ -491,6 +496,75 @@ function OfflineApp() {
     [startTimer, stopTimer]
   );
 
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // The local test page reaches the recorder through here. Production never
+  // sets the flag, so this stays inert.
+  useEffect(() => {
+    if (!isSandbox()) return;
+    sandboxBridge.getReplayBlob = getReplayBlob;
+    sandboxBridge.addRestoreAction = async () => {
+      await addRestoreAction();
+    };
+    sandboxBridge.width = canvasWidth;
+    sandboxBridge.height = canvasHeight;
+  }, [getReplayBlob, addRestoreAction, canvasWidth, canvasHeight]);
+
+  /**
+   * The full painter's shortcuts. Two-tone mode keeps Tegaki's pen semantics
+   * instead, so the two are mutually exclusive rather than layered.
+   */
+  const handleShortcut = useCallback(
+    (action: ShortcutAction) => {
+      switch (action.kind) {
+        case "tool":
+          updateBrushType(action.tool);
+          break;
+        case "drawType":
+          setDrawingState((prev) => ({ ...prev, drawType: action.drawType }));
+          break;
+        case "size":
+          setDrawingState((prev) => ({
+            ...prev,
+            brushSize: Math.min(
+              MAX_BRUSH_SIZE,
+              Math.max(MIN_BRUSH_SIZE, prev.brushSize + action.delta)
+            ),
+          }));
+          break;
+        case "zoom":
+          if (action.delta > 0) handleZoomIn();
+          else handleZoomOut();
+          break;
+        case "toggleLayer":
+          setDrawingState((prev) => ({
+            ...prev,
+            layerType:
+              prev.layerType === "foreground" ? "background" : "foreground",
+          }));
+          break;
+        case "undo":
+          if (historyState.canUndo) undo();
+          break;
+        case "redo":
+          if (historyState.canRedo) redo();
+          break;
+        case "help":
+          setShowShortcuts((open) => !open);
+          break;
+      }
+    },
+    [
+      updateBrushType, setDrawingState, handleZoomIn, handleZoomOut,
+      historyState.canUndo, historyState.canRedo, undo, redo,
+    ]
+  );
+
+  usePainterShortcuts({
+    enabled: twoToneConfig === null,
+    onAction: handleShortcut,
+  });
+
   // Tegaki-style pen shortcuts, two-tone mode only
   useTwoToneShortcuts({
     enabled: twoToneConfig !== null,
@@ -650,6 +724,23 @@ function OfflineApp() {
                 }}
               />
             </div>
+            <ShortcutHelp
+              open={showShortcuts}
+              onClose={() => setShowShortcuts(false)}
+            />
+            {twoToneConfig === null && (
+              // A shortcut nobody can find is a shortcut nobody uses, so the
+              // key that opens the list is also a button.
+              <button
+                type="button"
+                onClick={() => setShowShortcuts(true)}
+                title="Keyboard shortcuts (?)"
+                aria-label="Keyboard shortcuts"
+                className="neo-chrome fixed bottom-3 right-3 z-40 h-7 w-7 text-sm"
+              >
+                ?
+              </button>
+            )}
             {twoToneConfig ? (
               <SimplifiedToolbox
                 brushSize={drawingState.brushSize}
@@ -669,6 +760,9 @@ function OfflineApp() {
               />
             ) : (
               <ToolboxPanel
+                // NEO's beveled chrome: this is the standalone painter, and
+                // the retro look is the point of it.
+                retro
                 // An offline drawing records lineType straight into the .pch,
                 // which already has codes for every one of these.
                 tools={ALL_TOOLS}

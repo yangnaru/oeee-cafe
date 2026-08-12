@@ -1,0 +1,62 @@
+/*
+ * The viewer's own styling.
+ *
+ * On the site these rules come from static/style.css, so the library ships
+ * unstyled and inherits the page. The sandbox is not the site, so it needs
+ * them -- and it needs explicit colours, since it cannot borrow the site's
+ * theme variables either.
+ *
+ * Keep in step with the .oeee-replay block in static/style.css.
+ */
+.oeee-replay {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.5em;
+  max-width: 100%;
+  color: #1a1a2e;
+  font-size: 13px;
+}
+.oeee-replay-canvas {
+  display: block;
+  border: 1px solid #888;
+  background: #fff;
+  max-width: 100%;
+  image-rendering: pixelated;
+}
+.oeee-replay-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+}
+.oeee-replay-seek {
+  width: 100%;
+  cursor: pointer;
+}
+.oeee-replay-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  flex-wrap: wrap;
+}
+.oeee-replay-speeds {
+  display: flex;
+  gap: 0.2em;
+  margin-left: auto;
+}
+.oeee-replay-button,
+.oeee-replay-speed {
+  padding: 0.2em 0.6em;
+  cursor: pointer;
+  background: #e4e4ec;
+  color: #1a1a2e;
+  border: 1px solid #9397b2;
+}
+.oeee-replay-speed[aria-pressed="true"] {
+  font-weight: bold;
+  text-decoration: underline;
+  background: #b1d6fd;
+}
+.oeee-replay-status {
+  margin: 0;
+  color: #1a1a2e;
+}
