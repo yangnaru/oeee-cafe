@@ -2,7 +2,7 @@ import { Icon } from "@iconify/react";
 
 import type { ToolId } from "../neo/tools";
 import { SHARED_TOOLS, TOOL_GROUPS } from "../constants/drawing";
-import { neoIconFor } from "../neo/toolIcons";
+import { neoIconFor, NEO_TOOL_LABELS } from "../neo/toolIcons";
 import { useRef } from "react";
 
 interface ToolSelectorProps {
@@ -149,17 +149,22 @@ export const ToolSelector = ({
               activate(group, true);
             }}
           >
-            {neoIconFor(shown) ? (
-              <img
-                src={neoIconFor(shown)!}
-                alt={shown}
-                width={48}
-                height={19}
-                style={{ imageRendering: "pixelated", display: "block" }}
-              />
-            ) : (
-              <Icon icon={getToolIcon(shown)} width={16} height={16} />
-            )}
+            <span className="neo-tool-face">
+              {neoIconFor(shown) ? (
+                <img
+                  src={neoIconFor(shown)!}
+                  alt=""
+                  width={48}
+                  height={19}
+                  style={{ imageRendering: "pixelated", display: "block" }}
+                />
+              ) : (
+                <Icon icon={getToolIcon(shown)} width={16} height={16} />
+              )}
+              <span className="neo-tool-label">
+                {NEO_TOOL_LABELS[shown] ?? shown}
+              </span>
+            </span>
           </button>
         );
       })}
@@ -176,13 +181,18 @@ export const ToolSelector = ({
             onCycleDrawType(true);
           }}
         >
-          <img
-            src={neoIconFor(drawType)!}
-            alt={drawType}
-            width={48}
-            height={19}
-            style={{ imageRendering: "pixelated", display: "block" }}
-          />
+          <span className="neo-tool-face">
+            <img
+              src={neoIconFor(drawType)!}
+              alt=""
+              width={48}
+              height={19}
+              style={{ imageRendering: "pixelated", display: "block" }}
+            />
+            <span className="neo-tool-label">
+              {NEO_TOOL_LABELS[drawType] ?? drawType}
+            </span>
+          </span>
         </button>
       )}
     </div>

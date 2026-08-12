@@ -172,7 +172,9 @@
 .neo-chrome .neo-tool,
 .neo-chrome .neo-tool-selected {
   padding: 0;
-  background-color: var(--neo-face);
+  /* Tool buttons wear tool_color_button, not color_icon -- the tan face in
+     NEO's toolbox, which is what makes it read as a toolbox at all. */
+  background-color: var(--neo-tool-button);
   border-top: 1px solid var(--neo-light);
   border-left: 1px solid var(--neo-light);
   border-right: 1px solid var(--neo-shadow);
@@ -185,4 +187,25 @@
   border-left-color: var(--neo-shadow);
   border-right-color: var(--neo-light);
   border-bottom-color: var(--neo-light);
+}
+
+/* NEO composes a tool button as artwork with the label drawn over it */
+.neo-chrome .neo-tool-face {
+  position: relative;
+  display: block;
+  width: 48px;
+  height: 19px;
+}
+
+.neo-chrome .neo-tool-label {
+  position: absolute;
+  left: 2px;
+  bottom: -3px;
+  font-size: 12px;
+  font-family: "Arial";
+  letter-spacing: 0;
+  line-height: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--neo-tool-text);
 }

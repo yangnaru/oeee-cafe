@@ -75,3 +75,39 @@ export function neoIconFor(tool: string): string | null {
   const name = NEO_ICON_FOR_TOOL[tool];
   return name ? (NEO_TOOL_ICONS[name] ?? null) : null;
 }
+
+/**
+ * The label NEO draws over each icon.
+ *
+ * These are its `toolStrings`, set in each Tip's init. The sprite carries the
+ * artwork only -- the text is a separate DOM element sitting over it, which
+ * is why a button with no label looks bare rather than merely untranslated.
+ */
+export const NEO_TOOL_LABELS: Record<string, string> = {
+  solid: "Solid",
+  brush: "Brush",
+  text: "Text",
+  halftone: "Halftone",
+  blur: "Blur",
+  dodge: "Dodge",
+  burn: "Burn",
+  eraser: "Eraser",
+  eraseRect: "EraseRct",
+  eraseAll: "EraseAll",
+  rect: "Rect",
+  rectFill: "RectFill",
+  ellipse: "Ellipse",
+  ellipseFill: "EllipsFil",
+  copy: "Copy",
+  paste: "Paste",
+  merge: "Merge",
+  blurRect: "BlurRect",
+  flipH: "FlipH",
+  flipV: "FlipV",
+  turn: "Turn",
+  fill: "Fill",
+  pan: "Pan",
+  freehand: "Freehand",
+  line: "Line",
+  bezier: "Bezier",
+};
