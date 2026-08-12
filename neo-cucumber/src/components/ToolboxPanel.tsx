@@ -366,8 +366,7 @@ export const ToolboxPanel = ({
         {retro ? (
           <button
             type="button"
-            className="neo-tool"
-            style={{ width: "46px", height: "18px", position: "relative" }}
+            className="layerControl"
             title="Switch layer (right-click to hide)"
             onClick={() =>
               onUpdateDrawingState((prev) => ({
@@ -384,15 +383,20 @@ export const ToolboxPanel = ({
                   : { ...prev, bgVisible: !prev.bgVisible }
               );
             }}
+            style={{
+              opacity:
+                (drawingState.layerType === "foreground"
+                  ? drawingState.fgVisible
+                  : drawingState.bgVisible)
+                  ? 1
+                  : 0.4,
+            }}
           >
-            <span className="neo-tool-label" style={{ opacity:
-              (drawingState.layerType === "foreground"
-                ? drawingState.fgVisible
-                : drawingState.bgVisible)
-                ? 1
-                : 0.4 }}>
-              Layer{drawingState.layerType === "foreground" ? "FG" : "BG"}
-            </span>
+            <div className="bg" />
+            <div className="label0">Layer</div>
+            <div className="label1">
+              {drawingState.layerType === "foreground" ? "FG" : "BG"}
+            </div>
           </button>
         ) : (
         <div className="flex flex-row">
