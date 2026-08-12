@@ -3,6 +3,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
 import { NeoSizeSlider } from "./NeoSizeSlider";
+import { NeoColorSliders } from "./NeoColorSliders";
 import { ToolSelector } from "./ToolSelector";
 import { ColorPalette } from "./ColorPalette";
 import { CustomSlider } from "./CustomSlider";
@@ -22,6 +23,12 @@ interface HistoryState {
 interface ToolboxPanelProps {
   /** NEO's beveled chrome instead of the flat panel. */
   retro?: boolean;
+  /**
+   * Which half to show. NEO's toolbox has tools, colour and layers and
+   * nothing else, so our own controls -- undo, zoom, flip, save -- move to a
+   * second panel rather than sitting in a column that claims to be NEO's.
+   */
+  section?: "all" | "neo" | "extras";
   drawingState: DrawingState;
   historyState: HistoryState;
   paletteColors: string[];
@@ -68,6 +75,7 @@ export const ToolboxPanel = ({
   onZoomReset,
   onSaveCollaborativeDrawing,
   retro = false,
+  section = "all",
   initialPosition,
 }: ToolboxPanelProps) => {
   const { t } = useLingui();
@@ -208,6 +216,9 @@ export const ToolboxPanel = ({
     handleTouchEnd,
   ]);
 
+  const showNeo = section !== "extras";
+  const showExtras = section !== "neo";
+
   return (
     <div
       ref={panelRef}
@@ -235,6 +246,7 @@ export const ToolboxPanel = ({
       </div>
 
       <div className="p-2 flex flex-col gap-1">
+{showExtras && (<>
         {/* Undo/Redo buttons */}
         <div className="flex flex-row">
           <button
@@ -255,6 +267,8 @@ export const ToolboxPanel = ({
           </button>
         </div>
 
+</>)}
+{showNeo && (<>
         <div className="flex flex-row gap-2">
           {/* Tool selection */}
           <ToolSelector
@@ -285,22 +299,35 @@ export const ToolboxPanel = ({
             onColorPickerChange={onColorPickerChange}
           />
 
-          {/* Opacity gauge */}
-          <CustomSlider
-            value={drawingState.opacity}
-            min={1}
-            max={255}
-            label={`Opacity: ${Math.max(
-              1,
-              Math.round((drawingState.opacity / 255) * 100)
-            )}%`}
-            onChange={(value) =>
-              onUpdateDrawingState((prev) => ({
-                ...prev,
-                opacity: value,
-              }))
-            }
-          />
+          {/* NEO picks colour with four channel sliders rather than a
+              picker, and alpha is one of them -- so this replaces the
+              opacity gauge rather than sitting beside it. */}
+          {retro ? (
+            <NeoColorSliders
+              color={drawingState.color}
+              alpha={drawingState.opacity}
+              onChange={(color, alpha) => {
+                onUpdateColor(color);
+                onUpdateDrawingState((prev) => ({ ...prev, opacity: alpha }));
+              }}
+            />
+          ) : (
+            <CustomSlider
+              value={drawingState.opacity}
+              min={1}
+              max={255}
+              label={`Opacity: ${Math.max(
+                1,
+                Math.round((drawingState.opacity / 255) * 100)
+              )}%`}
+              onChange={(value) =>
+                onUpdateDrawingState((prev) => ({
+                  ...prev,
+                  opacity: value,
+                }))
+              }
+            />
+          )}
         </div>
 
           {/* Brush size. NEO's own slider in the retro chrome; the generic
@@ -396,6 +423,8 @@ export const ToolboxPanel = ({
           ))}
         </div>
 
+</>)}
+{showExtras && (<>
         {/* Zoom controls */}
         <div className="flex flex-row">
           <button
@@ -476,6 +505,7 @@ export const ToolboxPanel = ({
             </button>
           </div>
         )}
+</>)}
       </div>
     </div>
   );

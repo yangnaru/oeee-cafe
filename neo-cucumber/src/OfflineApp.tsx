@@ -759,10 +759,13 @@ function OfflineApp() {
                 onSave={handleSaveDrawing}
               />
             ) : (
+              <>
               <ToolboxPanel
                 // NEO's beveled chrome: this is the standalone painter, and
                 // the retro look is the point of it.
                 retro
+                // NEO's column carries tools, colour and layers only
+                section="neo"
                 // An offline drawing records lineType straight into the .pch,
                 // which already has codes for every one of these.
                 tools={ALL_TOOLS}
@@ -787,6 +790,33 @@ function OfflineApp() {
                 onSaveCollaborativeDrawing={() => {}}
                 initialPosition={{ x: 16, y: 70 }}
               />
+              {/* Everything NEO's toolbox does not have, in its own panel */}
+              <ToolboxPanel
+                retro
+                section="extras"
+                tools={ALL_TOOLS}
+                drawingState={drawingState}
+                historyState={historyState}
+                paletteColors={paletteColors}
+                selectedPaletteIndex={selectedPaletteIndex}
+                currentZoom={currentZoom}
+                isOwner={false}
+                isSaving={false}
+                sessionEnded={false}
+                onUndo={undo}
+                onRedo={redo}
+                onUpdateBrushType={updateBrushType}
+                onUpdateDrawingState={setDrawingState}
+                onUpdateColor={updateColor}
+                onColorPickerChange={handleColorPickerChange}
+                onSetSelectedPaletteIndex={setSelectedPaletteIndex}
+                onZoomIn={() => handleZoomIn()}
+                onZoomOut={() => handleZoomOut()}
+                onZoomReset={handleZoomReset}
+                onSaveCollaborativeDrawing={() => {}}
+                initialPosition={{ x: 16, y: 320 }}
+              />
+              </>
             )}
           </div>
         </div>

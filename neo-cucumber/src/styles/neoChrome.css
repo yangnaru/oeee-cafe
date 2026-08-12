@@ -9,11 +9,21 @@
  */
 
 .neo-chrome {
-  --neo-face: #e4e4ec;
-  --neo-light: #ffffff;
-  --neo-shadow: #9397b2;
-  --neo-selected: #b1d6fd;
-  --neo-text: #1a1a2e;
+  /*
+   * NEO's defaults, from applyStyle in container.js. These are the real
+   * values -- the toolbox is lavender with a pink selection, not the grey
+   * I had guessed at. The bevels are derived the way NEO derives them, by
+   * multiplying color_icon by 1.3 and 0.7.
+   */
+  --neo-face: #ccccff;        /* color_icon */
+  --neo-light: #ffffff;       /* color_icon x 1.3, clipped */
+  --neo-shadow: #8f8fb3;      /* color_icon x 0.7 */
+  --neo-selected: #ffaaaa;    /* color_iconselect */
+  --neo-text: #666699;        /* color_text */
+  --neo-bar: #6f6fae;         /* color_bar */
+  --neo-tool-bar: #ddddff;    /* tool_color_bar */
+  --neo-tool-text: #773333;   /* tool_color_text */
+  --neo-tool-button: #e8dfae; /* tool_color_button */
 
   background-color: var(--neo-face);
   color: var(--neo-text);
