@@ -13,6 +13,10 @@ const WIDTH = 48;
 const BAR = 33;
 const OFFSET = 4;
 const HIT_HEIGHT = 41;
+// NEO hangs the label below its 33px bar and lets the surrounding layout
+// absorb it. Ours is a self-contained box, so it reserves the room instead --
+// otherwise the text spills out over whatever sits underneath.
+const LABEL_HEIGHT = 14;
 
 /** NEO's SizeSlider.update: bar height is the value scaled onto 33px. */
 function heightFor(value: number): number {
@@ -83,7 +87,11 @@ export function NeoSizeSlider({ value, color, onChange }: NeoSizeSliderProps) {
     <div
       ref={ref}
       className="relative select-none"
-      style={{ width: `${WIDTH}px`, height: `${HIT_HEIGHT}px`, cursor: "ns-resize" }}
+      style={{
+        width: `${WIDTH}px`,
+        height: `${HIT_HEIGHT + LABEL_HEIGHT}px`,
+        cursor: "ns-resize",
+      }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={stop}
@@ -127,10 +135,12 @@ export function NeoSizeSlider({ value, color, onChange }: NeoSizeSliderProps) {
         style={{
           position: "absolute",
           left: "2px",
-          bottom: "-3px",
+          top: `${OFFSET + BAR - 2}px`,
           fontSize: "12px",
+          lineHeight: `${LABEL_HEIGHT}px`,
           fontFamily: "Arial",
           letterSpacing: 0,
+          whiteSpace: "nowrap",
           pointerEvents: "none",
         }}
       >
