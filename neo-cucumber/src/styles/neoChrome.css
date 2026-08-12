@@ -146,9 +146,7 @@
   padding: 1px;
 }
 
-.neo-chrome > div {
-  gap: 2px;
-}
+/* Spacing between widgets is neo.css's business now, not ours. */
 
 /*
  * Width. NEO's tool column is 52px; ours carries labels and a colour picker
@@ -166,48 +164,6 @@
 .neo-chrome input[type="text"],
 .neo-chrome input[type="number"] {
   max-width: 100%;
-}
-
-/* Tool buttons carry NEO's own 48x19 icons, so they are icon-shaped */
-.neo-chrome .neo-tool,
-.neo-chrome .neo-tool-selected {
-  padding: 0;
-  /* Tool buttons wear tool_color_button, not color_icon -- the tan face in
-     NEO's toolbox, which is what makes it read as a toolbox at all. */
-  background-color: var(--neo-tool-button);
-  border-top: 1px solid var(--neo-light);
-  border-left: 1px solid var(--neo-light);
-  border-right: 1px solid var(--neo-shadow);
-  border-bottom: 1px solid var(--neo-shadow);
-}
-
-.neo-chrome .neo-tool-selected {
-  background-color: var(--neo-selected);
-  border-top-color: var(--neo-shadow);
-  border-left-color: var(--neo-shadow);
-  border-right-color: var(--neo-light);
-  border-bottom-color: var(--neo-light);
-}
-
-/* NEO composes a tool button as artwork with the label drawn over it */
-.neo-chrome .neo-tool-face {
-  position: relative;
-  display: block;
-  width: 48px;
-  height: 19px;
-}
-
-.neo-chrome .neo-tool-label {
-  position: absolute;
-  left: 2px;
-  bottom: -3px;
-  font-size: 12px;
-  font-family: "Arial";
-  letter-spacing: 0;
-  line-height: 12px;
-  white-space: nowrap;
-  pointer-events: none;
-  color: var(--neo-tool-text);
 }
 
 /* A chosen swatch is outlined, the way NEO marks its colorTipOn */
