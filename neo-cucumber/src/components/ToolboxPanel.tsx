@@ -295,6 +295,7 @@ export const ToolboxPanel = ({
             selectedPaletteIndex={selectedPaletteIndex}
             currentColor={drawingState.color}
             onSetSelectedPaletteIndex={onSetSelectedPaletteIndex}
+            retro={retro}
             onUpdateColor={onUpdateColor}
             onColorPickerChange={onColorPickerChange}
           />

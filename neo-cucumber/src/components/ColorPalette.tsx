@@ -1,6 +1,11 @@
 import { useLingui } from "@lingui/react/macro";
 
 interface ColorPaletteProps {
+  /**
+   * NEO's swatch block: 22x18 tips in a 48x144 grid, filled row by row, with
+   * no backing panel and no picker -- its RGBA sliders are the picker.
+   */
+  retro?: boolean;
   paletteColors: string[];
   selectedPaletteIndex: number;
   currentColor: string;
@@ -16,22 +21,45 @@ export const ColorPalette = ({
   onSetSelectedPaletteIndex,
   onUpdateColor,
   onColorPickerChange,
+  retro = false,
 }: ColorPaletteProps) => {
   const { t } = useLingui();
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="border border-main bg-main p-1">
-        <div className="grid grid-cols-2 grid-rows-7 grid-flow-col-dense gap-0.5">
+    <div className={retro ? "" : "flex flex-col gap-1"}>
+      <div className={retro ? "" : "border border-main bg-main p-1"}
+           style={retro ? { width: "48px", marginTop: "4px" } : undefined}>
+        <div
+          className={
+            retro
+              ? "grid grid-cols-2"
+              : "grid grid-cols-2 grid-rows-7 grid-flow-col-dense gap-0.5"
+          }
+          style={retro ? { gap: "1px" } : undefined}
+        >
           {paletteColors.map((paletteColor, index) => (
             <button
               key={index}
-              className={`w-6 h-5 border border-main cursor-pointer hover:bg-highlight transition-colors ${
-                selectedPaletteIndex === index
-                  ? "ring-2 ring-inset ring-highlight"
-                  : ""
-              }`}
-              style={{ backgroundColor: paletteColor }}
+              className={
+                retro
+                  ? `cursor-pointer ${
+                      selectedPaletteIndex === index ? "neo-swatch-on" : ""
+                    }`
+                  : `w-6 h-5 border border-main cursor-pointer hover:bg-highlight transition-colors ${
+                      selectedPaletteIndex === index
+                        ? "ring-2 ring-inset ring-highlight"
+                        : ""
+                    }`
+              }
+              style={
+                retro
+                  ? {
+                      backgroundColor: paletteColor,
+                      width: "22px",
+                      height: "18px",
+                    }
+                  : { backgroundColor: paletteColor }
+              }
               onClick={() => {
                 onSetSelectedPaletteIndex(index);
                 onUpdateColor(paletteColor);
@@ -48,6 +76,8 @@ export const ColorPalette = ({
           ))}
         </div>
       </div>
+      {/* NEO has no picker: its RGBA sliders are how you mix a colour */}
+      {!retro && (
       <input
         type="color"
         value={currentColor}
@@ -60,6 +90,7 @@ export const ColorPalette = ({
         }
         className="w-full h-8 border border-main bg-main cursor-pointer appearance-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none hover:bg-highlight transition-colors"
       />
+      )}
     </div>
   );
 };

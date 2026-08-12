@@ -814,7 +814,7 @@ function OfflineApp() {
                 onZoomOut={() => handleZoomOut()}
                 onZoomReset={handleZoomReset}
                 onSaveCollaborativeDrawing={() => {}}
-                initialPosition={{ x: 96, y: 70 }}
+                initialPosition={{ x: 16, y: 320 }}
               />
               </>
             )}
