@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { encodeChat } from "../utils/binaryProtocol";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Icon } from "@iconify/react";
-import { NEO_ICON_BUTTON } from "./neo/neoClasses";
 import { getUserColors } from "../utils/userColors";
 
 interface ChatMessage {
@@ -25,7 +23,6 @@ interface ChatProps {
   userId: string;
   participants: Map<string, Participant>;
   onChatMessage: (message: ChatMessage) => void;
-  onMinimizedChange?: (isMinimized: boolean) => void;
   onAddMessage?: (
     addMessageFn: (message: {
       id: string;
@@ -43,7 +40,6 @@ export const Chat = ({
   userId,
   participants,
   onChatMessage,
-  onMinimizedChange,
   onAddMessage,
 }: ChatProps) => {
   const { t } = useLingui();
@@ -51,7 +47,6 @@ export const Chat = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isComposing, setIsComposing] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -160,43 +155,14 @@ export const Chat = ({
   };
 
   return (
-    <div
-      className={`${
-        isMinimized ? "h-full items-center p-[2px]" : "h-full p-4 gap-4"
-      } flex flex-col touch-auto select-auto`}
-    >
+    <div className="flex flex-col gap-4 p-4 touch-auto select-auto">
       <div className="flex items-center flex-row gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            const newMinimized = !isMinimized;
-            setIsMinimized(newMinimized);
-            onMinimizedChange?.(newMinimized);
-          }}
-          className={`${NEO_ICON_BUTTON} flex h-[24px] w-[24px] shrink-0 items-center justify-center`}
-          aria-expanded={!isMinimized}
-          title={isMinimized ? t`Show chat` : t`Hide chat`}
-          aria-label={isMinimized ? t`Show chat` : t`Hide chat`}
-        >
-          <Icon
-            icon={
-              isMinimized
-                ? "material-symbols:chevron-right"
-                : "material-symbols:chevron-left"
-            }
-            width={16}
-            height={16}
-          />
-        </button>
-        {!isMinimized && (
-          <p>
-            <Trans>Participants</Trans> ({participants.size})
-          </p>
-        )}
+        <p>
+          <Trans>Participants</Trans> ({participants.size})
+        </p>
       </div>
-      {!isMinimized && (
-        <>
-          <div className="flex flex-row gap-2 w-full">
+      <>
+          <div className="flex w-full flex-row gap-2">
             {Array.from(participants.values())
               .sort((a, b) => a.joinedAt - b.joinedAt)
               .map((participant) => (
@@ -214,7 +180,7 @@ export const Chat = ({
               </div>
             )}
           </div>
-          <div className="flex-1 overflow-y-auto p-2 border border-main bg-main text-xs leading-relaxed flex flex-col justify-end">
+          <div className="h-64 max-h-[calc(100vh-10rem)] overflow-y-auto border border-main bg-main p-2 text-xs leading-relaxed">
             <div>
               {messages.map((msg) => (
                 <div
@@ -279,8 +245,7 @@ export const Chat = ({
               <Trans>Send</Trans>
             </button>
           </div>
-        </>
-      )}
+      </>
     </div>
   );
 };

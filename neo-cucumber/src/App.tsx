@@ -131,7 +131,6 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [sessionEnded] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const [isChatMinimized, setIsChatMinimized] = useState(false);
 
   // Store reference to chat's addMessage function
   const chatAddMessageRef = useRef<
@@ -810,16 +809,10 @@ function App() {
         )}
 
         <div className="flex-1 flex overflow-hidden">
-          {/* Left Sidebar */}
-          {/*
-            Chat travels in the same window the toolbox does, rather than
-            docked down the side: the canvas is the point of the page, and a
-            fixed sidebar was taking a third of it on a narrow window. It
-            collapses to its title bar, and it can be dragged out of the way.
-          */}
+          {/* Chat travels with the toolbox so it can be moved out of the canvas. */}
           <NeoWindow
             initialPosition={{ x: 16, y: 70 }}
-            className={`z-40 ${isChatMinimized ? "w-[150px]" : "w-72"}`}
+            className="z-40 w-72"
             title={<Trans>Chat</Trans>}
           >
             <Chat
@@ -827,7 +820,6 @@ function App() {
               userId={userIdRef.current}
               participants={participants}
               onChatMessage={handleChatMessage}
-              onMinimizedChange={setIsChatMinimized}
               onAddMessage={handleChatAddMessage}
             />
           </NeoWindow>
