@@ -87,32 +87,49 @@ export const initializeTones = (): { [key: string]: Uint8Array } => {
   
   return tone;
 };
-/** Everything the engine rasterises, in NEO's toolbar order. */
-export const ALL_TOOLS: readonly ToolId[] = [
+/**
+ * Every image-editing tool NEO dispatches in `Painter.setToolByType`.
+ *
+ * This deliberately includes fill and paste even though neither has a tip in
+ * NEO's tool column: fill is a button above the canvas, and copy switches to
+ * paste when its selection is finished. It deliberately excludes NEO's Hand
+ * and Slider tools, which only operate the UI.
+ */
+export const NEO_DRAWING_TOOLS: readonly ToolId[] = [
   "solid",
-  "brush",
-  "halftone",
   "eraser",
+  "fill",
+  "eraseAll",
+  "eraseRect",
+  "copy",
+  "paste",
+  "merge",
+  "flipH",
+  "flipV",
+  "brush",
+  "text",
+  "halftone",
+  "blur",
   "dodge",
   "burn",
-  "blur",
-  "fill",
   // Dragged out over a rectangle rather than stroked
   "rect",
   "rectFill",
   "ellipse",
   "ellipseFill",
-  "eraseRect",
   "blurRect",
-  "flipH",
-  "flipV",
   "turn",
-  "merge",
-  "copy",
-  "paste",
-  "eraseAll",
-  "text",
+];
+
+/** Tools added for operating the modern canvas, never for editing its pixels. */
+export const CONVENIENCE_TOOLS: readonly ToolId[] = [
   "pan",
+];
+
+/** Every selectable tool in neo-cucumber. */
+export const ALL_TOOLS: readonly ToolId[] = [
+  ...NEO_DRAWING_TOOLS,
+  ...CONVENIENCE_TOOLS,
 ];
 
 /**

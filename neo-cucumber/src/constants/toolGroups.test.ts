@@ -1,8 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { ALL_TOOLS, NON_NEO_TOOLS } from "./drawing";
+import {
+  ALL_TOOLS,
+  CONVENIENCE_TOOLS,
+  NEO_DRAWING_TOOLS,
+  NON_NEO_TOOLS,
+} from "./drawing";
 import { NEO_TIPS, NEO_TOOL_LABELS } from "../neo/toolboxSpec";
 
 describe("NEO's tool tips", () => {
+  it("has exactly NEO's image-editing toolset", () => {
+    // neo/src/painter.js: Painter.setToolByType. Hand and Slider are UI
+    // helpers, not drawing tools; Mask is a drawing setting rather than a
+    // tool. The order here is its switch order, so a missing case is visible.
+    expect(NEO_DRAWING_TOOLS).toEqual([
+      "solid",
+      "eraser",
+      "fill",
+      "eraseAll",
+      "eraseRect",
+      "copy",
+      "paste",
+      "merge",
+      "flipH",
+      "flipV",
+      "brush",
+      "text",
+      "halftone",
+      "blur",
+      "dodge",
+      "burn",
+      "rect",
+      "rectFill",
+      "ellipse",
+      "ellipseFill",
+      "blurRect",
+      "turn",
+    ]);
+  });
+
+  it("adds only explicitly non-drawing convenience tools", () => {
+    expect(CONVENIENCE_TOOLS).toEqual(["pan"]);
+    expect(ALL_TOOLS).toEqual([...NEO_DRAWING_TOOLS, ...CONVENIENCE_TOOLS]);
+  });
+
   /**
    * The column is NEO's toolbox and nothing else -- no additions, no
    * omissions. Every tool the painter has is either on one of NEO's tips or
