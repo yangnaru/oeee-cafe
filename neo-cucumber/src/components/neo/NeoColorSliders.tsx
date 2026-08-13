@@ -117,6 +117,7 @@ export function NeoColorSliders({
                 hits.current[key] = el;
               }}
               className={NEO_COLOR_SLIDER_HIT}
+              style={{ touchAction: "none" }}
               role="slider"
               aria-label={prefix}
               aria-valuemin={key === "a" ? 1 : 0}

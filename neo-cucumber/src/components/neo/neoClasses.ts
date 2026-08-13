@@ -163,9 +163,9 @@ export const NEO_BAR_LABEL =
  * bearing rather than a courtesy.
  */
 export const NEO_COLOR_SLIDER_HIT =
-  "absolute top-0 left-[-6px] h-[13px] w-[60px] bg-white opacity-[0.01]";
+  "absolute top-0 left-[-6px] h-[13px] w-[60px] touch-none bg-white opacity-[0.01]";
 export const NEO_SIZE_SLIDER_HIT =
-  "absolute top-[-4px] left-0 h-[41px] w-[48px] bg-white opacity-[0.01]";
+  "absolute top-[-4px] left-0 h-[41px] w-[48px] touch-none bg-white opacity-[0.01]";
 
 /** One saved tool: NEO's 11x8 inside a 1px black border, so 13x10 outer. */
 export const NEO_RESERVE =

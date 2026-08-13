@@ -80,6 +80,7 @@ export function NeoSizeSlider({
       <div
         ref={hitRef}
         className={NEO_SIZE_SLIDER_HIT}
+        style={{ touchAction: "none" }}
         role="slider"
         aria-label="Brush size"
         aria-valuemin={MIN_BRUSH_SIZE}
