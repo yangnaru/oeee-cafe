@@ -699,14 +699,12 @@ function OfflineApp() {
                 <canvas
                 id="canvas"
                 ref={tempLocalUserCanvasRef}
-                width={Math.max(1, Math.round(canvasWidth * currentZoom))}
-                height={Math.max(1, Math.round(canvasHeight * currentZoom))}
+                width={canvasWidth}
+                height={canvasHeight}
                 className="absolute top-0 left-0 pointer-events-auto canvas-bg"
                 style={{
-                  width: `${canvasWidth * currentZoom}px`,
-                  height: `${canvasHeight * currentZoom}px`,
-                  transform: `scale(${1 / currentZoom})`,
-                  transformOrigin: "top left",
+                  width: `${canvasWidth}px`,
+                  height: `${canvasHeight}px`,
                 }}
                 />
               {/* Layer canvases will be dynamically created here */}

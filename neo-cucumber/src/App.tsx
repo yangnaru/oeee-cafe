@@ -880,14 +880,12 @@ function App() {
                     <canvas
                     id="canvas"
                     ref={tempLocalUserCanvasRef}
-                    width={Math.max(1, Math.round(canvasMeta.width * currentZoom))}
-                    height={Math.max(1, Math.round(canvasMeta.height * currentZoom))}
+                    width={canvasMeta.width}
+                    height={canvasMeta.height}
                     className="absolute top-0 left-0 pointer-events-auto canvas-bg"
                     style={{
                       width: `${canvasMeta.width}px`,
                       height: `${canvasMeta.height}px`,
-                      transform: `scale(${1 / currentZoom})`,
-                      transformOrigin: "top left",
                     }}
                     onPointerDown={() =>
                       console.log("Interaction canvas pointer down")
