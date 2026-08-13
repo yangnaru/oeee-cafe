@@ -175,12 +175,13 @@ export const ToolboxPanel = ({
         )}
 
         {showExtras && (
-          <div className="flex w-[52px] flex-col gap-[2px]">
+          <div className="flex w-[50px] flex-col gap-[2px]">
             {/*
-              Everything NEO keeps outside its toolbox, in the 52px its column
-              is wide. Every row is the same two-column grid so the buttons
-              line up: a flex row will not shrink a button below its icon, and
-              two of those overflowed the column and widened the whole panel.
+              Everything NEO keeps outside its toolbox, in the same width the
+              NEO column paints in so the two panels line up. Every row is the
+              same two-column grid so the buttons line up too: a flex row will
+              not shrink a button below its icon, and two of those overflowed
+              the column and widened the whole panel.
             */}
 
             {/*

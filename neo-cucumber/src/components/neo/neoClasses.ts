@@ -17,10 +17,19 @@
  * The column itself. `line-height: 18px` is NEO's, set on `.NEO`, and it is
  * what gives every 12px label an 18px box -- without it the labels sit a few
  * pixels high and nothing else lines up.
+ *
+ * The width is 50px where NEO's `#toolSet` is 52px, and that is deliberate.
+ * NEO's widgets are 48px wide plus the 1px ring that box-shadow paints just
+ * outside them, so they occupy 50px and leave 2px of slack in its column --
+ * which NEO never shows, because it hangs the whole wrapper off the edge of
+ * the painter (`#toolsWrapper { right: -3px }`). A floating panel has no edge
+ * to hide slack behind, so keeping the raw 52px only produced a lopsided
+ * panel: 3px of margin down one side and 7px down the other. The padding puts
+ * the ring back inside, so every widget still sits exactly where NEO puts it.
  */
 export const NEO_COLUMN =
-  "w-[52px] shrink-0 bg-[#ccccff] font-[Arial] text-[#773333] leading-[18px] " +
-  "cursor-default select-none";
+  "w-[50px] px-[1px] shrink-0 bg-[#ccccff] font-[Arial] text-[#773333] " +
+  "leading-[18px] cursor-default select-none";
 
 /*
   -------------------------------------------------------------------------
