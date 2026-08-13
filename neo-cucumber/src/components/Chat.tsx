@@ -183,18 +183,18 @@ export const Chat = ({
               {messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`mb-[3px] p-[3px] ${
+                  className={`mb-[2px] px-[3px] py-[1px] ${
                     msg.type === "system" ||
                     msg.type === "join" ||
                     msg.type === "leave"
-                      ? "py-0 mb-[2px]"
+                      ? "mb-[1px]"
                       : "border-b border-main"
                   } last:border-b-0`}
                 >
                   {msg.type === "system" ||
                   msg.type === "join" ||
                   msg.type === "leave" ? (
-                    <div className="italic text-main opacity-80 text-xs">
+                    <div className="text-[11px] leading-[14px] italic text-main opacity-80">
                       {msg.type === "join"
                         ? `${msg.username} joined`
                         : msg.type === "leave"
@@ -203,15 +203,15 @@ export const Chat = ({
                     </div>
                   ) : (
                     <>
-                      <div className="mb-[1px] flex items-center justify-between gap-1">
+                      <div className="flex items-center justify-between gap-1 text-[10px] leading-[12px]">
                         <span className="" style={getUserStyle(msg.username)}>
                           {msg.username}
                         </span>
-                        <span className="text-xs text-main opacity-70">
+                        <span className="text-[10px] leading-[12px] text-main opacity-70">
                           {formatTime(msg.timestamp)}
                         </span>
                       </div>
-                      <div className="break-words text-main text-xs">
+                      <div className="break-words text-[11px] leading-[14px] text-main">
                         {msg.message}
                       </div>
                     </>
