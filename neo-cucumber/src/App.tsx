@@ -16,7 +16,6 @@ import {
 } from "./types/collaboration";
 import { ToolboxPanels } from "./components/ToolboxPanels";
 import { NeoWindow } from "./components/neo/NeoWindow";
-import { Trans } from "@lingui/react/macro";
 import { SHARED_TOOLS } from "./constants/drawing";
 import { useDrawing } from "./hooks/useDrawing";
 import { useDrawingState } from "./hooks/useDrawingState";
@@ -833,7 +832,6 @@ function App() {
           <NeoWindow
             initialPosition={{ x: 16, y: 70 }}
             className="z-40 w-56"
-            title={<Trans>Chat</Trans>}
             resizable
             initialSize={{ width: 224, height: 469 }}
           >
