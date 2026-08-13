@@ -11,6 +11,7 @@ import {
 } from "../neo/tools";
 import { RegionDrag, type RegionRect } from "../neo/regionDrag";
 import type { BezierPreviewStyle } from "../neo/regionPreview";
+import { screenToArtwork } from "../neo/canvasTransform";
 
 /**
  * Copies the control points so a preview can move a handle without writing it
@@ -269,21 +270,13 @@ export const useBaseDrawing = (
     const rect = canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
 
-    const baseCanvasWidth = canvas.width;
-    const baseCanvasHeight = canvas.height;
-
-    const screenX = clientX - rect.left;
-    const screenY = clientY - rect.top;
-
-    let x = (screenX / rect.width) * baseCanvasWidth;
-    const y = (screenY / rect.height) * baseCanvasHeight;
-
-    // Flip x-coordinate if horizontal flip is enabled
-    if (currentDrawingStateRef.current.isFlippedHorizontal) {
-      x = baseCanvasWidth - x - 1;
-    }
-
-    return { x: Math.round(x), y: Math.round(y) };
+    return screenToArtwork(
+      { x: clientX, y: clientY },
+      rect,
+      canvas.width,
+      canvas.height,
+      currentDrawingStateRef.current.isFlippedHorizontal
+    );
   }, [canvasRef]);
 
   // Perform drawing operation on engine
