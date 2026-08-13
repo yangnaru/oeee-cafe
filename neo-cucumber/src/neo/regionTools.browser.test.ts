@@ -14,6 +14,8 @@ import { NeoPainter } from "./NeoPainter";
 import { BufferSurface } from "./PixelSurface";
 import { NeoReplay, decodePCH as decodeReplay } from "./NeoReplay";
 import { describeDifference, firstPixelDifference } from "../test/neoHarness";
+import { CanvasHistory } from "../utils/canvasHistory";
+import { decodeMessage, encodeRegion } from "../utils/binaryProtocol";
 
 const W = 48;
 const H = 48;
@@ -197,6 +199,41 @@ describe("region tools through the engine map to the right kernel", () => {
 });
 
 describe("eraseRect end to end", () => {
+  it("applies and confirms WhiteRegion through collaborative history", async () => {
+    const engine = new DrawingEngine(W, H);
+    const layer = engine.layers.background;
+    for (let i = 0; i < layer.length; i += 4) {
+      layer[i] = 40;
+      layer[i + 1] = 90;
+      layer[i + 2] = 180;
+      layer[i + 3] = 255;
+    }
+
+    const history = new CanvasHistory(engine);
+    history.setLocalUserId(7);
+    const bytes = encodeRegion(
+      7,
+      "background",
+      "eraseRect",
+      RECT,
+      { r: 0, g: 0, b: 0, a: 255 },
+      SIZE
+    );
+    const message = decodeMessage(bytes)!;
+
+    history.handleLocal(bytes, message);
+    const inside = ((RECT.y + 2) * W + RECT.x + 2) * 4 + 3;
+    const outside = 2 * 4 + 3;
+    expect(layer[inside]).toBe(0);
+    expect(layer[outside]).toBe(255);
+    expect(history.hasPendingLocal).toBe(true);
+
+    await history.handleRemote(new Uint8Array(bytes), message, 12);
+    expect(history.hasPendingLocal).toBe(false);
+    expect(layer[inside]).toBe(0);
+    expect(layer[outside]).toBe(255);
+  });
+
   it("records a frame that replays back to the same pixels", async () => {
     const { engine } = seeded();
     const recorder = new ActionRecorder();

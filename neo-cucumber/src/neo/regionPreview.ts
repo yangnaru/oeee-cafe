@@ -41,11 +41,12 @@ export function drawRegionPreview(
   if (!rect || !backdrop || rect.width <= 0 || rect.height <= 0) return;
 
   const overlay = new XorOverlay(ctx, backdrop);
+  const scale = backdrop.scale ?? 1;
   const fill = tool !== undefined && FILLED_TOOLS.has(tool);
   if (tool !== undefined && ELLIPSE_TOOLS.has(tool)) {
-    overlay.ellipse(rect.x, rect.y, rect.width, rect.height, fill);
+    overlay.ellipse(rect.x * scale, rect.y * scale, rect.width * scale, rect.height * scale, fill);
   } else {
-    overlay.rect(rect.x, rect.y, rect.width, rect.height, fill);
+    overlay.rect(rect.x * scale, rect.y * scale, rect.width * scale, rect.height * scale, fill);
   }
   overlay.commit();
 }
@@ -61,7 +62,8 @@ export function drawLinePreview(
   if (!from || !to || !backdrop) return;
 
   const overlay = new XorOverlay(ctx, backdrop);
-  overlay.line(from.x, from.y, to.x, to.y);
+  const scale = backdrop.scale ?? 1;
+  overlay.line(from.x * scale, from.y * scale, to.x * scale, to.y * scale);
   overlay.commit();
 }
 
@@ -92,6 +94,8 @@ export function drawBezierPreview(
   if (!points || points.length < 4 || !backdrop) return;
 
   const overlay = new XorOverlay(ctx, backdrop);
+  const scale = backdrop.scale ?? 1;
+  points = points.map((point) => point * scale);
   const ring = (x: number, y: number) =>
     overlay.ellipse(x - HANDLE, y - HANDLE, HANDLE * 2, HANDLE * 2);
 
@@ -122,7 +126,7 @@ export function drawBezierPreview(
     // preview mode deliberately forces full alpha and disables masking.
     const painter = new NeoPainter(ctx.canvas.width, ctx.canvas.height);
     painter._currentColor = [...style.color];
-    painter._currentWidth = style.width;
+    painter._currentWidth = style.width * scale;
     painter.drawBezier(
       ctx, x0, y0, x1, y1,
       step <= 1 ? x1 : x2, step <= 1 ? y1 : y2,

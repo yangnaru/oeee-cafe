@@ -150,12 +150,13 @@ function OfflineApp() {
     return {
       width: canvasWidth,
       height: canvasHeight,
+      scale: drawingState.zoomLevel / 100,
       layers: [
         drawingState.bgVisible ? engine.layers.background : null,
         drawingState.fgVisible ? engine.layers.foreground : null,
       ].filter((layer): layer is Uint8ClampedArray => layer !== null),
     };
-  }, [canvasWidth, canvasHeight, drawingState.bgVisible, drawingState.fgVisible]);
+  }, [canvasWidth, canvasHeight, drawingState.zoomLevel, drawingState.bgVisible, drawingState.fgVisible]);
   const handleRegionPreview = useCallback((rect: RegionRect | null) => {
     const ctx = previewCanvasRef.current?.getContext("2d");
     if (ctx) drawRegionPreview(ctx, rect, previewBackdrop(), drawingState.brushType);
@@ -696,12 +697,14 @@ function OfflineApp() {
               <canvas
                 id="canvas"
                 ref={tempLocalUserCanvasRef}
-                width={canvasWidth}
-                height={canvasHeight}
+                width={Math.max(1, Math.round(canvasWidth * currentZoom))}
+                height={Math.max(1, Math.round(canvasHeight * currentZoom))}
                 className="absolute top-0 left-0 pointer-events-auto canvas-bg"
                 style={{
-                  width: `${canvasWidth}px`,
-                  height: `${canvasHeight}px`,
+                  width: `${canvasWidth * currentZoom}px`,
+                  height: `${canvasHeight * currentZoom}px`,
+                  transform: `scale(${1 / currentZoom})`,
+                  transformOrigin: "top left",
                 }}
               />
               {/* Layer canvases will be dynamically created here */}
@@ -729,23 +732,27 @@ function OfflineApp() {
               )}
               <canvas
                 ref={cursorCanvasRef}
-                width={canvasWidth}
-                height={canvasHeight}
+                width={Math.max(1, Math.round(canvasWidth * currentZoom))}
+                height={Math.max(1, Math.round(canvasHeight * currentZoom))}
                 className="absolute top-0 left-0 pointer-events-none"
                 style={{
-                  width: `${canvasWidth}px`,
-                  height: `${canvasHeight}px`,
+                  width: `${canvasWidth * currentZoom}px`,
+                  height: `${canvasHeight * currentZoom}px`,
+                  transform: `scale(${1 / currentZoom})`,
+                  transformOrigin: "top left",
                   zIndex: 11,
                 }}
               />
               <canvas
                 ref={previewCanvasRef}
-                width={canvasWidth}
-                height={canvasHeight}
+                width={Math.max(1, Math.round(canvasWidth * currentZoom))}
+                height={Math.max(1, Math.round(canvasHeight * currentZoom))}
                 className="absolute top-0 left-0 pointer-events-none"
                 style={{
-                  width: `${canvasWidth}px`,
-                  height: `${canvasHeight}px`,
+                  width: `${canvasWidth * currentZoom}px`,
+                  height: `${canvasHeight * currentZoom}px`,
+                  transform: `scale(${1 / currentZoom})`,
+                  transformOrigin: "top left",
                   zIndex: 10,
                 }}
               />

@@ -6,7 +6,7 @@ import {
   drawRegionPreview,
   type Backdrop,
 } from "./regionPreview";
-import type { ToolId } from "./tools";
+import type { RegionTool, ToolId } from "./tools";
 
 const W = 72;
 const H = 56;
@@ -88,6 +88,65 @@ describe("interactive previews against canonical NEO", () => {
         method.call(p, ctx, rect.x, rect.y, rect.width, rect.height, fill);
       });
       expect(actual, tool).toEqual(expected);
+    }
+  });
+
+  it("keeps every region cursor pixel-perfect at zoom", () => {
+    const scale = 2;
+    const rect = { x: 7, y: 5, width: 25, height: 19 };
+    const tools: RegionTool[] = [
+      "eraseRect", "blurRect", "merge", "flipH", "flipV", "turn",
+      "copy", "paste", "rect", "rectFill", "ellipse", "ellipseFill",
+    ];
+
+    const source = artwork();
+    const back: Backdrop = {
+      width: W,
+      height: H,
+      scale,
+      layers: [new Uint8ClampedArray(source.getImageData(0, 0, W, H).data)],
+    };
+
+    for (const tool of tools) {
+      const overlay = document.createElement("canvas");
+      overlay.width = W * scale;
+      overlay.height = H * scale;
+      const overlayCtx = overlay.getContext("2d", { willReadFrequently: true })!;
+      drawRegionPreview(overlayCtx, rect, back, tool);
+
+      const actualCtx = document.createElement("canvas").getContext("2d")!;
+      actualCtx.canvas.width = W * scale;
+      actualCtx.canvas.height = H * scale;
+      actualCtx.fillStyle = "rgb(187,93,41)";
+      actualCtx.fillRect(0, 0, W, H * scale);
+      actualCtx.fillStyle = "rgb(31,142,203)";
+      actualCtx.fillRect(W, 0, W, H * scale);
+      actualCtx.drawImage(overlay, 0, 0);
+
+      const expectedCtx = document.createElement("canvas").getContext("2d")!;
+      expectedCtx.canvas.width = W * scale;
+      expectedCtx.canvas.height = H * scale;
+      expectedCtx.putImageData(actualCtx.getImageData(0, 0, W * scale, H * scale), 0, 0);
+      // Restore the un-previewed display artwork before asking canonical NEO.
+      expectedCtx.fillStyle = "rgb(187,93,41)";
+      expectedCtx.fillRect(0, 0, W, H * scale);
+      expectedCtx.fillStyle = "rgb(31,142,203)";
+      expectedCtx.fillRect(W, 0, W, H * scale);
+
+      const cp = createCanonicalPainter(W * scale, H * scale);
+      const ellipse = tool === "ellipse" || tool === "ellipseFill";
+      const fill = tool === "rectFill" || tool === "ellipseFill";
+      const method = ellipse ? cp.painter.drawXOREllipse : cp.painter.drawXORRect;
+      method.call(
+        cp.painter, expectedCtx,
+        rect.x * scale, rect.y * scale,
+        rect.width * scale, rect.height * scale, fill
+      );
+
+      expect(
+        new Uint8ClampedArray(actualCtx.getImageData(0, 0, W * scale, H * scale).data),
+        tool
+      ).toEqual(expectedCtx.getImageData(0, 0, W * scale, H * scale).data);
     }
   });
 

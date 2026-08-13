@@ -71,11 +71,11 @@ export function useCanvasView({
         brushSize,
         brushType,
         engine && canvasWidth && canvasHeight
-          ? { width: canvasWidth, height: canvasHeight, layers }
+          ? { width: canvasWidth, height: canvasHeight, scale: currentZoom, layers }
           : null
       );
     },
-    [brushSize, brushType, bgVisible, fgVisible, canvasWidth, canvasHeight]
+    [brushSize, brushType, bgVisible, fgVisible, canvasWidth, canvasHeight, currentZoom]
   );
 
   // Redraw where it already is when the brush changes under it, so the circle

@@ -403,6 +403,11 @@ export const useWebSocket = ({
           // reconciliation) and collaborative undo
           case "stroke":
           case "fill":
+          case "region":
+          case "line":
+          case "bezier":
+          case "eraseAll":
+          case "text":
           case "snapshot":
           case "undoPoint":
           case "undo": {

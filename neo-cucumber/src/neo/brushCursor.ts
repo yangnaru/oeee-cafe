@@ -15,6 +15,7 @@
  *   plausible, and diverges over everything in between.
  */
 import { isRegionTool, isTextTool, type ToolId } from "./tools";
+import { backdropAt, type Backdrop } from "./xorOverlay";
 
 /**
  * The cursor colours, as NEO writes them: a uint32 XORed into a little-endian
@@ -29,35 +30,7 @@ function channels(c: number): { r: number; g: number; b: number } {
 }
 
 /** The composited artwork the cursor inverts against. */
-export interface Backdrop {
-  width: number;
-  height: number;
-  /** RGBA, bottom layer first. Hidden layers are simply left out. */
-  layers: Uint8ClampedArray[];
-}
-
-/**
- * The colour showing at one pixel: the layers composited over white, which is
- * what the canvas element sits on.
- */
-function backdropAt(
-  backdrop: Backdrop,
-  x: number,
-  y: number
-): { r: number; g: number; b: number } {
-  let r = 255;
-  let g = 255;
-  let b = 255;
-  const i = (y * backdrop.width + x) * 4;
-  for (const layer of backdrop.layers) {
-    const a = layer[i + 3] / 255;
-    if (!a) continue;
-    r = layer[i] * a + r * (1 - a);
-    g = layer[i + 1] * a + g * (1 - a);
-    b = layer[i + 2] * a + b * (1 - a);
-  }
-  return { r: Math.round(r), g: Math.round(g), b: Math.round(b) };
-}
+export type { Backdrop } from "./xorOverlay";
 
 /**
  * Whether a tool shows the circle.
@@ -150,10 +123,11 @@ export function drawBrushCursor(
   if (!at || !backdrop || !hasBrushCursor(tool)) return;
 
   // NEO: "1pxの時は2px相当の円カーソルを表示"
-  const d = brushSize === 1 ? 2 : brushSize;
+  const scale = backdrop.scale ?? 1;
+  const d = (brushSize === 1 ? 2 : brushSize) * scale;
   const r = d * 0.5;
-  const left = Math.round(at.x - r);
-  const top = Math.round(at.y - r);
+  const left = Math.round(at.x * scale - r);
+  const top = Math.round(at.y * scale - r);
   const size = Math.round(d);
   if (size <= 0) return;
 
@@ -172,7 +146,7 @@ export function drawBrushCursor(
 
   plotEllipse(left, top, size, size, (px, py) => {
     if (px < x0 || py < y0 || px >= x1 || py >= y1) return;
-    if (px >= backdrop.width || py >= backdrop.height) return;
+    if (px >= backdrop.width * scale || py >= backdrop.height * scale) return;
 
     const under = backdropAt(backdrop, px, py);
     const i = ((py - y0) * (x1 - x0) + (px - x0)) * 4;

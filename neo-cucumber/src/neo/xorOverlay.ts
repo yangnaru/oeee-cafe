@@ -16,6 +16,8 @@
 export interface Backdrop {
   width: number;
   height: number;
+  /** Display pixels per artwork pixel. */
+  scale?: number;
   /** RGBA, bottom layer first. Hidden layers are simply left out. */
   layers: Uint8ClampedArray[];
 }
@@ -35,7 +37,10 @@ export function backdropAt(
   let r = 255;
   let g = 255;
   let b = 255;
-  const i = (y * backdrop.width + x) * 4;
+  const scale = backdrop.scale ?? 1;
+  const sourceX = Math.max(0, Math.min(backdrop.width - 1, Math.floor(x / scale)));
+  const sourceY = Math.max(0, Math.min(backdrop.height - 1, Math.floor(y / scale)));
+  const i = (sourceY * backdrop.width + sourceX) * 4;
   for (const layer of backdrop.layers) {
     const a = layer[i + 3] / 255;
     if (!a) continue;
@@ -82,7 +87,8 @@ export class XorOverlay {
     const px = Math.round(x);
     const py = Math.round(y);
     if (px < 0 || py < 0 || px >= this.width || py >= this.height) return;
-    if (px >= this.backdrop.width || py >= this.backdrop.height) return;
+    const scale = this.backdrop.scale ?? 1;
+    if (px >= this.backdrop.width * scale || py >= this.backdrop.height * scale) return;
     const key = py * this.width + px;
     // XOR is parity, not membership. Neo mutates the destination on every
     // primitive call, so two primitives crossing at a pixel cancel there.
