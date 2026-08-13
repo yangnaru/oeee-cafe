@@ -202,19 +202,17 @@ export const Chat = ({
                         : msg.message}
                     </div>
                   ) : (
-                    <>
-                      <div className="flex items-center justify-between gap-1 text-[10px] leading-[12px]">
-                        <span className="" style={getUserStyle(msg.username)}>
-                          {msg.username}
-                        </span>
-                        <span className="text-[10px] leading-[12px] text-main opacity-70">
-                          {formatTime(msg.timestamp)}
-                        </span>
-                      </div>
-                      <div className="break-words text-[11px] leading-[14px] text-main">
+                    <div className="flex items-baseline gap-1 text-[11px] leading-[14px]">
+                      <span className="shrink-0" style={getUserStyle(msg.username)}>
+                        {msg.username}
+                      </span>
+                      <span className="shrink-0 text-[10px] leading-[12px] text-main opacity-70">
+                        {formatTime(msg.timestamp)}
+                      </span>
+                      <span className="min-w-0 break-words text-main">
                         {msg.message}
-                      </div>
-                    </>
+                      </span>
+                    </div>
                   )}
                 </div>
               ))}
