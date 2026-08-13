@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { encodeChat } from "../utils/binaryProtocol";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { getUserColors } from "../utils/userColors";
+import { NEO_BUTTON } from "./neo/neoClasses";
 
 interface ChatMessage {
   id: string;
@@ -155,20 +156,20 @@ export const Chat = ({
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 touch-auto select-auto">
-      <div className="flex items-center flex-row gap-2">
-        <p>
+    <div className="flex flex-col gap-[3px] p-[3px] touch-auto select-auto">
+      <div className="flex items-center gap-[3px] text-xs leading-[18px]">
+        <p className="whitespace-nowrap">
           <Trans>Participants</Trans> ({participants.size})
         </p>
       </div>
       <>
-          <div className="flex w-full flex-row gap-2">
+          <div className="flex w-full flex-wrap gap-[3px]">
             {Array.from(participants.values())
               .sort((a, b) => a.joinedAt - b.joinedAt)
               .map((participant) => (
                 <div
                   key={participant.userId}
-                  className="items-center py-0.5 text-xs"
+                  className="items-center text-[11px] leading-[14px]"
                   style={getUserStyle(participant.username)}
                 >
                   {participant.username}
@@ -180,16 +181,16 @@ export const Chat = ({
               </div>
             )}
           </div>
-          <div className="h-64 max-h-[calc(100vh-10rem)] overflow-y-auto border border-main bg-main p-2 text-xs leading-relaxed">
+          <div className="h-40 max-h-[calc(100vh-8rem)] overflow-y-auto border border-main bg-main p-[3px] text-[11px] leading-[15px]">
             <div>
               {messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`mb-3 p-2 ${
+                  className={`mb-[3px] p-[3px] ${
                     msg.type === "system" ||
                     msg.type === "join" ||
                     msg.type === "leave"
-                      ? "py-1 mb-2"
+                      ? "py-0 mb-[2px]"
                       : "border-b border-main"
                   } last:border-b-0`}
                 >
@@ -205,7 +206,7 @@ export const Chat = ({
                     </div>
                   ) : (
                     <>
-                      <div className="flex justify-between items-center mb-1">
+                      <div className="mb-[1px] flex items-center justify-between gap-1">
                         <span className="" style={getUserStyle(msg.username)}>
                           {msg.username}
                         </span>
@@ -223,7 +224,7 @@ export const Chat = ({
               <div ref={messagesEndRef} />
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-[3px]">
             <input
               ref={inputRef}
               type="text"
@@ -235,12 +236,12 @@ export const Chat = ({
               onFocus={handleInputFocus}
               placeholder={t`Type a message...`}
               maxLength={500}
-              className="flex-1 p-2 border border-main bg-main text-main text-xs font-sans focus:outline-2 focus:outline-highlight focus:-outline-offset-2"
+              className="min-w-0 flex-1 border border-main bg-main px-[3px] py-[2px] text-[11px] leading-[14px] font-sans text-main focus:outline-2 focus:outline-highlight focus:-outline-offset-2"
             />
             <button
               onClick={sendMessage}
               disabled={!inputValue.trim()}
-              className="px-4 py-2 border border-main bg-main text-main cursor-pointer text-xs font-sans disabled:opacity-50 disabled:cursor-not-allowed hover:not(:disabled):bg-highlight hover:not(:disabled):text-white"
+              className={`${NEO_BUTTON} shrink-0 px-[5px] py-[2px] text-[11px] font-sans disabled:cursor-not-allowed`}
             >
               <Trans>Send</Trans>
             </button>

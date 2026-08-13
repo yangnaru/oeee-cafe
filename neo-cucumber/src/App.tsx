@@ -812,7 +812,7 @@ function App() {
           {/* Chat travels with the toolbox so it can be moved out of the canvas. */}
           <NeoWindow
             initialPosition={{ x: 16, y: 70 }}
-            className="z-40 w-72"
+            className="z-40 w-56"
             title={<Trans>Chat</Trans>}
           >
             <Chat
