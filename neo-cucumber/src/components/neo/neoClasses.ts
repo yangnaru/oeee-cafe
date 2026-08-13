@@ -29,7 +29,7 @@
  */
 export const NEO_COLUMN =
   "w-[50px] px-[1px] shrink-0 bg-(--neo-tool-set) font-[Arial] text-(--neo-tool-text) " +
-  "leading-[18px] cursor-default select-none";
+  "leading-[18px] cursor-default";
 
 /*
   -------------------------------------------------------------------------
@@ -204,7 +204,7 @@ export const NEO_PANEL =
   "bg-(--neo-icon) text-(--neo-text) font-[Arial] text-[12px] leading-[18px] " +
   "border-t border-l border-t-(--neo-bevel-light) border-l-(--neo-bevel-light) " +
   "border-r border-b border-r-(--neo-panel-shadow) border-b-(--neo-panel-shadow) " +
-  "cursor-default select-none";
+  "cursor-default";
 
 /** The bevel and behaviour every control in the chrome shares. */
 const BUTTON_FACE =

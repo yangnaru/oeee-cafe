@@ -104,8 +104,7 @@ export const ToolboxPanel = ({
   return (
     <NeoWindow
       initialPosition={initialPosition ?? { x: 304, y: 70 }}
-      className="w-max"
-      constrainToViewport
+      className="w-max overflow-hidden select-text"
       minimumY={70}
     >
       <div className="flex flex-col gap-[2px] p-[2px]">
