@@ -156,7 +156,7 @@ export const Chat = ({
   };
 
   return (
-    <div className="flex h-[600px] min-h-0 flex-1 flex-col gap-[3px] p-[3px] touch-auto select-auto">
+    <div className="flex min-h-0 flex-1 flex-col gap-[3px] p-[3px] touch-auto select-auto">
       <>
           <div className="flex w-full flex-wrap items-center gap-[3px]">
             <span
@@ -219,7 +219,7 @@ export const Chat = ({
               <div ref={messagesEndRef} />
             </div>
           </div>
-          <div className="flex gap-[3px]">
+          <div className="flex gap-[3px] pr-[32px]">
             <input
               ref={inputRef}
               type="text"

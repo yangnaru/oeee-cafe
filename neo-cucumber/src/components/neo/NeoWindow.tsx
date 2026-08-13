@@ -10,6 +10,8 @@ interface NeoWindowProps {
   title?: React.ReactNode;
   /** Enables a visible bottom-right resize handle for larger panels. */
   resizable?: boolean;
+  /** Explicit opening size for resizable windows. */
+  initialSize?: { width: number; height: number };
   /** Keeps tall floating controls reachable in a small viewport. */
   constrainToViewport?: boolean;
   /** Keeps a window below persistent application chrome. */
@@ -31,13 +33,18 @@ export function NeoWindow({
   className = "",
   title,
   resizable = false,
+  initialSize,
   constrainToViewport = false,
   minimumY = 0,
   children,
 }: NeoWindowProps) {
+  const initialWidth = initialSize?.width;
+  const initialHeight = initialSize?.height;
   const [position, setPosition] = useState(initialPosition);
   const [size, setSize] = useState<{ width: number; height: number } | null>(
-    null
+    initialWidth !== undefined && initialHeight !== undefined
+      ? { width: initialWidth, height: initialHeight }
+      : null
   );
   const frameRef = useRef<HTMLDivElement>(null);
   const dragOffset = useRef<{ x: number; y: number } | null>(null);
@@ -113,8 +120,14 @@ export function NeoWindow({
 
   // A changed opening position is an explicit re-anchor.
   useEffect(() => {
-    setPosition(initialPosition);
+    setPosition({ x: initialPosition.x, y: initialPosition.y });
   }, [initialPosition.x, initialPosition.y]);
+
+  useEffect(() => {
+    if (initialWidth !== undefined && initialHeight !== undefined) {
+      setSize({ width: initialWidth, height: initialHeight });
+    }
+  }, [initialWidth, initialHeight]);
 
   // Keep the whole frame reachable when the viewport shrinks under it.
   useEffect(() => {
@@ -170,12 +183,14 @@ export function NeoWindow({
       {resizable && (
         <div
           aria-hidden="true"
-          className="absolute right-[2px] bottom-[2px] z-10 h-[12px] w-[12px] cursor-se-resize bg-[linear-gradient(135deg,transparent_0%,transparent_42%,var(--neo-panel-shadow)_42%,var(--neo-panel-shadow)_50%,transparent_50%,transparent_62%,var(--neo-panel-shadow)_62%,var(--neo-panel-shadow)_70%,transparent_70%)]"
+          className="absolute right-0 bottom-0 z-30 h-[32px] w-[32px] touch-none cursor-se-resize"
           onPointerDown={handleResizeStart}
           onPointerMove={handleResizeMove}
           onPointerUp={endResize}
           onPointerCancel={endResize}
-        />
+        >
+          <span className="pointer-events-none absolute right-[2px] bottom-[2px] h-[12px] w-[12px] bg-[linear-gradient(135deg,transparent_0%,transparent_42%,var(--neo-panel-shadow)_42%,var(--neo-panel-shadow)_50%,transparent_50%,transparent_62%,var(--neo-panel-shadow)_62%,var(--neo-panel-shadow)_70%,transparent_70%)]" />
+        </div>
       )}
     </div>
   );
