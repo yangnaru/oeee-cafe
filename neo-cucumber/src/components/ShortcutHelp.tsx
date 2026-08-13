@@ -1,4 +1,4 @@
-import "../styles/neoChrome.css";
+import { NEO_BUTTON, NEO_KBD, NEO_PANEL } from "./neo/neoClasses";
 import { SHORTCUTS, describeAction, type Shortcut } from "../constants/shortcuts";
 
 interface ShortcutHelpProps {
@@ -27,7 +27,7 @@ export function ShortcutHelp({ open, onClose }: ShortcutHelpProps) {
       onClick={onClose}
     >
       <div
-        className="neo-chrome neo-raised max-h-[80vh] overflow-y-auto p-4 shadow-lg"
+        className={`${NEO_PANEL} max-h-[80vh] overflow-y-auto p-4 shadow-lg`}
         style={{ minWidth: "320px" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -36,7 +36,7 @@ export function ShortcutHelp({ open, onClose }: ShortcutHelpProps) {
           <button
             type="button"
             onClick={onClose}
-            className="px-2 text-xs"
+            className={`${NEO_BUTTON} text-xs`}
           >
             close
           </button>
@@ -56,7 +56,7 @@ export function ShortcutHelp({ open, onClose }: ShortcutHelpProps) {
                     {rows.map((s) => (
                       <tr key={`${s.label}-${describeAction(s.action)}`}>
                         <td className="py-0.5 pr-3 align-top">
-                          <kbd className="font-mono">
+                          <kbd className={`${NEO_KBD} font-mono`}>
                             {s.label}
                           </kbd>
                         </td>

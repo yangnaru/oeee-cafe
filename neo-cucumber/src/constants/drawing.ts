@@ -122,32 +122,6 @@ export const ALL_TOOLS: readonly ToolId[] = [
  */
 export const SHARED_TOOLS: readonly ToolId[] = ALL_TOOLS;
 
-/**
- * NEO's tool groups, from container.js's `Neo.toolButtons`.
- *
- * NEO fits twenty-three tools into seven buttons: a button selects its group,
- * and clicking it again cycles within the group (right-click cycles back).
- * That is what keeps its tool column 52px wide instead of a stack of rows.
- *
- * The order inside each group is NEO's own, so the first click after
- * selecting a group lands on the same tool it would there. `paste` and `pan`
- * are ours -- NEO reaches paste through the copy tool's modifier and has no
- * pan tool -- so they sit at the end of the group they belong to.
- */
-export interface ToolGroup {
-  name: string;
-  tools: readonly ToolId[];
-}
-
-export const TOOL_GROUPS: readonly ToolGroup[] = [
-  { name: "fill", tools: ["fill"] },
-  { name: "pen", tools: ["solid", "brush", "text"] },
-  { name: "pen2", tools: ["halftone", "blur", "dodge", "burn"] },
-  { name: "eraser", tools: ["eraser", "eraseRect", "eraseAll"] },
-  { name: "shape", tools: ["rectFill", "rect", "ellipseFill", "ellipse"] },
-  {
-    name: "region",
-    tools: ["copy", "paste", "merge", "blurRect", "flipH", "flipV", "turn"],
-  },
-  { name: "pan", tools: ["pan"] },
-];
+// NEO's tool tips -- which tools each button cycles through, and in what
+// order -- live in neo/toolboxSpec.ts alongside the rest of the toolbox it
+// was read off. They were duplicated here as TOOL_GROUPS.

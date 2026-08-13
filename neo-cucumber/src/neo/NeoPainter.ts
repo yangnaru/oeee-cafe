@@ -47,6 +47,32 @@ export const TOOLTYPE = {
 
 export type Point = [number, number];
 
+/**
+ * NEO's 4x4 ordered dither, as a flat 16-entry mask. Level `i` turns on every
+ * cell whose threshold it has reached, so level 0 is empty and 15 is solid.
+ */
+export function neoToneMatrix(level: number): Uint8Array {
+  const pattern = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const mask = new Uint8Array(16);
+  for (let j = 0; j < 16; j++) mask[j] = level >= pattern[j] ? 1 : 0;
+  return mask;
+}
+
+/**
+ * Which dither level an alpha lands on. The thresholds are NEO's own and are
+ * deliberately non-monotonic -- 114 and 184 and 230 each appear twice, so
+ * three of the sixteen levels are unreachable.
+ */
+export function neoToneIndex(alpha: number): number {
+  const alphaTable = [
+    23, 47, 69, 92, 114, 114, 114, 138, 161, 184, 184, 207, 230, 230, 253,
+  ];
+  for (let i = 0; i < alphaTable.length; i++) {
+    if (alpha < alphaTable[i]) return i;
+  }
+  return alphaTable.length;
+}
+
 export class NeoPainter {
   readonly canvasWidth: number;
   readonly canvasHeight: number;
@@ -143,23 +169,11 @@ export class NeoPainter {
   }
 
   private initToneData(): void {
-    const pattern = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-    for (let i = 0; i < 16; i++) {
-      this.toneData[i] = new Uint8Array(16);
-      for (let j = 0; j < 16; j++) {
-        this.toneData[i][j] = i >= pattern[j] ? 1 : 0;
-      }
-    }
+    for (let i = 0; i < 16; i++) this.toneData[i] = neoToneMatrix(i);
   }
 
   private getToneData(alpha: number): Uint8Array {
-    const alphaTable = [
-      23, 47, 69, 92, 114, 114, 114, 138, 161, 184, 184, 207, 230, 230, 253,
-    ];
-    for (let i = 0; i < alphaTable.length; i++) {
-      if (alpha < alphaTable[i]) return this.toneData[i];
-    }
-    return this.toneData[alphaTable.length];
+    return this.toneData[neoToneIndex(alpha)];
   }
 
   // ---------------------------------------------------------------- colour

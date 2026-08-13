@@ -1,15 +1,13 @@
 import { useEffect, useRef, useCallback } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { useCanvasHistory } from "./useCanvasHistory";
-import type { BrushType } from "../types/collaboration";
+import type { BrushType, DrawingState } from "../types/collaboration";
 import {
   brushTypeFor,
   isImmediateTool,
   isRegionTool,
   isTextTool,
   type RegionTool,
-  type DrawType,
-  type ToolId,
 } from "../neo/tools";
 import { RegionDrag, type RegionRect } from "../neo/regionDrag";
 
@@ -21,16 +19,27 @@ function bezierPreviewPoints(points: number[]): number[] {
   return points.slice();
 }
 
-export interface DrawingState {
-  brushSize: number;
-  opacity: number;
-  color: string;
-  brushType: ToolId;
-  drawType?: DrawType;
-  layerType: "foreground" | "background";
-  fgVisible: boolean;
-  bgVisible: boolean;
-  isFlippedHorizontal: boolean;
+/**
+ * The shared type, re-exported rather than restated.
+ *
+ * This was a second declaration of the same shape, and it had already drifted
+ * once -- it was missing `drawType`, which is what left the toolbox unable to
+ * offer line or bezier. A copy that has to be kept in step by hand will not
+ * be, so there is only one now.
+ */
+export type { DrawingState } from "../types/collaboration";
+
+/** The mask a stroke is drawn through, as the engine wants it. */
+function applyMask(engine: DrawingEngine, state: DrawingState): void {
+  const type = state.maskType ?? 0;
+  engine.maskType = type;
+  if (!type) return;
+  const hex = state.maskColor ?? "#000000";
+  engine.maskColor = [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
 }
 
 interface DrawingEventCallbacks {
@@ -268,6 +277,8 @@ export const useBaseDrawing = (
     const g = parseInt(active.color.slice(3, 5), 16);
     const b = parseInt(active.color.slice(5, 7), 16);
     const effectiveOpacity = active.opacity;
+
+    applyMask(drawingEngineRef.current, active);
 
     const targetLayer = drawingEngineRef.current.layers[active.layerType];
 
@@ -598,6 +609,7 @@ export const useBaseDrawing = (
         };
         const brush = brushTypeFor(params.brushType);
         if (!remoteSyncRef.current && drawingEngineRef.current) {
+          applyMask(drawingEngineRef.current, params);
           drawingEngineRef.current.drawBezier(
             params.layerType,
             points as [number, number, number, number, number, number, number, number],
@@ -627,6 +639,7 @@ export const useBaseDrawing = (
           };
           const brush = brushTypeFor(params.brushType);
           if (!remoteSyncRef.current && drawingEngineRef.current) {
+            applyMask(drawingEngineRef.current, params);
             // Drawn new -> previous, as NEO draws every segment
             drawingEngineRef.current.drawLine(
               drawingEngineRef.current.layers[params.layerType],
@@ -657,8 +670,9 @@ export const useBaseDrawing = (
             b: parseInt(params.color.slice(5, 7), 16),
             a: params.opacity,
           };
-          if (!remoteSyncRef.current) {
-            drawingEngineRef.current?.applyRegionTool(
+          if (!remoteSyncRef.current && drawingEngineRef.current) {
+            applyMask(drawingEngineRef.current, params);
+            drawingEngineRef.current.applyRegionTool(
               params.brushType,
               params.layerType,
               rect,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } fr
 import "./App.css";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ToolboxPanel } from "./components/ToolboxPanel";
+import { NEO_BUTTON } from "./components/neo/neoClasses";
 import { ALL_TOOLS } from "./constants/drawing";
 import { SimplifiedToolbox } from "./components/SimplifiedToolbox";
 import { useOfflineDrawing } from "./hooks/useOfflineDrawing";
@@ -85,7 +86,7 @@ function OfflineApp() {
     setSelectedPaletteIndex,
     updateBrushType,
     updateColor,
-    handleColorPickerChange,
+    setPaletteColor,
     initializeForTwoTone,
     selectPen,
     swapPen,
@@ -736,7 +737,7 @@ function OfflineApp() {
                 onClick={() => setShowShortcuts(true)}
                 title="Keyboard shortcuts (?)"
                 aria-label="Keyboard shortcuts"
-                className="neo-chrome fixed bottom-3 right-3 z-40 h-7 w-7 text-sm"
+                className={`${NEO_BUTTON} fixed bottom-3 right-3 z-40 h-7 w-7 text-sm`}
               >
                 ?
               </button>
@@ -761,9 +762,6 @@ function OfflineApp() {
             ) : (
               <>
               <ToolboxPanel
-                // NEO's beveled chrome: this is the standalone painter, and
-                // the retro look is the point of it.
-                retro
                 // NEO's column carries tools, colour and layers only
                 section="neo"
                 // An offline drawing records lineType straight into the .pch,
@@ -782,8 +780,8 @@ function OfflineApp() {
                 onUpdateBrushType={updateBrushType}
                 onUpdateDrawingState={setDrawingState}
                 onUpdateColor={updateColor}
-                onColorPickerChange={handleColorPickerChange}
                 onSetSelectedPaletteIndex={setSelectedPaletteIndex}
+                onSetPaletteColor={setPaletteColor}
                 onZoomIn={() => handleZoomIn()}
                 onZoomOut={() => handleZoomOut()}
                 onZoomReset={handleZoomReset}
@@ -792,7 +790,6 @@ function OfflineApp() {
               />
               {/* Everything NEO's toolbox does not have, in its own panel */}
               <ToolboxPanel
-                retro
                 section="extras"
                 tools={ALL_TOOLS}
                 drawingState={drawingState}
@@ -808,13 +805,13 @@ function OfflineApp() {
                 onUpdateBrushType={updateBrushType}
                 onUpdateDrawingState={setDrawingState}
                 onUpdateColor={updateColor}
-                onColorPickerChange={handleColorPickerChange}
                 onSetSelectedPaletteIndex={setSelectedPaletteIndex}
+                onSetPaletteColor={setPaletteColor}
                 onZoomIn={() => handleZoomIn()}
                 onZoomOut={() => handleZoomOut()}
                 onZoomReset={handleZoomReset}
                 onSaveCollaborativeDrawing={() => {}}
-                initialPosition={{ x: 16, y: 320 }}
+                initialPosition={{ x: 92, y: 70 }}
               />
               </>
             )}

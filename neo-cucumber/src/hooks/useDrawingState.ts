@@ -21,6 +21,8 @@ export const useDrawingState = () => {
     opacity: 255,
     color: "#000000",
     brushType: "solid",
+    maskType: 0,
+    maskColor: "#000000",
     layerType: "foreground",
     zoomLevel: 100,
     fgVisible: true,
@@ -55,24 +57,22 @@ export const useDrawingState = () => {
     [paletteColors]
   );
 
-  // Handle color picker changes - updates palette if a palette slot is selected
-  const handleColorPickerChange = useCallback(
-    (newColor: string) => {
-      // If a palette color is currently selected, update that palette slot
-      if (
-        selectedPaletteIndex >= 0 &&
-        selectedPaletteIndex < paletteColors.length
-      ) {
-        const newPaletteColors = [...paletteColors];
-        newPaletteColors[selectedPaletteIndex] = newColor;
-        setPaletteColors(newPaletteColors);
-      }
-
-      // Update the current color
-      updateColor(newColor);
-    },
-    [selectedPaletteIndex, paletteColors, updateColor]
-  );
+  /**
+   * Overwrite one palette slot.
+   *
+   * NEO's swatches are editable in place -- right-clicking one drops the
+   * current colour into it -- so this takes the slot rather than assuming the
+   * selected one. NEO has no colour picker for a "current slot" to belong
+   * to -- the swatches and the RGBA sliders are the picker.
+   */
+  const setPaletteColor = useCallback((index: number, newColor: string) => {
+    setPaletteColors((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      const next = [...prev];
+      next[index] = newColor;
+      return next;
+    });
+  }, []);
 
   // Set the active brush size, remembering it against the current pen so that
   // switching pens restores the size that pen was last used at.
@@ -156,7 +156,7 @@ export const useDrawingState = () => {
     // Actions
     updateBrushType,
     updateColor,
-    handleColorPickerChange,
+    setPaletteColor,
     initializeForTwoTone,
     selectPen,
     swapPen,

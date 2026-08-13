@@ -14,6 +14,7 @@ import {
   type Participant,
 } from "./types/collaboration";
 import { ToolboxPanel } from "./components/ToolboxPanel";
+import { SHARED_TOOLS } from "./constants/drawing";
 import { useDrawing } from "./hooks/useDrawing";
 import { useDrawingState } from "./hooks/useDrawingState";
 import { useZoomControls } from "./hooks/useZoomControls";
@@ -93,7 +94,7 @@ function App() {
     setSelectedPaletteIndex,
     updateBrushType,
     updateColor,
-    handleColorPickerChange,
+    setPaletteColor,
   } = useDrawingState();
 
   const [historyState, setHistoryState] = useState({
@@ -927,6 +928,11 @@ function App() {
                 </div>
               )}
               <ToolboxPanel
+                // Every tool the wire format can carry
+                tools={SHARED_TOOLS}
+                // A shared stroke has no mask field, so the tip is withheld
+                // rather than allowed to draw something peers cannot see.
+                maskSupported={false}
                 drawingState={drawingState}
                 historyState={historyState}
                 paletteColors={paletteColors}
@@ -940,8 +946,8 @@ function App() {
                 onUpdateBrushType={updateBrushType}
                 onUpdateDrawingState={setDrawingState}
                 onUpdateColor={updateColor}
-                onColorPickerChange={handleColorPickerChange}
                 onSetSelectedPaletteIndex={setSelectedPaletteIndex}
+                onSetPaletteColor={setPaletteColor}
                 onZoomIn={() => handleZoomIn()}
                 onZoomOut={() => handleZoomOut()}
                 onZoomReset={handleZoomReset}

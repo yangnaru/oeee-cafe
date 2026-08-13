@@ -3,7 +3,7 @@ import OfflineApp from "../OfflineApp";
 import { mount, type MountedViewer } from "../viewer/embed";
 import { sandboxBridge } from "./bridge";
 import "../viewer/viewer.css";
-import "../styles/neoChrome.css";
+import { NEO_BUTTON, NEO_PANEL } from "../components/neo/neoClasses";
 
 /**
  * Local test harness: draw, then replay what you drew.
@@ -102,25 +102,24 @@ export function SandboxPage() {
 
       {/* The painter fills the viewport, so these ride above it rather than
           sitting underneath where they cannot be seen. */}
-      <div className="neo-chrome fixed bottom-0 left-0 right-0 z-[60] max-h-[60vh] overflow-y-auto border-t border-neutral-400 p-2">
+      <div className={`${NEO_PANEL} fixed bottom-0 left-0 right-0 z-[60] max-h-[60vh] overflow-y-auto border-t border-t-[#8f8fb3] p-2`}>
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={replay}
-            className="px-3 py-1 text-sm"
+            className={`${NEO_BUTTON} text-sm`}
           >
             Replay what I drew
           </button>
           <button
             type="button"
             onClick={download}
-            className="px-3 py-1 text-sm"
+            className={`${NEO_BUTTON} text-sm`}
           >
             Download .pch
           </button>
           <label
-            className="px-3 py-1 text-sm cursor-pointer"
-            style={{ border: "1px solid #8f8fb3" }}
+            className={`${NEO_BUTTON} cursor-pointer text-sm`}
           >
             Open a .pch…
             <input

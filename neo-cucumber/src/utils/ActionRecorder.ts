@@ -4,6 +4,22 @@ import { compressToUint8Array } from "lz-string";
 type ActionItem = string | number | ActionItem[];
 
 /**
+ * The mask a stroke was drawn through: a colour to test against and one of
+ * NEO's five MASKTYPE modes. Every verb that carries the drawing state has
+ * four slots for this, so it travels with the stroke rather than being
+ * replayed from whatever the UI happens to hold later.
+ */
+export interface MaskState {
+  r: number;
+  g: number;
+  b: number;
+  type: number;
+}
+
+/** MASKTYPE_NONE, which is what almost every stroke uses. */
+export const NO_MASK: MaskState = { r: 0, g: 0, b: 0, type: 0 };
+
+/**
  * ActionRecorder - Records drawing operations for replay
  * Mirrors Neo.ActionManager functionality
  */
@@ -93,7 +109,8 @@ export class ActionRecorder {
     rect: { x: number; y: number; width: number; height: number },
     color: { r: number; g: number; b: number; a: number },
     brushSize: number,
-    trailing: number[] = []
+    trailing: number[] = [],
+    mask: MaskState = NO_MASK
   ): void {
     this.step();
     if (carriesDrawingState) {
@@ -101,9 +118,9 @@ export class ActionRecorder {
         verb,
         layer,
         color.r, color.g, color.b, color.a,
-        0, 0, 0,
+        mask.r, mask.g, mask.b,
         brushSize,
-        0,
+        mask.type,
         rect.x, rect.y, rect.width, rect.height,
         ...trailing
       );
@@ -122,14 +139,15 @@ export class ActionRecorder {
     from: { x: number; y: number },
     to: { x: number; y: number },
     color: { r: number; g: number; b: number; a: number },
-    brushSize: number
+    brushSize: number,
+    mask: MaskState = NO_MASK
   ): void {
     this.step();
     this.push(
       "line", layer,
       color.r, color.g, color.b, color.a,
-      0, 0, 0,
-      brushSize, 0,
+      mask.r, mask.g, mask.b,
+      brushSize, mask.type,
       lineType,
       Math.round(from.x), Math.round(from.y),
       Math.round(to.x), Math.round(to.y)
@@ -145,14 +163,15 @@ export class ActionRecorder {
     lineType: number,
     points: number[],
     color: { r: number; g: number; b: number; a: number },
-    brushSize: number
+    brushSize: number,
+    mask: MaskState = NO_MASK
   ): void {
     this.step();
     this.push(
       "bezier", layer,
       color.r, color.g, color.b, color.a,
-      0, 0, 0,
-      brushSize, 0,
+      mask.r, mask.g, mask.b,
+      brushSize, mask.type,
       lineType,
       ...points.map((v) => Math.round(v))
     );

@@ -67,7 +67,7 @@ msgid "Color"
 msgstr "色"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:448
+#: src/OfflineApp.tsx:611
 msgid "Community: {0}"
 msgstr "コミュニティ: {0}"
 
@@ -88,12 +88,12 @@ msgid "Connection lost. Your work is saved locally."
 msgstr "接続が失われました。作業はローカルに保存されました。"
 
 #: src/components/ColorPalette.tsx:59
-msgid "Custom color picker"
-msgstr "カスタムカラーピッカー"
+#~ msgid "Custom color picker"
+#~ msgstr "カスタムカラーピッカー"
 
 #: src/components/ColorPalette.tsx:55
-msgid "Custom color picker - edits selected palette color"
-msgstr "カスタムカラーピッカー - 選択されたパレットカラーを編集"
+#~ msgid "Custom color picker - edits selected palette color"
+#~ msgstr "カスタムカラーピッカー - 選択されたパレットカラーを編集"
 
 #: src/components/SessionHeader.tsx:83
 msgid "Disconnected"
@@ -101,28 +101,27 @@ msgstr "切断済み"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:478
+#: src/OfflineApp.tsx:641
 msgid "Download PNG"
 msgstr "PNG をダウンロード"
 
-#: src/OfflineApp.tsx:485
+#: src/OfflineApp.tsx:648
 msgid "Download Replay"
 msgstr "リプレイをダウンロード"
 
-#. placeholder {0}: selectedPaletteIndex + 1
 #: src/components/ColorPalette.tsx:58
-msgid "Edit palette color {0}"
-msgstr "パレットカラー {0} を編集"
+#~ msgid "Edit palette color {0}"
+#~ msgstr "パレットカラー {0} を編集"
 
 #: src/App.tsx:1915
 #~ msgid "Eraser"
 #~ msgstr "消しゴム"
 
-#: src/OfflineApp.tsx:309
+#: src/OfflineApp.tsx:403
 msgid "Failed to download replay file."
 msgstr "リプレイファイルのダウンロードに失敗しました。"
 
-#: src/OfflineApp.tsx:272
+#: src/OfflineApp.tsx:366
 msgid "Failed to save drawing. Please try again."
 msgstr "描画の保存に失敗しました。もう一度お試しください。"
 
@@ -135,8 +134,8 @@ msgstr "セッションの保存に失敗しました。代わりに PNG とし�
 #~ msgstr "塗りつぶし"
 
 #: src/components/ToolboxPanel.tsx:419
-msgid "Flip"
-msgstr "左右反転"
+#~ msgid "Flip"
+#~ msgstr "左右反転"
 
 #: src/components/SimplifiedToolbox.tsx:57
 msgid "Foreground pen"
@@ -160,8 +159,8 @@ msgid "Initializing collaboration session..."
 msgstr "コラボレーションセッションを初期化中..."
 
 #: src/components/ToolboxPanel.tsx:340
-msgid "Left click to select layer, right click to toggle visibility"
-msgstr "左クリックでレイヤーを選択、右クリックで表示切り替え"
+#~ msgid "Left click to select layer, right click to toggle visibility"
+#~ msgstr "左クリックでレイヤーを選択、右クリックで表示切り替え"
 
 #: src/components/SessionHeader.tsx:89
 msgid "Loading"
@@ -191,7 +190,7 @@ msgstr "読み込み中..."
 msgid "Off"
 msgstr "オフ"
 
-#: src/OfflineApp.tsx:442
+#: src/OfflineApp.tsx:605
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "オフライン描画 ({canvasWidth} × {canvasHeight})"
 
@@ -199,22 +198,20 @@ msgstr "オフライン描画 ({canvasWidth} × {canvasHeight})"
 #~ msgid "Opacity"
 #~ msgstr "不透明度"
 
-#. placeholder {0}: index + 1
 #: src/components/ColorPalette.tsx:44
-msgid "Palette color {0}"
-msgstr "パレットカラー {0}"
+#~ msgid "Palette color {0}"
+#~ msgstr "パレットカラー {0}"
 
-#. placeholder {0}: index + 1
 #: src/components/ColorPalette.tsx:41
-msgid "Palette color {0} (selected - edit with color picker below)"
-msgstr "パレットカラー {0} (選択済み - 下のカラーピッカーで編集)"
+#~ msgid "Palette color {0} (selected - edit with color picker below)"
+#~ msgstr "パレットカラー {0} (選択済み - 下のカラーピッカーで編集)"
 
 #: src/App.tsx:1919
 #~ msgid "Pan"
 #~ msgstr "パン"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:456
+#: src/OfflineApp.tsx:619
 msgid "Parent Post: {0}"
 msgstr "親投稿: {0}"
 
@@ -240,6 +237,7 @@ msgstr "再接続"
 
 #: src/components/SimplifiedToolbox.tsx:61
 #: src/components/SimplifiedToolbox.tsx:169
+#: src/components/ToolboxPanel.tsx:190
 msgid "Redo"
 msgstr "やり直し"
 
@@ -250,6 +248,10 @@ msgstr "残り: {remaining}"
 #: src/App.tsx:2119
 #~ msgid "Reset"
 #~ msgstr "リセット"
+
+#: src/components/ToolboxPanel.tsx:219
+msgid "Reset zoom"
+msgstr "ズームを戻す"
 
 #: src/components/modals/InitializationErrorModal.tsx:25
 #: src/components/modals/RoomFullModal.tsx:41
@@ -264,29 +266,30 @@ msgstr "ロビーに戻る"
 #~ msgid "Rewind"
 #~ msgstr "最初から"
 
+#: src/components/ToolboxPanel.tsx:259
+msgid "Save"
+msgstr "保存"
+
 #: src/components/SessionExpiredModal.tsx:154
 msgid "Save as PNG"
 msgstr "PNG として保存"
 
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/OfflineApp.tsx:469
+#: src/OfflineApp.tsx:632
 msgid "Save Drawing"
 msgstr "描画を保存"
 
-#: src/components/ToolboxPanel.tsx:433
-#: src/components/ToolboxPanel.tsx:434
+#: src/components/ToolboxPanel.tsx:247
 msgid "Save drawing to gallery"
 msgstr "描画をギャラリーに保存"
 
 #: src/components/SessionExpiredModal.tsx:122
-#: src/components/ToolboxPanel.tsx:451
 msgid "Save to Gallery"
 msgstr "ギャラリーに保存"
 
 #: src/components/SessionExpiredModal.tsx:113
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/components/ToolboxPanel.tsx:446
-#: src/OfflineApp.tsx:469
+#: src/OfflineApp.tsx:632
 msgid "Saving..."
 msgstr "保存中..."
 
@@ -374,7 +377,7 @@ msgstr "このセッションはすでに保存されています。PNG とし�
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "このセッションは満員です（{currentUserCount}/{maxUsers}ユーザー）。最初の{maxUsers}ユーザーのみがセッションに参加できます。"
 
-#: src/OfflineApp.tsx:384
+#: src/OfflineApp.tsx:478
 msgid "Time's up."
 msgstr "設定時間が経過しました。"
 
@@ -386,7 +389,7 @@ msgstr "タイマー"
 msgid "Timer off"
 msgstr "タイマー：オフ"
 
-#: src/components/ToolboxPanel.tsx:415
+#: src/components/ToolboxPanel.tsx:234
 msgid "Toggle horizontal flip"
 msgstr "左右反転を切り替え"
 
@@ -400,9 +403,18 @@ msgstr "セッションを認証できません。セッションが存在しな
 
 #: src/components/SimplifiedToolbox.tsx:60
 #: src/components/SimplifiedToolbox.tsx:161
+#: src/components/ToolboxPanel.tsx:181
 msgid "Undo"
 msgstr "元に戻す"
 
 #: src/components/modals/SessionEndingModal.tsx:20
 msgid "You'll be redirected to the post page shortly."
 msgstr "まもなく投稿ページにリダイレクトされます。"
+
+#: src/components/ToolboxPanel.tsx:210
+msgid "Zoom in"
+msgstr "拡大"
+
+#: src/components/ToolboxPanel.tsx:202
+msgid "Zoom out"
+msgstr "縮小"

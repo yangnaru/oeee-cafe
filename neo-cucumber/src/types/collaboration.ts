@@ -48,6 +48,13 @@ export interface DrawingState {
   brushType: ToolId;
   /** How the tool lays marks down; defaults to freehand. */
   drawType?: DrawType;
+  /**
+   * NEO's MASKTYPE, 0-4: none, mask, reverse mask, add, subtract. Chosen with
+   * the mask tip and applied to every stroke.
+   */
+  maskType?: number;
+  /** The colour maskType tests against, "#rrggbb". */
+  maskColor?: string;
   layerType: LayerType;
   zoomLevel: number;
   fgVisible: boolean;

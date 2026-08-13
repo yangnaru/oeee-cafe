@@ -1,9 +1,13 @@
 /**
- * NEO's own tool icons, lifted verbatim from neo/src/widgets.js.
+ * NEO's own artwork, lifted verbatim from neo/src/widgets.js.
  *
- * Each is a 48x19 PNG with its label already drawn into it -- which is why
- * NEO's tool column is 52px wide and one button per row. NEO tints them to
- * the configured text colour at runtime; we render them as-is.
+ * Every entry here is byte-identical to the matching file in NEO's `Design`
+ * folder, checked by decoding the base64 and comparing -- so this is the
+ * artwork itself, not a redraw of it.
+ *
+ * Each tool sprite is a 48x19 PNG. It carries the *shape* only: NEO recolours
+ * it at runtime by keeping each pixel's alpha and replacing its RGB
+ * (Neo.tintImage), so a sprite drawn as-is comes out black.
  *
  * Generated from the reference implementation. Do not hand-edit.
  */
@@ -30,84 +34,13 @@ export const NEO_TOOL_ICONS: Record<string, string> = {
 };
 
 /**
- * Which icon each tool wears, straight from the `toolIcons` arrays in
- * widgets.js -- including two of NEO's own quirks, kept because matching it
- * is the point: dodge wears the *burn* icon (Pen2Tip lists burn twice), and
- * flipH, flipV and turn all share the one flip icon.
+ * ColorTip.png, the sprite NEO lays over every colour swatch.
  *
- * `fill` and `pan` have no entry: NEO's fill is a separate button rather than
- * a ToolTip, and it has no pan tool at all, so neither ships an icon here.
+ * 44x18: two 22x18 frames side by side. The left is the raised bevel of an
+ * unselected swatch, the right the pressed bevel of the selected one, and NEO
+ * picks between them by shifting the image left by 22px. It is drawn at
+ * opacity 0.5 so the swatch colour shows through, which is what makes a light
+ * swatch read as light and a dark one as dark with a single image.
  */
-export const NEO_ICON_FOR_TOOL: Record<string, string> = {
-  solid: "pen",
-  brush: "brush",
-  text: "text",
-
-  halftone: "tone",
-  blur: "blur",
-  dodge: "burn",
-  burn: "burn",
-
-  eraser: "eraser",
-  eraseRect: "eraser",
-  eraseAll: "eraser",
-
-  rectFill: "rectfill",
-  rect: "rect",
-  ellipseFill: "ellipsefill",
-  ellipse: "ellipse",
-
-  copy: "copy",
-  paste: "copy2",
-  merge: "merge",
-  blurRect: "blurrect",
-  flipH: "flip",
-  flipV: "flip",
-  turn: "flip",
-
-  freehand: "freehand",
-  line: "line",
-  bezier: "bezier",
-};
-
-/** The data URI for a tool, or null when NEO ships no icon for it. */
-export function neoIconFor(tool: string): string | null {
-  const name = NEO_ICON_FOR_TOOL[tool];
-  return name ? (NEO_TOOL_ICONS[name] ?? null) : null;
-}
-
-/**
- * The label NEO draws over each icon.
- *
- * These are its `toolStrings`, set in each Tip's init. The sprite carries the
- * artwork only -- the text is a separate DOM element sitting over it, which
- * is why a button with no label looks bare rather than merely untranslated.
- */
-export const NEO_TOOL_LABELS: Record<string, string> = {
-  solid: "Solid",
-  brush: "Brush",
-  text: "Text",
-  halftone: "Halftone",
-  blur: "Blur",
-  dodge: "Dodge",
-  burn: "Burn",
-  eraser: "Eraser",
-  eraseRect: "EraseRct",
-  eraseAll: "EraseAll",
-  rect: "Rect",
-  rectFill: "RectFill",
-  ellipse: "Ellipse",
-  ellipseFill: "EllipsFil",
-  copy: "Copy",
-  paste: "Paste",
-  merge: "Merge",
-  blurRect: "BlurRect",
-  flipH: "FlipH",
-  flipV: "FlipV",
-  turn: "Turn",
-  fill: "Fill",
-  pan: "Pan",
-  freehand: "Freehand",
-  line: "Line",
-  bezier: "Bezier",
-};
+export const NEO_COLORTIP_SPRITE =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAASCAYAAAAg9DzcAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAABmJLR0QAAAAAAAD5Q7t/AAAACXBIWXMAAAsSAAALEgHS3X78AAAANklEQVRIx+3OAQkAMADDsO3+Pe8qCj+0Akq6bQFqS2wTCpwE+R4IiyVYsGDBggULfirBgn8HX7BzCRwDx1QeAAAAAElFTkSuQmCC";

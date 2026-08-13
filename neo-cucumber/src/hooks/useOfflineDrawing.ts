@@ -1,6 +1,6 @@
 import { useRef, useCallback } from "react";
 import { useBaseDrawing, type DrawingState } from "./useBaseDrawing";
-import { ActionRecorder } from "../utils/ActionRecorder";
+import { ActionRecorder, NO_MASK, type MaskState } from "../utils/ActionRecorder";
 import type { BrushType } from "../types/collaboration";
 import { frameShapeFor, type RegionTool } from "../neo/tools";
 import type { RegionRect } from "../neo/regionDrag";
@@ -41,6 +41,25 @@ export const useOfflineDrawing = (
   // freezes for the stroke, so the frame header cannot disagree with the
   // layer the engine actually drew into.
   const strokeLayerRef = useRef<number | null>(null);
+  /**
+   * The mask the stroke started with, frozen alongside the layer. A stroke is
+   * drawn with the settings it opened with, so reading the live mask when the
+   * frame is written could record a mask the canvas was never drawn through.
+   */
+  const strokeMaskRef = useRef<MaskState>(NO_MASK);
+
+  /** The current mask as the recorder wants it: three channels and a mode. */
+  const maskFrom = (state: DrawingState): MaskState => {
+    const type = state.maskType ?? 0;
+    if (!type) return NO_MASK;
+    const hex = state.maskColor ?? "#000000";
+    return {
+      r: parseInt(hex.slice(1, 3), 16),
+      g: parseInt(hex.slice(3, 5), 16),
+      b: parseInt(hex.slice(5, 7), 16),
+      type,
+    };
+  };
 
   // Helper to map brushType to lineType
   const getLineType = (
@@ -65,7 +84,9 @@ export const useOfflineDrawing = (
       hasCreatedStepRef.current = false;
       strokeLayerRef.current =
         drawingState.layerType === "foreground" ? 1 : 0;
-    }, [drawingState.layerType]),
+      strokeMaskRef.current = maskFrom(drawingState);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [drawingState.layerType, drawingState.maskType, drawingState.maskColor]),
 
     onDrawLine: useCallback(
       (
@@ -116,11 +137,11 @@ export const useOfflineDrawing = (
             safeG,
             safeB,
             alpha,
-            0, // maskR
-            0, // maskG
-            0, // maskB
+            strokeMaskRef.current.r,
+            strokeMaskRef.current.g,
+            strokeMaskRef.current.b,
             brushSize,
-            0, // maskType (always 0)
+            strokeMaskRef.current.type,
             lineType,
             Math.round(fromX),
             Math.round(fromY),
@@ -176,11 +197,11 @@ export const useOfflineDrawing = (
           safeG,
           safeB,
           alpha,
-          0, // maskR
-          0, // maskG
-          0, // maskB
+          strokeMaskRef.current.r,
+          strokeMaskRef.current.g,
+          strokeMaskRef.current.b,
           brushSize,
-          0, // maskType (always 0)
+          strokeMaskRef.current.type,
           lineType,
           Math.round(x),
           Math.round(y),
@@ -240,7 +261,8 @@ export const useOfflineDrawing = (
           getLineType(brushType),
           points,
           color,
-          brushSize
+          brushSize,
+          strokeMaskRef.current
         );
       },
       []
@@ -261,7 +283,8 @@ export const useOfflineDrawing = (
           from,
           to,
           color,
-          brushSize
+          brushSize,
+          strokeMaskRef.current
         );
       },
       []
@@ -300,7 +323,8 @@ export const useOfflineDrawing = (
           brushSize,
           // paste's frame ends with the offset it was dropped at; we drop it
           // where it was dragged, so that offset is zero.
-          tool === "paste" ? [0, 0] : []
+          tool === "paste" ? [0, 0] : [],
+          strokeMaskRef.current
         );
       },
       []

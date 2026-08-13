@@ -98,4 +98,74 @@ describe("ActionRecorder", () => {
     recorder.addRestoreAction("BG", "FG");
     expect(recorder.getActionCount()).toBe(3);
   });
+
+  /**
+   * The mask travels in slots 6..8 and 10 of every verb that carries the
+   * drawing state. These slots existed all along and were written as zeros,
+   * so a mask drawn on the canvas would have replayed without one -- exactly
+   * the canvas/replay divergence this codebase cares most about.
+   */
+  describe("the mask a stroke was drawn through", () => {
+    const mask = { r: 18, g: 52, b: 86, type: 2 };
+
+    it("lands in NEO's slots on a line", async () => {
+      const recorder = new ActionRecorder();
+      recorder.pushLine(
+        1, 1, { x: 1, y: 2 }, { x: 3, y: 4 },
+        { r: 10, g: 20, b: 30, a: 255 }, 5, mask
+      );
+
+      const { items } = await decodeReplay(recorder.getReplayBlob(300, 300));
+      const frame = items[0];
+
+      expect(frame.slice(6, 9)).toEqual([18, 52, 86]);
+      expect(frame[10]).toBe(2);
+      // The geometry must not have shifted along with it
+      expect(frame.slice(11, 16)).toEqual([1, 1, 2, 3, 4]);
+    });
+
+    it("lands in NEO's slots on a bezier", async () => {
+      const recorder = new ActionRecorder();
+      recorder.pushBezier(
+        1, 1, [1, 2, 3, 4, 5, 6, 7, 8],
+        { r: 10, g: 20, b: 30, a: 255 }, 5, mask
+      );
+
+      const { items } = await decodeReplay(recorder.getReplayBlob(300, 300));
+      const frame = items[0];
+
+      expect(frame.slice(6, 9)).toEqual([18, 52, 86]);
+      expect(frame[10]).toBe(2);
+      expect(frame.slice(12, 20)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    });
+
+    it("lands in NEO's slots on a region tool that carries state", async () => {
+      const recorder = new ActionRecorder();
+      recorder.pushRegion(
+        "eraseRect", true, 0,
+        { x: 7, y: 8, width: 9, height: 10 },
+        { r: 10, g: 20, b: 30, a: 255 }, 5, [], mask
+      );
+
+      const { items } = await decodeReplay(recorder.getReplayBlob(300, 300));
+      const frame = items[0];
+
+      expect(frame.slice(6, 9)).toEqual([18, 52, 86]);
+      expect(frame[10]).toBe(2);
+      expect(frame.slice(11, 15)).toEqual([7, 8, 9, 10]);
+    });
+
+    it("defaults to no mask, so untouched call sites record zeros", async () => {
+      const recorder = new ActionRecorder();
+      recorder.pushLine(
+        1, 1, { x: 1, y: 2 }, { x: 3, y: 4 },
+        { r: 10, g: 20, b: 30, a: 255 }, 5
+      );
+
+      const { items } = await decodeReplay(recorder.getReplayBlob(300, 300));
+
+      expect(items[0].slice(6, 9)).toEqual([0, 0, 0]);
+      expect(items[0][10]).toBe(0);
+    });
+  });
 });

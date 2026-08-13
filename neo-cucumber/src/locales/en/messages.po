@@ -67,7 +67,7 @@ msgid "Color"
 msgstr "Color"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:448
+#: src/OfflineApp.tsx:611
 msgid "Community: {0}"
 msgstr "Community: {0}"
 
@@ -88,12 +88,12 @@ msgid "Connection lost. Your work is saved locally."
 msgstr "Connection lost. Your work is saved locally."
 
 #: src/components/ColorPalette.tsx:59
-msgid "Custom color picker"
-msgstr "Custom color picker"
+#~ msgid "Custom color picker"
+#~ msgstr "Custom color picker"
 
 #: src/components/ColorPalette.tsx:55
-msgid "Custom color picker - edits selected palette color"
-msgstr "Custom color picker - edits selected palette color"
+#~ msgid "Custom color picker - edits selected palette color"
+#~ msgstr "Custom color picker - edits selected palette color"
 
 #: src/components/SessionHeader.tsx:83
 msgid "Disconnected"
@@ -101,28 +101,27 @@ msgstr "Disconnected"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:478
+#: src/OfflineApp.tsx:641
 msgid "Download PNG"
 msgstr "Download PNG"
 
-#: src/OfflineApp.tsx:485
+#: src/OfflineApp.tsx:648
 msgid "Download Replay"
 msgstr "Download Replay"
 
-#. placeholder {0}: selectedPaletteIndex + 1
 #: src/components/ColorPalette.tsx:58
-msgid "Edit palette color {0}"
-msgstr "Edit palette color {0}"
+#~ msgid "Edit palette color {0}"
+#~ msgstr "Edit palette color {0}"
 
 #: src/App.tsx:1915
 #~ msgid "Eraser"
 #~ msgstr "Eraser"
 
-#: src/OfflineApp.tsx:309
+#: src/OfflineApp.tsx:403
 msgid "Failed to download replay file."
 msgstr "Failed to download replay file."
 
-#: src/OfflineApp.tsx:272
+#: src/OfflineApp.tsx:366
 msgid "Failed to save drawing. Please try again."
 msgstr "Failed to save drawing. Please try again."
 
@@ -135,8 +134,8 @@ msgstr "Failed to save session. Please try downloading as PNG instead."
 #~ msgstr "Fill"
 
 #: src/components/ToolboxPanel.tsx:419
-msgid "Flip"
-msgstr "Flip"
+#~ msgid "Flip"
+#~ msgstr "Flip"
 
 #: src/components/SimplifiedToolbox.tsx:57
 msgid "Foreground pen"
@@ -160,8 +159,8 @@ msgid "Initializing collaboration session..."
 msgstr "Initializing collaboration session..."
 
 #: src/components/ToolboxPanel.tsx:340
-msgid "Left click to select layer, right click to toggle visibility"
-msgstr "Left click to select layer, right click to toggle visibility"
+#~ msgid "Left click to select layer, right click to toggle visibility"
+#~ msgstr "Left click to select layer, right click to toggle visibility"
 
 #: src/components/SessionHeader.tsx:89
 msgid "Loading"
@@ -191,7 +190,7 @@ msgstr "LOADING..."
 msgid "Off"
 msgstr "Off"
 
-#: src/OfflineApp.tsx:442
+#: src/OfflineApp.tsx:605
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "Offline Drawing ({canvasWidth} × {canvasHeight})"
 
@@ -199,22 +198,20 @@ msgstr "Offline Drawing ({canvasWidth} × {canvasHeight})"
 #~ msgid "Opacity"
 #~ msgstr "Opacity"
 
-#. placeholder {0}: index + 1
 #: src/components/ColorPalette.tsx:44
-msgid "Palette color {0}"
-msgstr "Palette color {0}"
+#~ msgid "Palette color {0}"
+#~ msgstr "Palette color {0}"
 
-#. placeholder {0}: index + 1
 #: src/components/ColorPalette.tsx:41
-msgid "Palette color {0} (selected - edit with color picker below)"
-msgstr "Palette color {0} (selected - edit with color picker below)"
+#~ msgid "Palette color {0} (selected - edit with color picker below)"
+#~ msgstr "Palette color {0} (selected - edit with color picker below)"
 
 #: src/App.tsx:1919
 #~ msgid "Pan"
 #~ msgstr "Pan"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:456
+#: src/OfflineApp.tsx:619
 msgid "Parent Post: {0}"
 msgstr "Parent Post: {0}"
 
@@ -240,6 +237,7 @@ msgstr "Reconnect"
 
 #: src/components/SimplifiedToolbox.tsx:61
 #: src/components/SimplifiedToolbox.tsx:169
+#: src/components/ToolboxPanel.tsx:190
 msgid "Redo"
 msgstr "Redo"
 
@@ -250,6 +248,10 @@ msgstr "Remaining: {remaining}"
 #: src/App.tsx:2119
 #~ msgid "Reset"
 #~ msgstr "Reset"
+
+#: src/components/ToolboxPanel.tsx:219
+msgid "Reset zoom"
+msgstr "Reset zoom"
 
 #: src/components/modals/InitializationErrorModal.tsx:25
 #: src/components/modals/RoomFullModal.tsx:41
@@ -264,29 +266,30 @@ msgstr "Return to Lobby"
 #~ msgid "Rewind"
 #~ msgstr "Rewind"
 
+#: src/components/ToolboxPanel.tsx:259
+msgid "Save"
+msgstr "Save"
+
 #: src/components/SessionExpiredModal.tsx:154
 msgid "Save as PNG"
 msgstr "Save as PNG"
 
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/OfflineApp.tsx:469
+#: src/OfflineApp.tsx:632
 msgid "Save Drawing"
 msgstr "Save Drawing"
 
-#: src/components/ToolboxPanel.tsx:433
-#: src/components/ToolboxPanel.tsx:434
+#: src/components/ToolboxPanel.tsx:247
 msgid "Save drawing to gallery"
 msgstr "Save drawing to gallery"
 
 #: src/components/SessionExpiredModal.tsx:122
-#: src/components/ToolboxPanel.tsx:451
 msgid "Save to Gallery"
 msgstr "Save to Gallery"
 
 #: src/components/SessionExpiredModal.tsx:113
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/components/ToolboxPanel.tsx:446
-#: src/OfflineApp.tsx:469
+#: src/OfflineApp.tsx:632
 msgid "Saving..."
 msgstr "Saving..."
 
@@ -374,7 +377,7 @@ msgstr "This session has already been saved. You can only download it as a PNG."
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 
-#: src/OfflineApp.tsx:384
+#: src/OfflineApp.tsx:478
 msgid "Time's up."
 msgstr "Time's up."
 
@@ -386,7 +389,7 @@ msgstr "Timer"
 msgid "Timer off"
 msgstr "Timer off"
 
-#: src/components/ToolboxPanel.tsx:415
+#: src/components/ToolboxPanel.tsx:234
 msgid "Toggle horizontal flip"
 msgstr "Toggle horizontal flip"
 
@@ -400,9 +403,18 @@ msgstr "Unable to authenticate your session. Either the session doesn't exist, o
 
 #: src/components/SimplifiedToolbox.tsx:60
 #: src/components/SimplifiedToolbox.tsx:161
+#: src/components/ToolboxPanel.tsx:181
 msgid "Undo"
 msgstr "Undo"
 
 #: src/components/modals/SessionEndingModal.tsx:20
 msgid "You'll be redirected to the post page shortly."
 msgstr "You'll be redirected to the post page shortly."
+
+#: src/components/ToolboxPanel.tsx:210
+msgid "Zoom in"
+msgstr "Zoom in"
+
+#: src/components/ToolboxPanel.tsx:202
+msgid "Zoom out"
+msgstr "Zoom out"
