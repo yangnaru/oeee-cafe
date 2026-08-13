@@ -103,6 +103,8 @@ export const ToolboxPanel = ({
     <NeoWindow
       initialPosition={initialPosition ?? { x: 304, y: 70 }}
       className="w-max"
+      constrainToViewport
+      minimumY={70}
     >
       <div className="flex flex-col gap-[2px] p-[2px]">
         {showNeo && (

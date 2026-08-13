@@ -10,6 +10,10 @@ interface NeoWindowProps {
   title?: React.ReactNode;
   /** Enables a visible bottom-right resize handle for larger panels. */
   resizable?: boolean;
+  /** Keeps tall floating controls reachable in a small viewport. */
+  constrainToViewport?: boolean;
+  /** Keeps a window below persistent application chrome. */
+  minimumY?: number;
   children: React.ReactNode;
 }
 
@@ -27,6 +31,8 @@ export function NeoWindow({
   className = "",
   title,
   resizable = false,
+  constrainToViewport = false,
+  minimumY = 0,
   children,
 }: NeoWindowProps) {
   const [position, setPosition] = useState(initialPosition);
@@ -53,14 +59,25 @@ export function NeoWindow({
     e.preventDefault();
   }, []);
 
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    const offset = dragOffset.current;
-    if (!offset) return;
-    setPosition({
-      x: Math.max(0, Math.min(e.clientX - offset.x, window.innerWidth - 24)),
-      y: Math.max(0, Math.min(e.clientY - offset.y, window.innerHeight - 24)),
-    });
-  }, []);
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      const offset = dragOffset.current;
+      const rect = frameRef.current?.getBoundingClientRect();
+      if (!offset || !rect) return;
+      const next = {
+        x: Math.max(
+          0,
+          Math.min(e.clientX - offset.x, window.innerWidth - rect.width)
+        ),
+        y: Math.max(
+          minimumY,
+          Math.min(e.clientY - offset.y, window.innerHeight - rect.height)
+        ),
+      };
+      setPosition(next);
+    },
+    [minimumY]
+  );
 
   const endDrag = useCallback(() => {
     dragOffset.current = null;
@@ -94,27 +111,43 @@ export function NeoWindow({
     resizeOrigin.current = null;
   }, []);
 
-  // Keep it reachable when the window shrinks under it
+  // A changed opening position is an explicit re-anchor.
   useEffect(() => {
-    const onResize = () =>
+    setPosition(initialPosition);
+  }, [initialPosition.x, initialPosition.y]);
+
+  // Keep the whole frame reachable when the viewport shrinks under it.
+  useEffect(() => {
+    const onResize = () => {
+      const rect = frameRef.current?.getBoundingClientRect();
+      if (!rect) return;
       setPosition((prev) => ({
-        x: Math.max(0, Math.min(prev.x, window.innerWidth - 24)),
-        y: Math.max(0, Math.min(prev.y, window.innerHeight - 24)),
+        x: Math.max(0, Math.min(prev.x, window.innerWidth - rect.width)),
+        y: Math.max(
+          minimumY,
+          Math.min(prev.y, window.innerHeight - rect.height)
+        ),
       }));
+    };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, []);
+  }, [minimumY]);
 
   return (
     <div
       ref={frameRef}
       className={`${NEO_PANEL} fixed flex flex-col shadow-lg ${
         resizable ? "min-h-[140px] min-w-[180px] overflow-hidden" : ""
-      } ${className}`}
+      } ${constrainToViewport ? "overflow-y-auto" : ""} ${
+        className
+      }`}
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
         ...(size && { width: `${size.width}px`, height: `${size.height}px` }),
+        ...(constrainToViewport && {
+          maxHeight: `calc(100vh - ${position.y + 12}px)`,
+        }),
       }}
     >
       <div
