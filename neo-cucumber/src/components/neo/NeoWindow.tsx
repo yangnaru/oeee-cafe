@@ -8,6 +8,8 @@ interface NeoWindowProps {
   className?: string;
   /** Sits in the title bar, right of the drag dots. */
   title?: React.ReactNode;
+  /** Enables the browser's bottom-right resize handle for larger panels. */
+  resizable?: boolean;
   children: React.ReactNode;
 }
 
@@ -24,6 +26,7 @@ export function NeoWindow({
   initialPosition,
   className = "",
   title,
+  resizable = false,
   children,
 }: NeoWindowProps) {
   const [position, setPosition] = useState(initialPosition);
@@ -70,7 +73,9 @@ export function NeoWindow({
   return (
     <div
       ref={frameRef}
-      className={`${NEO_PANEL} fixed flex flex-col shadow-lg ${className}`}
+      className={`${NEO_PANEL} fixed flex flex-col shadow-lg ${
+        resizable ? "resize overflow-auto" : ""
+      } ${className}`}
       style={{ left: `${position.x}px`, top: `${position.y}px` }}
     >
       <div

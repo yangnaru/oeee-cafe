@@ -146,7 +146,7 @@ export const Chat = ({
     return {
       color: colors.textColor,
       backgroundColor: colors.backgroundColor,
-      padding: "2px 6px",
+      padding: "1px 4px",
       borderRadius: "3px",
       fontSize: "inherit",
       fontWeight: "bold",
@@ -157,13 +157,15 @@ export const Chat = ({
 
   return (
     <div className="flex flex-col gap-[3px] p-[3px] touch-auto select-auto">
-      <div className="flex items-center gap-[3px] text-xs leading-[18px]">
-        <p className="whitespace-nowrap">
-          <Trans>Participants</Trans> ({participants.size})
-        </p>
-      </div>
       <>
-          <div className="flex w-full flex-wrap gap-[3px]">
+          <div className="flex w-full flex-wrap items-center gap-[3px]">
+            <span
+              title={t`Participants (${participants.size})`}
+              aria-label={t`Participants (${participants.size})`}
+              className="border border-main px-[3px] text-[11px] leading-[14px]"
+            >
+              {participants.size}
+            </span>
             {Array.from(participants.values())
               .sort((a, b) => a.joinedAt - b.joinedAt)
               .map((participant) => (
@@ -175,11 +177,6 @@ export const Chat = ({
                   {participant.username}
                 </div>
               ))}
-            {participants.size === 0 && (
-              <div className="text-main opacity-50 italic text-xs">
-                No participants
-              </div>
-            )}
           </div>
           <div className="h-40 max-h-[calc(100vh-8rem)] overflow-y-auto border border-main bg-main p-[3px] text-[11px] leading-[15px]">
             <div>

@@ -30,6 +30,8 @@ const PANEL_WIDTH = 56;
 const PANEL_PITCH = 76;
 /** How far the pair sits from the edges of the area it opens in. */
 const MARGIN = 12;
+/** The application navigation occupies the top 58px of the viewport. */
+const MINIMUM_TOP = 70;
 
 interface Point {
   x: number;
@@ -46,7 +48,10 @@ function anchorTo(area: DOMRect | null): Point {
   const top = area ? area.top : 0;
   return {
     x: Math.max(0, right - MARGIN - PANEL_WIDTH - PANEL_PITCH),
-    y: Math.max(0, top + MARGIN),
+    // The painter can be mounted inside the fixed application shell, whose
+    // DOM rect begins at zero even though the visible drawing area starts
+    // below the navigation. Keep the panels clear of that chrome either way.
+    y: Math.max(MINIMUM_TOP, top + MARGIN),
   };
 }
 

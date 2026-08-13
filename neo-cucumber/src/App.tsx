@@ -814,6 +814,7 @@ function App() {
             initialPosition={{ x: 16, y: 70 }}
             className="z-40 w-56"
             title={<Trans>Chat</Trans>}
+            resizable
           >
             <Chat
               wsRef={wsRef}
