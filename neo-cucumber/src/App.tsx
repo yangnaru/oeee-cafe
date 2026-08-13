@@ -835,7 +835,7 @@ function App() {
             className="z-40 w-56"
             title={<Trans>Chat</Trans>}
             resizable
-            initialSize={{ width: 224, height: 607 }}
+            initialSize={{ width: 224, height: 469 }}
           >
             <Chat
               wsRef={wsRef}

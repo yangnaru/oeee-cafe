@@ -183,7 +183,7 @@ export function NeoWindow({
       {resizable && (
         <div
           aria-hidden="true"
-          className="absolute right-0 bottom-0 z-30 h-[32px] w-[32px] touch-none cursor-se-resize"
+          className="absolute right-0 bottom-0 z-30 h-[20px] w-[20px] touch-none cursor-se-resize"
           onPointerDown={handleResizeStart}
           onPointerMove={handleResizeMove}
           onPointerUp={endResize}

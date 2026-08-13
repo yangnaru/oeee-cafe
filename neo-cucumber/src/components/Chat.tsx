@@ -219,7 +219,7 @@ export const Chat = ({
               <div ref={messagesEndRef} />
             </div>
           </div>
-          <div className="flex gap-[3px] pr-[32px]">
+          <div className="flex gap-[3px] pr-[20px]">
             <input
               ref={inputRef}
               type="text"
