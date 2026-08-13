@@ -2,7 +2,7 @@ import type React from "react";
 import { CANVAS_Z_INDEX } from "../neo/canvasStack";
 import { fontSizeForBrush, TEXT_FONT_FAMILY } from "../neo/tools";
 
-interface PainterCanvasProps {
+export interface PainterCanvasProps {
   width: number;
   height: number;
   zoom: number;

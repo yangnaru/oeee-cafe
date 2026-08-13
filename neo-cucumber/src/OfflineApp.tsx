@@ -30,7 +30,7 @@ import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 import { previewBackdrop as backdropFromCanvasStack } from "./neo/previewBackdrop";
-import { PainterCanvas } from "./components/PainterCanvas";
+import { PainterWorkspace } from "./components/PainterWorkspace";
 
 // Validation constants
 const MIN_DIMENSION = 100;
@@ -671,28 +671,25 @@ function OfflineApp() {
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Main Content Area */}
-        <div className="flex-1 relative overflow-hidden">
-          <div
-            className="neo-ground flex gap-4 flex-row w-full h-full justify-center items-center"
-            ref={appRef}
-          >
-            <PainterCanvas
-              width={canvasWidth}
-              height={canvasHeight}
-              zoom={currentZoom}
-              brushType={drawingState.brushType}
-              brushSize={drawingState.brushSize}
-              color={drawingState.color}
-              containerRef={canvasContainerRef}
-              interactionRef={tempLocalUserCanvasRef}
-              cursorRef={cursorCanvasRef}
-              previewRef={previewCanvasRef}
-              textBoxRef={textBoxRef}
-              textAt={textAt}
-              onTextKeyDown={handleTextKey}
-              onDismissText={() => setTextAt(null)}
-            />
+        <PainterWorkspace
+          workspaceRef={appRef}
+          canvas={{
+            width: canvasWidth,
+            height: canvasHeight,
+            zoom: currentZoom,
+            brushType: drawingState.brushType,
+            brushSize: drawingState.brushSize,
+            color: drawingState.color,
+            containerRef: canvasContainerRef,
+            interactionRef: tempLocalUserCanvasRef,
+            cursorRef: cursorCanvasRef,
+            previewRef: previewCanvasRef,
+            textBoxRef,
+            textAt,
+            onTextKeyDown: handleTextKey,
+            onDismissText: () => setTextAt(null),
+          }}
+        >
             <ShortcutHelp
               open={showShortcuts}
               onClose={() => setShowShortcuts(false)}
@@ -757,8 +754,7 @@ function OfflineApp() {
                 onSaveCollaborativeDrawing={() => {}}
               />
             )}
-          </div>
-        </div>
+        </PainterWorkspace>
       </div>
     </div>
   );

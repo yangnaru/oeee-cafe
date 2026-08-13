@@ -40,7 +40,7 @@ import {
 import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { previewBackdrop as backdropFromCanvasStack } from "./neo/previewBackdrop";
-import { PainterCanvas } from "./components/PainterCanvas";
+import { PainterWorkspace } from "./components/PainterWorkspace";
 
 // Function to get session ID from URL
 const getSessionId = (): string => {
@@ -843,36 +843,38 @@ function App() {
             />
           </NeoWindow>
 
-          {/* Main Content Area */}
-          <div className="flex-1 relative overflow-hidden">
-            <div
-              className="neo-ground flex gap-4 flex-row w-full h-full justify-center items-center"
-              ref={appRef}
-            >
+          <PainterWorkspace
+            workspaceRef={appRef}
+            canvas={
+              canvasMeta?.width && canvasMeta?.height
+                ? {
+                    width: canvasMeta.width,
+                    height: canvasMeta.height,
+                    zoom: currentZoom,
+                    brushType: drawingState.brushType,
+                    brushSize: drawingState.brushSize,
+                    color: drawingState.color,
+                    containerRef: canvasContainerRef,
+                    interactionRef: tempLocalUserCanvasRef,
+                    cursorRef: cursorCanvasRef,
+                    previewRef: previewCanvasRef,
+                    textBoxRef,
+                    textAt,
+                    onTextKeyDown: handleTextKey,
+                    onDismissText: () => setTextAt(null),
+                  }
+                : null
+            }
+            beforeCanvas={
               <ConnectionStatusModal
                 isCatchingUp={isCatchingUp}
                 connectionState={connectionState}
                 onReconnect={handleManualReconnect}
                 onDownloadPNG={downloadCanvasAsPNG}
               />
-              {canvasMeta?.width && canvasMeta?.height && (
-                <PainterCanvas
-                  width={canvasMeta.width}
-                  height={canvasMeta.height}
-                  zoom={currentZoom}
-                  brushType={drawingState.brushType}
-                  brushSize={drawingState.brushSize}
-                  color={drawingState.color}
-                  containerRef={canvasContainerRef}
-                  interactionRef={tempLocalUserCanvasRef}
-                  cursorRef={cursorCanvasRef}
-                  previewRef={previewCanvasRef}
-                  textBoxRef={textBoxRef}
-                  textAt={textAt}
-                  onTextKeyDown={handleTextKey}
-                  onDismissText={() => setTextAt(null)}
-                />
-              )}
+            }
+            overlay={<SessionEndingModal isOpen={sessionEnded} />}
+          >
               <ToolboxPanels
                 // Opens inside the painter area, below whatever the page
                 // puts above it
@@ -900,10 +902,7 @@ function App() {
                 onZoomFit={handleZoomFit}
                 onSaveCollaborativeDrawing={saveCollaborativeDrawing}
               />
-            </div>
-
-            <SessionEndingModal isOpen={sessionEnded} />
-          </div>
+          </PainterWorkspace>
         </div>
       </div>
 
