@@ -16,16 +16,15 @@ export const CustomSlider: React.FC<CustomSliderProps> = ({
   onChange,
 }) => {
   return (
-    <div className="flex flex-col gap-1">
+    <div>
       <div
-        className="relative flex items-center w-full h-8 cursor-pointer"
+        className="relative flex h-[22px] w-full cursor-pointer items-center border-t border-l border-t-(--neo-panel-shadow) border-l-(--neo-panel-shadow) border-r border-b border-r-(--neo-bevel-light) border-b-(--neo-bevel-light)"
         style={{
           background: `linear-gradient(to right, var(--main-text-color) 0%, var(--main-text-color) ${
             5 + ((value - min) / (max - min)) * 95
           }%, var(--main-bg-color) ${
             5 + ((value - min) / (max - min)) * 95
           }%, var(--main-bg-color) 100%)`,
-          border: "1px solid var(--main-border-color)",
         }}
         onMouseDown={(e) => {
           const element = e.currentTarget;
@@ -88,7 +87,7 @@ export const CustomSlider: React.FC<CustomSliderProps> = ({
       >
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
           <span
-            className="text-sm"
+            className="text-[11px] font-[Arial]"
             style={{
               mixBlendMode: "exclusion",
               color: "white",
