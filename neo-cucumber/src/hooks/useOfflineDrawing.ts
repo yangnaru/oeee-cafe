@@ -5,6 +5,7 @@ import { maskFrom, NO_MASK, type Mask } from "../neo/mask";
 import type { BrushType } from "../types/collaboration";
 import { frameShapeFor, type RegionTool } from "../neo/tools";
 import type { RegionRect } from "../neo/regionDrag";
+import type { BezierPreviewStyle } from "../neo/regionPreview";
 
 // Constants matching Neo's LINETYPE values
 const LINETYPE_PEN = 1;
@@ -57,7 +58,11 @@ export const useOfflineDrawing = (
   /** Called when the text tool is clicked, to open an editor there. */
   onTextPlace?: (x: number, y: number) => void,
   /** Called with the curve so far while a bezier is being built. */
-  onBezierPreview?: (points: number[] | null) => void,
+  onBezierPreview?: (
+    points: number[] | null,
+    step: number,
+    style: BezierPreviewStyle
+  ) => void,
   /** Called as the pointer moves over the canvas, or leaves it. */
   onHoverMove?: (at: { x: number; y: number } | null) => void
 ) => {

@@ -20,10 +20,13 @@ import { useOfflineCanvas } from "./hooks/useOfflineCanvas";
 import { compositeLayersToCanvas } from "./utils/canvasExport";
 import { NativeBridge } from "./utils/nativeBridge";
 import {
+  type Backdrop,
+  type BezierPreviewStyle,
   drawBezierPreview,
   drawLinePreview,
   drawRegionPreview,
 } from "./neo/regionPreview";
+import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 
@@ -140,10 +143,23 @@ function OfflineApp() {
    * touch the pixels or be recorded.
    */
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const previewEngineRef = useRef<DrawingEngine | null>(null);
+  const previewBackdrop = useCallback((): Backdrop | null => {
+    const engine = previewEngineRef.current;
+    if (!engine) return null;
+    return {
+      width: canvasWidth,
+      height: canvasHeight,
+      layers: [
+        drawingState.bgVisible ? engine.layers.background : null,
+        drawingState.fgVisible ? engine.layers.foreground : null,
+      ].filter((layer): layer is Uint8ClampedArray => layer !== null),
+    };
+  }, [canvasWidth, canvasHeight, drawingState.bgVisible, drawingState.fgVisible]);
   const handleRegionPreview = useCallback((rect: RegionRect | null) => {
     const ctx = previewCanvasRef.current?.getContext("2d");
-    if (ctx) drawRegionPreview(ctx, rect);
-  }, []);
+    if (ctx) drawRegionPreview(ctx, rect, previewBackdrop(), drawingState.brushType);
+  }, [previewBackdrop, drawingState.brushType]);
   /**
    * Where the text tool was clicked, if an editor is open there. NEO puts an
    * editable box straight on the canvas rather than in a dialog: you type in
@@ -162,14 +178,17 @@ function OfflineApp() {
       to: { x: number; y: number } | null
     ) => {
       const ctx = previewCanvasRef.current?.getContext("2d");
-      if (ctx) drawLinePreview(ctx, from, to);
+      if (ctx) drawLinePreview(ctx, from, to, previewBackdrop());
     },
-    []
+    [previewBackdrop]
   );
-  const handleBezierPreview = useCallback((points: number[] | null) => {
-    const ctx = previewCanvasRef.current?.getContext("2d");
-    if (ctx) drawBezierPreview(ctx, points);
-  }, []);
+  const handleBezierPreview = useCallback(
+    (points: number[] | null, step: number, style: BezierPreviewStyle) => {
+      const ctx = previewCanvasRef.current?.getContext("2d");
+      if (ctx) drawBezierPreview(ctx, points, previewBackdrop(), step, style);
+    },
+    [previewBackdrop]
+  );
 
   /*
    * The cursor is painted by useCanvasView, which needs the engine that the
@@ -226,6 +245,7 @@ function OfflineApp() {
     handleBezierPreview,
     handleHoverMove
   );
+  previewEngineRef.current = drawingEngine ?? null;
 
   // Focus the box as soon as it appears, so typing just works
   useEffect(() => {

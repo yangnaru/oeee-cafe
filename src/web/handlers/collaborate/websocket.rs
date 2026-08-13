@@ -447,14 +447,74 @@ fn should_forward_to_connection(
     if room_msg.from_connection != connection_id {
         return true;
     }
-    // Echo the sender's own canvas-affecting messages (snapshot, fill, undo
-    // point, undo, stroke) back in canonical server order so the client can
-    // reconcile its local fork against them. Chat is echoed as delivery
-    // confirmation.
-    matches!(
-        room_msg.payload.first().copied(),
-        Some(0x02) | Some(0x03) | Some(0x12) | Some(0x14) | Some(0x15) | Some(0x16)
-    )
+    // Echo every stored client drawing message back to its sender in canonical
+    // server order so the client can confirm its optimistic fork. Keeping an
+    // explicit list here lost newer operations (LINE was the first visible
+    // casualty) whenever the protocol grew. POINTER_UP is the sole ephemeral
+    // client message and must not enter reconciliation. Snapshot is a stored
+    // server-range message; chat is echoed as delivery confirmation.
+    match room_msg.payload.first().copied() {
+        Some(0x02) | Some(0x03) => true,
+        Some(msg_type) if messages::is_client_message(msg_type) => msg_type != 0x13,
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod forwarding_tests {
+    use super::should_forward_to_connection;
+    use crate::web::handlers::collaborate::redis_state::RoomMessage;
+    use uuid::Uuid;
+
+    fn message(from: &str, msg_type: u8) -> RoomMessage {
+        RoomMessage {
+            from_connection: from.to_string(),
+            user_id: Uuid::nil(),
+            user_login_name: "tester".to_string(),
+            message_type: "websocket".to_string(),
+            payload: vec![msg_type],
+            timestamp: 0,
+            seq: Some(1),
+            target_connection: None,
+        }
+    }
+
+    #[test]
+    fn echoes_every_drawing_operation_to_its_sender() {
+        for msg_type in [
+            0x02, // snapshot
+            0x12, // fill
+            0x14, // undo point
+            0x15, // undo
+            0x16, // freehand stroke
+            0x17, // region
+            0x18, // line
+            0x19, // bezier
+            0x1a, // erase all
+            0x1b, // text
+        ] {
+            assert!(
+                should_forward_to_connection(&message("same", msg_type), "same"),
+                "message 0x{msg_type:02x} was not echoed"
+            );
+        }
+    }
+
+    #[test]
+    fn does_not_echo_ephemeral_pointer_updates_to_the_sender() {
+        assert!(!should_forward_to_connection(
+            &message("same", 0x13),
+            "same"
+        ));
+    }
+
+    #[test]
+    fn forwards_messages_from_other_connections() {
+        assert!(should_forward_to_connection(
+            &message("other", 0x13),
+            "same"
+        ));
+    }
 }
 
 // Returns the highest sequence number contained in the replayed history,

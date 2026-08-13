@@ -15,6 +15,7 @@ import {
 import type { RegionTool } from "../neo/tools";
 import { maskFrom, NO_MASK, type Mask } from "../neo/mask";
 import type { RegionRect } from "../neo/regionDrag";
+import type { BezierPreviewStyle } from "../neo/regionPreview";
 import { type CanvasHistory } from "../utils/canvasHistory";
 import {
   isWireBrushType,
@@ -51,7 +52,11 @@ export const useDrawing = (
     to: { x: number; y: number } | null
   ) => void,
   /** Called with the curve so far while a bezier is being built. */
-  onBezierPreview?: (points: number[] | null) => void,
+  onBezierPreview?: (
+    points: number[] | null,
+    step: number,
+    style: BezierPreviewStyle
+  ) => void,
   /** Called when the text tool is clicked, to open an editor there. */
   onTextPlace?: (x: number, y: number) => void,
   /** Called as the pointer moves over the canvas, or leaves it. */

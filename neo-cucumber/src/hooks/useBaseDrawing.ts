@@ -10,6 +10,7 @@ import {
   type RegionTool,
 } from "../neo/tools";
 import { RegionDrag, type RegionRect } from "../neo/regionDrag";
+import type { BezierPreviewStyle } from "../neo/regionPreview";
 
 /**
  * Copies the control points so a preview can move a handle without writing it
@@ -100,7 +101,11 @@ interface DrawingEventCallbacks {
     color: { r: number; g: number; b: number; a: number },
     layerType: "foreground" | "background"
   ) => void;
-  onBezierPreview?: (points: number[] | null) => void;
+  onBezierPreview?: (
+    points: number[] | null,
+    step: number,
+    style: BezierPreviewStyle
+  ) => void;
   /**
    * The pointer moved over the canvas, or left it (null).
    *
@@ -227,6 +232,22 @@ export const useBaseDrawing = (
   }>({ step: 0, points: [], params: null });
 
   const lineStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const emitBezierPreview = useCallback(
+    (points: number[] | null, step: number, params: DrawingState | null) => {
+      const state = params ?? currentDrawingStateRef.current;
+      callbacks?.onBezierPreview?.(points, step, {
+        color: [
+          parseInt(state.color.slice(1, 3), 16),
+          parseInt(state.color.slice(3, 5), 16),
+          parseInt(state.color.slice(5, 7), 16),
+          state.opacity,
+        ],
+        width: state.brushSize,
+      });
+    },
+    [callbacks]
+  );
 
   useEffect(() => {
     currentDrawingStateRef.current = drawingState;
@@ -483,7 +504,11 @@ export const useBaseDrawing = (
           if (bezier.step === 0) {
             bezier.points = [coords.x, coords.y];
             bezier.params = strokeParamsRef.current;
-            callbacks?.onBezierPreview?.([coords.x, coords.y, coords.x, coords.y]);
+            emitBezierPreview(
+              [coords.x, coords.y, coords.x, coords.y],
+              0,
+              bezier.params
+            );
           }
           return;
         }
@@ -589,7 +614,7 @@ export const useBaseDrawing = (
             at.x, at.y,
             at.x, at.y,
           ];
-          callbacks?.onBezierPreview?.(bezierPreviewPoints(bezier.points));
+          emitBezierPreview(bezierPreviewPoints(bezier.points), 1, bezier.params);
           cleanupPointerState(e.pointerId);
           return;
         }
@@ -597,7 +622,7 @@ export const useBaseDrawing = (
         if (bezier.step === 2) {
           bezier.points[2] = at.x;
           bezier.points[3] = at.y;
-          callbacks?.onBezierPreview?.(bezierPreviewPoints(bezier.points));
+          emitBezierPreview(bezierPreviewPoints(bezier.points), 2, bezier.params);
           cleanupPointerState(e.pointerId);
           return;
         }
@@ -607,7 +632,7 @@ export const useBaseDrawing = (
         bezier.points[5] = at.y;
         const points = bezierPreviewPoints(bezier.points);
         bezierRef.current = { step: 0, points: [], params: null };
-        callbacks?.onBezierPreview?.(null);
+        emitBezierPreview(null, 0, params);
 
         const color = {
           r: parseInt(params.color.slice(1, 3), 16),
@@ -768,9 +793,9 @@ export const useBaseDrawing = (
       if (bezierMove.params) {
         const at = getCanvasCoordinates(e.clientX, e.clientY);
         if (bezierMove.step === 0) {
-          callbacks?.onBezierPreview?.([
+          emitBezierPreview([
             bezierMove.points[0], bezierMove.points[1], at.x, at.y,
-          ]);
+          ], 0, bezierMove.params);
         } else {
           // Show the handle that is currently under the pointer without
           // committing it, so the curve tracks the cursor.
@@ -778,7 +803,7 @@ export const useBaseDrawing = (
           const slot = bezierMove.step === 1 ? 2 : 4;
           preview[slot] = at.x;
           preview[slot + 1] = at.y;
-          callbacks?.onBezierPreview?.(preview);
+          emitBezierPreview(preview, bezierMove.step, bezierMove.params);
         }
         return;
       }
@@ -877,6 +902,7 @@ export const useBaseDrawing = (
     performDrawing,
     saveToHistory,
     callbacks,
+    emitBezierPreview,
   ]);
 
   useEffect(() => {

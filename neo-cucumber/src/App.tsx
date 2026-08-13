@@ -32,10 +32,13 @@ import {
 import { CanvasHistory } from "./utils/canvasHistory";
 import { layerToPngBlob } from "./utils/canvasSnapshot";
 import {
+  type Backdrop,
+  type BezierPreviewStyle,
   drawBezierPreview,
   drawLinePreview,
   drawRegionPreview,
 } from "./neo/regionPreview";
+import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { fontSizeForBrush, TEXT_FONT_FAMILY } from "./neo/tools";
 
@@ -227,24 +230,40 @@ function App() {
   // Region drags, straight lines and beziers all preview on one overlay
   // canvas that sits above the layers and takes no pointer events.
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingEngineRef = useRef<DrawingEngine | null>(null);
+  const previewBackdrop = useCallback((): Backdrop | null => {
+    const engine = drawingEngineRef.current;
+    if (!engine || !canvasMeta) return null;
+    return {
+      width: canvasMeta.width,
+      height: canvasMeta.height,
+      layers: [
+        drawingState.bgVisible ? engine.layers.background : null,
+        drawingState.fgVisible ? engine.layers.foreground : null,
+      ].filter((layer): layer is Uint8ClampedArray => layer !== null),
+    };
+  }, [canvasMeta, drawingState.bgVisible, drawingState.fgVisible]);
   const handleRegionPreview = useCallback((rect: RegionRect | null) => {
     const ctx = previewCanvasRef.current?.getContext("2d");
-    if (ctx) drawRegionPreview(ctx, rect);
-  }, []);
+    if (ctx) drawRegionPreview(ctx, rect, previewBackdrop(), drawingState.brushType);
+  }, [previewBackdrop, drawingState.brushType]);
   const handleLinePreview = useCallback(
     (
       from: { x: number; y: number } | null,
       to: { x: number; y: number } | null
     ) => {
       const ctx = previewCanvasRef.current?.getContext("2d");
-      if (ctx) drawLinePreview(ctx, from, to);
+      if (ctx) drawLinePreview(ctx, from, to, previewBackdrop());
     },
-    []
+    [previewBackdrop]
   );
-  const handleBezierPreview = useCallback((points: number[] | null) => {
-    const ctx = previewCanvasRef.current?.getContext("2d");
-    if (ctx) drawBezierPreview(ctx, points);
-  }, []);
+  const handleBezierPreview = useCallback(
+    (points: number[] | null, step: number, style: BezierPreviewStyle) => {
+      const ctx = previewCanvasRef.current?.getContext("2d");
+      if (ctx) drawBezierPreview(ctx, points, previewBackdrop(), step, style);
+    },
+    [previewBackdrop]
+  );
 
   /*
    * The cursor is painted by useCanvasView, which needs the engine that the
@@ -371,9 +390,8 @@ function App() {
   setHoverHandler(paintCursor);
 
   // Keep drawingEngine ref in sync to avoid circular dependencies
-  const drawingEngineRef = useRef(drawingEngine);
   useEffect(() => {
-    drawingEngineRef.current = drawingEngine;
+    drawingEngineRef.current = drawingEngine ?? null;
   }, [drawingEngine]);
 
   // Create the canonical canvas history once the engine is available; the

@@ -124,17 +124,27 @@ describe("dragging out a region tool", () => {
 
 describe("the preview overlay", () => {
   it("draws an outline that survives whatever is underneath", () => {
+    const artwork = document.createElement("canvas");
+    artwork.width = 40; artwork.height = 20;
+    const art = artwork.getContext("2d", { willReadFrequently: true })!;
+
+    // Half white, half black: a fixed colour would vanish on one of them
+    art.fillStyle = "#ffffff"; art.fillRect(0, 0, 20, 20);
+    art.fillStyle = "#000000"; art.fillRect(20, 0, 20, 20);
+    const before = new Uint8ClampedArray(art.getImageData(0, 0, 40, 20).data);
+
     const canvas = document.createElement("canvas");
     canvas.width = 40; canvas.height = 20;
     const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
-    // Half white, half black: a fixed colour would vanish on one of them
-    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 20, 20);
-    ctx.fillStyle = "#000000"; ctx.fillRect(20, 0, 20, 20);
-    const before = new Uint8ClampedArray(ctx.getImageData(0, 0, 40, 20).data);
-
-    drawRegionPreview(ctx, { x: 2, y: 2, width: 36, height: 16 });
-    const after = ctx.getImageData(0, 0, 40, 20).data;
+    drawRegionPreview(
+      ctx,
+      { x: 2, y: 2, width: 36, height: 16 },
+      { width: 40, height: 20, layers: [before] },
+      "rect"
+    );
+    art.drawImage(canvas, 0, 0);
+    const after = art.getImageData(0, 0, 40, 20).data;
 
     let changedOnWhite = 0, changedOnBlack = 0;
     for (let i = 0; i < before.length; i += 4) {
@@ -150,8 +160,13 @@ describe("the preview overlay", () => {
     const canvas = document.createElement("canvas");
     canvas.width = 20; canvas.height = 20;
     const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-    drawRegionPreview(ctx, { x: 2, y: 2, width: 10, height: 10 });
-    drawRegionPreview(ctx, null);
+    const backdrop = {
+      width: 20,
+      height: 20,
+      layers: [new Uint8ClampedArray(20 * 20 * 4)],
+    };
+    drawRegionPreview(ctx, { x: 2, y: 2, width: 10, height: 10 }, backdrop);
+    drawRegionPreview(ctx, null, backdrop);
     const px = ctx.getImageData(0, 0, 20, 20).data;
     expect(px.some((v) => v !== 0)).toBe(false);
   });

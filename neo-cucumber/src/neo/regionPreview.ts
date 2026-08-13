@@ -1,87 +1,132 @@
-import type { RegionRect } from "./regionDrag";
 /**
- * Draws the rubber-band rectangle a region tool is being dragged out over.
+ * The previews NEO draws while a shape is being dragged out, XORed over the
+ * artwork exactly as it draws them.
  *
- * NEO draws this with an XOR raster op, which is what makes it legible over
- * any artwork -- a plain black outline vanishes on black, a white one on white.
- * Canvas has no XOR, but `difference` compositing inverts what is underneath in
- * the same way, so the outline stays visible whatever it crosses.
+ * These used to be dashed white strokes with `globalCompositeOperation =
+ * "difference"` on a transparent overlay -- which composites only within that
+ * canvas, so they were plain white lines that vanished on white. Three things
+ * were wrong beyond the colour: NEO's previews are solid, its region preview
+ * is an *ellipse* for the ellipse tools and *filled* for the fill variants,
+ * and its bezier preview carries handles.
+ */
+import type { RegionRect } from "./regionDrag";
+import { XorOverlay, type Backdrop } from "./xorOverlay";
+import type { ToolId } from "./tools";
+import { LINETYPE, NeoPainter } from "./NeoPainter";
+
+export type { Backdrop } from "./xorOverlay";
+
+/** NEO's EffectTool shapes: which are round, and which are filled. */
+const ELLIPSE_TOOLS = new Set<string>(["ellipse", "ellipseFill"]);
+const FILLED_TOOLS = new Set<string>(["ellipseFill", "rectFill"]);
+
+function clear(ctx: CanvasRenderingContext2D): void {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+}
+
+/**
+ * The rubber band a region tool is being dragged out over.
  *
- * Drawn on its own overlay rather than into a layer: it is a cursor, not part
- * of the drawing, and nothing about it is recorded.
+ * EffectToolBase.drawCursor picks the shape from the tool and passes its
+ * `isFill` straight through, so the preview shows what the tool will actually
+ * lay down rather than always outlining a rectangle.
  */
 export function drawRegionPreview(
   ctx: CanvasRenderingContext2D,
   rect: RegionRect | null,
-  scale = 1
+  backdrop: Backdrop | null,
+  tool?: ToolId
 ): void {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  if (!rect || rect.width <= 0 || rect.height <= 0) return;
+  clear(ctx);
+  if (!rect || !backdrop || rect.width <= 0 || rect.height <= 0) return;
 
-  ctx.save();
-  ctx.globalCompositeOperation = "difference";
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 1;
-  // Half-pixel offset so a 1px stroke lands on the pixel grid rather than
-  // straddling it and rendering as two grey lines.
-  ctx.setLineDash([4, 4]);
-  ctx.strokeRect(
-    rect.x * scale + 0.5,
-    rect.y * scale + 0.5,
-    rect.width * scale - 1,
-    rect.height * scale - 1
-  );
-  ctx.restore();
+  const overlay = new XorOverlay(ctx, backdrop);
+  const fill = tool !== undefined && FILLED_TOOLS.has(tool);
+  if (tool !== undefined && ELLIPSE_TOOLS.has(tool)) {
+    overlay.ellipse(rect.x, rect.y, rect.width, rect.height, fill);
+  } else {
+    overlay.rect(rect.x, rect.y, rect.width, rect.height, fill);
+  }
+  overlay.commit();
 }
 
-/** The straight line being dragged out, drawn the same legible way. */
+/** The straight line being dragged out: DrawToolBase.drawLineCursor. */
 export function drawLinePreview(
   ctx: CanvasRenderingContext2D,
   from: { x: number; y: number } | null,
   to: { x: number; y: number } | null,
-  scale = 1
+  backdrop: Backdrop | null
 ): void {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  if (!from || !to) return;
+  clear(ctx);
+  if (!from || !to || !backdrop) return;
 
-  ctx.save();
-  ctx.globalCompositeOperation = "difference";
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(from.x * scale + 0.5, from.y * scale + 0.5);
-  ctx.lineTo(to.x * scale + 0.5, to.y * scale + 0.5);
-  ctx.stroke();
-  ctx.restore();
+  const overlay = new XorOverlay(ctx, backdrop);
+  overlay.line(from.x, from.y, to.x, to.y);
+  overlay.commit();
 }
 
-/** The bezier being built, drawn the same legible way as the other previews. */
+/** The radius of the grab handles NEO draws on a bezier, from its 8x8 box. */
+const HANDLE = 4;
+
+export interface BezierPreviewStyle {
+  color: [number, number, number, number];
+  width: number;
+}
+
+/**
+ * The bezier being built.
+ *
+ * NEO shows the curve *and* its handles: drawBezierCursor1 draws a line from
+ * the start to the pointer with a ring at each end, and drawBezierCursor2 adds
+ * the second handle from the end point. The rings are how you see which
+ * control point you are dragging, and they were missing entirely.
+ */
 export function drawBezierPreview(
   ctx: CanvasRenderingContext2D,
   points: number[] | null,
-  scale = 1
+  backdrop: Backdrop | null,
+  step = 0,
+  style: BezierPreviewStyle = { color: [0, 0, 0, 255], width: 1 }
 ): void {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  if (!points || points.length < 4) return;
+  clear(ctx);
+  if (!points || points.length < 4 || !backdrop) return;
 
-  ctx.save();
-  ctx.globalCompositeOperation = "difference";
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  const s = (v: number) => v * scale + 0.5;
+  const overlay = new XorOverlay(ctx, backdrop);
+  const ring = (x: number, y: number) =>
+    overlay.ellipse(x - HANDLE, y - HANDLE, HANDLE * 2, HANDLE * 2);
+
   if (points.length === 4) {
-    // Only the chord so far: its two endpoints
-    ctx.moveTo(s(points[0]), s(points[1]));
-    ctx.lineTo(s(points[2]), s(points[3]));
+    // Still setting the chord: NEO draws the plain line cursor for this step.
+    overlay.line(points[0], points[1], points[2], points[3]);
+    overlay.commit();
   } else {
-    ctx.moveTo(s(points[0]), s(points[1]));
-    ctx.bezierCurveTo(
-      s(points[2]), s(points[3]),
-      s(points[4]), s(points[5]),
-      s(points[6]), s(points[7])
+    const [x0, y0, x1, y1, x2, y2, x3, y3] = points;
+
+    if (step <= 1) {
+      // drawBezierCursor1: only the first handle is being placed.
+      overlay.line(x0, y0, x1, y1);
+      ring(x1, y1);
+      ring(x0, y0);
+    } else {
+      // drawBezierCursor2: the first handle is fixed and the second is live.
+      overlay.line(x3, y3, x2, y2);
+      ring(x2, y2);
+      overlay.line(x0, y0, x1, y1);
+      ring(x1, y1);
+      ring(x0, y0);
+    }
+    overlay.commit();
+
+    // Neo draws the handles into its destination first, then draws the curve
+    // from tempCanvas over them. Use the verified rasterizer for that curve;
+    // preview mode deliberately forces full alpha and disables masking.
+    const painter = new NeoPainter(ctx.canvas.width, ctx.canvas.height);
+    painter._currentColor = [...style.color];
+    painter._currentWidth = style.width;
+    painter.drawBezier(
+      ctx, x0, y0, x1, y1,
+      step <= 1 ? x1 : x2, step <= 1 ? y1 : y2,
+      x3, y3, LINETYPE.PEN, true
     );
   }
-  ctx.stroke();
-  ctx.restore();
 }
