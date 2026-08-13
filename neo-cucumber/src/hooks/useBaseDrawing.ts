@@ -101,6 +101,14 @@ interface DrawingEventCallbacks {
     layerType: "foreground" | "background"
   ) => void;
   onBezierPreview?: (points: number[] | null) => void;
+  /**
+   * The pointer moved over the canvas, or left it (null).
+   *
+   * Reported whether or not a button is down, because NEO's brush cursor
+   * follows the pointer either way -- it is how you see what size you are
+   * about to draw at before drawing anything.
+   */
+  onHoverMove?: (at: { x: number; y: number } | null) => void;
   /** A tool that acts on click was used; record it. */
   onEraseAll?: (layer: "foreground" | "background") => void;
   /** A region tool was released over `rect`; record it. */
@@ -721,11 +729,16 @@ export const useBaseDrawing = (
       const shouldCleanup = !relatedTarget || !app.contains(relatedTarget);
 
       if (shouldCleanup) {
+        callbacks?.onHoverMove?.(null);
         cleanupPointerState(e.pointerId);
       }
     };
 
     const handlePointerMove = (e: PointerEvent) => {
+      // Before the active-pointer guard: a hovering pointer has no stroke to
+      // belong to, and that is exactly when the cursor matters most.
+      callbacks?.onHoverMove?.(getCanvasCoordinates(e.clientX, e.clientY));
+
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
       if (drawingStateRef.current.isPanning) {

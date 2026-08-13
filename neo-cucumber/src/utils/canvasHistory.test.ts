@@ -37,7 +37,15 @@ class FakeEngine {
     background: new Uint8ClampedArray(SIZE * SIZE * 4),
   };
   ops: string[] = [];
+  // The mask the engine is currently pointed at. Logged with each op so a
+  // test can tell whether the sender's mask survived the trip.
+  maskType = 0;
+  maskColor: [number, number, number] = [0, 0, 0];
   private strokeState: StrokeState = null;
+
+  private maskTag(): string {
+    return this.maskType === 0 ? "" : `:mask${this.maskType}(${this.maskColor.join(",")})`;
+  }
 
   drawLine(
     ctx: Uint8ClampedArray,
@@ -51,7 +59,7 @@ class FakeEngine {
   ) {
     ctx[(y0 * SIZE + x0) * 4] = r;
     ctx[(y1 * SIZE + x1) * 4] = r;
-    this.ops.push(`line:${x0},${y0}-${x1},${y1}:${r}`);
+    this.ops.push(`line:${x0},${y0}-${x1},${y1}:${r}${this.maskTag()}`);
     this.strokeState = [
       [x0, y0],
       [x1, y1],
@@ -575,5 +583,72 @@ describe("the tool messages through history", () => {
     await remote(history, encodeEraseAll(REMOTE, "foreground"), 4);
     expect(red(engine, 4, 5)).toBe(0);
     expect(engine.ops).toContain("eraseAll:foreground");
+  });
+});
+
+/**
+ * A mask changes which pixels a stroke touches, so it has to reach every
+ * client that replays the stroke. These drive the real path: a local stroke
+ * is encoded exactly as it would be sent, then handed to a second history as
+ * if it had arrived over the wire.
+ */
+describe("masks over the wire", () => {
+  const MASK = { type: 2, r: 18, g: 52, b: 86 };
+
+  it("applies the sender's mask on the receiving client", async () => {
+    const { history } = setup();
+    history.addLocalSegment(
+      "foreground", 1, "solid", { r: 50, g: 0, b: 0, a: 255 }, 1, 1, MASK
+    );
+    const bytes = history.flushLocalStroke();
+    if (!bytes) throw new Error("expected a flushed stroke");
+
+    // A second client, which has only the bytes
+    const receiver = setup();
+    await remote(receiver.history, bytes, 1);
+
+    expect(receiver.engine.ops).toEqual(["line:1,1-1,1:50:mask2(18,52,86)"]);
+  });
+
+  it("leaves the engine unmasked for a stroke drawn without one", async () => {
+    const receiver = setup();
+    // A masked stroke first, so the engine is left holding a mask
+    const masked = setup();
+    masked.history.addLocalSegment(
+      "foreground", 1, "solid", { r: 50, g: 0, b: 0, a: 255 }, 1, 1, MASK
+    );
+    await remote(receiver.history, masked.history.flushLocalStroke()!, 1);
+
+    // Then an unmasked one from someone else must not inherit it
+    const plain = setup();
+    plain.history.addLocalSegment(
+      "foreground", 1, "solid", { r: 60, g: 0, b: 0, a: 255 }, 2, 2
+    );
+    await remote(receiver.history, plain.history.flushLocalStroke()!, 2);
+
+    // Both came from the same session id, so the second continues the first's
+    // stroke rather than starting a dot -- what matters here is the mask.
+    expect(receiver.engine.ops[1]).toContain(":60");
+    expect(receiver.engine.ops[1]).not.toContain("mask");
+  });
+
+  it("keeps the mask when the stroke is replayed from history", async () => {
+    const { engine, history } = setup();
+    const sender = setup();
+    sender.history.addLocalSegment(
+      "foreground", 1, "solid", { r: 50, g: 0, b: 0, a: 255 }, 1, 1, MASK
+    );
+    const bytes = sender.history.flushLocalStroke()!;
+
+    await remote(history, encodeUndoPoint(REMOTE), 1);
+    await remote(history, bytes, 2);
+    const drawn = engine.ops.length;
+
+    // An undo forces a rebuild from the last savepoint, replaying the stroke
+    await remote(history, encodeUndo(REMOTE, false), 3);
+    await remote(history, encodeUndo(REMOTE, true), 4);
+
+    const replayed = engine.ops.slice(drawn).filter((op) => op.startsWith("line:"));
+    for (const op of replayed) expect(op).toContain("mask2(18,52,86)");
   });
 });

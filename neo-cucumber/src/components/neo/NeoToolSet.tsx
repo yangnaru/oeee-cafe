@@ -24,8 +24,6 @@ interface NeoToolSetProps {
    * that restricts the toolset simply loses those buttons.
    */
   tools: readonly ToolId[];
-  /** When false the mask tip is dropped, because a mask could not be honoured. */
-  maskSupported?: boolean;
   onSelectTool: (tool: ToolId) => void;
   onSelectDrawType: (drawType: DrawType) => void;
   onSelectMaskType: (maskType: number) => void;
@@ -49,7 +47,6 @@ export function NeoToolSet({
   alpha,
   maskColor,
   tools,
-  maskSupported = true,
   onSelectTool,
   onSelectDrawType,
   onSelectMaskType,
@@ -62,7 +59,6 @@ export function NeoToolSet({
     ...tip,
     tools: tip.tools.filter((tool) => tools.includes(tool)),
   }))
-    .filter((tip) => tip.name !== "mask" || maskSupported)
     // A tip whose tools this mode does not offer has nothing left to do,
     // but the fixed tips carry settings rather than tools and always stay.
     .filter((tip) => tip.fixed || tip.tools.length > 0);

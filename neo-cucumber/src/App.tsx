@@ -30,6 +30,7 @@ import { CanvasHistory } from "./utils/canvasHistory";
 import { layerToPngBlob } from "./utils/canvasSnapshot";
 import {
   drawBezierPreview,
+  drawBrushCursor,
   drawLinePreview,
   drawRegionPreview,
 } from "./neo/regionPreview";
@@ -244,6 +245,28 @@ function App() {
     if (ctx) drawBezierPreview(ctx, points);
   }, []);
 
+  /**
+   * NEO's brush cursor, on its own overlay above the preview one, so a rubber
+   * band and a brush circle cannot clear each other on alternate frames.
+   */
+  const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
+  const hoverRef = useRef<{ x: number; y: number } | null>(null);
+  const paintCursor = useCallback(
+    (at: { x: number; y: number } | null) => {
+      hoverRef.current = at;
+      const ctx = cursorCanvasRef.current?.getContext("2d");
+      if (ctx) {
+        drawBrushCursor(ctx, at, drawingState.brushSize, drawingState.brushType);
+      }
+    },
+    [drawingState.brushSize, drawingState.brushType]
+  );
+  // Redraw in place when the brush changes under the pointer, so the circle
+  // resizes as the size slider moves rather than at the next mouse move.
+  useEffect(() => {
+    paintCursor(hoverRef.current);
+  }, [paintCursor]);
+
   // Text is typed into a box on the canvas, as NEO does it: no font pickers,
   // because the pen size is the font size and the family is fixed.
   const [textAt, setTextAt] = useState<{ x: number; y: number } | null>(null);
@@ -283,7 +306,8 @@ function App() {
     handleRegionPreview,
     handleLinePreview,
     handleBezierPreview,
-    handleTextPlace
+    handleTextPlace,
+    paintCursor
   );
 
   // Focus the box as soon as it appears, so typing just works
@@ -915,6 +939,17 @@ function App() {
                     />
                   )}
                   <canvas
+                    ref={cursorCanvasRef}
+                    width={canvasMeta.width}
+                    height={canvasMeta.height}
+                    className="absolute top-0 left-0 pointer-events-none mix-blend-difference"
+                    style={{
+                      width: `${canvasMeta.width}px`,
+                      height: `${canvasMeta.height}px`,
+                      zIndex: 11,
+                    }}
+                  />
+                  <canvas
                     ref={previewCanvasRef}
                     width={canvasMeta.width}
                     height={canvasMeta.height}
@@ -930,9 +965,6 @@ function App() {
               <ToolboxPanel
                 // Every tool the wire format can carry
                 tools={SHARED_TOOLS}
-                // A shared stroke has no mask field, so the tip is withheld
-                // rather than allowed to draw something peers cannot see.
-                maskSupported={false}
                 drawingState={drawingState}
                 historyState={historyState}
                 paletteColors={paletteColors}

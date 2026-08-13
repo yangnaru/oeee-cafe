@@ -1,6 +1,7 @@
 import { useRef, useCallback } from "react";
 import { useBaseDrawing, type DrawingState } from "./useBaseDrawing";
-import { ActionRecorder, NO_MASK, type MaskState } from "../utils/ActionRecorder";
+import { ActionRecorder } from "../utils/ActionRecorder";
+import { maskFrom, NO_MASK, type Mask } from "../neo/mask";
 import type { BrushType } from "../types/collaboration";
 import { frameShapeFor, type RegionTool } from "../neo/tools";
 import type { RegionRect } from "../neo/regionDrag";
@@ -30,7 +31,9 @@ export const useOfflineDrawing = (
   /** Called when the text tool is clicked, to open an editor there. */
   onTextPlace?: (x: number, y: number) => void,
   /** Called with the curve so far while a bezier is being built. */
-  onBezierPreview?: (points: number[] | null) => void
+  onBezierPreview?: (points: number[] | null) => void,
+  /** Called as the pointer moves over the canvas, or leaves it. */
+  onHoverMove?: (at: { x: number; y: number } | null) => void
 ) => {
   // Initialize replay recording
   const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
@@ -46,20 +49,7 @@ export const useOfflineDrawing = (
    * drawn with the settings it opened with, so reading the live mask when the
    * frame is written could record a mask the canvas was never drawn through.
    */
-  const strokeMaskRef = useRef<MaskState>(NO_MASK);
-
-  /** The current mask as the recorder wants it: three channels and a mode. */
-  const maskFrom = (state: DrawingState): MaskState => {
-    const type = state.maskType ?? 0;
-    if (!type) return NO_MASK;
-    const hex = state.maskColor ?? "#000000";
-    return {
-      r: parseInt(hex.slice(1, 3), 16),
-      g: parseInt(hex.slice(3, 5), 16),
-      b: parseInt(hex.slice(5, 7), 16),
-      type,
-    };
-  };
+  const strokeMaskRef = useRef<Mask>(NO_MASK);
 
   // Helper to map brushType to lineType
   const getLineType = (
@@ -247,6 +237,7 @@ export const useOfflineDrawing = (
     onLinePreview,
     onTextPlace,
     onBezierPreview,
+    onHoverMove,
 
     onBezier: useCallback(
       (

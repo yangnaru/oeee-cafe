@@ -1,23 +1,16 @@
 import { compressToUint8Array } from "lz-string";
+import { NO_MASK, type Mask } from "../neo/mask";
 
 // Type for action items - can be strings, numbers, or nested arrays
 type ActionItem = string | number | ActionItem[];
 
 /**
- * The mask a stroke was drawn through: a colour to test against and one of
- * NEO's five MASKTYPE modes. Every verb that carries the drawing state has
- * four slots for this, so it travels with the stroke rather than being
- * replayed from whatever the UI happens to hold later.
+ * The mask a stroke was drawn through. Every verb that carries the drawing
+ * state has four slots for it, so it travels with the stroke rather than
+ * being replayed from whatever the UI happens to hold later.
  */
-export interface MaskState {
-  r: number;
-  g: number;
-  b: number;
-  type: number;
-}
-
-/** MASKTYPE_NONE, which is what almost every stroke uses. */
-export const NO_MASK: MaskState = { r: 0, g: 0, b: 0, type: 0 };
+export type { Mask as MaskState } from "../neo/mask";
+export { NO_MASK } from "../neo/mask";
 
 /**
  * ActionRecorder - Records drawing operations for replay
@@ -110,7 +103,7 @@ export class ActionRecorder {
     color: { r: number; g: number; b: number; a: number },
     brushSize: number,
     trailing: number[] = [],
-    mask: MaskState = NO_MASK
+    mask: Mask = NO_MASK
   ): void {
     this.step();
     if (carriesDrawingState) {
@@ -140,7 +133,7 @@ export class ActionRecorder {
     to: { x: number; y: number },
     color: { r: number; g: number; b: number; a: number },
     brushSize: number,
-    mask: MaskState = NO_MASK
+    mask: Mask = NO_MASK
   ): void {
     this.step();
     this.push(
@@ -164,7 +157,7 @@ export class ActionRecorder {
     points: number[],
     color: { r: number; g: number; b: number; a: number },
     brushSize: number,
-    mask: MaskState = NO_MASK
+    mask: Mask = NO_MASK
   ): void {
     this.step();
     this.push(

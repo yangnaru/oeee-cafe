@@ -16,8 +16,6 @@ interface NeoToolColumnProps {
   selectedPaletteIndex: number;
   /** Which tools this mode offers. */
   tools: readonly ToolId[];
-  /** Whether this mode can carry a mask; see ToolboxPanel. */
-  maskSupported?: boolean;
   onUpdateDrawingState: React.Dispatch<React.SetStateAction<DrawingState>>;
   onUpdateBrushType: (tool: ToolId) => void;
   onUpdateColor: (color: string) => void;
@@ -41,7 +39,6 @@ export function NeoToolColumn({
   paletteColors,
   selectedPaletteIndex,
   tools,
-  maskSupported = true,
   onUpdateDrawingState,
   onUpdateBrushType,
   onUpdateColor,
@@ -100,7 +97,6 @@ export function NeoToolColumn({
         alpha={drawingState.opacity}
         maskColor={drawingState.maskColor ?? "#000000"}
         tools={tools}
-        maskSupported={maskSupported}
         onSelectTool={onUpdateBrushType}
         onSelectDrawType={(drawType: DrawType) =>
           onUpdateDrawingState((prev) => ({ ...prev, drawType }))

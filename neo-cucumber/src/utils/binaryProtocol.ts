@@ -1,5 +1,6 @@
 import type { WireBrushType } from "../types/collaboration";
 import type { RegionTool } from "../neo/tools";
+import { NO_MASK, type Mask } from "../neo/mask";
 /**
  * Binary WebSocket protocol for efficient collaborative drawing
  *
@@ -11,6 +12,48 @@ import type { RegionTool } from "../neo/tools";
  * server via WELCOME, Drawpile's "context id") instead of a 16-byte UUID.
  * Identity/presence messages (join, chat, layers...) still use UUIDs.
  */
+
+/**
+ * The mask a stroke was drawn through: NEO's MASKTYPE (0-4) and the colour it
+ * tests against.
+ *
+ * Every message that carries drawing state carries one, always -- an absent
+ * mask is `type: 0`, not an absent field. Making it optional would mean the
+ * receiver had to infer presence from the buffer's length, and a stroke that
+ * silently loses its mask draws different pixels on every other screen.
+ *
+ * It sits after the payload rather than in the header because these messages
+ * already end with a variable-length section, so a fixed-size trailer leaves
+ * every other offset alone.
+ */
+export type WireMask = Mask;
+
+/** MASKTYPE_NONE, which is what almost every stroke carries. */
+export const NO_WIRE_MASK = NO_MASK;
+
+/** Bytes the mask occupies on the wire. */
+export const MASK_BYTES = 4;
+
+/** Returns `base` with the mask written into its last four bytes. */
+function withMask(base: Uint8Array, mask: WireMask | undefined): ArrayBuffer {
+  const m = mask ?? NO_MASK;
+  const end = base.length - MASK_BYTES;
+  base[end] = m.type;
+  base[end + 1] = m.r;
+  base[end + 2] = m.g;
+  base[end + 3] = m.b;
+  return base.buffer as ArrayBuffer;
+}
+
+/** Reads the mask occupying the four bytes at `end`. */
+function readMask(buffer: Uint8Array, end: number): WireMask {
+  return {
+    type: buffer[end],
+    r: buffer[end + 1],
+    g: buffer[end + 2],
+    b: buffer[end + 3],
+  };
+}
 
 // Message type constants
 export const MSG_TYPE = {
@@ -302,9 +345,10 @@ export function encodeStroke(
   g: number,
   b: number,
   a: number,
-  points: { x: number; y: number }[]
+  points: { x: number; y: number }[],
+  mask?: WireMask
 ): ArrayBuffer {
-  const buffer = new Uint8Array(11 + points.length * 4);
+  const buffer = new Uint8Array(11 + points.length * 4 + MASK_BYTES);
 
   buffer[0] = MSG_TYPE.STROKE;
   buffer[1] = userId;
@@ -321,7 +365,7 @@ export function encodeStroke(
     writeInt16LE(buffer, 13 + i * 4, Math.round(points[i].y));
   }
 
-  return buffer.buffer;
+  return withMask(buffer, mask);
 }
 
 /**
@@ -336,9 +380,10 @@ export function encodeFill(
   r: number,
   g: number,
   b: number,
-  a: number
+  a: number,
+  mask?: WireMask
 ): ArrayBuffer {
-  const buffer = new Uint8Array(11);
+  const buffer = new Uint8Array(11 + MASK_BYTES);
 
   buffer[0] = MSG_TYPE.FILL;
   buffer[1] = userId;
@@ -350,7 +395,7 @@ export function encodeFill(
   buffer[9] = b;
   buffer[10] = a;
 
-  return buffer.buffer;
+  return withMask(buffer, mask);
 }
 
 /**
@@ -472,9 +517,10 @@ export function encodeRegion(
   tool: RegionTool,
   rect: { x: number; y: number; width: number; height: number },
   color: { r: number; g: number; b: number; a: number },
-  brushSize: number
+  brushSize: number,
+  mask?: WireMask
 ): ArrayBuffer {
-  const buffer = new Uint8Array(17);
+  const buffer = new Uint8Array(17 + MASK_BYTES);
   buffer[0] = MSG_TYPE.REGION;
   buffer[1] = userId;
   buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
@@ -488,7 +534,7 @@ export function encodeRegion(
   buffer[14] = color.b;
   buffer[15] = color.a;
   buffer[16] = brushSize;
-  return buffer.buffer;
+  return withMask(buffer, mask);
 }
 
 /**
@@ -502,9 +548,10 @@ export function encodeLine(
   brushType: WireBrushType,
   color: { r: number; g: number; b: number; a: number },
   from: { x: number; y: number },
-  to: { x: number; y: number }
+  to: { x: number; y: number },
+  mask?: WireMask
 ): ArrayBuffer {
-  const buffer = new Uint8Array(17);
+  const buffer = new Uint8Array(17 + MASK_BYTES);
   buffer[0] = MSG_TYPE.LINE;
   buffer[1] = userId;
   buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
@@ -518,7 +565,7 @@ export function encodeLine(
   writeInt16LE(buffer, 11, Math.round(from.y));
   writeInt16LE(buffer, 13, Math.round(to.x));
   writeInt16LE(buffer, 15, Math.round(to.y));
-  return buffer.buffer;
+  return withMask(buffer, mask);
 }
 
 /**
@@ -532,9 +579,10 @@ export function encodeBezier(
   brushSize: number,
   brushType: WireBrushType,
   color: { r: number; g: number; b: number; a: number },
-  points: number[]
+  points: number[],
+  mask?: WireMask
 ): ArrayBuffer {
-  const buffer = new Uint8Array(25);
+  const buffer = new Uint8Array(25 + MASK_BYTES);
   buffer[0] = MSG_TYPE.BEZIER;
   buffer[1] = userId;
   buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
@@ -547,7 +595,7 @@ export function encodeBezier(
   for (let i = 0; i < 8; i++) {
     writeInt16LE(buffer, 9 + i * 2, Math.round(points[i] ?? 0));
   }
-  return buffer.buffer;
+  return withMask(buffer, mask);
 }
 
 /**
@@ -579,10 +627,11 @@ export function encodeText(
   y: number,
   text: string,
   color: { r: number; g: number; b: number; a: number },
-  brushSize: number
+  brushSize: number,
+  mask?: WireMask
 ): ArrayBuffer {
   const encoded = new TextEncoder().encode(text);
-  const buffer = new Uint8Array(14 + encoded.length);
+  const buffer = new Uint8Array(14 + encoded.length + MASK_BYTES);
   buffer[0] = MSG_TYPE.TEXT;
   buffer[1] = userId;
   buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
@@ -595,7 +644,7 @@ export function encodeText(
   writeInt16LE(buffer, 10, Math.round(y));
   writeUint16LE(buffer, 12, encoded.length);
   buffer.set(encoded, 14);
-  return buffer.buffer;
+  return withMask(buffer, mask);
 }
 
 export interface JoinMessage {
@@ -635,6 +684,8 @@ export interface StrokeMessage {
   brushType: WireBrushType;
   color: { r: number; g: number; b: number; a: number };
   points: { x: number; y: number }[];
+  /** NEO's MASKTYPE and its colour; absent on history written before masks. */
+  mask: WireMask;
 }
 
 export interface FillMessage {
@@ -644,6 +695,7 @@ export interface FillMessage {
   x: number;
   y: number;
   color: { r: number; g: number; b: number; a: number };
+  mask: WireMask;
 }
 
 export interface RegionMessage {
@@ -654,6 +706,7 @@ export interface RegionMessage {
   rect: { x: number; y: number; width: number; height: number };
   color: { r: number; g: number; b: number; a: number };
   brushSize: number;
+  mask: WireMask;
 }
 
 export interface LineMessage {
@@ -665,6 +718,7 @@ export interface LineMessage {
   color: { r: number; g: number; b: number; a: number };
   from: { x: number; y: number };
   to: { x: number; y: number };
+  mask: WireMask;
 }
 
 export interface BezierMessage {
@@ -675,6 +729,7 @@ export interface BezierMessage {
   brushType: WireBrushType;
   color: { r: number; g: number; b: number; a: number };
   points: number[];
+  mask: WireMask;
 }
 
 export interface EraseAllMessage {
@@ -692,6 +747,7 @@ export interface TextMessage {
   text: string;
   color: { r: number; g: number; b: number; a: number };
   brushSize: number;
+  mask: WireMask;
 }
 
 export interface ChatMessage {
@@ -791,7 +847,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
 
   switch (msgType) {
     case MSG_TYPE.REGION: {
-      if (buffer.length < 17) return null;
+      if (buffer.length < 17 + MASK_BYTES) return null;
       const tool = CODE_TO_REGION_TOOL[buffer[3]];
       // A tool code this client predates: drop it rather than guess, since
       // applying the wrong region op is worse than applying none.
@@ -809,11 +865,12 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         },
         color: { r: buffer[12], g: buffer[13], b: buffer[14], a: buffer[15] },
         brushSize: buffer[16],
+        mask: readMask(buffer, 17),
       };
     }
 
     case MSG_TYPE.LINE: {
-      if (buffer.length < 17) return null;
+      if (buffer.length < 17 + MASK_BYTES) return null;
       return {
         type: "line",
         userId: buffer[1],
@@ -823,11 +880,12 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         color: { r: buffer[5], g: buffer[6], b: buffer[7], a: buffer[8] },
         from: { x: readInt16LE(buffer, 9), y: readInt16LE(buffer, 11) },
         to: { x: readInt16LE(buffer, 13), y: readInt16LE(buffer, 15) },
+        mask: readMask(buffer, 17),
       };
     }
 
     case MSG_TYPE.BEZIER: {
-      if (buffer.length < 25) return null;
+      if (buffer.length < 25 + MASK_BYTES) return null;
       const points: number[] = [];
       for (let i = 0; i < 8; i++) points.push(readInt16LE(buffer, 9 + i * 2));
       return {
@@ -838,6 +896,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         brushSize: buffer[4],
         color: { r: buffer[5], g: buffer[6], b: buffer[7], a: buffer[8] },
         points,
+        mask: readMask(buffer, 25),
       };
     }
 
@@ -853,7 +912,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
     case MSG_TYPE.TEXT: {
       if (buffer.length < 14) return null;
       const textLength = readUint16LE(buffer, 12);
-      if (buffer.length < 14 + textLength) return null;
+      if (buffer.length < 14 + textLength + MASK_BYTES) return null;
       return {
         type: "text",
         userId: buffer[1],
@@ -863,6 +922,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         x: readInt16LE(buffer, 8),
         y: readInt16LE(buffer, 10),
         text: new TextDecoder().decode(buffer.slice(14, 14 + textLength)),
+        mask: readMask(buffer, 14 + textLength),
       };
     }
 
@@ -997,7 +1057,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
     case MSG_TYPE.STROKE: {
       if (buffer.length < 11) return null;
       const count = readUint16LE(buffer, 9);
-      if (buffer.length < 11 + count * 4) return null;
+      if (buffer.length < 11 + count * 4 + MASK_BYTES) return null;
       const points: { x: number; y: number }[] = [];
       for (let i = 0; i < count; i++) {
         points.push({
@@ -1016,11 +1076,12 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         brushType: CODE_TO_BRUSH_TYPE[buffer[4]] ?? "solid",
         color: { r: buffer[5], g: buffer[6], b: buffer[7], a: buffer[8] },
         points,
+        mask: readMask(buffer, 11 + count * 4),
       };
     }
 
     case MSG_TYPE.FILL:
-      if (buffer.length < 11) return null;
+      if (buffer.length < 11 + MASK_BYTES) return null;
       return {
         type: "fill",
         userId: buffer[1],
@@ -1028,6 +1089,7 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         x: readInt16LE(buffer, 3),
         y: readInt16LE(buffer, 5),
         color: { r: buffer[7], g: buffer[8], b: buffer[9], a: buffer[10] },
+        mask: readMask(buffer, 11),
       };
 
     case MSG_TYPE.POINTER_UP:

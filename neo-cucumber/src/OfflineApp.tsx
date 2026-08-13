@@ -18,7 +18,12 @@ import { useZoomControls } from "./hooks/useZoomControls";
 import { useOfflineCanvas } from "./hooks/useOfflineCanvas";
 import { compositeLayersToCanvas } from "./utils/canvasExport";
 import { NativeBridge } from "./utils/nativeBridge";
-import { drawBezierPreview, drawLinePreview, drawRegionPreview } from "./neo/regionPreview";
+import {
+  drawBezierPreview,
+  drawBrushCursor,
+  drawLinePreview,
+  drawRegionPreview,
+} from "./neo/regionPreview";
 import type { RegionRect } from "./neo/regionDrag";
 import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 
@@ -166,6 +171,30 @@ function OfflineApp() {
     if (ctx) drawBezierPreview(ctx, points);
   }, []);
 
+  /**
+   * NEO's brush cursor, on its own overlay above the preview one.
+   *
+   * Separate because the two are cleared independently: a rubber band and a
+   * brush circle would otherwise wipe each other out on alternate frames.
+   */
+  const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
+  const hoverRef = useRef<{ x: number; y: number } | null>(null);
+  const paintCursor = useCallback(
+    (at: { x: number; y: number } | null) => {
+      hoverRef.current = at;
+      const ctx = cursorCanvasRef.current?.getContext("2d");
+      if (ctx) {
+        drawBrushCursor(ctx, at, drawingState.brushSize, drawingState.brushType);
+      }
+    },
+    [drawingState.brushSize, drawingState.brushType]
+  );
+  // Redraw where it already is when the brush changes under it, so the circle
+  // resizes as you drag the size slider rather than at the next mouse move.
+  useEffect(() => {
+    paintCursor(hoverRef.current);
+  }, [paintCursor]);
+
   const tempCanvasContainerRef = useRef<HTMLDivElement>(null);
   const tempLocalUserCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -209,7 +238,8 @@ function OfflineApp() {
     handleRegionPreview,
     handleLinePreview,
     handleTextPlace,
-    handleBezierPreview
+    handleBezierPreview,
+    paintCursor
   );
 
   // Focus the box as soon as it appears, so typing just works
@@ -713,6 +743,17 @@ function OfflineApp() {
                   }}
                 />
               )}
+              <canvas
+                ref={cursorCanvasRef}
+                width={canvasWidth}
+                height={canvasHeight}
+                className="absolute top-0 left-0 pointer-events-none mix-blend-difference"
+                style={{
+                  width: `${canvasWidth}px`,
+                  height: `${canvasHeight}px`,
+                  zIndex: 11,
+                }}
+              />
               <canvas
                 ref={previewCanvasRef}
                 width={canvasWidth}

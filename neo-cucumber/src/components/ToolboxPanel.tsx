@@ -33,13 +33,6 @@ interface ToolboxPanelProps {
   isOwner: boolean;
   /** Tools to offer; defaults to everything the painter has. */
   tools: readonly ToolId[];
-  /**
-   * Whether a stroke can carry a mask. Offline drawings record one into the
-   * .pch, but the collaborative wire format has no field for it, so a shared
-   * session would draw a mask locally that no peer could reproduce. The tip
-   * is hidden rather than allowed to lie.
-   */
-  maskSupported?: boolean;
   isSaving: boolean;
   sessionEnded: boolean;
   onUndo: () => void;
@@ -71,7 +64,6 @@ export const ToolboxPanel = ({
   currentZoom,
   isOwner,
   tools,
-  maskSupported = true,
   isSaving,
   sessionEnded,
   onUndo,
@@ -161,7 +153,6 @@ export const ToolboxPanel = ({
             paletteColors={paletteColors}
             selectedPaletteIndex={selectedPaletteIndex}
             tools={tools}
-            maskSupported={maskSupported}
             onUpdateDrawingState={onUpdateDrawingState}
             onUpdateBrushType={onUpdateBrushType}
             onUpdateColor={onUpdateColor}

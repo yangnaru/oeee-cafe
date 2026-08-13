@@ -13,6 +13,7 @@ import {
   encodeUndoPoint,
 } from "../utils/binaryProtocol";
 import type { RegionTool } from "../neo/tools";
+import { maskFrom, NO_MASK, type Mask } from "../neo/mask";
 import type { RegionRect } from "../neo/regionDrag";
 import { type CanvasHistory } from "../utils/canvasHistory";
 import {
@@ -52,7 +53,9 @@ export const useDrawing = (
   /** Called with the curve so far while a bezier is being built. */
   onBezierPreview?: (points: number[] | null) => void,
   /** Called when the text tool is clicked, to open an editor there. */
-  onTextPlace?: (x: number, y: number) => void
+  onTextPlace?: (x: number, y: number) => void,
+  /** Called as the pointer moves over the canvas, or leaves it. */
+  onHoverMove?: (at: { x: number; y: number } | null) => void
 ) => {
   // WebSocket-specific state
   const outboundMessageQueue = useRef<ArrayBuffer[]>([]);
@@ -159,10 +162,22 @@ export const useDrawing = (
     [canvasHistoryRef, sendOrQueueMessage, flushStroke]
   );
 
+  /**
+   * The mask the current operation opened with.
+   *
+   * An operation is drawn and sent with the settings it started with, the way
+   * useBaseDrawing freezes the rest of them, so changing the mask tip mid-drag
+   * applies to the next operation rather than retroactively to this one.
+   */
+  const liveMaskRef = useRef<Mask>(NO_MASK);
+  liveMaskRef.current = maskFrom(drawingState);
+  const strokeMaskRef = useRef<Mask>(NO_MASK);
+
   // Sends the UNDO_POINT that delimits an undoable operation, once per stroke
   const openStroke = useCallback(() => {
     if (strokeOpenRef.current || localIdRef?.current == null) return;
     strokeOpenRef.current = true;
+    strokeMaskRef.current = liveMaskRef.current;
     try {
       dispatchLocalMessage(encodeUndoPoint(localIdRef.current));
     } catch (error) {
@@ -200,7 +215,8 @@ export const useDrawing = (
         validBrushType,
         { r, g, b, a: opacity },
         Math.round(x),
-        Math.round(y)
+        Math.round(y),
+        strokeMaskRef.current
       );
       scheduleFlush(pending);
     },
@@ -264,7 +280,8 @@ export const useDrawing = (
             r,
             g,
             b,
-            opacity
+            opacity,
+            strokeMaskRef.current
           );
           dispatchLocalMessage(binaryMessage);
           // A fill is a complete operation on its own
@@ -294,7 +311,10 @@ export const useDrawing = (
         try {
           openStroke();
           dispatchLocalMessage(
-            encodeRegion(localIdRef.current, layer, tool, rect, color, brushSize)
+            encodeRegion(
+              localIdRef.current, layer, tool, rect, color, brushSize,
+              strokeMaskRef.current
+            )
           );
           strokeOpenRef.current = false;
         } catch (error) {
@@ -319,7 +339,8 @@ export const useDrawing = (
           dispatchLocalMessage(
             encodeLine(
               localIdRef.current, layer, brushSize,
-              brushType as WireBrushType, color, from, to
+              brushType as WireBrushType, color, from, to,
+              strokeMaskRef.current
             )
           );
           strokeOpenRef.current = false;
@@ -344,7 +365,8 @@ export const useDrawing = (
           dispatchLocalMessage(
             encodeBezier(
               localIdRef.current, layer, brushSize,
-              brushType as WireBrushType, color, points
+              brushType as WireBrushType, color, points,
+              strokeMaskRef.current
             )
           );
           strokeOpenRef.current = false;
@@ -372,6 +394,7 @@ export const useDrawing = (
     onRegionPreview,
     onLinePreview,
     onBezierPreview,
+    onHoverMove,
     onTextPlace,
 
     onPointerUp: useCallback(() => {
@@ -439,7 +462,10 @@ export const useDrawing = (
       if (!text || localIdRef?.current == null) return;
       try {
         dispatchLocalMessage(
-          encodeText(localIdRef.current, layer, x, y, text, color, brushSize)
+          encodeText(
+            localIdRef.current, layer, x, y, text, color, brushSize,
+            liveMaskRef.current
+          )
         );
       } catch (error) {
         console.error("Failed to encode/send text event:", error);

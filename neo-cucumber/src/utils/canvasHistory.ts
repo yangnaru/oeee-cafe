@@ -23,6 +23,8 @@ import { DrawingEngine } from "../DrawingEngine";
 import {
   decodeMessage,
   encodeStroke,
+  NO_WIRE_MASK,
+  type WireMask,
   type DecodedMessage,
   type SnapshotMessage,
   type StrokeMessage,
@@ -69,6 +71,7 @@ interface OpenBatch {
   brushSize: number;
   brushType: WireBrushType;
   color: { r: number; g: number; b: number; a: number };
+  mask: WireMask;
   points: { x: number; y: number }[];
   area: { kind: "pixels"; layer: LayerName; x0: number; y0: number; x1: number; y1: number };
 }
@@ -355,7 +358,8 @@ export class CanvasHistory {
     brushType: WireBrushType,
     color: { r: number; g: number; b: number; a: number },
     x: number,
-    y: number
+    y: number,
+    mask: WireMask = NO_WIRE_MASK
   ): number {
     if (this.localUserId < 0) return 0;
     if (!this.openBatch) {
@@ -364,6 +368,7 @@ export class CanvasHistory {
         brushSize,
         brushType,
         color,
+        mask,
         points: [],
         area: {
           kind: "pixels",
@@ -410,7 +415,8 @@ export class CanvasHistory {
       batch.color.g,
       batch.color.b,
       batch.color.a,
-      batch.points
+      batch.points,
+      batch.mask
     );
     const msg = decodeMessage(bytes);
     if (!msg) return null;
@@ -731,11 +737,22 @@ export class CanvasHistory {
     this.applyDrawSync(msg, layers, strokes);
   }
 
+  /** Points the engine at a mask, or at none. */
+  private useMask(mask: WireMask | undefined): void {
+    this.engine.maskType = mask?.type ?? 0;
+    if (mask && mask.type !== 0) {
+      this.engine.maskColor = [mask.r, mask.g, mask.b];
+    }
+  }
+
   private applyDrawSync(
     msg: DecodedMessage,
     layers: Record<string, Uint8ClampedArray>,
     strokes: StrokeStates
   ): void {
+    // Every drawing message carries the mask it was drawn through, so replay
+    // uses the sender's mask rather than whatever this client last set.
+    this.useMask("mask" in msg ? msg.mask : undefined);
     switch (msg.type) {
       case "stroke":
         this.applyStrokePoints(msg.userId, msg, msg.points, layers, strokes);
@@ -815,11 +832,14 @@ export class CanvasHistory {
    */
   private applyStrokePoints(
     userId: number,
-    props: Pick<StrokeMessage, "layer" | "brushSize" | "brushType" | "color">,
+    props: Pick<StrokeMessage, "layer" | "brushSize" | "brushType" | "color" | "mask">,
     points: { x: number; y: number }[],
     layers: Record<string, Uint8ClampedArray>,
     strokes: StrokeStates
   ): void {
+    // Reached directly by the local live path and by rebuilds, not only
+    // through applyDrawSync, so it sets the mask itself.
+    this.useMask(props.mask);
     this.engine.setStrokeState(strokes.get(userId) ?? null);
     for (const p of points) {
       const prev = this.engine.getStrokeState();

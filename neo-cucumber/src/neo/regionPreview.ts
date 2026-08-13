@@ -1,4 +1,62 @@
 import type { RegionRect } from "./regionDrag";
+import { isRegionTool, isTextTool, type ToolId } from "./tools";
+
+/**
+ * Whether a tool shows NEO's circle cursor.
+ *
+ * Only its drawing tools do. Region tools draw the rectangle being dragged
+ * instead (EffectToolBase has its own drawCursor), and fill, text and our own
+ * pan have no brush footprint to preview.
+ */
+export function hasBrushCursor(tool: ToolId): boolean {
+  if (isRegionTool(tool) || isTextTool(tool)) return false;
+  return tool !== "fill" && tool !== "pan" && tool !== "eraseAll";
+}
+
+/**
+ * NEO's brush cursor: a circle the width of the brush, centred on the pointer.
+ *
+ * From DrawToolBase.drawCursor. A 1px brush is drawn as a 2px circle, because
+ * a 1px circle is a dot indistinguishable from the pointer itself. The colour
+ * is NEO's: blue for the eraser, so it reads as "removing", and pale yellow
+ * for everything else.
+ *
+ * NEO XORs it over the artwork, which is what keeps it visible on any colour.
+ * The overlay carries `mix-blend-mode: difference` for the same reason, so the
+ * circle inverts what it crosses rather than vanishing into it.
+ */
+export function drawBrushCursor(
+  ctx: CanvasRenderingContext2D,
+  at: { x: number; y: number } | null,
+  brushSize: number,
+  tool: ToolId,
+  scale = 1
+): void {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (!at || !hasBrushCursor(tool)) return;
+
+  // NEO: "1pxの時は2px相当の円カーソルを表示"
+  const d = brushSize === 1 ? 2 : brushSize;
+  const r = (d * 0.5) * scale;
+  if (r <= 0) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "difference";
+  ctx.strokeStyle = tool === "eraser" ? "#0000ff" : "#ffff7f";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  // Half-pixel offset so a 1px stroke lands on the grid instead of
+  // straddling it and rendering as two grey lines
+  ctx.arc(
+    Math.floor(at.x * scale) + 0.5,
+    Math.floor(at.y * scale) + 0.5,
+    r,
+    0,
+    Math.PI * 2
+  );
+  ctx.stroke();
+  ctx.restore();
+}
 
 /**
  * Draws the rubber-band rectangle a region tool is being dragged out over.

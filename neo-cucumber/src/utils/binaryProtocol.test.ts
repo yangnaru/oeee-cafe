@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   decodeMessage,
+  encodeFill,
+  encodeStroke,
+  MASK_BYTES,
+  NO_WIRE_MASK,
   encodeBezier,
   encodeEraseAll,
   encodeLine,
@@ -34,6 +38,7 @@ describe("the tool messages", () => {
       rect: { x: 5, y: 7, width: 40, height: 22 },
       color: COLOR,
       brushSize: 9,
+      mask: NO_WIRE_MASK,
     });
   });
 
@@ -75,6 +80,7 @@ describe("the tool messages", () => {
       color: COLOR,
       from: { x: -30, y: 8 },
       to: { x: 200, y: -5 },
+      mask: NO_WIRE_MASK,
     });
   });
 
@@ -90,6 +96,7 @@ describe("the tool messages", () => {
       brushType: "brush",
       color: COLOR,
       points,
+      mask: NO_WIRE_MASK,
     });
   });
 
@@ -113,9 +120,12 @@ describe("the tool messages", () => {
       text,
       color: COLOR,
       brushSize: 14,
+      mask: NO_WIRE_MASK,
     });
     // The length prefix counts UTF-8 bytes, not characters
-    expect(new Uint8Array(bytes).length).toBe(14 + new TextEncoder().encode(text).length);
+    expect(new Uint8Array(bytes).length).toBe(
+      14 + new TextEncoder().encode(text).length + MASK_BYTES
+    );
   });
 
   it("rejects a truncated message instead of reading past the end", () => {
@@ -128,5 +138,54 @@ describe("the tool messages", () => {
   it("keeps the new codes clear of the existing ones", () => {
     const codes = Object.values(MSG_TYPE);
     expect(new Set(codes).size).toBe(codes.length);
+  });
+
+  /**
+   * Every message that carries drawing state carries a mask, always. A
+   * receiver that lost one would draw different pixels from the sender, so
+   * these pin that it survives the trip and that a message too short to hold
+   * one is rejected rather than read past.
+   */
+  describe("the mask", () => {
+    const MASK = { type: 2, r: 18, g: 52, b: 86 };
+
+    it("travels on every message that carries drawing state", () => {
+      const cases = [
+        encodeStroke(ID, "foreground", 4, "solid", 1, 2, 3, 255, [{ x: 1, y: 2 }], MASK),
+        encodeFill(ID, "foreground", 1, 2, 3, 4, 5, 255, MASK),
+        encodeRegion(ID, "foreground", "blurRect", { x: 1, y: 2, width: 3, height: 4 }, COLOR, 5, MASK),
+        encodeLine(ID, "foreground", 4, "solid", COLOR, { x: 1, y: 2 }, { x: 3, y: 4 }, MASK),
+        encodeBezier(ID, "foreground", 4, "solid", COLOR, [1, 2, 3, 4, 5, 6, 7, 8], MASK),
+        encodeText(ID, "foreground", 1, 2, "hi", COLOR, 3, MASK),
+      ];
+      for (const bytes of cases) {
+        expect(decodeMessage(bytes)).toMatchObject({ mask: MASK });
+      }
+    });
+
+    it("reads as none when the sender was not masking", () => {
+      const bytes = encodeStroke(ID, "foreground", 4, "solid", 1, 2, 3, 255, [
+        { x: 1, y: 2 },
+      ]);
+      expect(decodeMessage(bytes)).toMatchObject({ mask: NO_WIRE_MASK });
+    });
+
+    it("is found past a variable-length payload, not at a guessed offset", () => {
+      const text = encodeText(ID, "foreground", 1, 2, "x".repeat(300), COLOR, 3, MASK);
+      expect(decodeMessage(text)).toMatchObject({ mask: MASK });
+
+      const points = Array.from({ length: 200 }, (_, i) => ({ x: i, y: i }));
+      const stroke = encodeStroke(ID, "foreground", 4, "solid", 1, 2, 3, 255, points, MASK);
+      expect(decodeMessage(stroke)).toMatchObject({ mask: MASK, points });
+    });
+
+    it("rejects a message whose mask was cut off", () => {
+      const full = encodeStroke(ID, "foreground", 4, "solid", 1, 2, 3, 255, [
+        { x: 1, y: 2 },
+      ]);
+      // One byte short of a complete mask is not a maskless message
+      expect(decodeMessage(full.slice(0, full.byteLength - 1))).toBeNull();
+      expect(decodeMessage(full.slice(0, full.byteLength - MASK_BYTES))).toBeNull();
+    });
   });
 });

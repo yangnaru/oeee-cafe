@@ -23,7 +23,9 @@ export const useDrawingState = () => {
     brushType: "solid",
     maskType: 0,
     maskColor: "#000000",
-    layerType: "foreground",
+    // NEO opens on layer 0, the background (Neo.Painter.prototype.current),
+    // which is why its layer button reads LayerBG on load
+    layerType: "background",
     zoomLevel: 100,
     fgVisible: true,
     bgVisible: true,
