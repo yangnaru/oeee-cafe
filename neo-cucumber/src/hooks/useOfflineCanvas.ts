@@ -4,6 +4,7 @@ import {
   compositeLayersToCanvas,
   downloadCanvasAsPNG as downloadCanvas,
 } from "../utils/canvasExport";
+import { CANVAS_Z_INDEX } from "../neo/canvasStack";
 
 interface UseOfflineCanvasParams {
   canvasWidth: number;
@@ -38,7 +39,7 @@ export const useOfflineCanvas = ({
       bgCanvas.className = "absolute top-0 left-0 pointer-events-none";
       bgCanvas.style.width = `${canvasWidth}px`;
       bgCanvas.style.height = `${canvasHeight}px`;
-      bgCanvas.style.zIndex = "1";
+      bgCanvas.style.zIndex = CANVAS_Z_INDEX.background.toString();
       canvasContent.appendChild(bgCanvas);
       backgroundCanvasRef.current = bgCanvas;
     }
@@ -51,7 +52,7 @@ export const useOfflineCanvas = ({
       fgCanvas.className = "absolute top-0 left-0 pointer-events-none";
       fgCanvas.style.width = `${canvasWidth}px`;
       fgCanvas.style.height = `${canvasHeight}px`;
-      fgCanvas.style.zIndex = "2";
+      fgCanvas.style.zIndex = CANVAS_Z_INDEX.foreground.toString();
       canvasContent.appendChild(fgCanvas);
       foregroundCanvasRef.current = fgCanvas;
     }

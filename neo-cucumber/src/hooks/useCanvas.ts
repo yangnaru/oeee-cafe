@@ -5,6 +5,7 @@ import {
   compositeLayersToCanvas,
   downloadCanvasAsPNG as downloadCanvas,
 } from "../utils/canvasExport";
+import { CANVAS_Z_INDEX } from "../neo/canvasStack";
 
 interface CanvasHookParams {
   canvasMeta: CollaborationMeta | null;
@@ -69,10 +70,16 @@ export const useCanvas = ({
     };
 
     if (!bgCanvasRef.current) {
-      bgCanvasRef.current = createLayerCanvas("bg-shared", 100);
+      bgCanvasRef.current = createLayerCanvas(
+        "bg-shared",
+        CANVAS_Z_INDEX.background
+      );
     }
     if (!fgCanvasRef.current) {
-      fgCanvasRef.current = createLayerCanvas("fg-shared", 200);
+      fgCanvasRef.current = createLayerCanvas(
+        "fg-shared",
+        CANVAS_Z_INDEX.foreground
+      );
     }
 
     drawingEngine.attachDOMCanvases(bgCanvasRef.current, fgCanvasRef.current);

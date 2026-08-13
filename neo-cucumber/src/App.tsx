@@ -41,6 +41,7 @@ import {
 import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { fontSizeForBrush, TEXT_FONT_FAMILY } from "./neo/tools";
+import { CANVAS_Z_INDEX } from "./neo/canvasStack";
 
 // Function to get session ID from URL
 const getSessionId = (): string => {
@@ -910,7 +911,7 @@ function App() {
                         fontSize: `${fontSizeForBrush(drawingState.brushSize)}px`,
                         lineHeight: `${fontSizeForBrush(drawingState.brushSize)}px`,
                         color: drawingState.color,
-                        zIndex: 20,
+                        zIndex: CANVAS_Z_INDEX.textEditor,
                         minWidth: "1em",
                       }}
                     />
@@ -925,7 +926,7 @@ function App() {
                       height: `${canvasMeta.height * currentZoom}px`,
                       transform: `scale(${1 / currentZoom})`,
                       transformOrigin: "top left",
-                      zIndex: 11,
+                      zIndex: CANVAS_Z_INDEX.cursor,
                     }}
                   />
                   <canvas
@@ -938,7 +939,7 @@ function App() {
                       height: `${canvasMeta.height * currentZoom}px`,
                       transform: `scale(${1 / currentZoom})`,
                       transformOrigin: "top left",
-                      zIndex: 10,
+                      zIndex: CANVAS_Z_INDEX.preview,
                     }}
                   />
                   </div>
