@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasBrushCursor } from "./regionPreview";
+import { hasBrushCursor } from "./brushCursor";
 import { ALL_TOOLS } from "../constants/drawing";
 import type { ToolId } from "./tools";
 

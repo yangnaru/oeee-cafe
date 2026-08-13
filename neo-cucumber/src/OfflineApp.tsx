@@ -20,10 +20,11 @@ import { compositeLayersToCanvas } from "./utils/canvasExport";
 import { NativeBridge } from "./utils/nativeBridge";
 import {
   drawBezierPreview,
-  drawBrushCursor,
   drawLinePreview,
   drawRegionPreview,
 } from "./neo/regionPreview";
+import { drawBrushCursor } from "./neo/brushCursor";
+import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 
@@ -179,15 +180,39 @@ function OfflineApp() {
    */
   const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
   const hoverRef = useRef<{ x: number; y: number } | null>(null);
+  // The engine is created further down, and the cursor only ever paints from
+  // an event, so it reaches it through a ref rather than a closure.
+  const cursorEngineRef = useRef<DrawingEngine | null>(null);
   const paintCursor = useCallback(
     (at: { x: number; y: number } | null) => {
       hoverRef.current = at;
       const ctx = cursorCanvasRef.current?.getContext("2d");
-      if (ctx) {
-        drawBrushCursor(ctx, at, drawingState.brushSize, drawingState.brushType);
-      }
+      if (!ctx) return;
+      // The XOR needs whatever is showing underneath, which is the visible
+      // layers over the white the canvas element sits on.
+      const engine = cursorEngineRef.current;
+      const layers = engine
+        ? [
+            drawingState.bgVisible ? engine.layers.background : null,
+            drawingState.fgVisible ? engine.layers.foreground : null,
+          ].filter((l): l is Uint8ClampedArray => l !== null)
+        : [];
+      drawBrushCursor(
+        ctx,
+        at,
+        drawingState.brushSize,
+        drawingState.brushType,
+        engine ? { width: canvasWidth, height: canvasHeight, layers } : null
+      );
     },
-    [drawingState.brushSize, drawingState.brushType]
+    [
+      drawingState.brushSize,
+      drawingState.brushType,
+      drawingState.bgVisible,
+      drawingState.fgVisible,
+      canvasWidth,
+      canvasHeight,
+    ]
   );
   // Redraw where it already is when the brush changes under it, so the circle
   // resizes as you drag the size slider rather than at the next mouse move.
@@ -241,6 +266,10 @@ function OfflineApp() {
     handleBezierPreview,
     paintCursor
   );
+
+  useEffect(() => {
+    cursorEngineRef.current = drawingEngine ?? null;
+  }, [drawingEngine]);
 
   // Focus the box as soon as it appears, so typing just works
   useEffect(() => {
@@ -747,7 +776,7 @@ function OfflineApp() {
                 ref={cursorCanvasRef}
                 width={canvasWidth}
                 height={canvasHeight}
-                className="absolute top-0 left-0 pointer-events-none mix-blend-difference"
+                className="absolute top-0 left-0 pointer-events-none"
                 style={{
                   width: `${canvasWidth}px`,
                   height: `${canvasHeight}px`,
