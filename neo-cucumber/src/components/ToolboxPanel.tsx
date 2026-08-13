@@ -9,6 +9,7 @@ import {
 } from "./neo/neoClasses";
 import { NeoWindow } from "./neo/NeoWindow";
 import { useTheme } from "../hooks/useTheme";
+import { usePressRepeat } from "../hooks/usePressRepeat";
 
 import { NON_NEO_TOOLS } from "../constants/drawing";
 import { NEO_TOOL_LABELS } from "../neo/toolboxSpec";
@@ -97,6 +98,8 @@ export const ToolboxPanel = ({
 }: ToolboxPanelProps) => {
   const { t } = useLingui();
   const { theme, toggle: toggleTheme } = useTheme();
+  const zoomOutPress = usePressRepeat(onZoomOut);
+  const zoomInPress = usePressRepeat(onZoomIn);
 
   const showNeo = section !== "extras";
   const showExtras = section !== "neo";
@@ -164,17 +167,17 @@ export const ToolboxPanel = ({
               )}
               <button
                 type="button"
-                onClick={onZoomOut}
+                {...zoomOutPress}
                 title={t`Zoom out`}
-                className={`${NEO_ICON_BUTTON} flex items-center justify-center`}
+                className={`${NEO_ICON_BUTTON} flex touch-none select-none items-center justify-center`}
               >
                 <Icon icon="material-symbols:zoom-out" width={14} height={14} />
               </button>
               <button
                 type="button"
-                onClick={onZoomIn}
+                {...zoomInPress}
                 title={t`Zoom in`}
-                className={`${NEO_ICON_BUTTON} flex items-center justify-center`}
+                className={`${NEO_ICON_BUTTON} flex touch-none select-none items-center justify-center`}
               >
                 <Icon icon="material-symbols:zoom-in" width={14} height={14} />
               </button>

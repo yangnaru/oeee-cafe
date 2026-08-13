@@ -156,7 +156,7 @@ export const Chat = ({
   };
 
   return (
-    <div className="flex h-[462px] min-h-0 flex-1 flex-col gap-[3px] p-[3px] touch-auto select-auto">
+    <div className="flex h-[600px] min-h-0 flex-1 flex-col gap-[3px] p-[3px] touch-auto select-auto">
       <>
           <div className="flex w-full flex-wrap items-center gap-[3px]">
             <span
