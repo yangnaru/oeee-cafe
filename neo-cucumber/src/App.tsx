@@ -342,7 +342,7 @@ function App() {
   );
 
   // Zoom controls
-  const { currentZoom, handleZoomIn, handleZoomOut, handleZoomReset } =
+  const { currentZoom, handleZoomIn, handleZoomOut, handleZoomReset, handleZoomFit } =
     useZoomControls({
       canvasContainerRef: tempCanvasContainerRef,
       appRef,
@@ -878,7 +878,7 @@ function App() {
                       suppressContentEditableWarning
                       onKeyDown={handleTextKey}
                       onBlur={() => setTextAt(null)}
-                      className="absolute outline-none whitespace-pre"
+                      className="absolute whitespace-pre outline outline-1 outline-dashed outline-(--neo-tool-frame) outline-offset-[1px]"
                       style={{
                         left: `${textAt.x}px`,
                         // fillText draws from the baseline, so lift the box to
@@ -941,6 +941,7 @@ function App() {
                 onZoomIn={() => handleZoomIn()}
                 onZoomOut={() => handleZoomOut()}
                 onZoomReset={handleZoomReset}
+                onZoomFit={handleZoomFit}
                 onSaveCollaborativeDrawing={saveCollaborativeDrawing}
               />
             </div>

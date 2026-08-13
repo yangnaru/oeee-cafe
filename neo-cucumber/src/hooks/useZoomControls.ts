@@ -8,7 +8,9 @@ let cachedZoomLevels: number[] = [];
 
 const getZoomLevels = (): number[] => {
   if (cachedZoomLevels.length === 0) {
-    const steps = 2;
+    // Eight steps per doubling makes wheel zoom feel continuous while still
+    // keeping the full 50%–400% range practical to traverse with buttons.
+    const steps = 8;
     const k = steps / Math.LN2;
 
     const first = Math.ceil(Math.log(zoomMin) * k);
@@ -183,6 +185,34 @@ export const useZoomControls = ({
     }
   }, [zoomLevels, drawingEngine, canvasContainerRef, setDrawingState]);
 
+  const handleZoomFit = useCallback(() => {
+    const canvas = canvasContainerRef.current;
+    const viewport = appRef.current;
+    if (!canvas || !viewport) return;
+
+    // Leave a little room around the drawing so the border remains visible.
+    const padding = 32;
+    const fitScale = Math.min(
+      (viewport.clientWidth - padding) / canvas.offsetWidth,
+      (viewport.clientHeight - padding) / canvas.offsetHeight
+    );
+    const fitIndex = zoomLevels.reduce(
+      (best, level, index) =>
+        level <= fitScale && level > zoomLevels[best] ? index : best,
+      0
+    );
+    const fitZoom = zoomLevels[fitIndex];
+
+    setCurrentZoomIndex(fitIndex);
+    setDrawingState((prev: DrawingState) => ({
+      ...prev,
+      zoomLevel: Math.round(fitZoom * 100),
+      pendingPanDeltaX: undefined,
+      pendingPanDeltaY: undefined,
+    }));
+    drawingEngine?.resetPan(canvas, fitZoom);
+  }, [appRef, canvasContainerRef, drawingEngine, setDrawingState, zoomLevels]);
+
   // Add scroll wheel zoom functionality
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -194,11 +224,10 @@ export const useZoomControls = ({
         e.preventDefault();
 
         if (e.deltaY < 0) {
-          // Zoom out with pointer coordinates
-          handleZoomOut(e.clientX, e.clientY);
-        } else if (e.deltaY > 0) {
-          // Zoom in with pointer coordinates
+          // Scroll up follows the common map/canvas convention: zoom in.
           handleZoomIn(e.clientX, e.clientY);
+        } else if (e.deltaY > 0) {
+          handleZoomOut(e.clientX, e.clientY);
         }
       }
     };
@@ -221,5 +250,6 @@ export const useZoomControls = ({
     handleZoomIn,
     handleZoomOut,
     handleZoomReset,
+    handleZoomFit,
   };
 };

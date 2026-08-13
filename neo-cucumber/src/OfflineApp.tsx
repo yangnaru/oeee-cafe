@@ -285,7 +285,7 @@ function OfflineApp() {
   );
 
   // Zoom controls
-  const { currentZoom, handleZoomIn, handleZoomOut, handleZoomReset } =
+  const { currentZoom, handleZoomIn, handleZoomOut, handleZoomReset, handleZoomFit } =
     useZoomControls({
       canvasContainerRef: tempCanvasContainerRef,
       appRef,
@@ -692,7 +692,7 @@ function OfflineApp() {
                   suppressContentEditableWarning
                   onKeyDown={handleTextKey}
                   onBlur={() => setTextAt(null)}
-                  className="absolute outline-none whitespace-pre"
+                  className="absolute whitespace-pre outline outline-1 outline-dashed outline-(--neo-tool-frame) outline-offset-[1px]"
                   style={{
                     left: `${textAt.x}px`,
                     // fillText draws from the baseline, so lift the box to sit
@@ -790,6 +790,7 @@ function OfflineApp() {
                 onZoomIn={() => handleZoomIn()}
                 onZoomOut={() => handleZoomOut()}
                 onZoomReset={handleZoomReset}
+                onZoomFit={handleZoomFit}
                 onSaveCollaborativeDrawing={() => {}}
               />
             )}

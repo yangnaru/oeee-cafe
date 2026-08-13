@@ -301,15 +301,6 @@ export class DrawingEngine {
 
   private updateCanvasPan(container?: HTMLCanvasElement | HTMLDivElement, zoomScale?: number) {
     if (!container) return;
-
-    // Combine flip, scale, and translate transforms
-    const flipTransform = this.isFlippedHorizontal ? 'scaleX(-1)' : '';
-    const scaleTransform = zoomScale ? `scale(${zoomScale})` : '';
-    const translateTransform = `translate(${this.panOffsetX}px, ${this.panOffsetY}px)`;
-
-    // Build transform string with all active transforms
-    const transforms = [flipTransform, scaleTransform, translateTransform].filter(t => t);
-    const transform = transforms.join(' ');
     
     // Find the actual canvas container
     let actualContainer: HTMLElement | null = null;
@@ -324,15 +315,48 @@ export class DrawingEngine {
     
     if (!actualContainer) {
       // Fallback: find container in document
-      const containerDiv = document.querySelector('.canvas-container') as HTMLElement;
-      if (containerDiv) {
-        containerDiv.style.transform = transform;
-      }
-      return;
+      actualContainer = document.querySelector<HTMLElement>(".canvas-container");
     }
-    
+    if (!actualContainer) return;
+
+    this.clampPanToViewport(actualContainer, zoomScale ?? 1);
+
+    // Transform around the canvas centre, matching the flex-centred painter
+    // area. Keeping the transform origin explicit makes the pan bounds below
+    // independent of browser defaults.
+    actualContainer.style.transformOrigin = "center";
+    const flipTransform = this.isFlippedHorizontal ? "scaleX(-1)" : "";
+    const scaleTransform = zoomScale ? `scale(${zoomScale})` : "";
+    const translateTransform = `translate(${this.panOffsetX}px, ${this.panOffsetY}px)`;
+    const transform = [flipTransform, scaleTransform, translateTransform]
+      .filter(Boolean)
+      .join(" ");
+
     // Apply transform to the container itself
     actualContainer.style.transform = transform;
+  }
+
+  /**
+   * Bound pan to the painter viewport. A canvas that fits stays fully visible;
+   * a larger one can travel, but always leaves a generous recovery strip in
+   * view so it cannot be lost beyond an edge.
+   */
+  private clampPanToViewport(container: HTMLElement, zoom: number) {
+    const viewport = container.parentElement?.getBoundingClientRect();
+    if (!viewport || zoom <= 0) return;
+
+    const visibleStrip = 48;
+    const scaledWidth = container.offsetWidth * zoom;
+    const scaledHeight = container.offsetHeight * zoom;
+    const maxScreenPan = (scaledSize: number, viewportSize: number) =>
+      scaledSize <= viewportSize
+        ? (viewportSize - scaledSize) / 2
+        : Math.max(0, (viewportSize + scaledSize) / 2 - visibleStrip);
+
+    const maxPanX = maxScreenPan(scaledWidth, viewport.width) / zoom;
+    const maxPanY = maxScreenPan(scaledHeight, viewport.height) / zoom;
+    this.panOffsetX = Math.max(-maxPanX, Math.min(this.panOffsetX, maxPanX));
+    this.panOffsetY = Math.max(-maxPanY, Math.min(this.panOffsetY, maxPanY));
   }
 
   /** Maps the painter's brush names onto NEO's line types. */
