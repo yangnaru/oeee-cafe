@@ -1,15 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { ALL_TOOLS } from "./drawing";
+import { ALL_TOOLS, NON_NEO_TOOLS } from "./drawing";
 import { NEO_TIPS, NEO_TOOL_LABELS } from "../neo/toolboxSpec";
 
 describe("NEO's tool tips", () => {
-  it("reaches every tool the painter has", () => {
-    const grouped = NEO_TIPS.flatMap((tip) => tip.tools);
+  /**
+   * The column is NEO's toolbox and nothing else -- no additions, no
+   * omissions. Every tool the painter has is either on one of NEO's tips or
+   * declared as one NEO has no button for; a tool in neither is unreachable.
+   */
+  it("reaches every tool, between NEO's tips and the ones NEO lacks", () => {
+    const onTips = NEO_TIPS.flatMap((tip) => tip.tools);
     for (const tool of ALL_TOOLS) {
-      // A tool on no tip is a tool with no button, which is how line and
-      // bezier ended up unreachable before
-      expect(grouped).toContain(tool);
+      expect(
+        onTips.includes(tool) || NON_NEO_TOOLS.includes(tool),
+        `${tool} has no button anywhere`
+      ).toBe(true);
     }
+  });
+
+  it("keeps the tools NEO has no button for off its tips", () => {
+    const onTips = NEO_TIPS.flatMap((tip) => tip.tools);
+    for (const tool of NON_NEO_TOOLS) {
+      expect(onTips, `${tool} is not NEO's to show`).not.toContain(tool);
+    }
+    // fill sits above NEO's canvas, paste is what a finished copy switches
+    // to, and pan is ours outright
+    expect([...NON_NEO_TOOLS]).toEqual(["fill", "paste", "pan"]);
   });
 
   it("puts each tool on exactly one tip", () => {
@@ -17,13 +33,12 @@ describe("NEO's tool tips", () => {
     expect(new Set(grouped).size).toBe(grouped.length);
   });
 
-  it("collapses the tools into far fewer buttons", () => {
-    // The point of grouping: NEO shows seven buttons, not twenty-three
-    expect(NEO_TIPS.length).toBeLessThanOrEqual(9);
+  it("collapses the tools into NEO's seven buttons, exactly", () => {
+    expect(NEO_TIPS).toHaveLength(7);
     expect(ALL_TOOLS.length).toBeGreaterThan(NEO_TIPS.length * 2);
   });
 
-  it("keeps NEO's tips in NEO's order, with ours after them", () => {
+  it("keeps NEO's tips in NEO's order", () => {
     // createContainer writes the column in this order
     expect(NEO_TIPS.map((tip) => tip.name)).toEqual([
       "pen",
@@ -33,13 +48,6 @@ describe("NEO's tool tips", () => {
       "eraser",
       "draw",
       "mask",
-      // Ours: NEO's fill is a button above the canvas, and it has no pan
-      "fill",
-      "pan",
-    ]);
-    expect(NEO_TIPS.filter((tip) => tip.ours).map((tip) => tip.name)).toEqual([
-      "fill",
-      "pan",
     ]);
   });
 
@@ -55,6 +63,15 @@ describe("NEO's tool tips", () => {
       "ellipse",
     ]);
     expect(byName.eraser).toEqual(["eraser", "eraseRect", "eraseAll"]);
+    // Effect2Tip lists six tools; paste is not among them
+    expect(byName.effect2).toEqual([
+      "copy",
+      "merge",
+      "blurRect",
+      "flipH",
+      "flipV",
+      "turn",
+    ]);
   });
 
   it("labels the settings tips rather than leaving them tool-less", () => {

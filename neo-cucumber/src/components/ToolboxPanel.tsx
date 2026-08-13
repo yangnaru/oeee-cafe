@@ -3,13 +3,26 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
 import { NeoToolColumn } from "./neo/NeoToolColumn";
 import {
-  NEO_BUTTON,
   NEO_BUTTON_ON,
+  NEO_COLOR_INPUT,
+  NEO_ICON_BUTTON,
   NEO_PANEL,
   NEO_TITLEBAR,
 } from "./neo/neoClasses";
 
+import { NON_NEO_TOOLS } from "../constants/drawing";
+import { NEO_TOOL_LABELS } from "../neo/toolboxSpec";
 import type { ToolId } from "../neo/tools";
+
+/**
+ * Icons for the three tools NEO has no artwork for, since they have no button
+ * in its toolbox to carry one.
+ */
+const NON_NEO_TOOL_ICONS: Record<string, string> = {
+  fill: "material-symbols:format-color-fill",
+  paste: "material-symbols:content-paste",
+  pan: "material-symbols:pan-tool",
+};
 import type { DrawingState } from "../types/collaboration";
 
 interface HistoryState {
@@ -163,14 +176,64 @@ export const ToolboxPanel = ({
 
         {showExtras && (
           <div className="flex w-[52px] flex-col gap-[2px]">
+            {/*
+              Everything NEO keeps outside its toolbox, in the 52px its column
+              is wide. Every row is the same two-column grid so the buttons
+              line up: a flex row will not shrink a button below its icon, and
+              two of those overflowed the column and widened the whole panel.
+            */}
+
+            {/*
+              Tools NEO's column has no button for: fill is a button above
+              NEO's canvas, paste is what finishing a copy switches to, and
+              pan is ours outright. They are still tools -- selecting one
+              deselects whatever the NEO column held.
+            */}
+            <div className="grid grid-cols-2 gap-[2px]">
+              {NON_NEO_TOOLS.filter((tool) => tools.includes(tool)).map(
+                (tool) => (
+                  <button
+                    key={tool}
+                    type="button"
+                    onClick={() => onUpdateBrushType(tool)}
+                    aria-pressed={drawingState.brushType === tool}
+                    title={NEO_TOOL_LABELS[tool] ?? tool}
+                    className={`${NEO_ICON_BUTTON} ${
+                      drawingState.brushType === tool ? NEO_BUTTON_ON : ""
+                    } flex items-center justify-center`}
+                  >
+                    <Icon
+                      icon={NON_NEO_TOOL_ICONS[tool]}
+                      width={14}
+                      height={14}
+                    />
+                  </button>
+                )
+              )}
+            </div>
+
+            {/*
+              A colour picker, which NEO does not have -- its swatches and
+              RGBA sliders are how it mixes a colour. This sets the drawing
+              colour only; right-clicking a swatch is still what stores it.
+            */}
+            <input
+              type="color"
+              value={drawingState.color}
+              onChange={(e) => onUpdateColor(e.target.value)}
+              title={t`Pick a colour`}
+              aria-label={t`Pick a colour`}
+              className={NEO_COLOR_INPUT}
+            />
+
             {/* Undo and redo. NEO puts these in the bar above the canvas. */}
-            <div className="flex flex-row gap-[2px]">
+            <div className="grid grid-cols-2 gap-[2px]">
               <button
                 type="button"
                 onClick={onUndo}
                 disabled={!historyState.canUndo}
                 title={t`Undo`}
-                className={`${NEO_BUTTON} flex flex-1 items-center justify-center`}
+                className={`${NEO_ICON_BUTTON} flex items-center justify-center`}
               >
                 <Icon icon="material-symbols:undo" width={14} height={14} />
               </button>
@@ -179,19 +242,19 @@ export const ToolboxPanel = ({
                 onClick={onRedo}
                 disabled={!historyState.canRedo}
                 title={t`Redo`}
-                className={`${NEO_BUTTON} flex flex-1 items-center justify-center`}
+                className={`${NEO_ICON_BUTTON} flex items-center justify-center`}
               >
                 <Icon icon="material-symbols:redo" width={14} height={14} />
               </button>
             </div>
 
             {/* Zoom. NEO overlays + and - on the canvas corners instead. */}
-            <div className="flex flex-row gap-[2px]">
+            <div className="grid grid-cols-2 gap-[2px]">
               <button
                 type="button"
                 onClick={onZoomOut}
                 title={t`Zoom out`}
-                className={`${NEO_BUTTON} flex flex-1 items-center justify-center`}
+                className={`${NEO_ICON_BUTTON} flex items-center justify-center`}
               >
                 <Icon icon="material-symbols:zoom-out" width={14} height={14} />
               </button>
@@ -199,7 +262,7 @@ export const ToolboxPanel = ({
                 type="button"
                 onClick={onZoomIn}
                 title={t`Zoom in`}
-                className={`${NEO_BUTTON} flex flex-1 items-center justify-center`}
+                className={`${NEO_ICON_BUTTON} flex items-center justify-center`}
               >
                 <Icon icon="material-symbols:zoom-in" width={14} height={14} />
               </button>
@@ -208,7 +271,7 @@ export const ToolboxPanel = ({
               type="button"
               onClick={onZoomReset}
               title={t`Reset zoom`}
-              className={`${NEO_BUTTON} w-full text-center tabular-nums`}
+              className={`${NEO_ICON_BUTTON} w-full text-center text-[11px] tabular-nums`}
             >
               {Math.round(currentZoom * 100)}%
             </button>
@@ -223,9 +286,9 @@ export const ToolboxPanel = ({
                 }))
               }
               title={t`Toggle horizontal flip`}
-              className={`${NEO_BUTTON} ${
+              className={`${NEO_ICON_BUTTON} ${
                 drawingState.isFlippedHorizontal ? NEO_BUTTON_ON : ""
-              } flex w-full items-center justify-center gap-1`}
+              } flex w-full items-center justify-center`}
             >
               <Icon icon="material-symbols:flip" width={14} height={14} />
             </button>
@@ -236,7 +299,7 @@ export const ToolboxPanel = ({
                 onClick={onSaveCollaborativeDrawing}
                 disabled={isSaving || sessionEnded}
                 title={t`Save drawing to gallery`}
-                className={`${NEO_BUTTON} flex w-full items-center justify-center`}
+                className={`${NEO_ICON_BUTTON} flex w-full items-center justify-center`}
               >
                 {isSaving ? (
                   <Icon

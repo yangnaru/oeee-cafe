@@ -197,15 +197,40 @@ export const NEO_PANEL =
   "border-r border-b border-r-[#8f8fb3] border-b-[#8f8fb3] " +
   "cursor-default select-none";
 
-/** A pushable control in that chrome. */
-export const NEO_BUTTON =
-  "bg-[#ccccff] text-[#666699] rounded-none px-[6px] py-[2px] leading-[1.2] " +
+/** The bevel and behaviour every control in the chrome shares. */
+const BUTTON_FACE =
+  "bg-[#ccccff] text-[#666699] rounded-none leading-[1.2] " +
   "border-t border-l border-t-[#ffffff] border-l-[#ffffff] " +
   "border-r border-b border-r-[#8f8fb3] border-b-[#8f8fb3] " +
   "hover:not-disabled:bg-[#eeeef4] " +
   "active:not-disabled:border-t-[#8f8fb3] active:not-disabled:border-l-[#8f8fb3] " +
   "active:not-disabled:border-r-[#ffffff] active:not-disabled:border-b-[#ffffff] " +
   "disabled:text-[#8f8fb3] disabled:opacity-100";
+
+/** A pushable control carrying a label. */
+export const NEO_BUTTON = BUTTON_FACE + " px-[6px] py-[2px]";
+
+/**
+ * A control carrying nothing but an icon.
+ *
+ * It has no horizontal padding on purpose. A flex item will not shrink below
+ * its content, so a 14px icon plus NEO_BUTTON's padding refuses to go under
+ * 28px -- two of those overflow the 52px NEO is wide and drag the whole panel
+ * wider than the column it sits beside.
+ */
+export const NEO_ICON_BUTTON = BUTTON_FACE + " px-0 py-[2px]";
+
+/**
+ * The colour input, sized to the column. NEO has no colour picker at all --
+ * its swatches and RGBA sliders are the picker -- so this only ever appears
+ * in our own panel.
+ */
+export const NEO_COLOR_INPUT =
+  "block h-[18px] w-full cursor-pointer rounded-none p-0 " +
+  "border-t border-l border-t-[#8f8fb3] border-l-[#8f8fb3] " +
+  "border-r border-b border-r-[#ffffff] border-b-[#ffffff] " +
+  "[&::-webkit-color-swatch-wrapper]:p-[1px] " +
+  "[&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none";
 
 /** A control that stays pressed while its setting is on. */
 export const NEO_BUTTON_ON =

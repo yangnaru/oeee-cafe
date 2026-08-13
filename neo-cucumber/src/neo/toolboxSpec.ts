@@ -9,8 +9,8 @@
  * is `#ccccff`) and invented labels like "RectFill" for a tool NEO calls
  * "Rect".
  *
- * Anything marked "ours" has no counterpart in NEO -- it is a tool we added --
- * and is kept out of the way at the end rather than mixed into NEO's order.
+ * Nothing here is ours. Tools NEO has no button for live in NON_NEO_TOOLS and
+ * are offered beside this column rather than inside it.
  */
 import type { DrawType, ToolId } from "./tools";
 
@@ -96,9 +96,10 @@ export const NEO_TOOL_LABELS: Record<string, string> = {
   freehand: "Freehan",
   line: "Line",
   bezier: "Bezier",
-  // Neo.fillButton, which NEO puts in the bar above the canvas
+  // Tools with no button in NEO's column, offered beside it instead:
+  // fill is its own button above NEO's canvas, paste is what a finished copy
+  // switches to, and pan is ours outright.
   fill: "Fill",
-  // Ours: NEO reaches paste through the copy tool, and has no pan tool
   paste: "Paste",
   pan: "Pan",
 };
@@ -132,8 +133,6 @@ export interface NeoTipSpec {
    * would not deselect the tool you are drawing with.
    */
   fixed?: boolean;
-  /** True for the tips NEO does not have. */
-  ours?: boolean;
 }
 
 /**
@@ -141,25 +140,24 @@ export interface NeoTipSpec {
  *
  * Note this is the *DOM* order, not `Neo.toolButtons` order -- the latter
  * lists the fill button first and is only used for deselecting.
+ *
+ * This is all of NEO's toolbox and nothing else. Tools we added live in
+ * NON_NEO_TOOLS and are offered elsewhere, because a column that claims to be
+ * NEO's stops being a reference the moment it grows an eighth button. That
+ * includes `paste`: NEO has a paste *tool*, but no button for it -- finishing
+ * a copy switches the painter to it (CopyTool.doEffect).
  */
 export const NEO_TIPS: readonly NeoTipSpec[] = [
   { name: "pen", tools: ["solid", "brush", "text"] },
   { name: "pen2", tools: ["halftone", "blur", "dodge", "burn"] },
   { name: "effect", tools: ["rectFill", "rect", "ellipseFill", "ellipse"] },
-  {
-    name: "effect2",
-    // `paste` is ours, slotted next to the copy it belongs with
-    tools: ["copy", "paste", "merge", "blurRect", "flipH", "flipV", "turn"],
-  },
+  { name: "effect2", tools: ["copy", "merge", "blurRect", "flipH", "flipV", "turn"] },
   { name: "eraser", tools: ["eraser", "eraseRect", "eraseAll"] },
   // Settings rather than tools, so they always wear the fixed face and list
   // no tools: the draw tip cycles NEO's three draw types, the mask tip its
   // five mask modes.
   { name: "draw", tools: [], fixed: true },
   { name: "mask", tools: [], fixed: true },
-  // Ours. NEO's fill is a text button above the canvas and it has no pan.
-  { name: "fill", tools: ["fill"], ours: true },
-  { name: "pan", tools: ["pan"], ours: true },
 ];
 
 /*
@@ -177,7 +175,7 @@ export const NEO_TIPS: readonly NeoTipSpec[] = [
  * - `tone` is Pen2Tip's halftone preview: a dither block rather than a sprite,
  *   drawn from the current colour and alpha.
  * - `maskBar` is MaskTip's swatch of the current mask colour.
- * - `none` is a tip with no artwork at all, which is what ours get.
+ * - `none` is a tip with no artwork at all.
  */
 export type NeoTipArt =
   | { kind: "icon"; icon: string; tint: "foreground" | string | null }

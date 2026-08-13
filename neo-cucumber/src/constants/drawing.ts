@@ -122,6 +122,15 @@ export const ALL_TOOLS: readonly ToolId[] = [
  */
 export const SHARED_TOOLS: readonly ToolId[] = ALL_TOOLS;
 
+/**
+ * Tools NEO's toolbox has no button for, so ours cannot either.
+ *
+ * `fill` is a button above NEO's canvas rather than in its column, `paste` is
+ * reached by finishing a copy, and `pan` is entirely ours. They are offered
+ * beside the NEO column instead of inside it.
+ */
+export const NON_NEO_TOOLS: readonly ToolId[] = ["fill", "paste", "pan"];
+
 // NEO's tool tips -- which tools each button cycles through, and in what
 // order -- live in neo/toolboxSpec.ts alongside the rest of the toolbox it
 // was read off. They were duplicated here as TOOL_GROUPS.
