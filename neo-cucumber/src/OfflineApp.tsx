@@ -30,6 +30,7 @@ import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 import { CANVAS_Z_INDEX } from "./neo/canvasStack";
+import { previewBackdrop as backdropFromCanvasStack } from "./neo/previewBackdrop";
 
 // Validation constants
 const MIN_DIMENSION = 100;
@@ -148,15 +149,14 @@ function OfflineApp() {
   const previewBackdrop = useCallback((): Backdrop | null => {
     const engine = previewEngineRef.current;
     if (!engine) return null;
-    return {
-      width: canvasWidth,
-      height: canvasHeight,
-      scale: drawingState.zoomLevel / 100,
-      layers: [
-        drawingState.bgVisible ? engine.layers.background : null,
-        drawingState.fgVisible ? engine.layers.foreground : null,
-      ].filter((layer): layer is Uint8ClampedArray => layer !== null),
-    };
+    return backdropFromCanvasStack(
+      engine,
+      canvasWidth,
+      canvasHeight,
+      drawingState.zoomLevel / 100,
+      drawingState.bgVisible,
+      drawingState.fgVisible
+    );
   }, [canvasWidth, canvasHeight, drawingState.zoomLevel, drawingState.bgVisible, drawingState.fgVisible]);
   const handleRegionPreview = useCallback((rect: RegionRect | null) => {
     const ctx = previewCanvasRef.current?.getContext("2d");

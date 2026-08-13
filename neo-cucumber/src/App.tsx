@@ -42,6 +42,7 @@ import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { fontSizeForBrush, TEXT_FONT_FAMILY } from "./neo/tools";
 import { CANVAS_Z_INDEX } from "./neo/canvasStack";
+import { previewBackdrop as backdropFromCanvasStack } from "./neo/previewBackdrop";
 
 // Function to get session ID from URL
 const getSessionId = (): string => {
@@ -235,15 +236,14 @@ function App() {
   const previewBackdrop = useCallback((): Backdrop | null => {
     const engine = drawingEngineRef.current;
     if (!engine || !canvasMeta) return null;
-    return {
-      width: canvasMeta.width,
-      height: canvasMeta.height,
-      scale: drawingState.zoomLevel / 100,
-      layers: [
-        drawingState.bgVisible ? engine.layers.background : null,
-        drawingState.fgVisible ? engine.layers.foreground : null,
-      ].filter((layer): layer is Uint8ClampedArray => layer !== null),
-    };
+    return backdropFromCanvasStack(
+      engine,
+      canvasMeta.width,
+      canvasMeta.height,
+      drawingState.zoomLevel / 100,
+      drawingState.bgVisible,
+      drawingState.fgVisible
+    );
   }, [canvasMeta, drawingState.zoomLevel, drawingState.bgVisible, drawingState.fgVisible]);
   const handleRegionPreview = useCallback((rect: RegionRect | null) => {
     const ctx = previewCanvasRef.current?.getContext("2d");

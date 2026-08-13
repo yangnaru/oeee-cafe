@@ -7,6 +7,8 @@ import {
   type Backdrop,
 } from "./regionPreview";
 import type { RegionTool, ToolId } from "./tools";
+import { previewBackdrop } from "./previewBackdrop";
+import { DrawingEngine } from "../DrawingEngine";
 
 const W = 72;
 const H = 56;
@@ -61,6 +63,46 @@ function expectPixels(actual: Uint8ClampedArray, expected: Uint8ClampedArray) {
 }
 
 describe("interactive previews against canonical NEO", () => {
+  it("draws a white region outline over an opaque black background layer", () => {
+    const black = new Uint8ClampedArray(W * H * 4);
+    for (let i = 0; i < black.length; i += 4) black[i + 3] = 255;
+    const transparentForeground = new Uint8ClampedArray(W * H * 4);
+    const overlay = context();
+
+    drawRegionPreview(
+      overlay,
+      { x: 7, y: 5, width: 51, height: 39 },
+      { width: W, height: H, layers: [black, transparentForeground] },
+      "eraseRect"
+    );
+
+    const topEdge = overlay.getImageData(7, 5, 1, 1).data;
+    expect(Array.from(topEdge)).toEqual([255, 255, 255, 255]);
+  });
+
+  it("derives the preview from the mounted layer stack", () => {
+    const engine = new DrawingEngine(W, H);
+    const background = context();
+    const foreground = context();
+    background.fillStyle = "black";
+    background.fillRect(0, 0, W, H);
+    engine.attachDOMCanvases(background.canvas, foreground.canvas);
+
+    // The mounted canvas is deliberately newer than the raw buffer. NEO's
+    // destination-canvas XOR follows what is rendered, so ours must too.
+    const overlay = context();
+    drawRegionPreview(
+      overlay,
+      { x: 7, y: 5, width: 51, height: 39 },
+      previewBackdrop(engine, W, H, 1, true, true),
+      "eraseRect"
+    );
+
+    expect(Array.from(overlay.getImageData(7, 5, 1, 1).data)).toEqual([
+      255, 255, 255, 255,
+    ]);
+  });
+
   it("draws the straight-line cursor exactly", () => {
     const from = { x: 3, y: 46 };
     const to = { x: 68, y: 4 };
