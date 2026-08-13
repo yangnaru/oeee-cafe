@@ -27,6 +27,8 @@ export const useOfflineCanvas = ({
     if (!canvasContainerRef.current || !drawingEngine) return;
 
     const container = canvasContainerRef.current;
+    const canvasContent =
+      container.querySelector<HTMLElement>(".canvas-content") ?? container;
 
     // Create background canvas
     if (!backgroundCanvasRef.current) {
@@ -37,7 +39,7 @@ export const useOfflineCanvas = ({
       bgCanvas.style.width = `${canvasWidth}px`;
       bgCanvas.style.height = `${canvasHeight}px`;
       bgCanvas.style.zIndex = "1";
-      container.appendChild(bgCanvas);
+      canvasContent.appendChild(bgCanvas);
       backgroundCanvasRef.current = bgCanvas;
     }
 
@@ -50,7 +52,7 @@ export const useOfflineCanvas = ({
       fgCanvas.style.width = `${canvasWidth}px`;
       fgCanvas.style.height = `${canvasHeight}px`;
       fgCanvas.style.zIndex = "2";
-      container.appendChild(fgCanvas);
+      canvasContent.appendChild(fgCanvas);
       foregroundCanvasRef.current = fgCanvas;
     }
 

@@ -40,7 +40,9 @@ export const useCanvas = ({
     }
 
     const container = canvasContainerRef.current;
-    const interactionCanvas = container.querySelector("#canvas");
+    const canvasContent =
+      container.querySelector<HTMLElement>(".canvas-content") ?? container;
+    const interactionCanvas = canvasContent.querySelector("#canvas");
 
     const createLayerCanvas = (id: string, zIndex: number) => {
       const canvas = document.createElement("canvas");
@@ -59,9 +61,9 @@ export const useCanvas = ({
       }
 
       if (interactionCanvas) {
-        container.insertBefore(canvas, interactionCanvas);
+        canvasContent.insertBefore(canvas, interactionCanvas);
       } else {
-        container.appendChild(canvas);
+        canvasContent.appendChild(canvas);
       }
       return canvas;
     };

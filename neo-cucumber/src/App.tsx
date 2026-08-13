@@ -874,8 +874,9 @@ function App() {
                     flexShrink: 0,
                   }}
                 >
-                  {/* Local user interaction canvas for drawing events - positioned last in DOM to be on top */}
-                  <canvas
+                  <div className="canvas-content absolute inset-0">
+                    {/* Local user interaction canvas for drawing events - positioned last in DOM to be on top */}
+                    <canvas
                     id="canvas"
                     ref={tempLocalUserCanvasRef}
                     width={Math.max(1, Math.round(canvasMeta.width * currentZoom))}
@@ -890,7 +891,7 @@ function App() {
                     onPointerDown={() =>
                       console.log("Interaction canvas pointer down")
                     }
-                  />
+                    />
                   {/* Layer canvases for all users (including local) will be dynamically created here */}
                   {textAt && (
                     <div
@@ -940,6 +941,7 @@ function App() {
                       zIndex: 10,
                     }}
                   />
+                  </div>
                 </div>
               )}
               <ToolboxPanels

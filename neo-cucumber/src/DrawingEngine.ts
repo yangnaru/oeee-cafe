@@ -325,15 +325,24 @@ export class DrawingEngine {
     // area. Keeping the transform origin explicit makes the pan bounds below
     // independent of browser defaults.
     actualContainer.style.transformOrigin = "center";
-    const flipTransform = this.isFlippedHorizontal ? "scaleX(-1)" : "";
     const scaleTransform = zoomScale ? `scale(${zoomScale})` : "";
     const translateTransform = `translate(${this.panOffsetX}px, ${this.panOffsetY}px)`;
-    const transform = [flipTransform, scaleTransform, translateTransform]
+    const transform = [scaleTransform, translateTransform]
       .filter(Boolean)
       .join(" ");
 
     // Apply transform to the container itself
     actualContainer.style.transform = transform;
+
+    // Flipping is a canvas-view operation, not a transform of the canvas
+    // frame. Keep zoom and pan on the frame while mirroring only the plane
+    // containing the rendered layers and interaction overlays.
+    const canvasContent =
+      actualContainer.querySelector<HTMLElement>(".canvas-content");
+    if (canvasContent) {
+      canvasContent.style.transformOrigin = "center";
+      canvasContent.style.transform = this.isFlippedHorizontal ? "scaleX(-1)" : "";
+    }
   }
 
   /**

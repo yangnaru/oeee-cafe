@@ -693,8 +693,9 @@ function OfflineApp() {
                 flexShrink: 0,
               }}
             >
-              {/* Local user interaction canvas for drawing events */}
-              <canvas
+              <div className="canvas-content absolute inset-0">
+                {/* Local user interaction canvas for drawing events */}
+                <canvas
                 id="canvas"
                 ref={tempLocalUserCanvasRef}
                 width={Math.max(1, Math.round(canvasWidth * currentZoom))}
@@ -706,7 +707,7 @@ function OfflineApp() {
                   transform: `scale(${1 / currentZoom})`,
                   transformOrigin: "top left",
                 }}
-              />
+                />
               {/* Layer canvases will be dynamically created here */}
               {textAt && (
                 <div
@@ -756,6 +757,7 @@ function OfflineApp() {
                   zIndex: 10,
                 }}
               />
+              </div>
             </div>
             <ShortcutHelp
               open={showShortcuts}

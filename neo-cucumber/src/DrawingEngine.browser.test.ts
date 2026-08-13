@@ -86,6 +86,26 @@ const pen = (
   points,
 });
 
+describe("canvas view transforms", () => {
+  it("flips only the canvas content while leaving the frame unmirrored", () => {
+    const engine = new DrawingEngine(W, H);
+    const frame = document.createElement("div");
+    const content = document.createElement("div");
+    frame.className = "canvas-container";
+    content.className = "canvas-content";
+    frame.appendChild(content);
+
+    engine.setFlippedHorizontal(true, frame, 2);
+
+    expect(frame.style.transform).toBe("scale(2) translate(0px, 0px)");
+    expect(content.style.transform).toBe("scaleX(-1)");
+
+    engine.setFlippedHorizontal(false, frame, 2);
+    expect(frame.style.transform).toBe("scale(2) translate(0px, 0px)");
+    expect(content.style.transform).toBe("");
+  });
+});
+
 describe("DrawingEngine vs canonical NEO", () => {
   it("renders a single dot identically", () => {
     expectIdentical([pen([[32, 32]])]);
