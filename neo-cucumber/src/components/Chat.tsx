@@ -156,7 +156,7 @@ export const Chat = ({
   };
 
   return (
-    <div className="flex flex-col gap-[3px] p-[3px] touch-auto select-auto">
+    <div className="flex h-[208px] min-h-0 flex-1 flex-col gap-[3px] p-[3px] touch-auto select-auto">
       <>
           <div className="flex w-full flex-wrap items-center gap-[3px]">
             <span
@@ -178,7 +178,7 @@ export const Chat = ({
                 </div>
               ))}
           </div>
-          <div className="h-40 max-h-[calc(100vh-8rem)] overflow-y-auto border border-main bg-main p-[3px] text-[11px] leading-[15px]">
+          <div className="min-h-0 flex-1 overflow-y-auto border border-main bg-main p-[3px] text-[11px] leading-[15px]">
             <div>
               {messages.map((msg) => (
                 <div

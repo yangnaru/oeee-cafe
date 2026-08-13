@@ -8,7 +8,7 @@ interface NeoWindowProps {
   className?: string;
   /** Sits in the title bar, right of the drag dots. */
   title?: React.ReactNode;
-  /** Enables the browser's bottom-right resize handle for larger panels. */
+  /** Enables a visible bottom-right resize handle for larger panels. */
   resizable?: boolean;
   children: React.ReactNode;
 }
@@ -30,8 +30,15 @@ export function NeoWindow({
   children,
 }: NeoWindowProps) {
   const [position, setPosition] = useState(initialPosition);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(
+    null
+  );
   const frameRef = useRef<HTMLDivElement>(null);
   const dragOffset = useRef<{ x: number; y: number } | null>(null);
+  const resizeOrigin = useRef<{
+    left: number;
+    top: number;
+  } | null>(null);
 
   /**
    * One pointer gesture rather than a mouse pair and a touch pair. Pointer
@@ -59,6 +66,34 @@ export function NeoWindow({
     dragOffset.current = null;
   }, []);
 
+  const handleResizeStart = useCallback((e: React.PointerEvent) => {
+    const rect = frameRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    resizeOrigin.current = { left: rect.left, top: rect.top };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleResizeMove = useCallback((e: React.PointerEvent) => {
+    const origin = resizeOrigin.current;
+    if (!origin) return;
+    setSize({
+      width: Math.max(
+        180,
+        Math.min(e.clientX - origin.left, window.innerWidth - origin.left)
+      ),
+      height: Math.max(
+        140,
+        Math.min(e.clientY - origin.top, window.innerHeight - origin.top)
+      ),
+    });
+  }, []);
+
+  const endResize = useCallback(() => {
+    resizeOrigin.current = null;
+  }, []);
+
   // Keep it reachable when the window shrinks under it
   useEffect(() => {
     const onResize = () =>
@@ -74,9 +109,13 @@ export function NeoWindow({
     <div
       ref={frameRef}
       className={`${NEO_PANEL} fixed flex flex-col shadow-lg ${
-        resizable ? "resize overflow-auto" : ""
+        resizable ? "min-h-[140px] min-w-[180px] overflow-hidden" : ""
       } ${className}`}
-      style={{ left: `${position.x}px`, top: `${position.y}px` }}
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        ...(size && { width: `${size.width}px`, height: `${size.height}px` }),
+      }}
     >
       <div
         className={`${NEO_TITLEBAR} flex touch-none items-center gap-[3px] cursor-grab active:cursor-grabbing`}
@@ -95,6 +134,16 @@ export function NeoWindow({
         )}
       </div>
       {children}
+      {resizable && (
+        <div
+          aria-hidden="true"
+          className="absolute right-[2px] bottom-[2px] z-10 h-[12px] w-[12px] cursor-se-resize bg-[linear-gradient(135deg,transparent_0%,transparent_42%,var(--neo-panel-shadow)_42%,var(--neo-panel-shadow)_50%,transparent_50%,transparent_62%,var(--neo-panel-shadow)_62%,var(--neo-panel-shadow)_70%,transparent_70%)]"
+          onPointerDown={handleResizeStart}
+          onPointerMove={handleResizeMove}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+        />
+      )}
     </div>
   );
 }
