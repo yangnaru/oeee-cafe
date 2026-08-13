@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react-swc";
+import tailwindcss from "@tailwindcss/vite";
 import { playwright } from "@vitest/browser-playwright";
 import path from "node:path";
 
@@ -8,7 +9,10 @@ import path from "node:path";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 export default defineConfig({
-  plugins: [react()],
+  // Tailwind too: component tests render the real components, and without it
+  // they render unstyled -- which quietly turns any assertion about layout or
+  // colour into an assertion about the browser's defaults.
+  plugins: [react(), tailwindcss()],
   server: {
     fs: {
       allow: [repoRoot],
@@ -43,6 +47,17 @@ export default defineConfig({
         test: {
           name: "browser",
           include: ["src/**/*.browser.test.{ts,tsx}"],
+          /*
+           * One file at a time.
+           *
+           * The corpus test replays 1800 real .pch files through two engines
+           * in one page, and running it alongside the other browser files
+           * killed the page outright -- "Browser connection was closed" --
+           * in two of four full runs once the suite grew past twenty files.
+           * A crash that only appears under load looks exactly like a flaky
+           * assertion, and re-rolling it is not a verification strategy.
+           */
+          fileParallelism: false,
           browser: {
             enabled: true,
             provider: playwright(),
