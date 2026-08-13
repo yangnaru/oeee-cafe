@@ -10,6 +10,11 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# The replay viewer bundle. Built by `pnpm run build` and rebuilt by the
+# Dockerfile, so the deployed copy never comes from git. It was tracked only
+# so a bare `cargo run` could serve /static/viewer without a node build first;
+# run `pnpm run build:viewer` once instead.
+dist-viewer
 *.local
 
 # Editor directories and files

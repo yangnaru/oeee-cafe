@@ -34,6 +34,11 @@ When connecting to PostgreSQL via command line, use `psql oeee_cafe`.
 
 Don't try to run the development server. Just run `pnpm run build` if you need to check if the code compiles.
 
+`dist/` and `dist-viewer/` are build output and are not tracked. The Rust
+server serves `neo-cucumber/dist-viewer` at `/static/viewer/`, which the replay
+templates request, so a checkout that has never been built will 404 there until
+`pnpm run build:viewer` has run once. Docker builds both itself.
+
 Always run and check linting:
 
 ```bash
