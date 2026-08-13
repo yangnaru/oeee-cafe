@@ -29,8 +29,8 @@ import {
 import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
-import { CANVAS_Z_INDEX } from "./neo/canvasStack";
 import { previewBackdrop as backdropFromCanvasStack } from "./neo/previewBackdrop";
+import { PainterCanvas } from "./components/PainterCanvas";
 
 // Validation constants
 const MIN_DIMENSION = 100;
@@ -677,87 +677,22 @@ function OfflineApp() {
             className="neo-ground flex gap-4 flex-row w-full h-full justify-center items-center"
             ref={appRef}
           >
-            <div
-              ref={canvasContainerRef}
-              className={`relative mx-auto border border-main bg-white touch-none select-none canvas-container ${
-                drawingState.brushType === "pan"
-                  ? "cursor-grab active:cursor-grabbing"
-                  : "cursor-crosshair"
-              }`}
-              style={{
-                width: `${canvasWidth}px`,
-                height: `${canvasHeight}px`,
-                minWidth: `${canvasWidth}px`,
-                minHeight: `${canvasHeight}px`,
-                maxWidth: `${canvasWidth}px`,
-                maxHeight: `${canvasHeight}px`,
-                flexShrink: 0,
-              }}
-            >
-              <div className="canvas-content absolute inset-0">
-                {/* Local user interaction canvas for drawing events */}
-                <canvas
-                id="canvas"
-                ref={tempLocalUserCanvasRef}
-                width={canvasWidth}
-                height={canvasHeight}
-                className="absolute top-0 left-0 pointer-events-auto canvas-bg"
-                style={{
-                  width: `${canvasWidth}px`,
-                  height: `${canvasHeight}px`,
-                }}
-                />
-              {/* Layer canvases will be dynamically created here */}
-              {textAt && (
-                <div
-                  ref={textBoxRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onKeyDown={handleTextKey}
-                  onBlur={() => setTextAt(null)}
-                  className="absolute whitespace-pre outline outline-1 outline-dashed outline-(--neo-tool-frame) outline-offset-[1px]"
-                  style={{
-                    left: `${textAt.x}px`,
-                    // fillText draws from the baseline, so lift the box to sit
-                    // where the glyphs will land
-                    top: `${textAt.y - fontSizeForBrush(drawingState.brushSize)}px`,
-                    fontFamily: TEXT_FONT_FAMILY,
-                    fontSize: `${fontSizeForBrush(drawingState.brushSize)}px`,
-                    lineHeight: `${fontSizeForBrush(drawingState.brushSize)}px`,
-                    color: drawingState.color,
-                    zIndex: CANVAS_Z_INDEX.textEditor,
-                    minWidth: "1em",
-                  }}
-                />
-              )}
-              <canvas
-                ref={cursorCanvasRef}
-                width={Math.max(1, Math.round(canvasWidth * currentZoom))}
-                height={Math.max(1, Math.round(canvasHeight * currentZoom))}
-                className="absolute top-0 left-0 pointer-events-none"
-                style={{
-                  width: `${canvasWidth * currentZoom}px`,
-                  height: `${canvasHeight * currentZoom}px`,
-                  transform: `scale(${1 / currentZoom})`,
-                  transformOrigin: "top left",
-                  zIndex: CANVAS_Z_INDEX.cursor,
-                }}
-              />
-              <canvas
-                ref={previewCanvasRef}
-                width={Math.max(1, Math.round(canvasWidth * currentZoom))}
-                height={Math.max(1, Math.round(canvasHeight * currentZoom))}
-                className="absolute top-0 left-0 pointer-events-none"
-                style={{
-                  width: `${canvasWidth * currentZoom}px`,
-                  height: `${canvasHeight * currentZoom}px`,
-                  transform: `scale(${1 / currentZoom})`,
-                  transformOrigin: "top left",
-                  zIndex: CANVAS_Z_INDEX.preview,
-                }}
-              />
-              </div>
-            </div>
+            <PainterCanvas
+              width={canvasWidth}
+              height={canvasHeight}
+              zoom={currentZoom}
+              brushType={drawingState.brushType}
+              brushSize={drawingState.brushSize}
+              color={drawingState.color}
+              containerRef={canvasContainerRef}
+              interactionRef={tempLocalUserCanvasRef}
+              cursorRef={cursorCanvasRef}
+              previewRef={previewCanvasRef}
+              textBoxRef={textBoxRef}
+              textAt={textAt}
+              onTextKeyDown={handleTextKey}
+              onDismissText={() => setTextAt(null)}
+            />
             <ShortcutHelp
               open={showShortcuts}
               onClose={() => setShowShortcuts(false)}
