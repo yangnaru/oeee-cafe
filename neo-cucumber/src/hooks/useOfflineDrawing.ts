@@ -9,7 +9,33 @@ import type { RegionRect } from "../neo/regionDrag";
 // Constants matching Neo's LINETYPE values
 const LINETYPE_PEN = 1;
 const LINETYPE_ERASER = 2;
+const LINETYPE_BRUSH = 3;
 const LINETYPE_TONE = 4;
+const LINETYPE_DODGE = 5;
+const LINETYPE_BURN = 6;
+const LINETYPE_BLUR = 7;
+
+/** The line type NEO serialises for each stroked brush. */
+export const lineTypeForBrush = (brushType: BrushType): number => {
+  switch (brushType) {
+    case "eraser":
+      return LINETYPE_ERASER;
+    case "brush":
+      return LINETYPE_BRUSH;
+    case "halftone":
+      return LINETYPE_TONE;
+    case "dodge":
+      return LINETYPE_DODGE;
+    case "burn":
+      return LINETYPE_BURN;
+    case "blur":
+      return LINETYPE_BLUR;
+    default:
+      // solid is the remaining drawing brush; fill and pan do not serialize
+      // as strokes, but keeping their historical fallback is harmless.
+      return LINETYPE_PEN;
+  }
+};
 
 export const useOfflineDrawing = (
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
@@ -51,20 +77,6 @@ export const useOfflineDrawing = (
    */
   const strokeMaskRef = useRef<Mask>(NO_MASK);
 
-  // Helper to map brushType to lineType
-  const getLineType = (
-    brushType: BrushType
-  ): number => {
-    switch (brushType) {
-      case "eraser":
-        return LINETYPE_ERASER; // 2
-      case "halftone":
-        return LINETYPE_TONE; // 4
-      default: // 'solid' | 'fill' | 'pan'
-        return LINETYPE_PEN; // 1
-    }
-  };
-
   // Callbacks for recording drawing operations
   const callbacks = {
     onPointerDown: useCallback(() => {
@@ -96,7 +108,7 @@ export const useOfflineDrawing = (
           (drawingState.layerType === "foreground" ? 1 : 0);
         // Opacity is already in [0, 255] range - clamp and ensure no NaN
         const alpha = Math.max(0, Math.min(255, Math.floor(opacity || 0)));
-        const lineType = getLineType(brushType);
+        const lineType = lineTypeForBrush(brushType);
 
         // Ensure color values are valid
         const safeR = Math.max(0, Math.min(255, Math.floor(r || 0)));
@@ -162,7 +174,7 @@ export const useOfflineDrawing = (
           (drawingState.layerType === "foreground" ? 1 : 0);
         // Opacity is already in [0, 255] range - clamp and ensure no NaN
         const alpha = Math.max(0, Math.min(255, Math.floor(opacity || 0)));
-        const lineType = getLineType(brushType);
+        const lineType = lineTypeForBrush(brushType);
 
         // Ensure color values are valid
         const safeR = Math.max(0, Math.min(255, Math.floor(r || 0)));
@@ -249,7 +261,7 @@ export const useOfflineDrawing = (
       ) => {
         actionRecorderRef.current.pushBezier(
           layer === "foreground" ? 1 : 0,
-          getLineType(brushType),
+          lineTypeForBrush(brushType),
           points,
           color,
           brushSize,
@@ -270,7 +282,7 @@ export const useOfflineDrawing = (
       ) => {
         actionRecorderRef.current.pushLine(
           layer === "foreground" ? 1 : 0,
-          getLineType(brushType),
+          lineTypeForBrush(brushType),
           from,
           to,
           color,

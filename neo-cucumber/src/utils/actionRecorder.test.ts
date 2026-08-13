@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decompressFromUint8Array } from "lz-string";
 import { ActionRecorder } from "./ActionRecorder";
+import { lineTypeForBrush } from "../hooks/useOfflineDrawing";
 
 // Decode a replay blob the way Neo.decodePCH does (neo/src/actions.js)
 const decodeReplay = async (blob: Blob) => {
@@ -27,6 +28,20 @@ const strokeTags = (items: unknown[][]) =>
   items.filter((item) => item[0] === "freeHand").map((item) => item[16]);
 
 describe("ActionRecorder", () => {
+  it("uses NEO's line type for every stroked brush", () => {
+    const brushes = [
+      "solid",
+      "eraser",
+      "brush",
+      "halftone",
+      "dodge",
+      "burn",
+      "blur",
+    ] as const;
+
+    expect(brushes.map(lineTypeForBrush)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
   it("writes a PCH header Neo.decodePCH accepts", async () => {
     const recorder = new ActionRecorder();
     recordStroke(recorder, "s0");
