@@ -58,16 +58,16 @@ msgstr "배경색 펜"
 msgid "by"
 msgstr "작성자:"
 
-#: src/components/Chat.tsx:166
-#~ msgid "Chat"
-#~ msgstr "채팅"
+#: src/App.tsx:899
+msgid "Chat"
+msgstr "채팅"
 
 #: src/components/SimplifiedToolbox.tsx:86
 msgid "Color"
 msgstr "색상"
 
 #. placeholder {0}: drawingContext.communityId
-#: src/OfflineApp.tsx:611
+#: src/OfflineApp.tsx:671
 msgid "Community: {0}"
 msgstr "커뮤니티: {0}"
 
@@ -95,17 +95,21 @@ msgstr "연결이 끊어졌습니다. 작업이 로컬에 저장되었습니다.
 #~ msgid "Custom color picker - edits selected palette color"
 #~ msgstr "사용자 정의 색상 선택기 - 선택된 팔레트 색상 편집"
 
+#: src/components/ToolboxPanel.tsx:266
+msgid "Dark"
+msgstr "다크"
+
 #: src/components/SessionHeader.tsx:83
 msgid "Disconnected"
 msgstr "연결 끊어짐"
 
 #: src/components/modals/ConnectionStatusModal.tsx:49
 #: src/components/SessionExpiredModal.tsx:142
-#: src/OfflineApp.tsx:641
+#: src/OfflineApp.tsx:701
 msgid "Download PNG"
 msgstr "PNG 다운로드"
 
-#: src/OfflineApp.tsx:648
+#: src/OfflineApp.tsx:708
 msgid "Download Replay"
 msgstr "리플레이 다운로드"
 
@@ -117,11 +121,11 @@ msgstr "리플레이 다운로드"
 #~ msgid "Eraser"
 #~ msgstr "지우개"
 
-#: src/OfflineApp.tsx:403
+#: src/OfflineApp.tsx:463
 msgid "Failed to download replay file."
 msgstr "리플레이 파일 다운로드에 실패했습니다."
 
-#: src/OfflineApp.tsx:366
+#: src/OfflineApp.tsx:426
 msgid "Failed to save drawing. Please try again."
 msgstr "그림 저장에 실패했습니다. 다시 시도해 주세요."
 
@@ -150,6 +154,11 @@ msgstr "로비로 가기"
 #~ msgid "Halftone"
 #~ msgstr "하프톤"
 
+#: src/components/Chat.tsx:178
+#: src/components/Chat.tsx:179
+msgid "Hide chat"
+msgstr "채팅 숨기기"
+
 #: src/components/modals/InitializationErrorModal.tsx:18
 msgid "Initialization Failed"
 msgstr "초기화 실패"
@@ -161,6 +170,10 @@ msgstr "협업 세션 초기화 중..."
 #: src/components/ToolboxPanel.tsx:340
 #~ msgid "Left click to select layer, right click to toggle visibility"
 #~ msgstr "왼쪽 클릭으로 레이어 선택, 오른쪽 클릭으로 표시 전환"
+
+#: src/components/ToolboxPanel.tsx:266
+msgid "Light"
+msgstr "라이트"
 
 #: src/components/SessionHeader.tsx:89
 msgid "Loading"
@@ -190,7 +203,7 @@ msgstr "로딩 중..."
 msgid "Off"
 msgstr "끄기"
 
-#: src/OfflineApp.tsx:605
+#: src/OfflineApp.tsx:665
 msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
 msgstr "오프라인 그리기 ({canvasWidth} × {canvasHeight})"
 
@@ -211,11 +224,11 @@ msgstr "오프라인 그리기 ({canvasWidth} × {canvasHeight})"
 #~ msgstr "이동"
 
 #. placeholder {0}: drawingContext.parentPostId
-#: src/OfflineApp.tsx:619
+#: src/OfflineApp.tsx:679
 msgid "Parent Post: {0}"
 msgstr "부모 게시물: {0}"
 
-#: src/components/Chat.tsx:181
+#: src/components/Chat.tsx:193
 msgid "Participants"
 msgstr "참여자"
 
@@ -226,6 +239,11 @@ msgstr "참여자"
 #: src/components/SimplifiedToolbox.tsx:59
 msgid "Pen size"
 msgstr "펜 크기"
+
+#: src/components/ToolboxPanel.tsx:170
+#: src/components/ToolboxPanel.tsx:171
+msgid "Pick a colour"
+msgstr "색 선택"
 
 #: src/viewer/ViewerApp.tsx:153
 #~ msgid "Play"
@@ -266,7 +284,7 @@ msgstr "로비로 돌아가기"
 #~ msgid "Rewind"
 #~ msgstr "처음으로"
 
-#: src/components/ToolboxPanel.tsx:259
+#: src/components/ToolboxPanel.tsx:287
 msgid "Save"
 msgstr "저장"
 
@@ -275,11 +293,11 @@ msgid "Save as PNG"
 msgstr "PNG로 저장"
 
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/OfflineApp.tsx:632
+#: src/OfflineApp.tsx:692
 msgid "Save Drawing"
 msgstr "그림 저장"
 
-#: src/components/ToolboxPanel.tsx:247
+#: src/components/ToolboxPanel.tsx:275
 msgid "Save drawing to gallery"
 msgstr "그림을 갤러리에 저장"
 
@@ -289,7 +307,7 @@ msgstr "갤러리에 저장"
 
 #: src/components/SessionExpiredModal.tsx:113
 #: src/components/SimplifiedToolbox.tsx:180
-#: src/OfflineApp.tsx:632
+#: src/OfflineApp.tsx:692
 msgid "Saving..."
 msgstr "저장 중..."
 
@@ -297,7 +315,7 @@ msgstr "저장 중..."
 #~ msgid "Seek"
 #~ msgstr "탐색"
 
-#: src/components/Chat.tsx:267
+#: src/components/Chat.tsx:279
 msgid "Send"
 msgstr "전송"
 
@@ -320,6 +338,11 @@ msgstr "공유"
 #: src/components/SimplifiedToolbox.tsx:186
 msgid "Shortcuts"
 msgstr "단축키"
+
+#: src/components/Chat.tsx:178
+#: src/components/Chat.tsx:179
+msgid "Show chat"
+msgstr "채팅 보기"
 
 #: src/components/ToolboxPanel.tsx:379
 #~ msgid "Show/hide background layer"
@@ -349,6 +372,14 @@ msgstr "단축키"
 msgid "Swap pens"
 msgstr "펜 전환"
 
+#: src/components/ToolboxPanel.tsx:251
+msgid "Switch to dark"
+msgstr "다크 모드로 전환"
+
+#: src/components/ToolboxPanel.tsx:251
+msgid "Switch to light"
+msgstr "라이트 모드로 전환"
+
 #: src/components/SessionExpiredModal.tsx:88
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
 msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 소유자로서 갤러리에 저장하거나 PNG로 다운로드할 수 있습니다."
@@ -377,7 +408,7 @@ msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 �
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "이 세션이 가득 찼습니다 ({currentUserCount}/{maxUsers}명). 처음 {maxUsers}명의 사용자만 세션에 참여할 수 있습니다."
 
-#: src/OfflineApp.tsx:478
+#: src/OfflineApp.tsx:538
 msgid "Time's up."
 msgstr "설정한 시간이 지났습니다."
 
@@ -393,7 +424,7 @@ msgstr "타이머 꺼짐"
 msgid "Toggle horizontal flip"
 msgstr "좌우 반전 전환"
 
-#: src/components/Chat.tsx:258
+#: src/components/Chat.tsx:270
 msgid "Type a message..."
 msgstr "메시지 입력..."
 

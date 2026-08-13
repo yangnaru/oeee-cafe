@@ -28,7 +28,7 @@
  * the ring back inside, so every widget still sits exactly where NEO puts it.
  */
 export const NEO_COLUMN =
-  "w-[50px] px-[1px] shrink-0 bg-[#ccccff] font-[Arial] text-[#773333] " +
+  "w-[50px] px-[1px] shrink-0 bg-(--neo-tool-set) font-[Arial] text-(--neo-tool-text) " +
   "leading-[18px] cursor-default select-none";
 
 /*
@@ -53,13 +53,13 @@ export const NEO_COLUMN =
  */
 const TIP_BASE =
   "relative mx-0 my-[3px] block h-[20px] w-[48px] border p-0 " +
-  "shadow-[0_0_0_1px_#000000]";
+  "shadow-[0_0_0_1px_var(--neo-tool-frame)]";
 
 /** An unselected tool: raised, on `tool_color_button`. */
 export const NEO_TIP_OFF =
   TIP_BASE +
-  " bg-[#e8dfae] border-t-[#ffffff] border-l-[#ffffff] " +
-  "border-r-[#9397b2] border-b-[#9397b2]";
+  " bg-(--neo-tool-button) border-t-(--neo-bevel-light) border-l-(--neo-bevel-light) " +
+  "border-r-(--neo-bevel-shadow) border-b-(--neo-bevel-shadow)";
 
 /**
  * The selected tool: pressed, on `tool_color_button` darkened by NEO's own
@@ -68,8 +68,8 @@ export const NEO_TIP_OFF =
  */
 export const NEO_TIP_ON =
   TIP_BASE +
-  " bg-[#a29c7a] border-t-transparent border-l-transparent " +
-  "border-r-[#ffffff] border-b-[#ffffff]";
+  " bg-(--neo-tool-button-on) border-t-transparent border-l-transparent " +
+  "border-r-(--neo-bevel-light) border-b-(--neo-bevel-light)";
 
 /**
  * A tip that sets something rather than selecting a tool -- the draw mode and
@@ -77,8 +77,8 @@ export const NEO_TIP_ON =
  */
 export const NEO_TIP_FIXED =
   TIP_BASE +
-  " bg-[#f8daaa] border-t-[#ffffff] border-l-[#ffffff] " +
-  "border-r-[#9397b2] border-b-[#9397b2]";
+  " bg-(--neo-tool-button2) border-t-(--neo-bevel-light) border-l-(--neo-bevel-light) " +
+  "border-r-(--neo-bevel-shadow) border-b-(--neo-bevel-shadow)";
 
 /**
  * The text over a tip's artwork.
@@ -110,7 +110,7 @@ export const NEO_COLORTIPS = "relative mt-[4px] h-[144px] w-[48px]";
  */
 export const NEO_COLORTIP =
   "absolute m-0 mt-[-1px] mr-[4px] h-[18px] w-[22px] overflow-hidden p-0 " +
-  "shadow-[0_0_0_1px_#000000]";
+  "shadow-[0_0_0_1px_var(--neo-tool-frame)]";
 
 /** The bevel sprite laid over a swatch at half strength. */
 export const NEO_COLORTIP_SPRITE_IMG =
@@ -124,7 +124,7 @@ export const NEO_COLORTIP_SPRITE_IMG =
   All four share `tool_color_bar` and the same 1px black ring.
 */
 
-const BAR = "relative bg-[#ddddff] shadow-[0_0_0_1px_#000000]";
+const BAR = "relative bg-(--neo-tool-bar) shadow-[0_0_0_1px_var(--neo-tool-frame)]";
 
 /** One RGBA channel: 48x13, 3px above. */
 export const NEO_COLOR_SLIDER = BAR + " mt-[3px] h-[13px] w-[48px]";
@@ -169,12 +169,12 @@ export const NEO_SIZE_SLIDER_HIT =
 
 /** One saved tool: NEO's 11x8 inside a 1px black border, so 13x10 outer. */
 export const NEO_RESERVE =
-  "absolute top-[1px] h-[10px] w-[13px] border border-[#000000] p-0";
+  "absolute top-[1px] h-[10px] w-[13px] border border-(--neo-tool-frame) p-0";
 
 /** The strip behind the layer name, underlined in the label colour. */
 export const NEO_LAYER_BG =
   "pointer-events-none absolute top-0 left-[2px] h-[10px] w-[44px] " +
-  "border-b border-b-[#773333]";
+  "border-b border-b-(--neo-tool-text)";
 
 /** The layer name. Two of them exist; NEO shows whichever layer is current. */
 export const NEO_LAYER_LABEL =
@@ -201,20 +201,20 @@ export const NEO_LAYER_LINE =
 
 /** The floating panel: NEO's face, raised off the page. */
 export const NEO_PANEL =
-  "bg-[#ccccff] text-[#666699] font-[Arial] text-[12px] leading-[18px] " +
-  "border-t border-l border-t-[#ffffff] border-l-[#ffffff] " +
-  "border-r border-b border-r-[#8f8fb3] border-b-[#8f8fb3] " +
+  "bg-(--neo-icon) text-(--neo-text) font-[Arial] text-[12px] leading-[18px] " +
+  "border-t border-l border-t-(--neo-bevel-light) border-l-(--neo-bevel-light) " +
+  "border-r border-b border-r-(--neo-panel-shadow) border-b-(--neo-panel-shadow) " +
   "cursor-default select-none";
 
 /** The bevel and behaviour every control in the chrome shares. */
 const BUTTON_FACE =
-  "bg-[#ccccff] text-[#666699] rounded-none leading-[1.2] " +
-  "border-t border-l border-t-[#ffffff] border-l-[#ffffff] " +
-  "border-r border-b border-r-[#8f8fb3] border-b-[#8f8fb3] " +
-  "hover:not-disabled:bg-[#eeeef4] " +
-  "active:not-disabled:border-t-[#8f8fb3] active:not-disabled:border-l-[#8f8fb3] " +
-  "active:not-disabled:border-r-[#ffffff] active:not-disabled:border-b-[#ffffff] " +
-  "disabled:text-[#8f8fb3] disabled:opacity-100";
+  "bg-(--neo-icon) text-(--neo-text) rounded-none leading-[1.2] " +
+  "border-t border-l border-t-(--neo-bevel-light) border-l-(--neo-bevel-light) " +
+  "border-r border-b border-r-(--neo-panel-shadow) border-b-(--neo-panel-shadow) " +
+  "hover:not-disabled:bg-(--neo-bk2) " +
+  "active:not-disabled:border-t-(--neo-panel-shadow) active:not-disabled:border-l-(--neo-panel-shadow) " +
+  "active:not-disabled:border-r-(--neo-bevel-light) active:not-disabled:border-b-(--neo-bevel-light) " +
+  "disabled:text-(--neo-panel-shadow) disabled:opacity-100";
 
 /** A pushable control carrying a label. */
 export const NEO_BUTTON = BUTTON_FACE + " px-[6px] py-[2px]";
@@ -236,22 +236,23 @@ export const NEO_ICON_BUTTON = BUTTON_FACE + " px-0 py-[2px]";
  */
 export const NEO_COLOR_INPUT =
   "block h-[18px] w-full cursor-pointer rounded-none p-0 " +
-  "border-t border-l border-t-[#8f8fb3] border-l-[#8f8fb3] " +
-  "border-r border-b border-r-[#ffffff] border-b-[#ffffff] " +
+  "border-t border-l border-t-(--neo-panel-shadow) border-l-(--neo-panel-shadow) " +
+  "border-r border-b border-r-(--neo-bevel-light) border-b-(--neo-bevel-light) " +
   "[&::-webkit-color-swatch-wrapper]:p-[1px] " +
   "[&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none";
 
 /** A control that stays pressed while its setting is on. */
 export const NEO_BUTTON_ON =
-  "bg-[#ffaaaa] border-t-[#8f8fb3] border-l-[#8f8fb3] " +
-  "border-r-[#ffffff] border-b-[#ffffff]";
+  "bg-(--neo-icon-select) border-t-(--neo-panel-shadow) border-l-(--neo-panel-shadow) " +
+  "border-r-(--neo-bevel-light) border-b-(--neo-bevel-light)";
 
 /** The drag handle, which reads as a title bar. */
 export const NEO_TITLEBAR =
-  "bg-[linear-gradient(to_right,#9397b2,#b1d6fd)] text-white p-[1px]";
+  "bg-[linear-gradient(to_right,var(--neo-titlebar-from),var(--neo-titlebar-to))] " +
+  "text-(--neo-titlebar-text) p-[1px]";
 
 /** A key cap in the shortcut list. */
 export const NEO_KBD =
-  "bg-[#ccccff] rounded-none px-[3px] " +
-  "border-t border-l border-t-[#ffffff] border-l-[#ffffff] " +
-  "border-r border-b border-r-[#8f8fb3] border-b-[#8f8fb3]";
+  "bg-(--neo-icon) rounded-none px-[3px] " +
+  "border-t border-l border-t-(--neo-bevel-light) border-l-(--neo-bevel-light) " +
+  "border-r border-b border-r-(--neo-panel-shadow) border-b-(--neo-panel-shadow)";

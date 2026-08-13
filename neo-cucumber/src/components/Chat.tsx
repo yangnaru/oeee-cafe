@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { encodeChat } from "../utils/binaryProtocol";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
+import { NEO_ICON_BUTTON } from "./neo/neoClasses";
 import { getUserColors } from "../utils/userColors";
 
 interface ChatMessage {
@@ -161,20 +162,31 @@ export const Chat = ({
   return (
     <div
       className={`${
-        isMinimized ? "h-12" : "h-full"
-      } flex flex-col gap-4 p-4 touch-auto select-auto`}
+        isMinimized ? "h-full items-center p-[2px]" : "h-full p-4 gap-4"
+      } flex flex-col touch-auto select-auto`}
     >
-      <div className="flex items-center flex-row">
+      <div className="flex items-center flex-row gap-2">
         <button
+          type="button"
           onClick={() => {
             const newMinimized = !isMinimized;
             setIsMinimized(newMinimized);
             onMinimizedChange?.(newMinimized);
           }}
-          className="p-1 text-main hover:text-highlight cursor-pointer text-sm"
-          title={isMinimized ? "Maximize chat" : "Minimize chat"}
+          className={`${NEO_ICON_BUTTON} flex h-[24px] w-[24px] shrink-0 items-center justify-center`}
+          aria-expanded={!isMinimized}
+          title={isMinimized ? t`Show chat` : t`Hide chat`}
+          aria-label={isMinimized ? t`Show chat` : t`Hide chat`}
         >
-          <Icon icon="material-symbols:chat" width={16} height={16} />{" "}
+          <Icon
+            icon={
+              isMinimized
+                ? "material-symbols:chevron-right"
+                : "material-symbols:chevron-left"
+            }
+            width={16}
+            height={16}
+          />
         </button>
         {!isMinimized && (
           <p>

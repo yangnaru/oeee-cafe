@@ -53,10 +53,10 @@ export class ReplayPlayer {
 
   private readonly items: Frame[];
   /**
-   * The replay's final image. Strokes render through a canvas, which loses a
-   * little translucent colour that the painter's buffers keep, so playback
-   * finishes by applying this and landing on exactly the artwork rather than
-   * near it.
+   * The replay's final image, when the file ends with one. Strokes render
+   * through a canvas, which loses a little translucent colour that the
+   * painter's buffers keep, so playback finishes by applying this and landing
+   * on exactly the artwork rather than near it.
    */
   private readonly finalRestore: Frame | null;
   private restoreApplied = false;
@@ -77,12 +77,17 @@ export class ReplayPlayer {
     this.display = display;
     this.onChange = onChange;
 
-    // Restore frames hold the finished drawing as a PNG. Replaying the strokes
-    // is the point, so they are stepped over rather than short-circuiting it,
-    // but the last one is kept to settle on at the end.
-    const restores = items.filter((item) => item[0] === "restore");
-    this.finalRestore = restores.length > 0 ? restores[restores.length - 1] : null;
-    this.items = items.filter((item) => item[0] !== "restore");
+    // Only the restore a file ends on holds the finished drawing, and it is
+    // kept back to settle on rather than played, so the strokes are what you
+    // watch. Every earlier restore is the canvas the artist was already working
+    // over -- a drawing continued from an earlier session opens with one -- and
+    // plays in place, which is what NEO's own play() does with it. Dropping
+    // those left a tenth of the archive animating over a blank canvas and only
+    // showing the artwork on the last step.
+    const last = items.length > 0 ? items[items.length - 1] : null;
+    const endsOnRestore = last != null && last[0] === "restore";
+    this.finalRestore = endsOnRestore ? last : null;
+    this.items = endsOnRestore ? items.slice(0, -1) : items;
 
     for (let f = 0; f < this.items.length; f++) {
       const count = NeoReplay.stepsFor(this.items[f]);
@@ -136,7 +141,12 @@ export class ReplayPlayer {
   private async advance(): Promise<boolean> {
     if (this.position >= this.total) return false;
     const { frame, step } = this.steps[this.position];
-    await this.replay.applyStep(this.items[frame], step);
+    try {
+      await this.replay.applyStep(this.items[frame], step);
+    } catch {
+      // A restore whose image will not load. Skipping it costs that frame's
+      // pixels; letting it throw would strand playback on it entirely.
+    }
     this.position++;
     return true;
   }

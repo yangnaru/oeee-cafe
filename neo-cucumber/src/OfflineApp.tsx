@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import { useCanvasView, useDeferredHandler } from "./hooks/useCanvasView";
 import "./App.css";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ToolboxPanel } from "./components/ToolboxPanel";
+import { ToolboxPanels } from "./components/ToolboxPanels";
 import { NEO_BUTTON } from "./components/neo/neoClasses";
 import { ALL_TOOLS } from "./constants/drawing";
 import { SimplifiedToolbox } from "./components/SimplifiedToolbox";
@@ -23,8 +24,6 @@ import {
   drawLinePreview,
   drawRegionPreview,
 } from "./neo/regionPreview";
-import { drawBrushCursor } from "./neo/brushCursor";
-import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 
@@ -172,53 +171,14 @@ function OfflineApp() {
     if (ctx) drawBezierPreview(ctx, points);
   }, []);
 
-  /**
-   * NEO's brush cursor, on its own overlay above the preview one.
-   *
-   * Separate because the two are cleared independently: a rubber band and a
-   * brush circle would otherwise wipe each other out on alternate frames.
+  /*
+   * The cursor is painted by useCanvasView, which needs the engine that the
+   * drawing hook below creates -- so the hook is given a forwarder now and
+   * pointed at the real painter once both exist.
    */
-  const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
-  const hoverRef = useRef<{ x: number; y: number } | null>(null);
-  // The engine is created further down, and the cursor only ever paints from
-  // an event, so it reaches it through a ref rather than a closure.
-  const cursorEngineRef = useRef<DrawingEngine | null>(null);
-  const paintCursor = useCallback(
-    (at: { x: number; y: number } | null) => {
-      hoverRef.current = at;
-      const ctx = cursorCanvasRef.current?.getContext("2d");
-      if (!ctx) return;
-      // The XOR needs whatever is showing underneath, which is the visible
-      // layers over the white the canvas element sits on.
-      const engine = cursorEngineRef.current;
-      const layers = engine
-        ? [
-            drawingState.bgVisible ? engine.layers.background : null,
-            drawingState.fgVisible ? engine.layers.foreground : null,
-          ].filter((l): l is Uint8ClampedArray => l !== null)
-        : [];
-      drawBrushCursor(
-        ctx,
-        at,
-        drawingState.brushSize,
-        drawingState.brushType,
-        engine ? { width: canvasWidth, height: canvasHeight, layers } : null
-      );
-    },
-    [
-      drawingState.brushSize,
-      drawingState.brushType,
-      drawingState.bgVisible,
-      drawingState.fgVisible,
-      canvasWidth,
-      canvasHeight,
-    ]
-  );
-  // Redraw where it already is when the brush changes under it, so the circle
-  // resizes as you drag the size slider rather than at the next mouse move.
-  useEffect(() => {
-    paintCursor(hoverRef.current);
-  }, [paintCursor]);
+  const [handleHoverMove, setHoverHandler] = useDeferredHandler<
+    { x: number; y: number } | null
+  >();
 
   const tempCanvasContainerRef = useRef<HTMLDivElement>(null);
   const tempLocalUserCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -264,12 +224,8 @@ function OfflineApp() {
     handleLinePreview,
     handleTextPlace,
     handleBezierPreview,
-    paintCursor
+    handleHoverMove
   );
-
-  useEffect(() => {
-    cursorEngineRef.current = drawingEngine ?? null;
-  }, [drawingEngine]);
 
   // Focus the box as soon as it appears, so typing just works
   useEffect(() => {
@@ -344,6 +300,17 @@ function OfflineApp() {
     drawingEngine,
     currentZoom,
   });
+
+  const { cursorCanvasRef, paintCursor } = useCanvasView({
+    drawingEngine,
+    drawingState,
+    setDrawingState,
+    canvasContainerRef,
+    currentZoom,
+    canvasWidth,
+    canvasHeight,
+  });
+  setHoverHandler(paintCursor);
 
   // Save drawing handler
   const handleSaveDrawing = useCallback(async () => {
@@ -493,38 +460,6 @@ function OfflineApp() {
     }
   }, [drawingEngine]);
 
-  // Apply pending pan adjustments after zoom level changes
-  useEffect(() => {
-    if (
-      drawingState.pendingPanDeltaX !== undefined ||
-      drawingState.pendingPanDeltaY !== undefined
-    ) {
-      requestAnimationFrame(() => {
-        if (drawingEngine) {
-          drawingEngine.adjustPanForZoom(
-            drawingState.pendingPanDeltaX || 0,
-            drawingState.pendingPanDeltaY || 0,
-            canvasContainerRef.current || undefined,
-            currentZoom
-          );
-        }
-
-        setDrawingState((prev) => ({
-          ...prev,
-          pendingPanDeltaX: undefined,
-          pendingPanDeltaY: undefined,
-        }));
-      });
-    }
-  }, [
-    drawingState.pendingPanDeltaX,
-    drawingState.pendingPanDeltaY,
-    drawingState.zoomLevel,
-    drawingEngine,
-    currentZoom,
-    setDrawingState,
-    canvasContainerRef,
-  ]);
 
   // Initialize two-tone canvas fill when drawing engine is ready
   useEffect(() => {
@@ -717,7 +652,7 @@ function OfflineApp() {
         {/* Main Content Area */}
         <div className="flex-1 relative overflow-hidden">
           <div
-            className="flex gap-4 flex-row w-full h-full bg-main justify-center items-center"
+            className="neo-ground flex gap-4 flex-row w-full h-full justify-center items-center"
             ref={appRef}
           >
             <div
@@ -830,10 +765,10 @@ function OfflineApp() {
                 onSave={handleSaveDrawing}
               />
             ) : (
-              <>
-              <ToolboxPanel
-                // NEO's column carries tools, colour and layers only
-                section="neo"
+              <ToolboxPanels
+                // Opens inside the painter area, below whatever the page
+                // puts above it
+                anchorRef={appRef}
                 // An offline drawing records lineType straight into the .pch,
                 // which already has codes for every one of these.
                 tools={ALL_TOOLS}
@@ -856,34 +791,7 @@ function OfflineApp() {
                 onZoomOut={() => handleZoomOut()}
                 onZoomReset={handleZoomReset}
                 onSaveCollaborativeDrawing={() => {}}
-                initialPosition={{ x: 16, y: 70 }}
               />
-              {/* Everything NEO's toolbox does not have, in its own panel */}
-              <ToolboxPanel
-                section="extras"
-                tools={ALL_TOOLS}
-                drawingState={drawingState}
-                historyState={historyState}
-                paletteColors={paletteColors}
-                selectedPaletteIndex={selectedPaletteIndex}
-                currentZoom={currentZoom}
-                isOwner={false}
-                isSaving={false}
-                sessionEnded={false}
-                onUndo={undo}
-                onRedo={redo}
-                onUpdateBrushType={updateBrushType}
-                onUpdateDrawingState={setDrawingState}
-                onUpdateColor={updateColor}
-                onSetSelectedPaletteIndex={setSelectedPaletteIndex}
-                onSetPaletteColor={setPaletteColor}
-                onZoomIn={() => handleZoomIn()}
-                onZoomOut={() => handleZoomOut()}
-                onZoomReset={handleZoomReset}
-                onSaveCollaborativeDrawing={() => {}}
-                initialPosition={{ x: 92, y: 70 }}
-              />
-              </>
             )}
           </div>
         </div>

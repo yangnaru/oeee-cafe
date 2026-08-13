@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useCanvasView, useDeferredHandler } from "./hooks/useCanvasView";
 import "./App.css";
 import { Chat } from "./components/Chat";
 import { SessionExpiredModal } from "./components/SessionExpiredModal";
@@ -13,7 +14,9 @@ import {
   type CollaborationMeta,
   type Participant,
 } from "./types/collaboration";
-import { ToolboxPanel } from "./components/ToolboxPanel";
+import { ToolboxPanels } from "./components/ToolboxPanels";
+import { NeoWindow } from "./components/neo/NeoWindow";
+import { Trans } from "@lingui/react/macro";
 import { SHARED_TOOLS } from "./constants/drawing";
 import { useDrawing } from "./hooks/useDrawing";
 import { useDrawingState } from "./hooks/useDrawingState";
@@ -33,8 +36,6 @@ import {
   drawLinePreview,
   drawRegionPreview,
 } from "./neo/regionPreview";
-import { drawBrushCursor } from "./neo/brushCursor";
-import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { fontSizeForBrush, TEXT_FONT_FAMILY } from "./neo/tools";
 
@@ -246,52 +247,14 @@ function App() {
     if (ctx) drawBezierPreview(ctx, points);
   }, []);
 
-  /**
-   * NEO's brush cursor, on its own overlay above the preview one, so a rubber
-   * band and a brush circle cannot clear each other on alternate frames.
+  /*
+   * The cursor is painted by useCanvasView, which needs the engine that the
+   * drawing hook below creates -- so the hook is given a forwarder now and
+   * pointed at the real painter once both exist.
    */
-  const cursorCanvasRef = useRef<HTMLCanvasElement>(null);
-  const hoverRef = useRef<{ x: number; y: number } | null>(null);
-  // The engine is created further down, and the cursor only ever paints from
-  // an event, so it reaches it through a ref rather than a closure.
-  const cursorEngineRef = useRef<DrawingEngine | null>(null);
-  const paintCursor = useCallback(
-    (at: { x: number; y: number } | null) => {
-      hoverRef.current = at;
-      const ctx = cursorCanvasRef.current?.getContext("2d");
-      if (!ctx) return;
-      // The XOR needs whatever is showing underneath, which is the visible
-      // layers over the white the canvas element sits on.
-      const engine = cursorEngineRef.current;
-      const layers = engine
-        ? [
-            drawingState.bgVisible ? engine.layers.background : null,
-            drawingState.fgVisible ? engine.layers.foreground : null,
-          ].filter((l): l is Uint8ClampedArray => l !== null)
-        : [];
-      drawBrushCursor(
-        ctx,
-        at,
-        drawingState.brushSize,
-        drawingState.brushType,
-        engine && canvasMeta
-          ? { width: canvasMeta.width, height: canvasMeta.height, layers }
-          : null
-      );
-    },
-    [
-      drawingState.brushSize,
-      drawingState.brushType,
-      drawingState.bgVisible,
-      drawingState.fgVisible,
-      canvasMeta,
-    ]
-  );
-  // Redraw in place when the brush changes under the pointer, so the circle
-  // resizes as the size slider moves rather than at the next mouse move.
-  useEffect(() => {
-    paintCursor(hoverRef.current);
-  }, [paintCursor]);
+  const [handleHoverMove, setHoverHandler] = useDeferredHandler<
+    { x: number; y: number } | null
+  >();
 
   // Text is typed into a box on the canvas, as NEO does it: no font pickers,
   // because the pen size is the font size and the family is fixed.
@@ -333,12 +296,8 @@ function App() {
     handleLinePreview,
     handleBezierPreview,
     handleTextPlace,
-    paintCursor
+    handleHoverMove
   );
-
-  useEffect(() => {
-    cursorEngineRef.current = drawingEngine ?? null;
-  }, [drawingEngine]);
 
   // Focus the box as soon as it appears, so typing just works
   useEffect(() => {
@@ -400,6 +359,17 @@ function App() {
       currentZoom,
       drawingState,
     });
+
+  const { cursorCanvasRef, paintCursor } = useCanvasView({
+    drawingEngine,
+    drawingState,
+    setDrawingState,
+    canvasContainerRef,
+    currentZoom,
+    canvasWidth: canvasMeta?.width,
+    canvasHeight: canvasMeta?.height,
+  });
+  setHoverHandler(paintCursor);
 
   // Keep drawingEngine ref in sync to avoid circular dependencies
   const drawingEngineRef = useRef(drawingEngine);
@@ -780,51 +750,7 @@ function App() {
     }
   }, [canvasContainerRef]);
 
-  // Apply pending pan adjustments after zoom level changes
-  useEffect(() => {
-    if (
-      drawingState.pendingPanDeltaX !== undefined ||
-      drawingState.pendingPanDeltaY !== undefined
-    ) {
-      // Use requestAnimationFrame to ensure canvas has been resized first
-      requestAnimationFrame(() => {
-        if (drawingEngine) {
-          drawingEngine.adjustPanForZoom(
-            drawingState.pendingPanDeltaX || 0,
-            drawingState.pendingPanDeltaY || 0,
-            canvasContainerRef.current || undefined,
-            currentZoom
-          );
-        }
 
-        // Clear the pending deltas
-        setDrawingState((prev) => ({
-          ...prev,
-          pendingPanDeltaX: undefined,
-          pendingPanDeltaY: undefined,
-        }));
-      });
-    }
-  }, [
-    drawingState.pendingPanDeltaX,
-    drawingState.pendingPanDeltaY,
-    drawingState.zoomLevel,
-    drawingEngine,
-    currentZoom,
-    setDrawingState,
-    canvasContainerRef,
-  ]);
-
-  // Sync horizontal flip state to drawing engine
-  useEffect(() => {
-    if (drawingEngine) {
-      drawingEngine.setFlippedHorizontal(
-        drawingState.isFlippedHorizontal,
-        canvasContainerRef.current || undefined,
-        currentZoom
-      );
-    }
-  }, [drawingState.isFlippedHorizontal, drawingEngine, currentZoom, canvasContainerRef]);
 
   // Add keyboard shortcuts for undo/redo
   useEffect(() => {
@@ -885,10 +811,16 @@ function App() {
 
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar */}
-          <div
-            className={`${
-              isChatMinimized ? "w-12" : "w-72"
-            } bg-main border-r border-main flex flex-col transition-all duration-300`}
+          {/*
+            Chat travels in the same window the toolbox does, rather than
+            docked down the side: the canvas is the point of the page, and a
+            fixed sidebar was taking a third of it on a narrow window. It
+            collapses to its title bar, and it can be dragged out of the way.
+          */}
+          <NeoWindow
+            initialPosition={{ x: 16, y: 70 }}
+            className={`z-40 ${isChatMinimized ? "w-[150px]" : "w-72"}`}
+            title={<Trans>Chat</Trans>}
           >
             <Chat
               wsRef={wsRef}
@@ -898,12 +830,12 @@ function App() {
               onMinimizedChange={setIsChatMinimized}
               onAddMessage={handleChatAddMessage}
             />
-          </div>
+          </NeoWindow>
 
           {/* Main Content Area */}
           <div className="flex-1 relative overflow-hidden">
             <div
-              className="flex gap-4 flex-row w-full h-full bg-main justify-center items-center"
+              className="neo-ground flex gap-4 flex-row w-full h-full justify-center items-center"
               ref={appRef}
             >
               <ConnectionStatusModal
@@ -992,7 +924,10 @@ function App() {
                   />
                 </div>
               )}
-              <ToolboxPanel
+              <ToolboxPanels
+                // Opens inside the painter area, below whatever the page
+                // puts above it
+                anchorRef={appRef}
                 // Every tool the wire format can carry
                 tools={SHARED_TOOLS}
                 drawingState={drawingState}

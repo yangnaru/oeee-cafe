@@ -267,6 +267,17 @@ function sortByPosition(widgets: Widget[]): Widget[] {
 */
 
 async function renderOurs(): Promise<HTMLElement> {
+  /*
+   * Light, explicitly.
+   *
+   * The column follows the theme now, and only its light values are NEO's --
+   * dark is a derivation. Leaving this to the runner would make the assertion
+   * depend on whatever colour scheme the machine running CI happens to prefer,
+   * which is how a parity test starts failing for reasons that have nothing to
+   * do with parity.
+   */
+  document.documentElement.setAttribute("data-theme", "light");
+
   const host = document.createElement("div");
   document.body.appendChild(host);
 

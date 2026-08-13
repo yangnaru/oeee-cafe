@@ -29,6 +29,12 @@ function displayContext() {
 const pixels = (ctx: CanvasRenderingContext2D) =>
   new Uint8ClampedArray(ctx.getImageData(0, 0, W, H).data);
 
+/** The bottom-right pixel, which none of the strokes below reach. */
+const cornerOf = (px: Uint8ClampedArray) => {
+  const i = ((H - 1) * W + (W - 1)) * 4;
+  return [px[i], px[i + 1], px[i + 2], px[i + 3]];
+};
+
 /** Flattens a NeoReplay's two layers the way the player composites them. */
 function compositeOf(replay: NeoReplay) {
   const ctx = displayContext();
@@ -38,6 +44,26 @@ function compositeOf(replay: NeoReplay) {
   ctx.drawImage(replay.painter.canvas[1], 0, 0);
   return pixels(ctx);
 }
+
+/** Generated rather than hand-written, so the pixels are what we think. */
+function pngOf(paint: (ctx: CanvasRenderingContext2D) => void): string {
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  paint(ctx);
+  return canvas.toDataURL("image/png");
+}
+
+const RED = pngOf((ctx) => {
+  ctx.fillStyle = "rgb(255, 0, 0)";
+  ctx.fillRect(0, 0, W, H);
+});
+const GREEN = pngOf((ctx) => {
+  ctx.fillStyle = "rgb(0, 255, 0)";
+  ctx.fillRect(0, 0, W, H);
+});
+const TRANSPARENT = pngOf(() => {});
 
 describe("ReplayPlayer", () => {
   it("counts one step per stroke segment", () => {
@@ -114,7 +140,7 @@ describe("ReplayPlayer", () => {
     expect(states.length).toBeGreaterThan(0);
   });
 
-  it("drops restore frames so the strokes are what plays", () => {
+  it("holds back the trailing restore so the strokes are what plays", () => {
     const withRestore = [...items, ["restore", "data:image/png;base64,A", "data:image/png;base64,B"]];
     const player = new ReplayPlayer(withRestore, W, H, displayContext(), () => {});
     expect(player.total).toBe(10);
@@ -167,22 +193,6 @@ describe("ReplayPlayer", () => {
 });
 
 describe("settling on the artwork", () => {
-  /** Generated rather than hand-written, so the pixels are what we think. */
-  function pngOf(paint: (ctx: CanvasRenderingContext2D) => void): string {
-    const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d")!;
-    paint(ctx);
-    return canvas.toDataURL("image/png");
-  }
-
-  const RED = pngOf((ctx) => {
-    ctx.fillStyle = "rgb(255, 0, 0)";
-    ctx.fillRect(0, 0, W, H);
-  });
-  const TRANSPARENT = pngOf(() => {});
-
   const withRestore = () => [...items, ["restore", RED, TRANSPARENT]];
 
   it("applies the final image when playback reaches the end", async () => {
@@ -215,6 +225,14 @@ describe("settling on the artwork", () => {
     expect([px[0], px[1], px[2]]).toEqual([255, 0, 0]);
   });
 
+  it("settles on a file whose only restore is the trailing one", async () => {
+    const ctx = displayContext();
+    const player = new ReplayPlayer(withRestore(), W, H, ctx, () => {});
+    expect(player.total).toBe(10);
+    await player.skipToEnd();
+    expect(cornerOf(pixels(ctx))).toEqual([255, 0, 0, 255]);
+  });
+
   it("keeps the strokes when the final image will not load", async () => {
     const ctx = displayContext();
     const broken = [...items, ["restore", "data:image/png;base64,NOT_A_PNG", TRANSPARENT]];
@@ -227,5 +245,91 @@ describe("settling on the artwork", () => {
     const plain = new ReplayPlayer(items, W, H, reference, () => {});
     await plain.skipToEnd();
     expect(firstPixelDifference(pixels(ctx), pixels(reference))).toBe(-1);
+  });
+});
+
+/**
+ * A drawing continued from an earlier session opens with a restore holding the
+ * canvas it was continued from -- a tenth of the archive does. That frame is
+ * not a final image and has to play in place, the way NEO's play() runs it,
+ * or the whole replay animates over a blank canvas.
+ */
+describe("a replay that opens on a restore", () => {
+  // The flood fill is dropped: it would repaint the restored layer from (0, 0)
+  // and hide whether the restore ever landed.
+  const strokes = items.slice(1);
+  const continued = () => [
+    ["restore", GREEN, TRANSPARENT],
+    ...strokes,
+    ["restore", RED, TRANSPARENT],
+  ];
+
+  it("counts the opening restore as a step of its own", () => {
+    const player = new ReplayPlayer(continued(), W, H, displayContext(), () => {});
+    expect(player.total).toBe(10);
+  });
+
+  it("paints the canvas the artist started from, before the strokes", async () => {
+    const ctx = displayContext();
+    const player = new ReplayPlayer(continued(), W, H, ctx, () => {});
+
+    await player.seekTo(1);
+    expect(cornerOf(pixels(ctx))).toEqual([0, 255, 0, 255]);
+  });
+
+  it("keeps it under the strokes for the rest of playback", async () => {
+    const ctx = displayContext();
+    const player = new ReplayPlayer(continued(), W, H, ctx, () => {});
+
+    await player.seekTo(player.total - 1);
+    const px = pixels(ctx);
+    expect(cornerOf(px)).toEqual([0, 255, 0, 255]);
+
+    // and the strokes are on top of it, rather than the restore alone
+    const flat = displayContext();
+    flat.fillStyle = "rgb(0, 255, 0)";
+    flat.fillRect(0, 0, W, H);
+    expect(firstPixelDifference(px, pixels(flat))).not.toBe(-1);
+  });
+
+  it("re-applies it after seeking backwards", async () => {
+    const ctx = displayContext();
+    const player = new ReplayPlayer(continued(), W, H, ctx, () => {});
+
+    await player.skipToEnd();
+    await player.seekTo(0);
+    expect(cornerOf(pixels(ctx))).toEqual([255, 255, 255, 255]);
+
+    await player.seekTo(2);
+    expect(cornerOf(pixels(ctx))).toEqual([0, 255, 0, 255]);
+  });
+
+  it("still settles on the trailing restore at the end", async () => {
+    const ctx = displayContext();
+    const player = new ReplayPlayer(continued(), W, H, ctx, () => {});
+
+    await player.skipToEnd();
+    expect(cornerOf(pixels(ctx))).toEqual([255, 0, 0, 255]);
+  });
+
+  it("plays on when the opening image will not load", async () => {
+    const ctx = displayContext();
+    const broken = [
+      ["restore", "data:image/png;base64,NOT_A_PNG", TRANSPARENT],
+      ...strokes,
+    ];
+    const player = new ReplayPlayer(broken, W, H, ctx, () => {});
+
+    await player.skipToEnd();
+    expect(player.getState().position).toBe(player.total);
+
+    // The strokes still drew; only the ground they sit on is missing
+    const reference = displayContext();
+    const plain = new ReplayPlayer(strokes, W, H, reference, () => {});
+    await plain.skipToEnd();
+    expect(
+      firstPixelDifference(pixels(ctx), pixels(reference)),
+      describeDifference(pixels(ctx), pixels(reference), W)
+    ).toBe(-1);
   });
 });

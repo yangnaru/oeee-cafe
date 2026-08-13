@@ -5,6 +5,7 @@ import { i18n } from "@lingui/core";
 import { setupI18n } from "./utils/i18n";
 import { enableSandbox } from "./sandbox/bridge";
 import { SandboxPage } from "./sandbox/SandboxPage";
+import { installNeoGround } from "./neo/neoBackground";
 
 enableSandbox();
 setupI18n("en");
@@ -20,3 +21,6 @@ createRoot(document.getElementById("root")!).render(
     </I18nProvider>
   </StrictMode>
 );
+
+// NEO draws its ground as a generated tile rather than a flat colour
+installNeoGround();

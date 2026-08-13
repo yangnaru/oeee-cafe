@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
 import { NeoToolColumn } from "./neo/NeoToolColumn";
@@ -6,9 +6,9 @@ import {
   NEO_BUTTON_ON,
   NEO_COLOR_INPUT,
   NEO_ICON_BUTTON,
-  NEO_PANEL,
-  NEO_TITLEBAR,
 } from "./neo/neoClasses";
+import { NeoWindow } from "./neo/NeoWindow";
+import { useTheme } from "../hooks/useTheme";
 
 import { NON_NEO_TOOLS } from "../constants/drawing";
 import { NEO_TOOL_LABELS } from "../neo/toolboxSpec";
@@ -30,7 +30,7 @@ interface HistoryState {
   canRedo: boolean;
 }
 
-interface ToolboxPanelProps {
+export interface ToolboxPanelProps {
   /**
    * Which half to show. NEO's toolbox holds tools, colour and layers and
    * nothing else, so our own controls -- undo, zoom, flip, save -- can be
@@ -94,71 +94,16 @@ export const ToolboxPanel = ({
   initialPosition,
 }: ToolboxPanelProps) => {
   const { t } = useLingui();
-
-  const [position, setPosition] = useState(
-    initialPosition ?? { x: 304, y: 70 }
-  );
-  const panelRef = useRef<HTMLDivElement>(null);
-  const dragOffset = useRef<{ x: number; y: number } | null>(null);
-
-  /**
-   * One pointer gesture rather than a mouse pair and a touch pair. Pointer
-   * capture keeps the panel following even when the cursor outruns it, which
-   * is what the old document-level mousemove listener was working around.
-   */
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    const rect = panelRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  }, []);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    const offset = dragOffset.current;
-    if (!offset) return;
-    setPosition({
-      x: Math.max(0, Math.min(e.clientX - offset.x, window.innerWidth - 24)),
-      y: Math.max(0, Math.min(e.clientY - offset.y, window.innerHeight - 24)),
-    });
-  }, []);
-
-  const endDrag = useCallback(() => {
-    dragOffset.current = null;
-  }, []);
-
-  // Keep the panel reachable when the window shrinks under it
-  useEffect(() => {
-    const onResize = () =>
-      setPosition((prev) => ({
-        x: Math.max(0, Math.min(prev.x, window.innerWidth - 24)),
-        y: Math.max(0, Math.min(prev.y, window.innerHeight - 24)),
-      }));
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const showNeo = section !== "extras";
   const showExtras = section !== "neo";
 
   return (
-    <div
-      ref={panelRef}
-      className={`${NEO_PANEL} fixed flex w-max flex-col shadow-lg`}
-      style={{ left: `${position.x}px`, top: `${position.y}px` }}
+    <NeoWindow
+      initialPosition={initialPosition ?? { x: 304, y: 70 }}
+      className="w-max"
     >
-      <div
-        className={`${NEO_TITLEBAR} flex touch-none items-center justify-center gap-[3px] cursor-grab active:cursor-grabbing`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-      >
-        <span className="h-[3px] w-[3px] rounded-full bg-white/70" />
-        <span className="h-[3px] w-[3px] rounded-full bg-white/70" />
-        <span className="h-[3px] w-[3px] rounded-full bg-white/70" />
-      </div>
-
       <div className="flex flex-col gap-[2px] p-[2px]">
         {showNeo && (
           <NeoToolColumn
@@ -294,6 +239,34 @@ export const ToolboxPanel = ({
               <Icon icon="material-symbols:flip" width={14} height={14} />
             </button>
 
+            {/*
+              Light and dark. The palette follows the OS on its own, so this
+              is for wanting the painter dark on a light desktop or the other
+              way round -- and it is in this panel because NEO has no such
+              thing to reproduce.
+            */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={theme === "dark" ? t`Switch to light` : t`Switch to dark`}
+              className={`${NEO_ICON_BUTTON} flex w-full items-center justify-center gap-[3px]`}
+            >
+              <Icon
+                icon={
+                  theme === "dark"
+                    ? "material-symbols:light-mode"
+                    : "material-symbols:dark-mode"
+                }
+                width={12}
+                height={12}
+              />
+              {/* Labelled, not just an icon: as the ninth glyph in a stack of
+                  identical buttons it was effectively invisible. */}
+              <span className="text-[10px] leading-none">
+                {theme === "dark" ? <Trans>Light</Trans> : <Trans>Dark</Trans>}
+              </span>
+            </button>
+
             {isOwner && (
               <button
                 type="button"
@@ -319,6 +292,6 @@ export const ToolboxPanel = ({
           </div>
         )}
       </div>
-    </div>
+    </NeoWindow>
   );
 };
