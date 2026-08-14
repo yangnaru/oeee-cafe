@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
 
+const CURSOR_IDLE_MS = 1500;
+const CURSOR_FADE_MS = 300;
+
 const cursorColor = (username: string): string => {
   let hash = 5381;
   for (const character of username) {
@@ -34,7 +37,10 @@ export const useRemoteCursors = (
     const previousTimer = removalTimersRef.current.get(userId);
     if (previousTimer !== undefined) window.clearTimeout(previousTimer);
     cursor.style.opacity = "0";
-    removalTimersRef.current.set(userId, window.setTimeout(() => removeCursor(userId), 300));
+    removalTimersRef.current.set(
+      userId,
+      window.setTimeout(() => removeCursor(userId), CURSOR_FADE_MS),
+    );
   }, [removeCursor]);
 
   const createOrUpdateCursor = useCallback((
@@ -72,7 +78,11 @@ export const useRemoteCursors = (
     cursor.style.left = `${x}px`;
     cursor.style.top = `${y}px`;
     cursor.style.opacity = "1";
-  }, [localSessionIdRef, painterRootRef]);
+    removalTimersRef.current.set(
+      userId,
+      window.setTimeout(() => hideCursor(userId), CURSOR_IDLE_MS),
+    );
+  }, [hideCursor, localSessionIdRef, painterRootRef]);
 
   const clearCursors = useCallback(() => {
     for (const timer of removalTimersRef.current.values()) window.clearTimeout(timer);
