@@ -24,6 +24,15 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 6379:6379
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,6 +53,13 @@ jobs:
         run: cargo sqlx prepare
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/oeee_cafe
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
+      - name: Test collaboration protocol
+        run: cargo test protocol_integration_tests --lib
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/oeee_cafe
+          OEEE_TEST_REDIS_URL: redis://localhost:6379/
           SCCACHE_GHA_ENABLED: "true"
           RUSTC_WRAPPER: "sccache"
       - uses: docker/setup-buildx-action@v3

@@ -432,9 +432,10 @@ async fn setup_connection_atomically(
     connection_info
 }
 
-// Wraps a history message in the [0x0A][seq: 8 bytes LE][payload] envelope so
-// clients can track their position in the canonical history.
-fn wrap_sequenced(history_id: Uuid, seq: u64, payload: &[u8]) -> Vec<u8> {
+// Wraps a history message in
+// [0x0A][history UUID: 16 bytes][seq: 8 bytes LE][payload], so clients only
+// compare positions that belong to the same canonical history.
+pub(super) fn wrap_sequenced(history_id: Uuid, seq: u64, payload: &[u8]) -> Vec<u8> {
     let mut buf = Vec::with_capacity(25 + payload.len());
     buf.push(messages::MessageType::Sequenced as u8);
     buf.extend_from_slice(history_id.as_bytes());
@@ -741,14 +742,7 @@ async fn parse_reset_begin(data: &[u8], ctx: &SessionContext<'_>) -> Option<Pend
 }
 
 async fn finish_reset(ctx: &SessionContext<'_>, reset: PendingReset) {
-    let valid_layers = reset.payloads.len() == 2
-        && reset.payloads.iter().all(|payload| {
-            payload.len() >= 3
-                && payload[0] == messages::MessageType::Snapshot as u8
-                && (payload[2] == 0 || payload[2] == 1)
-        })
-        && reset.payloads[0][2] != reset.payloads[1][2];
-    if !valid_layers {
+    if !valid_reset_payloads(&reset.payloads) {
         warn!(
             "Rejecting malformed reset snapshots from connection {} in room {}",
             ctx.connection_id, ctx.room_uuid
@@ -802,6 +796,16 @@ async fn finish_reset(ctx: &SessionContext<'_>, reset: PendingReset) {
             ctx.room_uuid, e
         );
     }
+}
+
+pub(super) fn valid_reset_payloads(payloads: &[Vec<u8>]) -> bool {
+    payloads.len() == 2
+        && payloads.iter().all(|payload| {
+            payload.len() >= 3
+                && payload[0] == messages::MessageType::Snapshot as u8
+                && (payload[2] == 0 || payload[2] == 1)
+        })
+        && payloads[0][2] != payloads[1][2]
 }
 
 async fn maybe_request_reset(ctx: &SessionContext<'_>) {
