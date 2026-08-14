@@ -15,6 +15,23 @@ export type {
 } from "./operations";
 
 /**
+ * NEO's chrome as class names, for controls the host renders beside the
+ * painter. They name rules carried by `neo-cucumber/style.css`; see
+ * `./styles` for what each one is.
+ */
+export {
+  NEO_BUTTON,
+  NEO_BUTTON_ON,
+  NEO_FIELD,
+  NEO_ICON_BUTTON,
+  NEO_KBD,
+  NEO_PANEL,
+  NEO_PANEL_BUTTON,
+  NEO_TITLEBAR,
+  NEO_WELL,
+} from "./styles";
+
+/**
  * Public API for neo-cucumber.
  *
  * This file is deliberately host- and framework-neutral. It is the contract

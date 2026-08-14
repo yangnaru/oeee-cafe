@@ -21,6 +21,10 @@ msgstr "验证失败"
 msgid "by"
 msgstr "作者:"
 
+#: ../frontend/collaborate/App.tsx:547
+msgid "Chat"
+msgstr "聊天"
+
 #: ../frontend/collaborate/components/SessionHeader.tsx:71
 msgid "Connected"
 msgstr "已连接"
@@ -29,11 +33,12 @@ msgstr "已连接"
 msgid "Connecting"
 msgstr "连接中"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:58
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:34
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:75
 msgid "Connecting..."
 msgstr "连接中..."
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:36
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:53
 msgid "Connection lost. Your work is saved locally."
 msgstr "连接丢失。您的作品已本地保存。"
 
@@ -41,7 +46,7 @@ msgstr "连接丢失。您的作品已本地保存。"
 msgid "Disconnected"
 msgstr "已断开"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:49
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:66
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:142
 msgid "Download PNG"
 msgstr "下载 PNG"
@@ -67,21 +72,22 @@ msgstr "正在初始化协作会话..."
 msgid "Loading"
 msgstr "加载中"
 
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:34
 #: ../frontend/collaborate/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
 msgstr "加载中..."
 
 #: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
-msgid "LOADING..."
-msgstr "加载中..."
+#~ msgid "LOADING..."
+#~ msgstr "加载中..."
 
 #. placeholder {0}: participants.size
-#: ../frontend/collaborate/components/Chat.tsx:173
-#: ../frontend/collaborate/components/Chat.tsx:174
+#: ../frontend/collaborate/components/Chat.tsx:195
+#: ../frontend/collaborate/components/Chat.tsx:196
 msgid "Participants ({0})"
 msgstr ""
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:43
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:60
 msgid "Reconnect"
 msgstr "重新连接"
 
@@ -106,7 +112,7 @@ msgstr "保存到画廊"
 msgid "Saving..."
 msgstr "保存中..."
 
-#: ../frontend/collaborate/components/Chat.tsx:251
+#: ../frontend/collaborate/components/Chat.tsx:278
 msgid "Send"
 msgstr "发送"
 
@@ -125,6 +131,10 @@ msgstr "会话即将结束。正在保存绘画到画廊..."
 #: ../frontend/collaborate/components/SessionHeader.tsx:66
 msgid "Share"
 msgstr "分享"
+
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:52
+msgid "The shared drawing could not be synchronized safely. Your current canvas is still available to download."
+msgstr ""
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
@@ -146,7 +156,7 @@ msgstr "此会话已保存。您只能将其下载为 PNG。"
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "此会话已满（{currentUserCount}/{maxUsers} 位用户）。只有前 {maxUsers} 位用户可以加入会话。"
 
-#: ../frontend/collaborate/components/Chat.tsx:242
+#: ../frontend/collaborate/components/Chat.tsx:269
 msgid "Type a message..."
 msgstr "输入消息..."
 

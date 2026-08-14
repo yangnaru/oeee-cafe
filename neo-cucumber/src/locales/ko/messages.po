@@ -28,12 +28,12 @@ msgid "Color"
 msgstr "색상"
 
 #: src/components/SimplifiedToolbox.tsx:195
-#: src/components/ToolboxPanel.tsx:289
+#: src/components/ToolboxPanel.tsx:290
 msgid "Dark"
 msgstr "다크"
 
-#: src/components/ToolboxPanel.tsx:156
 #: src/components/ToolboxPanel.tsx:157
+#: src/components/ToolboxPanel.tsx:158
 msgid "Fit canvas"
 msgstr ""
 
@@ -44,7 +44,7 @@ msgid "Foreground pen"
 msgstr "전경색 펜"
 
 #: src/components/SimplifiedToolbox.tsx:195
-#: src/components/ToolboxPanel.tsx:289
+#: src/components/ToolboxPanel.tsx:290
 msgid "Light"
 msgstr "라이트"
 
@@ -56,14 +56,14 @@ msgstr "끄기"
 msgid "Pen size"
 msgstr "펜 크기"
 
-#: src/components/ToolboxPanel.tsx:218
 #: src/components/ToolboxPanel.tsx:219
+#: src/components/ToolboxPanel.tsx:220
 msgid "Pick a colour"
 msgstr "색 선택"
 
 #: src/components/SimplifiedToolbox.tsx:66
 #: src/components/SimplifiedToolbox.tsx:176
-#: src/components/ToolboxPanel.tsx:258
+#: src/components/ToolboxPanel.tsx:259
 msgid "Redo"
 msgstr "다시 실행"
 
@@ -71,15 +71,15 @@ msgstr "다시 실행"
 msgid "Remaining: {remaining}"
 msgstr "남은 시간: {remaining}"
 
-#: src/components/ToolboxPanel.tsx:187
+#: src/components/ToolboxPanel.tsx:188
 msgid "Reset zoom"
 msgstr "확대 초기화"
 
-#: src/components/ToolboxPanel.tsx:310
+#: src/components/ToolboxPanel.tsx:311
 msgid "Save"
 msgstr "저장"
 
-#: src/components/ToolboxPanel.tsx:298
+#: src/components/ToolboxPanel.tsx:299
 msgid "Save drawing to gallery"
 msgstr "그림을 갤러리에 저장"
 
@@ -92,16 +92,16 @@ msgid "Swap pens"
 msgstr "펜 전환"
 
 #: src/components/SimplifiedToolbox.tsx:183
-#: src/components/ToolboxPanel.tsx:274
+#: src/components/ToolboxPanel.tsx:275
 msgid "Switch to dark"
 msgstr "다크 모드로 전환"
 
 #: src/components/SimplifiedToolbox.tsx:183
-#: src/components/ToolboxPanel.tsx:274
+#: src/components/ToolboxPanel.tsx:275
 msgid "Switch to light"
 msgstr "라이트 모드로 전환"
 
-#: src/Painter.tsx:589
+#: src/Painter.tsx:622
 msgid "Time's up."
 msgstr "설정한 시간이 지났습니다."
 
@@ -113,20 +113,20 @@ msgstr "타이머"
 msgid "Timer off"
 msgstr "타이머 꺼짐"
 
-#: src/components/ToolboxPanel.tsx:200
+#: src/components/ToolboxPanel.tsx:201
 msgid "Toggle horizontal flip"
 msgstr "좌우 반전 전환"
 
 #: src/components/SimplifiedToolbox.tsx:65
 #: src/components/SimplifiedToolbox.tsx:168
-#: src/components/ToolboxPanel.tsx:249
+#: src/components/ToolboxPanel.tsx:250
 msgid "Undo"
 msgstr "실행 취소"
 
-#: src/components/ToolboxPanel.tsx:179
+#: src/components/ToolboxPanel.tsx:180
 msgid "Zoom in"
 msgstr "확대"
 
-#: src/components/ToolboxPanel.tsx:171
+#: src/components/ToolboxPanel.tsx:172
 msgid "Zoom out"
 msgstr "축소"

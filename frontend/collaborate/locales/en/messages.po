@@ -21,6 +21,10 @@ msgstr "Authentication Failed"
 msgid "by"
 msgstr "by"
 
+#: ../frontend/collaborate/App.tsx:547
+msgid "Chat"
+msgstr "Chat"
+
 #: ../frontend/collaborate/components/SessionHeader.tsx:71
 msgid "Connected"
 msgstr "Connected"
@@ -29,11 +33,12 @@ msgstr "Connected"
 msgid "Connecting"
 msgstr "Connecting"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:58
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:34
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:75
 msgid "Connecting..."
 msgstr "Connecting..."
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:36
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:53
 msgid "Connection lost. Your work is saved locally."
 msgstr "Connection lost. Your work is saved locally."
 
@@ -41,7 +46,7 @@ msgstr "Connection lost. Your work is saved locally."
 msgid "Disconnected"
 msgstr "Disconnected"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:49
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:66
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:142
 msgid "Download PNG"
 msgstr "Download PNG"
@@ -67,21 +72,22 @@ msgstr "Initializing collaboration session..."
 msgid "Loading"
 msgstr "Loading"
 
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:34
 #: ../frontend/collaborate/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
 msgstr "Loading..."
 
 #: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
-msgid "LOADING..."
-msgstr "LOADING..."
+#~ msgid "LOADING..."
+#~ msgstr "LOADING..."
 
 #. placeholder {0}: participants.size
-#: ../frontend/collaborate/components/Chat.tsx:173
-#: ../frontend/collaborate/components/Chat.tsx:174
+#: ../frontend/collaborate/components/Chat.tsx:195
+#: ../frontend/collaborate/components/Chat.tsx:196
 msgid "Participants ({0})"
 msgstr "Participants ({0})"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:43
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:60
 msgid "Reconnect"
 msgstr "Reconnect"
 
@@ -106,7 +112,7 @@ msgstr "Save to Gallery"
 msgid "Saving..."
 msgstr "Saving..."
 
-#: ../frontend/collaborate/components/Chat.tsx:251
+#: ../frontend/collaborate/components/Chat.tsx:278
 msgid "Send"
 msgstr "Send"
 
@@ -125,6 +131,10 @@ msgstr "Session is ending. The drawing is being saved to the gallery..."
 #: ../frontend/collaborate/components/SessionHeader.tsx:66
 msgid "Share"
 msgstr "Share"
+
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:52
+msgid "The shared drawing could not be synchronized safely. Your current canvas is still available to download."
+msgstr "The shared drawing could not be synchronized safely. Your current canvas is still available to download."
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
@@ -146,7 +156,7 @@ msgstr "This session has already been saved. You can only download it as a PNG."
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 
-#: ../frontend/collaborate/components/Chat.tsx:242
+#: ../frontend/collaborate/components/Chat.tsx:269
 msgid "Type a message..."
 msgstr "Type a message..."
 

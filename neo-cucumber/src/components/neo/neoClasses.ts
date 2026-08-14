@@ -220,6 +220,43 @@ const BUTTON_FACE =
 export const NEO_BUTTON = BUTTON_FACE + " px-[6px] py-[2px]";
 
 /**
+ * The bevel run backwards, so a surface reads as cut into the panel rather
+ * than raised off it.
+ *
+ * NEO has no sunken widget to copy -- the only thing it lets you type into is
+ * nothing at all, and its bars carry their own ring instead. This is the same
+ * four colours the panel uses, swapped corner for corner, which is what makes
+ * a field belong to the panel it sits on rather than merely sit near it.
+ */
+const SUNKEN =
+  "border-t border-l border-t-(--neo-panel-shadow) border-l-(--neo-panel-shadow) " +
+  "border-r border-b border-r-(--neo-bevel-light) border-b-(--neo-bevel-light)";
+
+/**
+ * The colour input, sized to the column. NEO has no colour picker at all --
+ * its swatches and RGBA sliders are the picker -- so this only ever appears
+ * in our own panel.
+ */
+export const NEO_COLOR_INPUT =
+  "block h-[18px] w-full cursor-pointer rounded-none p-0 " +
+  SUNKEN +
+  " [&::-webkit-color-swatch-wrapper]:p-[1px] " +
+  "[&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none";
+
+/**
+ * Somewhere to type: sunken, on the page ground rather than the panel face.
+ *
+ * The caret cursor is set here rather than left to the browser because
+ * `cursor` inherits and NEO_PANEL sets it: a field on a NEO panel that did not
+ * say otherwise would show the panel's arrow over its own text.
+ */
+export const NEO_FIELD =
+  SUNKEN + " bg-(--neo-bk) text-(--neo-text) rounded-none cursor-text";
+
+/** A sunken surface holding content that scrolls -- a log, a list, a message. */
+export const NEO_WELL = SUNKEN + " bg-(--neo-bk) text-(--neo-text)";
+
+/**
  * A control carrying nothing but an icon.
  *
  * It has no horizontal padding on purpose. A flex item will not shrink below
@@ -230,16 +267,17 @@ export const NEO_BUTTON = BUTTON_FACE + " px-[6px] py-[2px]";
 export const NEO_ICON_BUTTON = BUTTON_FACE + " px-0 py-[2px]";
 
 /**
- * The colour input, sized to the column. NEO has no colour picker at all --
- * its swatches and RGBA sliders are the picker -- so this only ever appears
- * in our own panel.
+ * A control spanning the panel's width, which is the shape the stack under
+ * the colour input is made of.
+ *
+ * It exists as one name rather than as `NEO_ICON_BUTTON` plus four layout
+ * utilities because hosts append to that stack -- the site's Save and Help
+ * buttons are the host's, not the toolbox's -- and a host writing those
+ * utilities out itself is a host whose buttons are only styled for as long as
+ * something inside this package happens to use the same ones.
  */
-export const NEO_COLOR_INPUT =
-  "block h-[18px] w-full cursor-pointer rounded-none p-0 " +
-  "border-t border-l border-t-(--neo-panel-shadow) border-l-(--neo-panel-shadow) " +
-  "border-r border-b border-r-(--neo-bevel-light) border-b-(--neo-bevel-light) " +
-  "[&::-webkit-color-swatch-wrapper]:p-[1px] " +
-  "[&::-webkit-color-swatch]:border-none [&::-moz-color-swatch]:border-none";
+export const NEO_PANEL_BUTTON =
+  NEO_ICON_BUTTON + " flex w-full items-center justify-center gap-[3px]";
 
 /** A control that stays pressed while its setting is on. */
 export const NEO_BUTTON_ON =

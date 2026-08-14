@@ -28,12 +28,12 @@ msgid "Color"
 msgstr "色"
 
 #: src/components/SimplifiedToolbox.tsx:195
-#: src/components/ToolboxPanel.tsx:289
+#: src/components/ToolboxPanel.tsx:290
 msgid "Dark"
 msgstr "ダーク"
 
-#: src/components/ToolboxPanel.tsx:156
 #: src/components/ToolboxPanel.tsx:157
+#: src/components/ToolboxPanel.tsx:158
 msgid "Fit canvas"
 msgstr ""
 
@@ -44,7 +44,7 @@ msgid "Foreground pen"
 msgstr "描画色ペン"
 
 #: src/components/SimplifiedToolbox.tsx:195
-#: src/components/ToolboxPanel.tsx:289
+#: src/components/ToolboxPanel.tsx:290
 msgid "Light"
 msgstr "ライト"
 
@@ -56,14 +56,14 @@ msgstr "オフ"
 msgid "Pen size"
 msgstr "ペンサイズ"
 
-#: src/components/ToolboxPanel.tsx:218
 #: src/components/ToolboxPanel.tsx:219
+#: src/components/ToolboxPanel.tsx:220
 msgid "Pick a colour"
 msgstr "色を選ぶ"
 
 #: src/components/SimplifiedToolbox.tsx:66
 #: src/components/SimplifiedToolbox.tsx:176
-#: src/components/ToolboxPanel.tsx:258
+#: src/components/ToolboxPanel.tsx:259
 msgid "Redo"
 msgstr "やり直し"
 
@@ -71,15 +71,15 @@ msgstr "やり直し"
 msgid "Remaining: {remaining}"
 msgstr "残り: {remaining}"
 
-#: src/components/ToolboxPanel.tsx:187
+#: src/components/ToolboxPanel.tsx:188
 msgid "Reset zoom"
 msgstr "ズームを戻す"
 
-#: src/components/ToolboxPanel.tsx:310
+#: src/components/ToolboxPanel.tsx:311
 msgid "Save"
 msgstr "保存"
 
-#: src/components/ToolboxPanel.tsx:298
+#: src/components/ToolboxPanel.tsx:299
 msgid "Save drawing to gallery"
 msgstr "描画をギャラリーに保存"
 
@@ -92,16 +92,16 @@ msgid "Swap pens"
 msgstr "ペン入れ替え"
 
 #: src/components/SimplifiedToolbox.tsx:183
-#: src/components/ToolboxPanel.tsx:274
+#: src/components/ToolboxPanel.tsx:275
 msgid "Switch to dark"
 msgstr "ダークモードに切り替え"
 
 #: src/components/SimplifiedToolbox.tsx:183
-#: src/components/ToolboxPanel.tsx:274
+#: src/components/ToolboxPanel.tsx:275
 msgid "Switch to light"
 msgstr "ライトモードに切り替え"
 
-#: src/Painter.tsx:589
+#: src/Painter.tsx:622
 msgid "Time's up."
 msgstr "設定時間が経過しました。"
 
@@ -113,20 +113,20 @@ msgstr "タイマー"
 msgid "Timer off"
 msgstr "タイマー：オフ"
 
-#: src/components/ToolboxPanel.tsx:200
+#: src/components/ToolboxPanel.tsx:201
 msgid "Toggle horizontal flip"
 msgstr "左右反転を切り替え"
 
 #: src/components/SimplifiedToolbox.tsx:65
 #: src/components/SimplifiedToolbox.tsx:168
-#: src/components/ToolboxPanel.tsx:249
+#: src/components/ToolboxPanel.tsx:250
 msgid "Undo"
 msgstr "元に戻す"
 
-#: src/components/ToolboxPanel.tsx:179
+#: src/components/ToolboxPanel.tsx:180
 msgid "Zoom in"
 msgstr "拡大"
 
-#: src/components/ToolboxPanel.tsx:171
+#: src/components/ToolboxPanel.tsx:172
 msgid "Zoom out"
 msgstr "縮小"

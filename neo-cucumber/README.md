@@ -41,6 +41,40 @@ The built-in toolbox is an optional maintained preset. Its React components,
 props, drawing state, and callbacks are not part of the public API. Consumers
 that do not request it receive the canvas alone.
 
+## Chrome for host controls
+
+A host renders controls the painter does not own -- a chat panel, a Save
+button, a session header -- and they sit beside the toolbox, where anything
+close to NEO's chrome but not equal to it reads as broken. The package exports
+the chrome as class names so a host can wear it without copying values:
+
+```ts
+import { NEO_PANEL, NEO_TITLEBAR, NEO_PANEL_BUTTON } from "neo-cucumber";
+import "neo-cucumber/style.css";
+
+<div className={`${NEO_PANEL} flex flex-col`}>
+  <div className={NEO_TITLEBAR}>Chat</div>
+  …
+  <button className={NEO_PANEL_BUTTON}>Save</button>
+</div>
+```
+
+`NEO_PANEL`, `NEO_TITLEBAR`, `NEO_BUTTON`, `NEO_ICON_BUTTON`,
+`NEO_PANEL_BUTTON`, `NEO_BUTTON_ON`, `NEO_FIELD`, `NEO_WELL`, and `NEO_KBD`
+are defined in [`src/styles.ts`](src/styles.ts). They name rules carried by
+`neo-cucumber/style.css`, so importing that stylesheet is the whole
+requirement -- a host that does not use Tailwind gets the same chrome, because
+the utilities are already compiled into it. Colours beyond what these names
+cover are available as the `--neo-*` custom properties the same stylesheet
+defines, which follow the light and dark palettes.
+
+A host that does compile its own Tailwind gets the toolbox's utilities from
+the same import: `src/App.css` declares the package's sources itself, so no
+consumer has to name a path inside neo-cucumber. Import it by package
+specifier (`@import "neo-cucumber/style.css"`) rather than by relative path,
+and the CSS reads identically whether it resolves through a workspace alias or
+through an installed package.
+
 ## Contract principles
 
 - No React types in the public interface.
@@ -73,9 +107,10 @@ Run `pnpm dev` and open `/example.html`. The host application has a separate
 Open the example link in another window to draw collaboratively through its
 in-browser canonical sequencer; a `?room=` query parameter selects the room.
 
-The package exposes only `neo-cucumber` and `neo-cucumber/style.css`. React and
-React DOM are peer dependencies; private canvas and toolbox modules are not
-package exports.
+The package exposes only `neo-cucumber` -- the painter lifecycle, the
+transport-neutral operation types, and the chrome class names -- and
+`neo-cucumber/style.css`. React and React DOM are peer dependencies; private
+canvas and toolbox modules are not package exports.
 
 ## Collaborative consumers
 

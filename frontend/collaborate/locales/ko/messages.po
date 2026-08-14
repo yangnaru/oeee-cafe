@@ -21,6 +21,10 @@ msgstr "인증 실패"
 msgid "by"
 msgstr "작성자:"
 
+#: ../frontend/collaborate/App.tsx:547
+msgid "Chat"
+msgstr "채팅"
+
 #: ../frontend/collaborate/components/SessionHeader.tsx:71
 msgid "Connected"
 msgstr "연결됨"
@@ -29,11 +33,12 @@ msgstr "연결됨"
 msgid "Connecting"
 msgstr "연결 중"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:58
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:34
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:75
 msgid "Connecting..."
 msgstr "연결 중..."
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:36
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:53
 msgid "Connection lost. Your work is saved locally."
 msgstr "연결이 끊어졌습니다. 작업이 로컬에 저장되었습니다."
 
@@ -41,7 +46,7 @@ msgstr "연결이 끊어졌습니다. 작업이 로컬에 저장되었습니다.
 msgid "Disconnected"
 msgstr "연결 끊어짐"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:49
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:66
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:142
 msgid "Download PNG"
 msgstr "PNG 다운로드"
@@ -67,21 +72,22 @@ msgstr "협업 세션 초기화 중..."
 msgid "Loading"
 msgstr "로딩 중"
 
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:34
 #: ../frontend/collaborate/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
 msgstr "로딩 중..."
 
 #: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
-msgid "LOADING..."
-msgstr "로딩 중..."
+#~ msgid "LOADING..."
+#~ msgstr "로딩 중..."
 
 #. placeholder {0}: participants.size
-#: ../frontend/collaborate/components/Chat.tsx:173
-#: ../frontend/collaborate/components/Chat.tsx:174
+#: ../frontend/collaborate/components/Chat.tsx:195
+#: ../frontend/collaborate/components/Chat.tsx:196
 msgid "Participants ({0})"
 msgstr ""
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:43
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:60
 msgid "Reconnect"
 msgstr "재연결"
 
@@ -106,7 +112,7 @@ msgstr "갤러리에 저장"
 msgid "Saving..."
 msgstr "저장 중..."
 
-#: ../frontend/collaborate/components/Chat.tsx:251
+#: ../frontend/collaborate/components/Chat.tsx:278
 msgid "Send"
 msgstr "전송"
 
@@ -125,6 +131,10 @@ msgstr "세션이 종료됩니다. 그림을 갤러리에 저장 중..."
 #: ../frontend/collaborate/components/SessionHeader.tsx:66
 msgid "Share"
 msgstr "공유"
+
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:52
+msgid "The shared drawing could not be synchronized safely. Your current canvas is still available to download."
+msgstr ""
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
@@ -146,7 +156,7 @@ msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 �
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "이 세션이 가득 찼습니다 ({currentUserCount}/{maxUsers}명). 처음 {maxUsers}명의 사용자만 세션에 참여할 수 있습니다."
 
-#: ../frontend/collaborate/components/Chat.tsx:242
+#: ../frontend/collaborate/components/Chat.tsx:269
 msgid "Type a message..."
 msgstr "메시지 입력..."
 

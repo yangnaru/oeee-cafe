@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { NEO_BUTTON, NEO_FIELD, NEO_WELL } from "neo-cucumber";
 import { encodeChat } from "../binaryProtocol";
 import { Trans, useLingui } from "@lingui/react/macro";
 
@@ -11,8 +12,6 @@ const getUserColors = (username: string) => {
     backgroundColor: `hsl(${hue}, 75%, 35%)`,
   };
 };
-
-const CHAT_BUTTON = "border border-main bg-main px-[6px] py-[2px] text-main active:translate-y-px";
 
 interface ChatMessage {
   id: string;
@@ -61,14 +60,22 @@ export const Chat = ({
   const [inputValue, setInputValue] = useState("");
   const [isComposing, setIsComposing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  /*
+   * Auto-scroll to bottom when new messages arrive.
+   *
+   * Scroll the log itself rather than asking the browser to bring the last
+   * message into view: scrollIntoView walks every scrollable ancestor, so a
+   * new message -- or the focus that follows sending one -- dragged the page
+   * down with it and took the canvas along.
+   */
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const element = messagesRef.current;
+    if (!element) return;
+    element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
   }, []);
 
   // Handle incoming chat messages
@@ -115,7 +122,10 @@ export const Chat = ({
       ws.send(binaryMessage);
 
       setInputValue("");
-      inputRef.current?.focus();
+      // Keep the caret in the box without letting the browser scroll the page
+      // to put it there: the box has not moved, and the painter behind it must
+      // not either.
+      inputRef.current?.focus({ preventScroll: true });
     } catch (error) {
       console.error("Failed to send chat message:", error);
     }
@@ -145,12 +155,12 @@ export const Chat = ({
 
   // Handle input focus for mobile
   const handleInputFocus = useCallback(() => {
-    // Scroll input into view on mobile after a brief delay to allow keyboard to appear
+    // Give the soft keyboard time to appear, then move the input only if it
+    // ended up out of view. `center` moved something on every focus, and
+    // sending a message focuses the input again -- which is how typing in the
+    // chat scrolled the whole app down.
     setTimeout(() => {
-      inputRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
+      inputRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
     }, 300);
   }, []);
 
@@ -195,7 +205,7 @@ export const Chat = ({
             <span
               title={t`Participants (${participants.size})`}
               aria-label={t`Participants (${participants.size})`}
-              className="border border-main px-[3px] text-[11px] leading-[14px]"
+              className={`${NEO_WELL} px-[3px] text-[11px] leading-[14px]`}
             >
               {participants.size}
             </span>
@@ -211,7 +221,7 @@ export const Chat = ({
                 </div>
               ))}
           </div>
-          <div ref={messagesRef} onScroll={handleMessagesScroll} className="relative min-h-0 flex-1 overflow-y-auto border border-main bg-main p-[3px] text-[11px] leading-[15px]">
+          <div ref={messagesRef} onScroll={handleMessagesScroll} className={`${NEO_WELL} relative min-h-0 flex-1 overflow-y-auto p-[3px] text-[11px] leading-[15px]`}>
             <div>
               {messages.map((msg) => (
                 <div
@@ -221,7 +231,7 @@ export const Chat = ({
                     msg.type === "join" ||
                     msg.type === "leave"
                       ? "mb-[1px]"
-                      : "border-b border-main"
+                      : "border-b border-(--neo-bk2)"
                   } last:border-b-0`}
                 >
                   {msg.type === "system" ||
@@ -249,10 +259,9 @@ export const Chat = ({
                   )}
                 </div>
               ))}
-              <div ref={messagesEndRef} />
             </div>
             {unreadCount > 0 && (
-              <button type="button" onClick={showNewestMessages} className="sticky bottom-1 left-1/2 -translate-x-1/2 border border-main bg-main px-2 py-1 text-[11px] shadow">
+              <button type="button" onClick={showNewestMessages} className={`${NEO_BUTTON} sticky bottom-1 left-1/2 -translate-x-1/2 text-[11px] shadow`}>
                 {unreadCount} new {unreadCount === 1 ? "message" : "messages"}
               </button>
             )}
@@ -269,12 +278,12 @@ export const Chat = ({
               onFocus={handleInputFocus}
               placeholder={t`Type a message...`}
               maxLength={500}
-              className="min-w-0 flex-1 border border-main bg-main px-[3px] py-[2px] text-[11px] leading-[14px] font-sans text-main focus:outline-2 focus:outline-highlight focus:-outline-offset-2"
+              className={`${NEO_FIELD} min-w-0 flex-1 px-[3px] py-[2px] text-[11px] leading-[14px] font-sans focus:outline-2 focus:outline-(--neo-icon-select) focus:-outline-offset-2`}
             />
             <button
               onClick={sendMessage}
               disabled={connectionState !== "connected" || !inputValue.trim()}
-              className={`${CHAT_BUTTON} shrink-0 px-[5px] py-[2px] text-[11px] font-sans disabled:cursor-not-allowed`}
+              className={`${NEO_BUTTON} shrink-0 px-[5px] py-[2px] text-[11px] font-sans disabled:cursor-not-allowed`}
             >
               <Trans>Send</Trans>
             </button>

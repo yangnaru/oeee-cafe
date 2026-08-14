@@ -6,7 +6,9 @@
     "dist-lib/neo-cucumber.js",
     "dist-lib/style.css",
     "dist-lib/types/public.d.ts",
-    "dist-lib/types/operations.d.ts"
+    "dist-lib/types/operations.d.ts",
+    "dist-lib/types/styles.d.ts",
+    "dist-lib/types/components/neo/neoClasses.d.ts"
   ],
   "main": "./dist-lib/neo-cucumber.js",
   "types": "./dist-lib/types/public.d.ts",

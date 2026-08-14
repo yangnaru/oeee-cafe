@@ -12,9 +12,18 @@ export default defineConfig({
     "process.env.NODE_ENV": JSON.stringify("production"),
   },
   resolve: {
-    alias: {
-      "neo-cucumber": resolve(import.meta.dirname, "src/public.ts"),
-    },
+    // Exact patterns, not prefixes: a bare string alias for "neo-cucumber"
+    // also rewrites "neo-cucumber/style.css" into a path that does not exist.
+    alias: [
+      {
+        find: /^neo-cucumber$/,
+        replacement: resolve(import.meta.dirname, "src/public.ts"),
+      },
+      {
+        find: /^neo-cucumber\/style\.css$/,
+        replacement: resolve(import.meta.dirname, "src/App.css"),
+      },
+    ],
   },
   plugins: [
     react({ plugins: [["@lingui/swc-plugin", {}]] }),

@@ -1,8 +1,12 @@
 import {
   mount,
+  NEO_PANEL_BUTTON,
   type PainterMode,
   type PainterHandle,
 } from "neo-cucumber";
+// The chrome this adapter borrows below lives in the package's stylesheet,
+// which a library build keeps out of the JavaScript bundle.
+import "neo-cucumber/style.css";
 
 interface OeeePainterConfig {
   width: number;
@@ -139,24 +143,23 @@ function movePageActionsIntoExtraToolbox(): void {
   const helpButton = painterRoot.querySelector<HTMLButtonElement>(
     'button[aria-label="Keyboard shortcuts"]',
   );
-  const toolboxButton =
-    extraTools?.querySelector<HTMLButtonElement>("button.w-full");
-  if (!extraTools || !helpButton || !toolboxButton) {
+  if (!extraTools || !helpButton) {
     throw new Error("Oeee painter could not find the extra toolbox actions");
   }
 
-  // Reuse neo-cucumber's own full-width toolbox styling without changing its
-  // public API or moving React-owned DOM. The proxy activates the original
-  // hidden Help button, which keeps React's tree intact when the dialog opens.
+  // neo-cucumber publishes the chrome its own panel buttons wear, so these
+  // match without copying values or reading them off a rendered button. The
+  // proxy activates the original hidden Help button, which keeps React's tree
+  // intact when the dialog opens.
   const helpProxy = document.createElement("button");
   helpProxy.type = "button";
-  helpProxy.className = toolboxButton.className;
+  helpProxy.className = NEO_PANEL_BUTTON;
   helpProxy.textContent = "Help";
   helpProxy.title = helpButton.title;
   helpProxy.setAttribute("aria-label", helpButton.getAttribute("aria-label") ?? "Help");
   helpProxy.addEventListener("click", () => helpButton.click());
   helpButton.hidden = true;
-  pageSaveButton.className = toolboxButton.className;
+  pageSaveButton.className = NEO_PANEL_BUTTON;
   pageSaveButton.removeAttribute("style");
   extraTools.append(helpProxy, pageSaveButton);
 }

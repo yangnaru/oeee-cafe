@@ -1,6 +1,23 @@
 @import "tailwindcss";
 
 /*
+ * Where this library's own class names live.
+ *
+ * Tailwind emits a utility only after it has seen the name written out in
+ * some source file it scans, and it scans outward from whichever CSS file is
+ * the entry point -- which, in an app that imports this stylesheet, is the
+ * app's own CSS, sitting somewhere else entirely. Without this line the
+ * toolbox renders in a consuming app with every one of its utilities missing,
+ * and each host has to repeat neo-cucumber's source path in its own CSS to
+ * put them back. Declaring the sources here means importing this file is
+ * enough, and that the path is written once, in the package that owns it.
+ *
+ * A published build needs none of this: `dist-lib/style.css` is the compiled
+ * result, so a host that never runs Tailwind still gets the same chrome.
+ */
+@source ".";
+
+/*
  * The palette, taken from PaintBBS NEO.
  *
  * Light is NEO's own configuration verbatim -- these are the values a running

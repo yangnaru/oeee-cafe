@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Trans } from "@lingui/react/macro";
 import {
   mount,
+  NEO_PANEL,
+  NEO_PANEL_BUTTON,
+  NEO_TITLEBAR,
   type CanonicalPainterOperation,
   type LocalPainterOperation,
   type PainterCheckpoint,
@@ -476,16 +480,14 @@ export default function App() {
         'input[type="color"]',
       );
       const extraTools = colorInput?.parentElement;
-      const toolboxButton =
-        extraTools?.querySelector<HTMLButtonElement>("button.w-full");
       helpButton = painterElement.querySelector<HTMLButtonElement>(
         'button[aria-label="Keyboard shortcuts"]',
       );
-      if (!extraTools || !toolboxButton || !helpButton) return;
+      if (!extraTools || !helpButton) return;
 
       helpProxy = document.createElement("button");
       helpProxy.type = "button";
-      helpProxy.className = toolboxButton.className;
+      helpProxy.className = NEO_PANEL_BUTTON;
       helpProxy.textContent = "Help";
       helpProxy.title = helpButton.title;
       helpProxy.setAttribute(
@@ -499,7 +501,7 @@ export default function App() {
       if (isOwner && saveButton) {
         proxy = document.createElement("button");
         proxy.type = "button";
-        proxy.className = toolboxButton.className;
+        proxy.className = NEO_PANEL_BUTTON;
         proxy.textContent = saveButton.textContent;
         proxy.disabled = saveButton.disabled;
         proxy.addEventListener("click", () => saveButton.click());
@@ -534,7 +536,16 @@ export default function App() {
       <RoomFullModal isOpen={!!roomFullError} currentUserCount={roomFullError?.currentUserCount ?? 0} maxUsers={roomFullError?.maxUsers ?? 0} onGoToLobby={() => { location.href = "/collaborate"; }} onRetry={() => location.reload()} />
       {canvasMeta && <SessionHeader canvasMeta={canvasMeta} connectionState={connectionState} isCatchingUp={isCatchingUp} />}
       <div className="relative flex-1 overflow-hidden">
-        <div className="absolute left-4 top-4 z-40 h-[469px] w-56 resize overflow-auto border border-main bg-main">
+        {/*
+          The chat is the toolbox's neighbour, so it is one of the painter's
+          own panels: the same face, the same bevel, the same title strip.
+          Those come from neo-cucumber rather than from a copy of its values
+          kept here, which is the only version of this that stays true.
+        */}
+        <div className={`${NEO_PANEL} absolute left-4 top-4 z-40 flex h-[469px] w-56 resize flex-col overflow-hidden`}>
+          <div className={`${NEO_TITLEBAR} shrink-0 px-[4px] text-[11px] leading-[14px]`}>
+            <Trans>Chat</Trans>
+          </div>
           <Chat wsRef={wsRef} userId={userIdRef.current} participants={participants} connectionState={connectionState} onChatMessage={() => {}} onAddMessage={(add) => { chatAddMessageRef.current = add; }} />
         </div>
         <div ref={painterElementRef} className="h-full w-full" />

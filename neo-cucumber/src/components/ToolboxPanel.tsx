@@ -6,6 +6,7 @@ import {
   NEO_BUTTON_ON,
   NEO_COLOR_INPUT,
   NEO_ICON_BUTTON,
+  NEO_PANEL_BUTTON,
 } from "./neo/neoClasses";
 import { NeoWindow } from "./neo/NeoWindow";
 import { useTheme } from "../hooks/useTheme";
@@ -272,7 +273,7 @@ export const ToolboxPanel = ({
               type="button"
               onClick={toggleTheme}
               title={theme === "dark" ? t`Switch to light` : t`Switch to dark`}
-              className={`${NEO_ICON_BUTTON} flex w-full items-center justify-center gap-[3px]`}
+              className={NEO_PANEL_BUTTON}
             >
               <Icon
                 icon={
@@ -296,7 +297,7 @@ export const ToolboxPanel = ({
                 onClick={onSaveCollaborativeDrawing}
                 disabled={isSaving || sessionEnded}
                 title={t`Save drawing to gallery`}
-                className={`${NEO_ICON_BUTTON} flex w-full items-center justify-center`}
+                className={NEO_PANEL_BUTTON}
               >
                 {isSaving ? (
                   <Icon

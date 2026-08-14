@@ -1,3 +1,14 @@
-@import "../../neo-cucumber/src/App.css";
+/*
+ * The painter's stylesheet is this app's stylesheet: it pulls in Tailwind,
+ * NEO's palette, and the utilities the toolbox and its chrome are built from,
+ * and it declares its own sources, so nothing here has to know where the
+ * package keeps them. This app only declares its own.
+ *
+ * It is imported by package specifier rather than by relative path so that
+ * this file says the same thing whether neo-cucumber resolves to the source
+ * next door or to an installed package. In this repository the resolution is
+ * an alias in the Vite config; after publication it is `exports` in
+ * neo-cucumber's package.json, which already names the same entry.
+ */
+@import "neo-cucumber/style.css";
 @source ".";
-@source "../../neo-cucumber/src";

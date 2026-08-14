@@ -11,11 +11,27 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 
 export default defineConfig({
   resolve: {
-    alias: {
-      "neo-cucumber/internal": path.resolve(import.meta.dirname, "src"),
-      react: path.resolve(import.meta.dirname, "node_modules/react"),
-      "react-dom": path.resolve(import.meta.dirname, "node_modules/react-dom"),
-    },
+    alias: [
+      {
+        find: "neo-cucumber/internal",
+        replacement: path.resolve(import.meta.dirname, "src"),
+      },
+      // The host applications under ../frontend are tested from here, and they
+      // import the package the way a published consumer would.
+      {
+        find: /^neo-cucumber$/,
+        replacement: path.resolve(import.meta.dirname, "src/public.ts"),
+      },
+      {
+        find: /^neo-cucumber\/style\.css$/,
+        replacement: path.resolve(import.meta.dirname, "src/App.css"),
+      },
+      { find: "react", replacement: path.resolve(import.meta.dirname, "node_modules/react") },
+      {
+        find: "react-dom",
+        replacement: path.resolve(import.meta.dirname, "node_modules/react-dom"),
+      },
+    ],
   },
   // Tailwind too: component tests render the real components, and without it
   // they render unstyled -- which quietly turns any assertion about layout or
