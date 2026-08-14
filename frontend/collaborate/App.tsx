@@ -36,6 +36,10 @@ import { useWebSocket, type ConnectionState, type SyncProgress } from "./hooks/u
 import { useRemoteCursors } from "./hooks/useRemoteCursors";
 import type { CollaborationMeta, Participant } from "./types";
 
+/** How long the owner waits for the server to confirm the end of the session
+ * before going to the saved post anyway. */
+const SAVE_CONFIRMATION_TIMEOUT_MS = 5000;
+
 const getSessionId = (): string => {
   const id = window.location.pathname.split("/")[2];
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id ?? "")) {
@@ -473,6 +477,9 @@ export default function App() {
       // The server echoes END_SESSION only after accepting the authoritative
       // lifecycle transition. Navigation happens in handleSessionEnded.
       socket.send(encodeEndSession(userIdRef.current, result.post_url));
+      // The post above is already committed, so a confirmation that never
+      // comes back must not strand the owner on a session that is over.
+      window.setTimeout(() => window.location.assign(result.post_url), SAVE_CONFIRMATION_TIMEOUT_MS);
     } catch (error) {
       alert(error instanceof Error ? error.message : String(error));
       setIsSaving(false);

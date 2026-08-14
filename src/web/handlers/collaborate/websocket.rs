@@ -480,8 +480,11 @@ fn should_forward_to_connection(
     // casualty) whenever the protocol grew. Pointer messages are ephemeral
     // and must not enter reconciliation. Snapshot is a stored
     // server-range message; chat is echoed as delivery confirmation.
+    // END_SESSION is the lifecycle transition the owner is waiting on: it is
+    // published only once the session is really over, and the owner navigates
+    // to the saved post on receiving it, so it must come back to its sender.
     match room_msg.payload.first().copied() {
-        Some(0x02) | Some(0x03) => true,
+        Some(0x02) | Some(0x03) | Some(0x07) => true,
         Some(msg_type) if messages::is_client_message(msg_type) => {
             msg_type != 0x13 && msg_type != 0x1c
         }
@@ -550,6 +553,14 @@ mod forwarding_tests {
                 "same"
             ));
         }
+    }
+
+    /// The owner ends the session and then waits for the server to say so
+    /// before navigating to the saved post. Filtering the echo out strands the
+    /// owner on a finished session while everyone else is redirected.
+    #[test]
+    fn echoes_the_end_of_the_session_to_the_owner_who_ended_it() {
+        assert!(should_forward_to_connection(&message("same", 0x07), "same"));
     }
 
     #[test]
