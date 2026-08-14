@@ -77,7 +77,16 @@ class FakeEngine {
     this.ops.push(`fill:${r}`);
   }
 
-  queueLayerUpdate() {}
+  // Which repaint each path asked for. Uploading a whole layer costs far more
+  // than drawing the message did, so "did this ask for the whole canvas?" is
+  // worth being able to assert.
+  repaints: string[] = [];
+  queueLayerUpdate(layer: string) {
+    this.repaints.push(`all:${layer}`);
+  }
+  queueLayerRegionUpdate(layer: string) {
+    this.repaints.push(`region:${layer}`);
+  }
 
   // Region ops record what they were asked to do, and which buffers they were
   // pointed at, so a test can tell a fork apart from the live layers.
@@ -354,6 +363,31 @@ describe("local fork reconciliation", () => {
     await remote(history, mine!, 3);
     expect(red(engine, 5, 5)).toBe(100);
     expect(history.hasPendingLocal).toBe(false);
+  });
+
+  it("repaints only the region a remote stroke drew", async () => {
+    const { engine, history } = setup();
+    await remote(history, encodeUndoPoint(REMOTE), 1);
+    engine.repaints.length = 0;
+    await remote(history, stroke(REMOTE, 5, 5, 100), 2);
+
+    // The engine tracked what the stroke wrote, so the repaint can be that
+    // and nothing else. Asking for the whole layer here is the difference
+    // between a few hundred pixels and the entire canvas, twice, per message.
+    expect(engine.repaints).toEqual(["region:foreground", "region:background"]);
+  });
+
+  it("repaints whole layers when a replay rebuilds the canvas", async () => {
+    const { engine, history } = setup();
+    local(history, encodeUndoPoint(LOCAL));
+    localStroke(history, 5, 5, 100);
+    engine.repaints.length = 0;
+
+    // An overlapping remote stroke restores a savepoint under the fork, which
+    // puts pixels back the engine never saw written.
+    await remote(history, stroke(REMOTE, 5, 5, 200), 1);
+    expect(engine.repaints).toContain("all:foreground");
+    expect(engine.repaints).toContain("all:background");
   });
 
   it("does not join a new stroke to the last one when a replay rebuilds the fork", async () => {

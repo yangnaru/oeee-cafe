@@ -355,12 +355,17 @@ export const useWebSocket = ({
           if (resumeSequence === null) lastSeqRef.current = 0;
           historyIdRef.current = sequenced.historyId;
         }
-        setSyncProgress({
-          phase: "receiving",
-          receivedSequence: sequenced.seq,
-          appliedSequence: lastSeqRef.current,
-          targetSequence: replayTargetRef.current,
-        });
+        // Only while the progress readout is on screen. Publishing it for
+        // every live message re-renders the whole session view once per
+        // remote pointer move, for a number nobody is looking at.
+        if (isCatchingUpRef.current) {
+          setSyncProgress({
+            phase: "receiving",
+            receivedSequence: sequenced.seq,
+            appliedSequence: lastSeqRef.current,
+            targetSequence: replayTargetRef.current,
+          });
+        }
         if (historyIdRef.current === null) {
           historyIdRef.current = sequenced.historyId;
         } else if (historyIdRef.current !== sequenced.historyId) {

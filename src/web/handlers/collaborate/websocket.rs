@@ -160,9 +160,9 @@ pub async fn handle_socket(
         loop {
             match pubsub.on_message().next().await {
                 Some(msg) => {
-                    let payload: String = msg.get_payload().unwrap_or_default();
-                    match serde_json::from_str::<super::redis_state::RoomMessage>(&payload) {
-                        Ok(room_msg) => {
+                    let payload: Vec<u8> = msg.get_payload().unwrap_or_default();
+                    match super::redis_state::RoomBroadcast::decode(&payload) {
+                        Some(room_msg) => {
                             if should_forward_to_connection(&room_msg, &connection_id_clone) {
                                 let position = room_msg.history_id.zip(room_msg.seq);
                                 if redis_tx.send((position, room_msg.payload)).is_err() {
@@ -174,8 +174,11 @@ pub async fn handle_socket(
                                 }
                             }
                         }
-                        Err(e) => {
-                            error!("Failed to deserialize Redis message: {}", e);
+                        None => {
+                            error!(
+                                "Dropping unrecognised Redis broadcast ({} bytes)",
+                                payload.len()
+                            );
                         }
                     }
                 }
@@ -464,7 +467,7 @@ pub(super) fn wrap_sequenced(history_id: Uuid, seq: u64, payload: &[u8]) -> Vec<
 }
 
 fn should_forward_to_connection(
-    room_msg: &super::redis_state::RoomMessage,
+    room_msg: &super::redis_state::RoomBroadcast,
     connection_id: &str,
 ) -> bool {
     // Targeted messages (e.g. RESET_REQUEST) go to exactly one connection
@@ -507,20 +510,16 @@ fn accepted_resume_sequence(
 #[cfg(test)]
 mod forwarding_tests {
     use super::{accepted_resume_sequence, should_forward_to_connection};
-    use crate::web::handlers::collaborate::redis_state::RoomMessage;
+    use crate::web::handlers::collaborate::redis_state::RoomBroadcast;
     use uuid::Uuid;
 
-    fn message(from: &str, msg_type: u8) -> RoomMessage {
-        RoomMessage {
+    fn message(from: &str, msg_type: u8) -> RoomBroadcast {
+        RoomBroadcast {
             from_connection: from.to_string(),
-            user_id: Uuid::nil(),
-            user_login_name: "tester".to_string(),
-            message_type: "websocket".to_string(),
-            payload: vec![msg_type],
-            timestamp: 0,
+            target_connection: None,
             seq: Some(1),
             history_id: Some(Uuid::nil()),
-            target_connection: None,
+            payload: vec![msg_type],
         }
     }
 

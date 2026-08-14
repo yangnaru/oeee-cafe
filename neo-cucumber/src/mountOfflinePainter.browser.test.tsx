@@ -224,6 +224,96 @@ describe("public painter lifecycle", () => {
     act(() => painter.unmount());
   });
 
+  it("puts every applied region on the visible canvas", async () => {
+    // Repaints upload only the region an operation drew, so what reaches the
+    // screen is assembled from many partial uploads. A region that is too
+    // small, or landed at the wrong offset, leaves the canvas showing
+    // something the layer buffer does not say -- and no export would notice,
+    // because exports read the buffers rather than these canvases.
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    let painter!: ReturnType<typeof mount>;
+    act(() => {
+      painter = mount(element, {
+        width: 64, height: 48,
+        mode: { kind: "standard" },
+        controls: { kind: "none" },
+        synchronization: { actorId: "1", onOperation: () => {} },
+      });
+    });
+    await act(async () => painter.ready);
+
+    const layerCanvas = (zIndex: number) =>
+      Array.from(element.querySelectorAll("canvas")).find(
+        (canvas) => canvas.style.zIndex === String(zIndex),
+      )!;
+    const frame = () =>
+      act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+      });
+    const pixel = (canvas: HTMLCanvasElement, x: number, y: number) =>
+      Array.from(canvas.getContext("2d")!.getImageData(x, y, 1, 1).data);
+
+    const dot = (at: { x: number; y: number }, color: { r: number; g: number; b: number }) => ({
+      kind: "stroke" as const, layer: "foreground" as const, brushSize: 1,
+      brush: "solid" as const, color: { ...color, a: 255 },
+      points: [at], mask: { type: 0, r: 0, g: 0, b: 0 },
+    });
+
+    await act(async () => {
+      await painter.applyCanonicalOperation({
+        id: "b1", actorId: "2", sequence: 1, operation: { kind: "undo-boundary" },
+      });
+      await painter.applyCanonicalOperation({
+        id: "s1", actorId: "2", sequence: 2,
+        operation: dot({ x: 8, y: 8 }, { r: 255, g: 0, b: 0 }),
+      });
+    });
+    await frame();
+
+    const foreground = layerCanvas(2);
+    expect(pixel(foreground, 8, 8)).toEqual([255, 0, 0, 255]);
+    expect(pixel(foreground, 50, 40)).toEqual([0, 0, 0, 0]);
+
+    // A second mark far away: its own region must reach the canvas without
+    // taking the first one off it.
+    await act(async () => {
+      await painter.applyCanonicalOperation({
+        id: "b2", actorId: "2", sequence: 3, operation: { kind: "undo-boundary" },
+      });
+      await painter.applyCanonicalOperation({
+        id: "s2", actorId: "2", sequence: 4,
+        operation: dot({ x: 50, y: 40 }, { r: 0, g: 0, b: 255 }),
+      });
+    });
+    await frame();
+
+    expect(pixel(foreground, 50, 40)).toEqual([0, 0, 255, 255]);
+    expect(pixel(foreground, 8, 8)).toEqual([255, 0, 0, 255]);
+
+    // A fill covers the whole layer, which no drawn region describes
+    await act(async () => {
+      await painter.applyCanonicalOperation({
+        id: "b3", actorId: "2", sequence: 5, operation: { kind: "undo-boundary" },
+      });
+      await painter.applyCanonicalOperation({
+        id: "f1", actorId: "2", sequence: 6,
+        operation: {
+          kind: "fill", layer: "background", at: { x: 1, y: 1 },
+          color: { r: 0, g: 255, b: 0, a: 255 }, mask: { type: 0, r: 0, g: 0, b: 0 },
+        },
+      });
+    });
+    await frame();
+
+    const background = layerCanvas(1);
+    expect(pixel(background, 1, 1)).toEqual([0, 255, 0, 255]);
+    expect(pixel(background, 63, 47)).toEqual([0, 255, 0, 255]);
+
+    act(() => painter.unmount());
+  });
+
   it("applies canonical operations and round-trips public checkpoints", async () => {
     const element = document.createElement("div");
     document.body.appendChild(element);

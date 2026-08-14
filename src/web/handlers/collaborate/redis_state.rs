@@ -31,56 +31,86 @@ pub struct ConnectionInfo {
     pub last_heartbeat: u64,
 }
 
-// Serializes the binary payload as base64 (~1.33x) instead of serde_json's
-// default number array (~3.7x), which matters for snapshot-sized messages on
-// the pub/sub channel. Deserialization also accepts the old number-array form
-// so envelopes from a previous server version still parse during a deploy.
-mod base64_payload {
-    use data_encoding::BASE64;
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S: Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&BASE64.encode(bytes))
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum PayloadRepr {
-            Base64(String),
-            Raw(Vec<u8>),
-        }
-
-        match PayloadRepr::deserialize(deserializer)? {
-            PayloadRepr::Base64(s) => BASE64
-                .decode(s.as_bytes())
-                .map_err(serde::de::Error::custom),
-            PayloadRepr::Raw(bytes) => Ok(bytes),
-        }
-    }
+/// What a subscriber needs off a room's Pub/Sub channel.
+///
+/// Everything else a publisher knows -- who they are, what they called the
+/// message, when they sent it -- is never read on the other side, so it does
+/// not go on the wire. What does goes as a text header and the payload's own
+/// bytes:
+///
+/// ```text
+/// 1|<from_connection>|<target_connection>|<seq>|<history_id>\n<payload>
+/// ```
+///
+/// Redis strings are binary-safe, so the drawing payload rides untouched. The
+/// JSON envelope this replaced base64'd it, which grew a twenty-byte stroke
+/// past two hundred and made the sequencer's Lua decode and re-encode that
+/// JSON, on Redis's single thread, once per pointer move.
+///
+/// The header's fields are UUIDs, decimal numbers, or the literal `system`,
+/// none of which can contain the `|` and newline that delimit them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomBroadcast {
+    pub from_connection: String,
+    /// Set when the message goes to exactly one connection (e.g. RESET_REQUEST).
+    pub target_connection: Option<String>,
+    /// Canonical sequence number, for messages that are part of session
+    /// history; None for ephemeral ones.
+    pub seq: Option<u64>,
+    /// Identity of the canonical history containing `seq`. Comparable
+    /// positions must have the same identity.
+    pub history_id: Option<Uuid>,
+    pub payload: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RoomMessage {
-    pub from_connection: String,
-    pub user_id: Uuid,
-    pub user_login_name: String,
-    pub message_type: String, // "websocket" | "join" | "leave" | "end_session"
-    #[serde(with = "base64_payload")]
-    pub payload: Vec<u8>,
-    pub timestamp: u64,
-    // Canonical sequence number assigned by the atomic sequencer for messages
-    // that are part of session history; None for ephemeral messages.
-    #[serde(default)]
-    pub seq: Option<u64>,
-    // Identity of the canonical history containing `seq`. Comparable
-    // positions must have the same identity.
-    #[serde(default)]
-    pub history_id: Option<Uuid>,
-    // When set, the message is delivered only to this connection (e.g. a
-    // RESET_REQUEST addressed to the client chosen to upload a session reset).
-    #[serde(default)]
-    pub target_connection: Option<String>,
+/// Framing version. The sequencer's Lua writes this same header, so a change
+/// here has to be made there too (see SEQUENCE_AND_PUBLISH_SCRIPT).
+pub const BROADCAST_VERSION: &str = "1";
+
+impl RoomBroadcast {
+    pub fn encode(&self) -> Vec<u8> {
+        let header = format!(
+            "{}|{}|{}|{}|{}\n",
+            BROADCAST_VERSION,
+            self.from_connection,
+            self.target_connection.as_deref().unwrap_or(""),
+            self.seq.map(|seq| seq.to_string()).unwrap_or_default(),
+            self.history_id.map(|id| id.to_string()).unwrap_or_default(),
+        );
+        let mut out = Vec::with_capacity(header.len() + self.payload.len());
+        out.extend_from_slice(header.as_bytes());
+        out.extend_from_slice(&self.payload);
+        out
+    }
+
+    /// None for anything that is not this framing, so a stray publish is
+    /// dropped rather than delivered as a corrupt drawing operation.
+    pub fn decode(bytes: &[u8]) -> Option<Self> {
+        let split = bytes.iter().position(|&byte| byte == b'\n')?;
+        let mut fields = std::str::from_utf8(&bytes[..split]).ok()?.split('|');
+        if fields.next()? != BROADCAST_VERSION {
+            return None;
+        }
+        let from_connection = fields.next()?.to_string();
+        let target = fields.next()?;
+        let seq = fields.next()?;
+        let history_id = fields.next()?;
+        Some(Self {
+            from_connection,
+            target_connection: (!target.is_empty()).then(|| target.to_string()),
+            seq: if seq.is_empty() {
+                None
+            } else {
+                Some(seq.parse().ok()?)
+            },
+            history_id: if history_id.is_empty() {
+                None
+            } else {
+                Some(history_id.parse().ok()?)
+            },
+            payload: bytes[split + 1..].to_vec(),
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -403,13 +433,12 @@ impl RedisStateManager {
     pub async fn publish_message(
         &self,
         room_uuid: Uuid,
-        message: &RoomMessage,
+        message: &RoomBroadcast,
     ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await?;
         let channel = format!("{}{}", PUBSUB_PREFIX, room_uuid);
 
-        let serialized = serde_json::to_string(message)?;
-        let subscriber_count: usize = conn.publish(&channel, &serialized).await?;
+        let subscriber_count: usize = conn.publish(&channel, message.encode()).await?;
 
         debug!(
             "Published message to {} subscribers in room {}",
@@ -477,5 +506,96 @@ impl RedisStateManager {
             total_deleted, room_uuid
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod broadcast_framing_tests {
+    use super::{RoomBroadcast, BROADCAST_VERSION};
+    use uuid::Uuid;
+
+    fn round_trip(message: &RoomBroadcast) {
+        let encoded = message.encode();
+        assert_eq!(RoomBroadcast::decode(&encoded).as_ref(), Some(message));
+    }
+
+    #[test]
+    fn round_trips_a_sequenced_drawing_message() {
+        round_trip(&RoomBroadcast {
+            from_connection: Uuid::new_v4().to_string(),
+            target_connection: None,
+            seq: Some(4_294_967_296),
+            history_id: Some(Uuid::new_v4()),
+            payload: vec![0x16, 0x01, 0x00, 0xff],
+        });
+    }
+
+    #[test]
+    fn round_trips_an_ephemeral_targeted_message() {
+        round_trip(&RoomBroadcast {
+            from_connection: "system".to_string(),
+            target_connection: Some(Uuid::new_v4().to_string()),
+            seq: None,
+            history_id: None,
+            payload: vec![0x1d],
+        });
+    }
+
+    #[test]
+    fn carries_a_payload_that_looks_like_the_header() {
+        // The payload is arbitrary bytes -- a stroke's coordinates land on
+        // whatever `|` and newline happen to be. Only the first newline
+        // delimits, so the rest belongs to the drawing.
+        round_trip(&RoomBroadcast {
+            from_connection: Uuid::new_v4().to_string(),
+            target_connection: None,
+            seq: Some(7),
+            history_id: Some(Uuid::nil()),
+            payload: b"1|deadbeef||9|\n|not a header\n".to_vec(),
+        });
+    }
+
+    #[test]
+    fn round_trips_an_empty_payload() {
+        round_trip(&RoomBroadcast {
+            from_connection: "system".to_string(),
+            target_connection: None,
+            seq: None,
+            history_id: None,
+            payload: Vec::new(),
+        });
+    }
+
+    #[test]
+    fn rejects_anything_that_is_not_this_framing() {
+        assert!(RoomBroadcast::decode(b"").is_none());
+        assert!(RoomBroadcast::decode(b"no newline here").is_none());
+        // The JSON envelope this replaced
+        assert!(RoomBroadcast::decode(br#"{"from_connection":"x"}"#).is_none());
+        // A future framing version
+        assert!(RoomBroadcast::decode(b"2|x||1|\n").is_none());
+        // Truncated header
+        assert!(RoomBroadcast::decode(b"1|x|\n").is_none());
+        // Unparseable position
+        assert!(RoomBroadcast::decode(b"1|x||notanumber|\n").is_none());
+    }
+
+    #[test]
+    fn matches_the_header_the_sequencer_lua_writes() {
+        // The Lua in SEQUENCE_AND_PUBLISH_SCRIPT builds this by hand, so the
+        // two have to agree byte for byte.
+        let history_id = Uuid::nil();
+        let from = "c0ffee";
+        let lua_written = format!("{BROADCAST_VERSION}|{from}||12|{history_id}\n");
+        let encoded = RoomBroadcast {
+            from_connection: from.to_string(),
+            target_connection: None,
+            seq: Some(12),
+            history_id: Some(history_id),
+            payload: b"payload".to_vec(),
+        }
+        .encode();
+        assert_eq!(&encoded[..lua_written.len()], lua_written.as_bytes());
+        assert_eq!(&encoded[lua_written.len()..], b"payload");
     }
 }

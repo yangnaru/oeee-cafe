@@ -35,11 +35,26 @@ export class BufferSurface implements PixelSurface {
   private readonly buffer: Uint8ClampedArray;
   private readonly width: number;
   private readonly height: number;
+  private readonly onWrite?: (x0: number, y0: number, x1: number, y1: number) => void;
 
-  constructor(buffer: Uint8ClampedArray, width: number, height: number) {
+  /**
+   * `onWrite` reports the clipped, inclusive bounds of every write. Every
+   * kernel ends by putting its padded sub-rectangle back, so a surface that
+   * reports what it stored knows exactly which pixels changed -- which is what
+   * lets a repaint upload a stroke's few hundred pixels instead of the canvas.
+   * Deriving the same extent a second time from the operation's arguments
+   * would be a copy of the tool table free to drift from it.
+   */
+  constructor(
+    buffer: Uint8ClampedArray,
+    width: number,
+    height: number,
+    onWrite?: (x0: number, y0: number, x1: number, y1: number) => void,
+  ) {
     this.buffer = buffer;
     this.width = width;
     this.height = height;
+    this.onWrite = onWrite;
   }
 
   getImageData(x: number, y: number, width: number, height: number): ImageData {
@@ -69,11 +84,12 @@ export class BufferSurface implements PixelSurface {
     const endY = Math.min(data.height, this.height - y);
 
     const span = (endX - startX) * 4;
-    if (span <= 0) return;
+    if (span <= 0 || endY <= startY) return;
     for (let row = startY; row < endY; row++) {
       const src = (row * data.width + startX) * 4;
       const dst = ((y + row) * this.width + x + startX) * 4;
       this.buffer.set(data.data.subarray(src, src + span), dst);
     }
+    this.onWrite?.(x + startX, y + startY, x + endX - 1, y + endY - 1);
   }
 }

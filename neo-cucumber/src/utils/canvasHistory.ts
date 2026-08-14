@@ -620,7 +620,10 @@ export class CanvasHistory {
         await this.replayFrom(this.latestSavepoint());
       } else {
         await this.applyMessage(msg, this.engine.layers, this.liveStrokes);
-        this.queueUpdates();
+        // A snapshot is assigned straight into the buffer, so the engine has
+        // no region for it; everything else drew through the engine.
+        if (msg.type === "snapshot") this.queueUpdates();
+        else this.queueDrawnUpdates();
       }
     }
     this.maybeSavepoint();
@@ -942,9 +945,28 @@ export class CanvasHistory {
     strokes.set(actorKey(userId), this.engine.getStrokeState());
   }
 
+  /**
+   * Repaints both layers whole. For the paths that put pixels somewhere the
+   * engine cannot have seen: a savepoint restored under a replay, a decoded
+   * snapshot, a blanked canvas.
+   */
   private queueUpdates(): void {
     this.engine.queueLayerUpdate("foreground");
     this.engine.queueLayerUpdate("background");
+  }
+
+  /**
+   * Repaints only what the operation just drew.
+   *
+   * The live application path -- one message, one small mark. Every write it
+   * makes goes through the engine's own surfaces, which is what makes the
+   * region trustworthy; a remote stroke segment covers a few hundred pixels,
+   * and uploading the whole canvas for it costs an order of magnitude more
+   * than drawing it did.
+   */
+  private queueDrawnUpdates(): void {
+    this.engine.queueLayerRegionUpdate("foreground");
+    this.engine.queueLayerRegionUpdate("background");
   }
 
   private notify(): void {

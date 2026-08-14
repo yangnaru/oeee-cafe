@@ -487,7 +487,11 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       const history = synchronizationHistoryRef.current;
       if (!history) throw new Error("Painter is not in controlled mode");
       await history.handleCanonicalOperation(operation);
-      domCanvasUpdateRef.current();
+      // No repaint is forced here. The history queues one for the region it
+      // drew, and the engine coalesces those to a frame -- where a forced
+      // repaint per message would cancel that batch and upload both layers
+      // whole, which costs more than applying the message did. A busy room
+      // sends a message per pointer move, per participant.
     },
     [],
   );

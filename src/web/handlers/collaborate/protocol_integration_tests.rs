@@ -11,7 +11,7 @@ use tokio_tungstenite::{accept_async, connect_async, tungstenite::Message};
 use uuid::Uuid;
 
 use super::redis_messages::RedisMessageStore;
-use super::redis_state::{RedisStateManager, RoomMessage};
+use super::redis_state::{RedisStateManager, RoomBroadcast};
 use super::websocket::{valid_reset_payloads, wrap_sequenced};
 use crate::redis::RedisPool;
 
@@ -101,17 +101,13 @@ async fn redis_pool(url: &str) -> RedisPool {
     Pool::builder().build(manager).await.expect("Redis pool")
 }
 
-fn room_message(payload: Vec<u8>) -> RoomMessage {
-    RoomMessage {
+fn room_message(payload: Vec<u8>) -> RoomBroadcast {
+    RoomBroadcast {
         from_connection: Uuid::new_v4().to_string(),
-        user_id: Uuid::nil(),
-        user_login_name: "integration-test".into(),
-        message_type: "websocket".into(),
-        payload,
-        timestamp: 0,
+        target_connection: None,
         seq: None,
         history_id: None,
-        target_connection: None,
+        payload,
     }
 }
 
@@ -154,8 +150,8 @@ async fn serve_connection(stream: TcpStream, pool: RedisPool, redis_url: String,
     let outgoing = tokio::spawn(async move {
         let mut messages = subscriber.on_message();
         while let Some(message) = messages.next().await {
-            let json: String = message.get_payload().expect("PubSub JSON");
-            let envelope: RoomMessage = serde_json::from_str(&json).expect("room envelope");
+            let framed: Vec<u8> = message.get_payload().expect("PubSub frame");
+            let envelope = RoomBroadcast::decode(&framed).expect("room envelope");
             if let (Some(history_id), Some(sequence)) = (envelope.history_id, envelope.seq) {
                 if history_id == replay_history_id && sequence <= last_sequence {
                     continue;
@@ -175,9 +171,8 @@ async fn serve_connection(stream: TcpStream, pool: RedisPool, redis_url: String,
 
     while let Some(Ok(Message::Binary(payload))) = source.next().await {
         let envelope = room_message(payload.to_vec());
-        let envelope_json = serde_json::to_string(&envelope).expect("serialize envelope");
         store
-            .sequence_and_publish(room, &payload, &envelope_json, &channel)
+            .sequence_and_publish(room, &payload, &envelope.from_connection, &channel)
             .await
             .expect("sequence client operation");
     }
@@ -352,12 +347,7 @@ async fn reconnect_replays_missed_operations_once_and_reports_exact_position() {
         let payload = vec![0x12, 2, 0x22];
         let envelope = room_message(payload.clone());
         store
-            .sequence_and_publish(
-                harness.room,
-                &payload,
-                &serde_json::to_string(&envelope).unwrap(),
-                &channel,
-            )
+            .sequence_and_publish(harness.room, &payload, &envelope.from_connection, &channel)
             .await
             .expect("operation while disconnected");
 
@@ -423,12 +413,7 @@ async fn checkpoint_compaction_keeps_operations_that_race_after_its_base() {
             let payload = vec![0x12, 1, marker];
             let envelope = room_message(payload.clone());
             store
-                .sequence_and_publish(
-                    harness.room,
-                    &payload,
-                    &serde_json::to_string(&envelope).unwrap(),
-                    &channel,
-                )
+                .sequence_and_publish(harness.room, &payload, &envelope.from_connection, &channel)
                 .await
                 .expect("seed canonical operation");
         }
@@ -436,11 +421,10 @@ async fn checkpoint_compaction_keeps_operations_that_race_after_its_base() {
         let snapshots = [vec![0x02, 1, 1, 0xaa], vec![0x02, 1, 0, 0xbb]];
         let newer_payload = vec![0x12, 2, 0x33];
         let newer_envelope = room_message(newer_payload.clone());
-        let newer_envelope_json = serde_json::to_string(&newer_envelope).unwrap();
         let publish_newer = store.sequence_and_publish(
             harness.room,
             &newer_payload,
-            &newer_envelope_json,
+            &newer_envelope.from_connection,
             &channel,
         );
         let apply_checkpoint = store.apply_reset(harness.room, 2, &snapshots);
@@ -476,12 +460,7 @@ async fn future_checkpoint_is_rejected_without_mutating_history() {
     let payload = vec![0x12, 1, 0x11];
     let envelope = room_message(payload.clone());
     store
-        .sequence_and_publish(
-            harness.room,
-            &payload,
-            &serde_json::to_string(&envelope).unwrap(),
-            &channel,
-        )
+        .sequence_and_publish(harness.room, &payload, &envelope.from_connection, &channel)
         .await
         .expect("seed operation");
 
@@ -516,12 +495,7 @@ async fn replacing_history_changes_identity_instead_of_reusing_sequence_space() 
         let payload = vec![0x12, 1, 0x44];
         let envelope = room_message(payload.clone());
         store
-            .sequence_and_publish(
-                harness.room,
-                &payload,
-                &serde_json::to_string(&envelope).unwrap(),
-                &channel,
-            )
+            .sequence_and_publish(harness.room, &payload, &envelope.from_connection, &channel)
             .await
             .expect("first operation in replacement history");
 
@@ -664,12 +638,7 @@ async fn touching_live_history_refreshes_every_canonical_key_lifetime() {
     let payload = vec![0x12, 1, 0x11];
     let envelope = room_message(payload.clone());
     store
-        .sequence_and_publish(
-            room,
-            &payload,
-            &serde_json::to_string(&envelope).unwrap(),
-            &channel,
-        )
+        .sequence_and_publish(room, &payload, &envelope.from_connection, &channel)
         .await
         .expect("seed live history");
 

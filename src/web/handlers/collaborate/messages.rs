@@ -321,19 +321,12 @@ async fn broadcast_layers(_db: &Pool<Postgres>, room_uuid: Uuid, state: &AppStat
             };
 
             // Use Redis pub/sub to send LAYERS message to all connections in the room
-            let room_message = super::redis_state::RoomMessage {
+            let room_message = super::redis_state::RoomBroadcast {
                 from_connection: "system".to_string(),
-                user_id: uuid::Uuid::nil(),
-                user_login_name: "system".to_string(),
-                message_type: "layers".to_string(),
-                payload: layers_message.serialize(),
-                timestamp: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("System time is before UNIX_EPOCH")
-                    .as_secs(),
+                target_connection: None,
                 seq: None,
                 history_id: None,
-                target_connection: None,
+                payload: layers_message.serialize(),
             };
 
             match state
@@ -452,19 +445,12 @@ pub async fn handle_end_session_message(data: &[u8], ctx: EndSessionContext<'_>)
                         }
 
                         // Broadcast END_SESSION to all participants in the room (including sender) via Redis pub/sub
-                        let room_message = super::redis_state::RoomMessage {
+                        let room_message = super::redis_state::RoomBroadcast {
                             from_connection: ctx.connection_id.to_string(),
-                            user_id: ctx.user_id,
-                            user_login_name: ctx.user_login_name.to_string(),
-                            message_type: "websocket".to_string(),
-                            payload: ctx.msg.clone().into_data(),
-                            timestamp: std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .expect("System time is before UNIX_EPOCH")
-                                .as_secs(),
+                            target_connection: None,
                             seq: None,
                             history_id: None,
-                            target_connection: None,
+                            payload: ctx.msg.clone().into_data(),
                         };
 
                         match ctx
@@ -528,19 +514,12 @@ pub async fn send_reset_request(room_uuid: Uuid, target_connection: &str, state:
         timestamp: get_current_timestamp_ms(),
     };
 
-    let room_message = super::redis_state::RoomMessage {
+    let room_message = super::redis_state::RoomBroadcast {
         from_connection: "system".to_string(),
-        user_id: Uuid::nil(),
-        user_login_name: "system".to_string(),
-        message_type: "reset_request".to_string(),
-        payload: reset_request.serialize(),
-        timestamp: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX_EPOCH")
-            .as_secs(),
+        target_connection: Some(target_connection.to_string()),
         seq: None,
         history_id: None,
-        target_connection: Some(target_connection.to_string()),
+        payload: reset_request.serialize(),
     };
 
     match state
@@ -563,24 +542,17 @@ pub async fn send_reset_request(room_uuid: Uuid, target_connection: &str, state:
     }
 }
 
-fn to_room_message(msg: &Message, connection_id: &str) -> super::redis_state::RoomMessage {
-    super::redis_state::RoomMessage {
+fn to_room_broadcast(msg: &Message, connection_id: &str) -> super::redis_state::RoomBroadcast {
+    super::redis_state::RoomBroadcast {
         from_connection: connection_id.to_string(),
-        user_id: Uuid::nil(), // We'll get this from Redis connection info if needed
-        user_login_name: String::new(), // We'll get this from Redis connection info if needed
-        message_type: "websocket".to_string(),
+        target_connection: None,
+        seq: None,
+        history_id: None,
         payload: match msg {
             Message::Binary(data) => data.clone(),
             Message::Text(text) => text.as_bytes().to_vec(),
             _ => vec![],
         },
-        timestamp: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64,
-        seq: None,
-        history_id: None,
-        target_connection: None,
     }
 }
 
@@ -591,7 +563,7 @@ pub async fn broadcast_message(
     connection_id: &str,
     state: &AppState,
 ) {
-    let room_message = to_room_message(msg, connection_id);
+    let room_message = to_room_broadcast(msg, connection_id);
 
     // Publish to Redis Pub/Sub - this will reach all server instances
     match state
@@ -623,13 +595,16 @@ pub async fn sequence_and_broadcast(
     connection_id: &str,
     state: &AppState,
 ) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
-    let room_message = to_room_message(msg, connection_id);
-    let envelope_json = serde_json::to_string(&room_message)?;
+    let payload = match msg {
+        Message::Binary(data) => data.clone(),
+        Message::Text(text) => text.as_bytes().to_vec(),
+        _ => vec![],
+    };
 
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
     let channel = state.redis_state.get_room_channel(room_uuid);
     let seq = redis_store
-        .sequence_and_publish(room_uuid, &room_message.payload, &envelope_json, &channel)
+        .sequence_and_publish(room_uuid, &payload, connection_id, &channel)
         .await?;
 
     debug!(
@@ -678,19 +653,12 @@ pub async fn send_leave_message(
     };
 
     // Use Redis pub/sub to send LEAVE message to all connections except the one leaving
-    let room_message = super::redis_state::RoomMessage {
+    let room_message = super::redis_state::RoomBroadcast {
         from_connection: connection_id.to_string(),
-        user_id,
-        user_login_name: user_login_name.to_string(),
-        message_type: "leave".to_string(),
-        payload: leave_message.serialize(),
-        timestamp: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("System time is before UNIX_EPOCH")
-            .as_secs(),
+        target_connection: None,
         seq: None,
         history_id: None,
-        target_connection: None,
+        payload: leave_message.serialize(),
     };
 
     match state

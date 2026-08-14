@@ -1,5 +1,6 @@
 use axum::extract::ws::Message;
 use redis::AsyncCommands;
+use std::sync::OnceLock;
 use tracing::{debug, error};
 use uuid::Uuid;
 
@@ -18,8 +19,8 @@ const MAX_REDIS_MESSAGES: usize = 50000;
 const MAX_CHAT_MESSAGES: usize = 100;
 
 /// Atomically assigns the next per-room sequence number, appends the message to
-/// the history list, and publishes the envelope (with the sequence number
-/// injected) to the room's Pub/Sub channel.
+/// the history list, and publishes it to the room's Pub/Sub channel under the
+/// position it was just given.
 ///
 /// This is the single serialization point for drawing commands, modeled after
 /// Drawpile's SessionHistory: because sequencing, storage, and broadcast happen
@@ -39,12 +40,21 @@ redis.call('EXPIRE', KEYS[1], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[4], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[5], tonumber(ARGV[4]))
-local envelope = cjson.decode(ARGV[2])
-envelope['seq'] = seq
-envelope['history_id'] = history_id
-redis.call('PUBLISH', KEYS[3], cjson.encode(envelope))
+-- RoomBroadcast framing, written by hand because the payload must stay the
+-- bytes the client sent: header, newline, payload. The empty field is
+-- target_connection -- history messages go to the whole room.
+redis.call('PUBLISH', KEYS[3],
+    '1|' .. ARGV[2] .. '||' .. seq .. '|' .. history_id .. '\n' .. ARGV[1])
 return {seq, history_id}
 "#;
+
+/// Compiled once: `Script::new` hashes the source, and this runs on every
+/// drawing message a room produces.
+static SEQUENCE_AND_PUBLISH: OnceLock<redis::Script> = OnceLock::new();
+
+fn sequence_and_publish_script() -> &'static redis::Script {
+    SEQUENCE_AND_PUBLISH.get_or_init(|| redis::Script::new(SEQUENCE_AND_PUBLISH_SCRIPT))
+}
 
 pub struct RedisMessageStore {
     pool: RedisPool,
@@ -106,7 +116,7 @@ impl RedisMessageStore {
         &self,
         room_uuid: Uuid,
         payload: &[u8],
-        envelope_json: &str,
+        from_connection: &str,
         channel: &str,
     ) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await.map_err(|e| {
@@ -114,8 +124,7 @@ impl RedisMessageStore {
             e
         })?;
 
-        let script = redis::Script::new(SEQUENCE_AND_PUBLISH_SCRIPT);
-        let (seq, _history_id): (u64, String) = script
+        let (seq, _history_id): (u64, String) = sequence_and_publish_script()
             .key(seq_key(room_uuid))
             .key(history_key(room_uuid))
             .key(channel)
@@ -126,17 +135,14 @@ impl RedisMessageStore {
             ))
             .key(history_id_key(room_uuid))
             .arg(payload)
-            .arg(envelope_json)
+            .arg(from_connection)
             .arg(MAX_REDIS_MESSAGES)
             .arg(MESSAGE_HISTORY_TTL)
             .arg(Uuid::new_v4().to_string())
             .invoke_async(&mut *conn)
             .await
             .map_err(|e| {
-                error!(
-                    "Failed to sequence message for room {}: {}",
-                    room_uuid, e
-                );
+                error!("Failed to sequence message for room {}: {}", room_uuid, e);
                 e
             })?;
 

@@ -8,6 +8,25 @@ export interface LayerBuffers {
   background: Uint8ClampedArray;
 }
 
+type LayerName = "foreground" | "background";
+
+/** Inclusive pixel bounds of a change, in layer coordinates. */
+interface DirtyRegion {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+function unionRegion(into: DirtyRegion | null, x0: number, y0: number, x1: number, y1: number): DirtyRegion {
+  if (!into) return { x0, y0, x1, y1 };
+  into.x0 = Math.min(into.x0, x0);
+  into.y0 = Math.min(into.y0, y0);
+  into.x1 = Math.max(into.x1, x1);
+  into.y1 = Math.max(into.y1, y1);
+  return into;
+}
+
 export class DrawingEngine {
   public imageWidth: number;
   public imageHeight: number;
@@ -25,8 +44,21 @@ export class DrawingEngine {
   public domCanvases: { [key: string]: HTMLCanvasElement } = {};
   public domContexts: { [key: string]: CanvasRenderingContext2D } = {};
 
-  // Batched update system
-  private pendingUpdates = new Set<"foreground" | "background">();
+  // Batched update system. A repaint carries the region it has to cover:
+  // `null` is nothing to do, `"all"` is the whole layer, and a rectangle is
+  // the union of what has been drawn since the last one. Uploading the whole
+  // canvas for a stroke costs far more than drawing the stroke did.
+  private pendingUpdates: Record<LayerName, DirtyRegion | "all" | null> = {
+    foreground: null,
+    background: null,
+  };
+  /** What the owned surfaces have written since the last repaint was queued. */
+  private writtenRegions: Record<LayerName, DirtyRegion | null> = {
+    foreground: null,
+    background: null,
+  };
+  /** Reused staging buffer for partial uploads, grown to the largest region. */
+  private uploadScratch = new Uint8ClampedArray(0);
   private updateScheduled = false;
   private rafId: number | null = null;
 
@@ -80,8 +112,20 @@ export class DrawingEngine {
     this.initializeOffscreenCanvases();
 
     this.neo = new NeoPainter(width, height);
-    this.backgroundSurface = new BufferSurface(this.layers.background, width, height);
-    this.foregroundSurface = new BufferSurface(this.layers.foreground, width, height);
+    // Only the two owned surfaces report their writes: they are the ones on
+    // screen, so a fork's writes must not mark the display dirty.
+    this.backgroundSurface = new BufferSurface(
+      this.layers.background, width, height,
+      (x0, y0, x1, y1) => {
+        this.writtenRegions.background = unionRegion(this.writtenRegions.background, x0, y0, x1, y1);
+      },
+    );
+    this.foregroundSurface = new BufferSurface(
+      this.layers.foreground, width, height,
+      (x0, y0, x1, y1) => {
+        this.writtenRegions.foreground = unionRegion(this.writtenRegions.foreground, x0, y0, x1, y1);
+      },
+    );
     // Layer-addressed operations (the region tools) resolve through this, so
     // it has to point at the engine's buffers rather than the painter's own
     // canvases, which nothing here draws to.
@@ -195,23 +239,56 @@ export class DrawingEngine {
     }
   }
 
-  // Update DOM canvas for a specific layer
-  private updateDOMCanvas(layerName: "foreground" | "background") {
+  /**
+   * Uploads a layer's pending region to its DOM canvas.
+   *
+   * Building a full-canvas ImageData is what makes a repaint expensive, not
+   * the blit -- passing a dirty rectangle to `putImageData` while still
+   * handing it the whole buffer saves nothing. So a partial repaint stages
+   * just its own rows and hands over an ImageData that size.
+   */
+  private updateDOMCanvas(layerName: LayerName) {
     const domCtx = this.domContexts[layerName];
     const layerData = this.layers[layerName];
+    const region = this.pendingUpdates[layerName];
+    if (!domCtx || !layerData || !region) return;
+    this.pendingUpdates[layerName] = null;
 
-    if (domCtx && layerData) {
-      const imageData = new ImageData(
-        new Uint8ClampedArray(layerData),
-        this.imageWidth,
-        this.imageHeight
+    if (region === "all") {
+      domCtx.putImageData(
+        new ImageData(new Uint8ClampedArray(layerData), this.imageWidth, this.imageHeight),
+        0,
+        0
       );
-      domCtx.putImageData(imageData, 0, 0);
+      return;
     }
+
+    const x0 = Math.max(0, Math.min(this.imageWidth - 1, Math.floor(region.x0)));
+    const y0 = Math.max(0, Math.min(this.imageHeight - 1, Math.floor(region.y0)));
+    const x1 = Math.max(x0, Math.min(this.imageWidth - 1, Math.ceil(region.x1)));
+    const y1 = Math.max(y0, Math.min(this.imageHeight - 1, Math.ceil(region.y1)));
+    const width = x1 - x0 + 1;
+    const height = y1 - y0 + 1;
+    const needed = width * height * 4;
+    if (this.uploadScratch.length < needed) {
+      this.uploadScratch = new Uint8ClampedArray(needed);
+    }
+    const rowBytes = width * 4;
+    for (let row = 0; row < height; row++) {
+      const from = ((y0 + row) * this.imageWidth + x0) * 4;
+      this.uploadScratch.set(layerData.subarray(from, from + rowBytes), row * rowBytes);
+    }
+    domCtx.putImageData(
+      new ImageData(this.uploadScratch.subarray(0, needed), width, height),
+      x0,
+      y0
+    );
   }
 
   // Update all attached DOM canvases
   public updateAllDOMCanvases() {
+    this.pendingUpdates.background = "all";
+    this.pendingUpdates.foreground = "all";
     this.updateDOMCanvas("background");
     this.updateDOMCanvas("foreground");
   }
@@ -225,20 +302,36 @@ export class DrawingEngine {
   }
 
   private processBatchedUpdates() {
-    // Process all pending updates
-    for (const layerName of this.pendingUpdates) {
-      this.updateDOMCanvas(layerName);
-    }
-    
-    // Clear pending updates
-    this.pendingUpdates.clear();
+    this.updateDOMCanvas("background");
+    this.updateDOMCanvas("foreground");
     this.updateScheduled = false;
     this.rafId = null;
   }
 
-  // Queue a layer for batched update
-  public queueLayerUpdate(layerName: "foreground" | "background") {
-    this.pendingUpdates.add(layerName);
+  /** Queues a repaint of the whole layer: everything in it may have changed. */
+  public queueLayerUpdate(layerName: LayerName) {
+    this.pendingUpdates[layerName] = "all";
+    this.writtenRegions[layerName] = null;
+    this.scheduleBatchedUpdate();
+  }
+
+  /**
+   * Queues a repaint of just the pixels drawn since the last one.
+   *
+   * For callers whose every write went through this engine's own surfaces --
+   * which is all of them except `drawText`, and anything that assigns into a
+   * layer buffer directly. Those must use `queueLayerUpdate`, or the screen
+   * keeps pixels the buffer no longer has.
+   */
+  public queueLayerRegionUpdate(layerName: LayerName) {
+    const written = this.writtenRegions[layerName];
+    if (!written) return;
+    this.writtenRegions[layerName] = null;
+    const pending = this.pendingUpdates[layerName];
+    this.pendingUpdates[layerName] =
+      pending === "all"
+        ? "all"
+        : unionRegion(pending, written.x0, written.y0, written.x1, written.y1);
     this.scheduleBatchedUpdate();
   }
 
@@ -258,11 +351,7 @@ export class DrawingEngine {
       this.rafId = null;
       this.updateScheduled = false;
     }
-    this.pendingUpdates.clear();
-    
-    // Immediate update
-    this.updateDOMCanvas("background");
-    this.updateDOMCanvas("foreground");
+    this.updateAllDOMCanvases();
   }
 
   // Pan offset management - applies to all canvases
@@ -435,6 +524,16 @@ export class DrawingEngine {
 
   /** Only our own buffers are on screen; a fork's repaint would be a lie. */
   private queueUpdateIfLive(ctx: Uint8ClampedArray): void {
+    if (ctx === this.layers.background) this.queueLayerRegionUpdate("background");
+    else if (ctx === this.layers.foreground) this.queueLayerRegionUpdate("foreground");
+  }
+
+  /**
+   * As above, but for a write this engine cannot describe -- one that went
+   * into the buffer rather than through a surface. The whole layer repaints
+   * because nothing knows any better.
+   */
+  private queueFullUpdateIfLive(ctx: Uint8ClampedArray): void {
     if (ctx === this.layers.background) this.queueLayerUpdate("background");
     else if (ctx === this.layers.foreground) this.queueLayerUpdate("foreground");
   }
@@ -550,10 +649,11 @@ export class DrawingEngine {
     });
 
     if (targets) return;
-    // merge writes both layers; the rest write one, but queueing both costs a
-    // repaint rather than a correctness problem.
-    this.queueLayerUpdate("background");
-    this.queueLayerUpdate("foreground");
+    // merge writes both layers, the rest write one, and copy writes neither.
+    // The surfaces reported which, so asking for both costs nothing when only
+    // one of them has a region to upload.
+    this.queueLayerRegionUpdate("background");
+    this.queueLayerRegionUpdate("foreground");
   }
 
   /**
@@ -574,7 +674,7 @@ export class DrawingEngine {
     this.withTargets(targets, () =>
       this.neo.eraseAll(layer === "foreground" ? 1 : 0)
     );
-    if (!targets) this.queueLayerUpdate(layer);
+    if (!targets) this.queueLayerRegionUpdate(layer);
   }
 
   /**
@@ -616,7 +716,10 @@ export class DrawingEngine {
       target[i + 3] = Math.round(a * 255);
     }
     scratch.clearRect(0, 0, this.imageWidth, this.imageHeight);
-    if (!into) this.queueLayerUpdate(layer);
+    // Composited into the buffer a pixel at a time rather than through a
+    // surface, so there is no recorded region -- and glyph metrics are the
+    // font's business anyway. Repaint the layer.
+    this.queueFullUpdateIfLive(target);
   }
 
   /** Draws a cubic bezier through the four control points. */
@@ -639,7 +742,7 @@ export class DrawingEngine {
       DrawingEngine.lineTypeFor(brushType)
     );
     this.neo.prevLine = null;
-    if (!target) this.queueLayerUpdate(layer);
+    if (!target) this.queueLayerRegionUpdate(layer);
   }
 
   public initialize(ctx?: CanvasRenderingContext2D) {
@@ -680,7 +783,10 @@ export class DrawingEngine {
     this.compositeContext = null;
 
     // Reset batched update state
-    this.pendingUpdates.clear();
+    this.pendingUpdates.foreground = null;
+    this.pendingUpdates.background = null;
+    this.writtenRegions.foreground = null;
+    this.writtenRegions.background = null;
     this.updateScheduled = false;
   }
 }

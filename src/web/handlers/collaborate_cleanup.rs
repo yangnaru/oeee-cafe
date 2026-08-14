@@ -186,19 +186,12 @@ async fn cleanup_ended_sessions(
             session_expired_msg.extend_from_slice(session_id.as_bytes()); // 16 bytes
 
             // Use Redis pub/sub to notify all connections
-            let room_message = super::collaborate::redis_state::RoomMessage {
+            let room_message = super::collaborate::redis_state::RoomBroadcast {
                 from_connection: "system".to_string(),
-                user_id: uuid::Uuid::nil(),
-                user_login_name: "system".to_string(),
-                message_type: "session_expired".to_string(),
-                payload: session_expired_msg,
-                timestamp: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("System time is before UNIX_EPOCH")
-                    .as_secs(),
+                target_connection: None,
                 seq: None,
                 history_id: None,
-                target_connection: None,
+                payload: session_expired_msg,
             };
 
             if let Err(e) = state
@@ -313,19 +306,12 @@ async fn cleanup_inactive_sessions(
             session_expired_msg.extend_from_slice(session_id.as_bytes()); // 16 bytes
 
             // Use Redis pub/sub to notify all connections
-            let room_message = super::collaborate::redis_state::RoomMessage {
+            let room_message = super::collaborate::redis_state::RoomBroadcast {
                 from_connection: "system".to_string(),
-                user_id: uuid::Uuid::nil(),
-                user_login_name: "system".to_string(),
-                message_type: "session_expired".to_string(),
-                payload: session_expired_msg,
-                timestamp: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("System time is before UNIX_EPOCH")
-                    .as_secs(),
+                target_connection: None,
                 seq: None,
                 history_id: None,
-                target_connection: None,
+                payload: session_expired_msg,
             };
 
             if let Err(e) = state
