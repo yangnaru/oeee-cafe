@@ -70,6 +70,8 @@ painter through `src/public.ts`, opts into the built-in toolbox, exports PNG and
 replay data, and opens the replay viewer without relying on private components.
 Run `pnpm dev` and open `/example.html`. The host application has a separate
 `pnpm dev:collaborate` server and retains its `/collaborate/` base path.
+Open the example link in another window to draw collaboratively through its
+in-browser canonical sequencer; a `?room=` query parameter selects the room.
 
 The package exposes only `neo-cucumber` and `neo-cucumber/style.css`. React and
 React DOM are peer dependencies; private canvas and toolbox modules are not
