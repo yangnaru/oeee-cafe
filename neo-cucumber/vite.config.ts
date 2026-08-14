@@ -35,11 +35,9 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        // The app itself, and the local painter sandbox. The sandbox is a
-        // test harness rather than a route -- nothing links to it, and the
-        // painter only wires itself to it when ?sandbox is present.
+        // The app itself and a standalone public-API usage example.
         index: resolve(__dirname, "index.html"),
-        sandbox: resolve(__dirname, "sandbox.html"),
+        example: resolve(__dirname, "example.html"),
       },
     },
   },

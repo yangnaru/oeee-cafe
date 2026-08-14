@@ -22,9 +22,9 @@
 </head>
 <body>
 <div id="viewer"></div>
-<script src="{{ '/static/viewer/oeee-replay.js' | cachebuster | safe }}"></script>
+<script src="{{ '/static/viewer/neo-cucumber-replay.js' | cachebuster | safe }}"></script>
 <script>
-  OeeeReplay.mount(document.getElementById("viewer"), {
+  NeoCucumberReplay.mount(document.getElementById("viewer"), {
     replay: "{{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}",
     width: {{ post.image_width|int }},
     height: {{ post.image_height|int }},

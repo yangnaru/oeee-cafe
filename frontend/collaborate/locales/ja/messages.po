@@ -48,8 +48,7 @@ msgstr "PNG をダウンロード"
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:49
 msgid "Failed to save session. Please try downloading as PNG instead."
-msgstr ""
-"セッションの保存に失敗しました。代わりに PNG としてダウンロードしてください。"
+msgstr "セッションの保存に失敗しました。代わりに PNG としてダウンロードしてください。"
 
 #: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:28
 #: ../frontend/collaborate/components/modals/RoomFullModal.tsx:35
@@ -128,271 +127,33 @@ msgid "Share"
 msgstr "共有"
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
-msgid ""
-"This collaborative session has ended due to inactivity. As the owner, you "
-"can save it to the gallery or download it as a PNG."
-msgstr ""
-"非アクティブのためコラボレーションセッションが終了しました。オーナーとして、"
-"ギャラリーに保存するか PNG としてダウンロードできます。"
+msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
+msgstr "非アクティブのためコラボレーションセッションが終了しました。オーナーとして、ギャラリーに保存するか PNG としてダウンロードできます。"
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:87
-msgid ""
-"This collaborative session has ended due to inactivity. The session has "
-"already been saved to the gallery, but you can download it as a PNG."
-msgstr ""
-"非アクティブのためコラボレーションセッションが終了しました。セッションはすで"
-"にギャラリーに保存されていますが、PNG としてダウンロードできます。"
+msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
+msgstr "非アクティブのためコラボレーションセッションが終了しました。セッションはすでにギャラリーに保存されていますが、PNG としてダウンロードできます。"
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:89
-msgid ""
-"This collaborative session has ended due to inactivity. You can save your "
-"work locally as a PNG before leaving."
-msgstr ""
-"非アクティブのためコラボレーションセッションが終了しました。退出前にローカル"
-"に PNG として保存できます。"
+msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
+msgstr "非アクティブのためコラボレーションセッションが終了しました。退出前にローカルに PNG として保存できます。"
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:45
 msgid "This session has already been saved. You can only download it as a PNG."
-msgstr ""
-"このセッションはすでに保存されています。PNG としてのみダウンロードできます。"
+msgstr "このセッションはすでに保存されています。PNG としてのみダウンロードできます。"
 
 #: ../frontend/collaborate/components/modals/RoomFullModal.tsx:25
-msgid ""
-"This session is full ({currentUserCount}/{maxUsers} users). Only the first "
-"{maxUsers} users can join a session."
-msgstr ""
-"このセッションは満員です（{currentUserCount}/{maxUsers}ユーザー）。最初の"
-"{maxUsers}ユーザーのみがセッションに参加できます。"
+msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
+msgstr "このセッションは満員です（{currentUserCount}/{maxUsers}ユーザー）。最初の{maxUsers}ユーザーのみがセッションに参加できます。"
 
 #: ../frontend/collaborate/components/Chat.tsx:242
 msgid "Type a message..."
 msgstr "メッセージを入力..."
 
 #: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:19
-msgid ""
-"Unable to authenticate your session. Either the session doesn't exist, or it "
-"has expired. Please return to the lobby."
-msgstr ""
-"セッションを認証できません。セッションが存在しないか、期限切れです。ロビーに"
-"戻ってください。"
+msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
+msgstr "セッションを認証できません。セッションが存在しないか、期限切れです。ロビーに戻ってください。"
 
 #: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:20
 msgid "You'll be redirected to the post page shortly."
 msgstr "まもなく投稿ページにリダイレクトされます。"
-
-#~ msgid "(you)"
-#~ msgstr "（あなた）"
-
-#~ msgid "{minutes} min"
-#~ msgstr "{minutes}分"
-
-#~ msgid "💾 Download PNG"
-#~ msgstr "💾 PNG をダウンロード"
-
-#~ msgid "💾 Save as PNG"
-#~ msgstr "💾 PNG として保存"
-
-#~ msgid "💾 Save to Gallery"
-#~ msgstr "💾 ギャラリーに保存"
-
-#~ msgid "💾 Saving..."
-#~ msgstr "💾 保存中..."
-
-#~ msgid "📄 Download PNG"
-#~ msgstr "📄 PNG をダウンロード"
-
-#~ msgid "🔄 Saving..."
-#~ msgstr "🔄 保存中..."
-
-#~ msgid "Background pen"
-#~ msgstr "背景色ペン"
-
-#~ msgid "Chat"
-#~ msgstr "チャット"
-
-#~ msgid "Color"
-#~ msgstr "色"
-
-#~ msgid "Community: {0}"
-#~ msgstr "コミュニティ: {0}"
-
-#~ msgid "Custom color picker"
-#~ msgstr "カスタムカラーピッカー"
-
-#~ msgid "Custom color picker - edits selected palette color"
-#~ msgstr "カスタムカラーピッカー - 選択されたパレットカラーを編集"
-
-#~ msgid "Dark"
-#~ msgstr "ダーク"
-
-#~ msgid "Download Replay"
-#~ msgstr "リプレイをダウンロード"
-
-#~ msgid "Edit palette color {0}"
-#~ msgstr "パレットカラー {0} を編集"
-
-#~ msgid "Eraser"
-#~ msgstr "消しゴム"
-
-#~ msgid "Failed to download replay file."
-#~ msgstr "リプレイファイルのダウンロードに失敗しました。"
-
-#~ msgid "Failed to save drawing. Please try again."
-#~ msgstr "描画の保存に失敗しました。もう一度お試しください。"
-
-#~ msgid "Fill"
-#~ msgstr "塗りつぶし"
-
-#~ msgid "Flip"
-#~ msgstr "左右反転"
-
-#~ msgid "Foreground pen"
-#~ msgstr "描画色ペン"
-
-#~ msgid "Halftone"
-#~ msgstr "ハーフトーン"
-
-#~ msgid "Hide chat"
-#~ msgstr "チャットを隠す"
-
-#~ msgid "Left click to select layer, right click to toggle visibility"
-#~ msgstr "左クリックでレイヤーを選択、右クリックで表示切り替え"
-
-#~ msgid "Light"
-#~ msgstr "ライト"
-
-#~ msgid "Loading replay..."
-#~ msgstr "リプレイを読み込み中..."
-
-#~ msgid "No replay to show."
-#~ msgstr "表示するリプレイがありません。"
-
-#~ msgid "Oeee Cafe"
-#~ msgstr "OEEEカフェ"
-
-#~ msgid "Off"
-#~ msgstr "オフ"
-
-#~ msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
-#~ msgstr "オフライン描画 ({canvasWidth} × {canvasHeight})"
-
-#~ msgid "Opacity"
-#~ msgstr "不透明度"
-
-#~ msgid "Palette color {0}"
-#~ msgstr "パレットカラー {0}"
-
-#~ msgid "Palette color {0} (selected - edit with color picker below)"
-#~ msgstr "パレットカラー {0} (選択済み - 下のカラーピッカーで編集)"
-
-#~ msgid "Pan"
-#~ msgstr "パン"
-
-#~ msgid "Parent Post: {0}"
-#~ msgstr "親投稿: {0}"
-
-#~ msgid "Participants"
-#~ msgstr "参加者"
-
-#~ msgid "Pause"
-#~ msgstr "一時停止"
-
-#~ msgid "Pen size"
-#~ msgstr "ペンサイズ"
-
-#~ msgid "Pick a colour"
-#~ msgstr "色を選ぶ"
-
-#~ msgid "Play"
-#~ msgstr "再生"
-
-#~ msgid "Redo"
-#~ msgstr "やり直し"
-
-#~ msgid "Remaining: {remaining}"
-#~ msgstr "残り: {remaining}"
-
-#~ msgid "Reset"
-#~ msgstr "リセット"
-
-#~ msgid "Reset zoom"
-#~ msgstr "ズームを戻す"
-
-#~ msgid "Rewind"
-#~ msgstr "最初から"
-
-#~ msgid "Save"
-#~ msgstr "保存"
-
-#~ msgid "Save Drawing"
-#~ msgstr "描画を保存"
-
-#~ msgid "Save drawing to gallery"
-#~ msgstr "描画をギャラリーに保存"
-
-#~ msgid "Seek"
-#~ msgstr "シーク"
-
-#~ msgid "Shortcuts"
-#~ msgstr "ショートカット"
-
-#~ msgid "Show chat"
-#~ msgstr "チャットを表示"
-
-#~ msgid "Show/hide background layer"
-#~ msgstr "背景レイヤーの表示/非表示"
-
-#~ msgid "Show/hide foreground layer"
-#~ msgstr "前景レイヤーの表示/非表示"
-
-#~ msgid "Size"
-#~ msgstr "サイズ"
-
-#~ msgid "Skip to end"
-#~ msgstr "最後まで"
-
-#~ msgid "Solid"
-#~ msgstr "ソリッド"
-
-#~ msgid "step {0} of {1}"
-#~ msgstr "{1}ステップ中{0}ステップ"
-
-#~ msgid "Swap pens"
-#~ msgstr "ペン入れ替え"
-
-#~ msgid "Switch to dark"
-#~ msgstr "ダークモードに切り替え"
-
-#~ msgid "Switch to light"
-#~ msgstr "ライトモードに切り替え"
-
-#~ msgid "This drawing's replay could not be loaded."
-#~ msgstr "この絵のリプレイを読み込めませんでした。"
-
-#~ msgid ""
-#~ "This session is full ({0}/{1} users). Only the first {2} users can join a "
-#~ "session."
-#~ msgstr ""
-#~ "このセッションは満員です（{0}/{1}ユーザー）。最初の{2}ユーザーのみがセッ"
-#~ "ションに参加できます。"
-
-#~ msgid "Time's up."
-#~ msgstr "設定時間が経過しました。"
-
-#~ msgid "Timer"
-#~ msgstr "タイマー"
-
-#~ msgid "Timer off"
-#~ msgstr "タイマー：オフ"
-
-#~ msgid "Toggle horizontal flip"
-#~ msgstr "左右反転を切り替え"
-
-#~ msgid "Undo"
-#~ msgstr "元に戻す"
-
-#~ msgid "Zoom in"
-#~ msgstr "拡大"
-
-#~ msgid "Zoom out"
-#~ msgstr "縮小"

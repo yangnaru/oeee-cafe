@@ -13,42 +13,9 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/components/Chat.tsx:245
-#~ msgid "(you)"
-#~ msgstr "(you)"
-
 #: src/components/SimplifiedToolbox.tsx:147
 msgid "{minutes} min"
 msgstr "{minutes} min"
-
-#: src/components/SessionExpiredModal.tsx:110
-#~ msgid "💾 Download PNG"
-#~ msgstr "💾 Download PNG"
-
-#: src/components/SessionExpiredModal.tsx:120
-#~ msgid "💾 Save as PNG"
-#~ msgstr "💾 Save as PNG"
-
-#: src/components/SessionExpiredModal.tsx:97
-#: src/components/ToolboxPanel.tsx:429
-#~ msgid "💾 Save to Gallery"
-#~ msgstr "💾 Save to Gallery"
-
-#: src/components/ToolboxPanel.tsx:426
-#~ msgid "💾 Saving..."
-#~ msgstr "💾 Saving..."
-
-#: src/components/SessionExpiredModal.tsx:111
-#~ msgid "📄 Download PNG"
-#~ msgstr "📄 Download PNG"
-
-#: src/components/SessionExpiredModal.tsx:97
-#~ msgid "🔄 Saving..."
-#~ msgstr "🔄 Saving..."
-
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:16
-#~ msgid "Authentication Failed"
-#~ msgstr "Authentication Failed"
 
 #: src/components/SimplifiedToolbox.tsx:63
 #: src/components/SimplifiedToolbox.tsx:97
@@ -56,96 +23,19 @@ msgstr "{minutes} min"
 msgid "Background pen"
 msgstr "Background pen"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:56
-#~ msgid "by"
-#~ msgstr "by"
-
-#: src/App.tsx:899
-#~ msgid "Chat"
-#~ msgstr "Chat"
-
 #: src/components/SimplifiedToolbox.tsx:91
 msgid "Color"
 msgstr "Color"
-
-#: src/OfflineApp.tsx:671
-#~ msgid "Community: {0}"
-#~ msgstr "Community: {0}"
-
-#: ../frontend/collaborate/components/SessionHeader.tsx:71
-#~ msgid "Connected"
-#~ msgstr "Connected"
-
-#: ../frontend/collaborate/components/SessionHeader.tsx:77
-#~ msgid "Connecting"
-#~ msgstr "Connecting"
-
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:58
-#~ msgid "Connecting..."
-#~ msgstr "Connecting..."
-
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:36
-#~ msgid "Connection lost. Your work is saved locally."
-#~ msgstr "Connection lost. Your work is saved locally."
-
-#: src/components/ColorPalette.tsx:59
-#~ msgid "Custom color picker"
-#~ msgstr "Custom color picker"
-
-#: src/components/ColorPalette.tsx:55
-#~ msgid "Custom color picker - edits selected palette color"
-#~ msgstr "Custom color picker - edits selected palette color"
 
 #: src/components/SimplifiedToolbox.tsx:195
 #: src/components/ToolboxPanel.tsx:289
 msgid "Dark"
 msgstr "Dark"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:83
-#~ msgid "Disconnected"
-#~ msgstr "Disconnected"
-
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:49
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:142
-#~ msgid "Download PNG"
-#~ msgstr "Download PNG"
-
-#: src/OfflineApp.tsx:708
-#~ msgid "Download Replay"
-#~ msgstr "Download Replay"
-
-#: src/components/ColorPalette.tsx:58
-#~ msgid "Edit palette color {0}"
-#~ msgstr "Edit palette color {0}"
-
-#: src/App.tsx:1915
-#~ msgid "Eraser"
-#~ msgstr "Eraser"
-
-#: src/OfflineApp.tsx:463
-#~ msgid "Failed to download replay file."
-#~ msgstr "Failed to download replay file."
-
-#: src/OfflineApp.tsx:426
-#~ msgid "Failed to save drawing. Please try again."
-#~ msgstr "Failed to save drawing. Please try again."
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:49
-#~ msgid "Failed to save session. Please try downloading as PNG instead."
-#~ msgstr "Failed to save session. Please try downloading as PNG instead."
-
-#: src/App.tsx:1917
-#~ msgid "Fill"
-#~ msgstr "Fill"
-
 #: src/components/ToolboxPanel.tsx:156
 #: src/components/ToolboxPanel.tsx:157
 msgid "Fit canvas"
 msgstr "Fit canvas"
-
-#: src/components/ToolboxPanel.tsx:419
-#~ msgid "Flip"
-#~ msgstr "Flip"
 
 #: src/components/SimplifiedToolbox.tsx:62
 #: src/components/SimplifiedToolbox.tsx:116
@@ -153,101 +43,14 @@ msgstr "Fit canvas"
 msgid "Foreground pen"
 msgstr "Foreground pen"
 
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:28
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:35
-#~ msgid "Go to Lobby"
-#~ msgstr "Go to Lobby"
-
-#: src/App.tsx:1913
-#~ msgid "Halftone"
-#~ msgstr "Halftone"
-
-#: src/components/Chat.tsx:178
-#: src/components/Chat.tsx:179
-#~ msgid "Hide chat"
-#~ msgstr "Hide chat"
-
-#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:18
-#~ msgid "Initialization Failed"
-#~ msgstr "Initialization Failed"
-
-#: ../frontend/collaborate/components/modals/LoadingModal.tsx:13
-#~ msgid "Initializing collaboration session..."
-#~ msgstr "Initializing collaboration session..."
-
-#: src/components/ToolboxPanel.tsx:340
-#~ msgid "Left click to select layer, right click to toggle visibility"
-#~ msgstr "Left click to select layer, right click to toggle visibility"
-
 #: src/components/SimplifiedToolbox.tsx:195
 #: src/components/ToolboxPanel.tsx:289
 msgid "Light"
 msgstr "Light"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:89
-#~ msgid "Loading"
-#~ msgstr "Loading"
-
-#: src/viewer/ViewerApp.tsx:133
-#~ msgid "Loading replay..."
-#~ msgstr "Loading replay..."
-
-#: ../frontend/collaborate/components/modals/LoadingModal.tsx:12
-#~ msgid "Loading..."
-#~ msgstr "Loading..."
-
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
-#~ msgid "LOADING..."
-#~ msgstr "LOADING..."
-
-#: src/viewer/ViewerApp.tsx:45
-#~ msgid "No replay to show."
-#~ msgstr "No replay to show."
-
-#: src/App.tsx:917
-#~ msgid "Oeee Cafe"
-#~ msgstr "Oeee Cafe"
-
 #: src/components/SimplifiedToolbox.tsx:147
 msgid "Off"
 msgstr "Off"
-
-#: src/OfflineApp.tsx:665
-#~ msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
-#~ msgstr "Offline Drawing ({canvasWidth} × {canvasHeight})"
-
-#: src/components/ToolboxPanel.tsx:259
-#~ msgid "Opacity"
-#~ msgstr "Opacity"
-
-#: src/components/ColorPalette.tsx:44
-#~ msgid "Palette color {0}"
-#~ msgstr "Palette color {0}"
-
-#: src/components/ColorPalette.tsx:41
-#~ msgid "Palette color {0} (selected - edit with color picker below)"
-#~ msgstr "Palette color {0} (selected - edit with color picker below)"
-
-#: src/App.tsx:1919
-#~ msgid "Pan"
-#~ msgstr "Pan"
-
-#: src/OfflineApp.tsx:679
-#~ msgid "Parent Post: {0}"
-#~ msgstr "Parent Post: {0}"
-
-#: src/components/Chat.tsx:193
-#~ msgid "Participants"
-#~ msgstr "Participants"
-
-#: ../frontend/collaborate/components/Chat.tsx:163
-#: ../frontend/collaborate/components/Chat.tsx:164
-#~ msgid "Participants ({0})"
-#~ msgstr "Participants ({0})"
-
-#: src/viewer/ViewerApp.tsx:153
-#~ msgid "Pause"
-#~ msgstr "Pause"
 
 #: src/components/SimplifiedToolbox.tsx:64
 msgid "Pen size"
@@ -257,14 +60,6 @@ msgstr "Pen size"
 #: src/components/ToolboxPanel.tsx:219
 msgid "Pick a colour"
 msgstr "Pick a colour"
-
-#: src/viewer/ViewerApp.tsx:153
-#~ msgid "Play"
-#~ msgstr "Play"
-
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:43
-#~ msgid "Reconnect"
-#~ msgstr "Reconnect"
 
 #: src/components/SimplifiedToolbox.tsx:66
 #: src/components/SimplifiedToolbox.tsx:176
@@ -276,108 +71,21 @@ msgstr "Redo"
 msgid "Remaining: {remaining}"
 msgstr "Remaining: {remaining}"
 
-#: src/App.tsx:2119
-#~ msgid "Reset"
-#~ msgstr "Reset"
-
 #: src/components/ToolboxPanel.tsx:187
 msgid "Reset zoom"
 msgstr "Reset zoom"
-
-#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:25
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:41
-#~ msgid "Retry"
-#~ msgstr "Retry"
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:163
-#~ msgid "Return to Lobby"
-#~ msgstr "Return to Lobby"
-
-#: src/viewer/ViewerApp.tsx:160
-#~ msgid "Rewind"
-#~ msgstr "Rewind"
 
 #: src/components/ToolboxPanel.tsx:310
 msgid "Save"
 msgstr "Save"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:154
-#~ msgid "Save as PNG"
-#~ msgstr "Save as PNG"
-
-#: src/components/SimplifiedToolbox.tsx:180
-#: src/OfflineApp.tsx:692
-#~ msgid "Save Drawing"
-#~ msgstr "Save Drawing"
-
 #: src/components/ToolboxPanel.tsx:298
 msgid "Save drawing to gallery"
 msgstr "Save drawing to gallery"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:122
-#~ msgid "Save to Gallery"
-#~ msgstr "Save to Gallery"
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:113
-#~ msgid "Saving..."
-#~ msgstr "Saving..."
-
-#: src/viewer/ViewerApp.tsx:143
-#~ msgid "Seek"
-#~ msgstr "Seek"
-
-#: ../frontend/collaborate/components/Chat.tsx:241
-#~ msgid "Send"
-#~ msgstr "Send"
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:82
-#~ msgid "Session Expired"
-#~ msgstr "Session Expired"
-
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:22
-#~ msgid "Session Full"
-#~ msgstr "Session Full"
-
-#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:15
-#~ msgid "Session is ending. The drawing is being saved to the gallery..."
-#~ msgstr "Session is ending. The drawing is being saved to the gallery..."
-
-#: ../frontend/collaborate/components/SessionHeader.tsx:66
-#~ msgid "Share"
-#~ msgstr "Share"
-
 #: src/components/SimplifiedToolbox.tsx:201
 msgid "Shortcuts"
 msgstr "Shortcuts"
-
-#: src/components/Chat.tsx:178
-#: src/components/Chat.tsx:179
-#~ msgid "Show chat"
-#~ msgstr "Show chat"
-
-#: src/components/ToolboxPanel.tsx:379
-#~ msgid "Show/hide background layer"
-#~ msgstr "Show/hide background layer"
-
-#: src/components/ToolboxPanel.tsx:378
-#~ msgid "Show/hide foreground layer"
-#~ msgstr "Show/hide foreground layer"
-
-#: src/components/ToolboxPanel.tsx:240
-#~ msgid "Size"
-#~ msgstr "Size"
-
-#: src/viewer/ViewerApp.tsx:167
-#~ msgid "Skip to end"
-#~ msgstr "Skip to end"
-
-#: src/App.tsx:1911
-#~ msgid "Solid"
-#~ msgstr "Solid"
-
-#: src/viewer/ViewerApp.tsx:191
-#~ msgid "step {0} of {1}"
-#~ msgstr "step {0} of {1}"
 
 #: src/components/SimplifiedToolbox.tsx:61
 msgid "Swap pens"
@@ -392,34 +100,6 @@ msgstr "Switch to dark"
 #: src/components/ToolboxPanel.tsx:274
 msgid "Switch to light"
 msgstr "Switch to light"
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
-#~ msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
-#~ msgstr "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:87
-#~ msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
-#~ msgstr "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:89
-#~ msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
-#~ msgstr "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
-
-#: src/viewer/ViewerApp.tsx:81
-#~ msgid "This drawing's replay could not be loaded."
-#~ msgstr "This drawing's replay could not be loaded."
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:45
-#~ msgid "This session has already been saved. You can only download it as a PNG."
-#~ msgstr "This session has already been saved. You can only download it as a PNG."
-
-#: src/App.tsx:1750
-#~ msgid "This session is full ({0}/{1} users). Only the first {2} users can join a session."
-#~ msgstr "This session is full ({0}/{1} users). Only the first {2} users can join a session."
-
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:25
-#~ msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
-#~ msgstr "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 
 #: src/Painter.tsx:589
 msgid "Time's up."
@@ -437,23 +117,11 @@ msgstr "Timer off"
 msgid "Toggle horizontal flip"
 msgstr "Toggle horizontal flip"
 
-#: ../frontend/collaborate/components/Chat.tsx:232
-#~ msgid "Type a message..."
-#~ msgstr "Type a message..."
-
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:19
-#~ msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
-#~ msgstr "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
-
 #: src/components/SimplifiedToolbox.tsx:65
 #: src/components/SimplifiedToolbox.tsx:168
 #: src/components/ToolboxPanel.tsx:249
 msgid "Undo"
 msgstr "Undo"
-
-#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:20
-#~ msgid "You'll be redirected to the post page shortly."
-#~ msgstr "You'll be redirected to the post page shortly."
 
 #: src/components/ToolboxPanel.tsx:179
 msgid "Zoom in"

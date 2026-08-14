@@ -13,42 +13,9 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/components/Chat.tsx:245
-#~ msgid "(you)"
-#~ msgstr "(나)"
-
 #: src/components/SimplifiedToolbox.tsx:147
 msgid "{minutes} min"
 msgstr "{minutes}분"
-
-#: src/components/SessionExpiredModal.tsx:110
-#~ msgid "💾 Download PNG"
-#~ msgstr "💾 PNG 다운로드"
-
-#: src/components/SessionExpiredModal.tsx:120
-#~ msgid "💾 Save as PNG"
-#~ msgstr "💾 PNG로 저장"
-
-#: src/components/SessionExpiredModal.tsx:97
-#: src/components/ToolboxPanel.tsx:429
-#~ msgid "💾 Save to Gallery"
-#~ msgstr "💾 갤러리에 저장"
-
-#: src/components/ToolboxPanel.tsx:426
-#~ msgid "💾 Saving..."
-#~ msgstr "💾 저장 중..."
-
-#: src/components/SessionExpiredModal.tsx:111
-#~ msgid "📄 Download PNG"
-#~ msgstr "📄 PNG 다운로드"
-
-#: src/components/SessionExpiredModal.tsx:97
-#~ msgid "🔄 Saving..."
-#~ msgstr "🔄 저장 중..."
-
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:16
-#~ msgid "Authentication Failed"
-#~ msgstr "인증 실패"
 
 #: src/components/SimplifiedToolbox.tsx:63
 #: src/components/SimplifiedToolbox.tsx:97
@@ -56,96 +23,19 @@ msgstr "{minutes}분"
 msgid "Background pen"
 msgstr "배경색 펜"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:56
-#~ msgid "by"
-#~ msgstr "작성자:"
-
-#: src/App.tsx:899
-#~ msgid "Chat"
-#~ msgstr "채팅"
-
 #: src/components/SimplifiedToolbox.tsx:91
 msgid "Color"
 msgstr "색상"
-
-#: src/OfflineApp.tsx:671
-#~ msgid "Community: {0}"
-#~ msgstr "커뮤니티: {0}"
-
-#: ../frontend/collaborate/components/SessionHeader.tsx:71
-#~ msgid "Connected"
-#~ msgstr "연결됨"
-
-#: ../frontend/collaborate/components/SessionHeader.tsx:77
-#~ msgid "Connecting"
-#~ msgstr "연결 중"
-
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:58
-#~ msgid "Connecting..."
-#~ msgstr "연결 중..."
-
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:36
-#~ msgid "Connection lost. Your work is saved locally."
-#~ msgstr "연결이 끊어졌습니다. 작업이 로컬에 저장되었습니다."
-
-#: src/components/ColorPalette.tsx:59
-#~ msgid "Custom color picker"
-#~ msgstr "사용자 정의 색상 선택기"
-
-#: src/components/ColorPalette.tsx:55
-#~ msgid "Custom color picker - edits selected palette color"
-#~ msgstr "사용자 정의 색상 선택기 - 선택된 팔레트 색상 편집"
 
 #: src/components/SimplifiedToolbox.tsx:195
 #: src/components/ToolboxPanel.tsx:289
 msgid "Dark"
 msgstr "다크"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:83
-#~ msgid "Disconnected"
-#~ msgstr "연결 끊어짐"
-
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:49
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:142
-#~ msgid "Download PNG"
-#~ msgstr "PNG 다운로드"
-
-#: src/OfflineApp.tsx:708
-#~ msgid "Download Replay"
-#~ msgstr "리플레이 다운로드"
-
-#: src/components/ColorPalette.tsx:58
-#~ msgid "Edit palette color {0}"
-#~ msgstr "팔레트 색상 {0} 편집"
-
-#: src/App.tsx:1915
-#~ msgid "Eraser"
-#~ msgstr "지우개"
-
-#: src/OfflineApp.tsx:463
-#~ msgid "Failed to download replay file."
-#~ msgstr "리플레이 파일 다운로드에 실패했습니다."
-
-#: src/OfflineApp.tsx:426
-#~ msgid "Failed to save drawing. Please try again."
-#~ msgstr "그림 저장에 실패했습니다. 다시 시도해 주세요."
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:49
-#~ msgid "Failed to save session. Please try downloading as PNG instead."
-#~ msgstr "세션 저장에 실패했습니다. 대신 PNG로 다운로드해 보세요."
-
-#: src/App.tsx:1917
-#~ msgid "Fill"
-#~ msgstr "채우기"
-
 #: src/components/ToolboxPanel.tsx:156
 #: src/components/ToolboxPanel.tsx:157
 msgid "Fit canvas"
 msgstr ""
-
-#: src/components/ToolboxPanel.tsx:419
-#~ msgid "Flip"
-#~ msgstr "좌우 반전"
 
 #: src/components/SimplifiedToolbox.tsx:62
 #: src/components/SimplifiedToolbox.tsx:116
@@ -153,101 +43,14 @@ msgstr ""
 msgid "Foreground pen"
 msgstr "전경색 펜"
 
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:28
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:35
-#~ msgid "Go to Lobby"
-#~ msgstr "로비로 가기"
-
-#: src/App.tsx:1913
-#~ msgid "Halftone"
-#~ msgstr "하프톤"
-
-#: src/components/Chat.tsx:178
-#: src/components/Chat.tsx:179
-#~ msgid "Hide chat"
-#~ msgstr "채팅 숨기기"
-
-#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:18
-#~ msgid "Initialization Failed"
-#~ msgstr "초기화 실패"
-
-#: ../frontend/collaborate/components/modals/LoadingModal.tsx:13
-#~ msgid "Initializing collaboration session..."
-#~ msgstr "협업 세션 초기화 중..."
-
-#: src/components/ToolboxPanel.tsx:340
-#~ msgid "Left click to select layer, right click to toggle visibility"
-#~ msgstr "왼쪽 클릭으로 레이어 선택, 오른쪽 클릭으로 표시 전환"
-
 #: src/components/SimplifiedToolbox.tsx:195
 #: src/components/ToolboxPanel.tsx:289
 msgid "Light"
 msgstr "라이트"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:89
-#~ msgid "Loading"
-#~ msgstr "로딩 중"
-
-#: src/viewer/ViewerApp.tsx:133
-#~ msgid "Loading replay..."
-#~ msgstr "리플레이 불러오는 중..."
-
-#: ../frontend/collaborate/components/modals/LoadingModal.tsx:12
-#~ msgid "Loading..."
-#~ msgstr "로딩 중..."
-
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
-#~ msgid "LOADING..."
-#~ msgstr "로딩 중..."
-
-#: src/viewer/ViewerApp.tsx:45
-#~ msgid "No replay to show."
-#~ msgstr "표시할 리플레이가 없습니다."
-
-#: src/App.tsx:917
-#~ msgid "Oeee Cafe"
-#~ msgstr "오이카페"
-
 #: src/components/SimplifiedToolbox.tsx:147
 msgid "Off"
 msgstr "끄기"
-
-#: src/OfflineApp.tsx:665
-#~ msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
-#~ msgstr "오프라인 그리기 ({canvasWidth} × {canvasHeight})"
-
-#: src/components/ToolboxPanel.tsx:259
-#~ msgid "Opacity"
-#~ msgstr "불투명도"
-
-#: src/components/ColorPalette.tsx:44
-#~ msgid "Palette color {0}"
-#~ msgstr "팔레트 색상 {0}"
-
-#: src/components/ColorPalette.tsx:41
-#~ msgid "Palette color {0} (selected - edit with color picker below)"
-#~ msgstr "팔레트 색상 {0} (선택됨 - 아래 색상 선택기로 편집)"
-
-#: src/App.tsx:1919
-#~ msgid "Pan"
-#~ msgstr "이동"
-
-#: src/OfflineApp.tsx:679
-#~ msgid "Parent Post: {0}"
-#~ msgstr "부모 게시물: {0}"
-
-#: src/components/Chat.tsx:193
-#~ msgid "Participants"
-#~ msgstr "참여자"
-
-#: ../frontend/collaborate/components/Chat.tsx:163
-#: ../frontend/collaborate/components/Chat.tsx:164
-#~ msgid "Participants ({0})"
-#~ msgstr ""
-
-#: src/viewer/ViewerApp.tsx:153
-#~ msgid "Pause"
-#~ msgstr "일시정지"
 
 #: src/components/SimplifiedToolbox.tsx:64
 msgid "Pen size"
@@ -257,14 +60,6 @@ msgstr "펜 크기"
 #: src/components/ToolboxPanel.tsx:219
 msgid "Pick a colour"
 msgstr "색 선택"
-
-#: src/viewer/ViewerApp.tsx:153
-#~ msgid "Play"
-#~ msgstr "재생"
-
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:43
-#~ msgid "Reconnect"
-#~ msgstr "재연결"
 
 #: src/components/SimplifiedToolbox.tsx:66
 #: src/components/SimplifiedToolbox.tsx:176
@@ -276,108 +71,21 @@ msgstr "다시 실행"
 msgid "Remaining: {remaining}"
 msgstr "남은 시간: {remaining}"
 
-#: src/App.tsx:2119
-#~ msgid "Reset"
-#~ msgstr "초기화"
-
 #: src/components/ToolboxPanel.tsx:187
 msgid "Reset zoom"
 msgstr "확대 초기화"
-
-#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:25
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:41
-#~ msgid "Retry"
-#~ msgstr "다시 시도"
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:163
-#~ msgid "Return to Lobby"
-#~ msgstr "로비로 돌아가기"
-
-#: src/viewer/ViewerApp.tsx:160
-#~ msgid "Rewind"
-#~ msgstr "처음으로"
 
 #: src/components/ToolboxPanel.tsx:310
 msgid "Save"
 msgstr "저장"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:154
-#~ msgid "Save as PNG"
-#~ msgstr "PNG로 저장"
-
-#: src/components/SimplifiedToolbox.tsx:180
-#: src/OfflineApp.tsx:692
-#~ msgid "Save Drawing"
-#~ msgstr "그림 저장"
-
 #: src/components/ToolboxPanel.tsx:298
 msgid "Save drawing to gallery"
 msgstr "그림을 갤러리에 저장"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:122
-#~ msgid "Save to Gallery"
-#~ msgstr "갤러리에 저장"
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:113
-#~ msgid "Saving..."
-#~ msgstr "저장 중..."
-
-#: src/viewer/ViewerApp.tsx:143
-#~ msgid "Seek"
-#~ msgstr "탐색"
-
-#: ../frontend/collaborate/components/Chat.tsx:241
-#~ msgid "Send"
-#~ msgstr "전송"
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:82
-#~ msgid "Session Expired"
-#~ msgstr "세션 만료"
-
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:22
-#~ msgid "Session Full"
-#~ msgstr "세션 만석"
-
-#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:15
-#~ msgid "Session is ending. The drawing is being saved to the gallery..."
-#~ msgstr "세션이 종료됩니다. 그림을 갤러리에 저장 중..."
-
-#: ../frontend/collaborate/components/SessionHeader.tsx:66
-#~ msgid "Share"
-#~ msgstr "공유"
-
 #: src/components/SimplifiedToolbox.tsx:201
 msgid "Shortcuts"
 msgstr "단축키"
-
-#: src/components/Chat.tsx:178
-#: src/components/Chat.tsx:179
-#~ msgid "Show chat"
-#~ msgstr "채팅 보기"
-
-#: src/components/ToolboxPanel.tsx:379
-#~ msgid "Show/hide background layer"
-#~ msgstr "배경 레이어 표시/숨기기"
-
-#: src/components/ToolboxPanel.tsx:378
-#~ msgid "Show/hide foreground layer"
-#~ msgstr "전경 레이어 표시/숨기기"
-
-#: src/components/ToolboxPanel.tsx:240
-#~ msgid "Size"
-#~ msgstr "크기"
-
-#: src/viewer/ViewerApp.tsx:167
-#~ msgid "Skip to end"
-#~ msgstr "끝으로"
-
-#: src/App.tsx:1911
-#~ msgid "Solid"
-#~ msgstr "실선"
-
-#: src/viewer/ViewerApp.tsx:191
-#~ msgid "step {0} of {1}"
-#~ msgstr "{1}단계 중 {0}단계"
 
 #: src/components/SimplifiedToolbox.tsx:61
 msgid "Swap pens"
@@ -392,34 +100,6 @@ msgstr "다크 모드로 전환"
 #: src/components/ToolboxPanel.tsx:274
 msgid "Switch to light"
 msgstr "라이트 모드로 전환"
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
-#~ msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
-#~ msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 소유자로서 갤러리에 저장하거나 PNG로 다운로드할 수 있습니다."
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:87
-#~ msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
-#~ msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 세션이 이미 갤러리에 저장되었지만 PNG로 다운로드할 수 있습니다."
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:89
-#~ msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
-#~ msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 떠나기 전에 작업을 PNG로 로컬에 저장할 수 있습니다."
-
-#: src/viewer/ViewerApp.tsx:81
-#~ msgid "This drawing's replay could not be loaded."
-#~ msgstr "이 그림의 리플레이를 불러올 수 없습니다."
-
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:45
-#~ msgid "This session has already been saved. You can only download it as a PNG."
-#~ msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 수 있습니다."
-
-#: src/App.tsx:1750
-#~ msgid "This session is full ({0}/{1} users). Only the first {2} users can join a session."
-#~ msgstr "이 세션이 가득참 ({0}/{1} 사용자). 처음 {2}명의 사용자만 세션에 참여할 수 있습니다."
-
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:25
-#~ msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
-#~ msgstr "이 세션이 가득 찼습니다 ({currentUserCount}/{maxUsers}명). 처음 {maxUsers}명의 사용자만 세션에 참여할 수 있습니다."
 
 #: src/Painter.tsx:589
 msgid "Time's up."
@@ -437,23 +117,11 @@ msgstr "타이머 꺼짐"
 msgid "Toggle horizontal flip"
 msgstr "좌우 반전 전환"
 
-#: ../frontend/collaborate/components/Chat.tsx:232
-#~ msgid "Type a message..."
-#~ msgstr "메시지 입력..."
-
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:19
-#~ msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
-#~ msgstr "세션을 인증할 수 없습니다. 세션이 존재하지 않거나 만료되었습니다. 로비로 돌아가 주세요."
-
 #: src/components/SimplifiedToolbox.tsx:65
 #: src/components/SimplifiedToolbox.tsx:168
 #: src/components/ToolboxPanel.tsx:249
 msgid "Undo"
 msgstr "실행 취소"
-
-#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:20
-#~ msgid "You'll be redirected to the post page shortly."
-#~ msgstr "곧 게시물 페이지로 리디렉션됩니다."
 
 #: src/components/ToolboxPanel.tsx:179
 msgid "Zoom in"

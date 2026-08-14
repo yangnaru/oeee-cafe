@@ -15,9 +15,9 @@ export default defineConfig({
     emptyOutDir: true,
     lib: {
       entry: path.resolve(import.meta.dirname, "src/viewer/embed.ts"),
-      name: "OeeeReplay",
+      name: "NeoCucumberReplay",
       formats: ["iife"],
-      fileName: () => "oeee-replay.js",
+      fileName: () => "neo-cucumber-replay.js",
     },
   },
 });

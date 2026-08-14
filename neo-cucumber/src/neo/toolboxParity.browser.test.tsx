@@ -4,8 +4,8 @@ import { createRoot } from "react-dom/client";
 // Our own stylesheet, so the column renders with the utilities it ships with
 // rather than with the browser's defaults
 import "../App.css";
-import neoScript from "../../../neo/dist/paintbbs-oeee-1.7.0.js?raw";
-import neoStyles from "../../../neo/dist/paintbbs-oeee-1.7.0.css?raw";
+import neoScript from "../../../neo/dist/PaintBBS-1.6.10.js?raw";
+import neoStyles from "../../../neo/dist/PaintBBS-1.6.10.css?raw";
 import { NeoToolColumn } from "../components/neo/NeoToolColumn";
 import { ALL_TOOLS, DEFAULT_PALETTE_COLORS } from "../constants/drawing";
 import type { DrawingState } from "../types/drawing";

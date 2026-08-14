@@ -942,11 +942,11 @@ mod template_tests {
             let rendered = render_replay(template);
 
             assert!(
-                rendered.contains("OeeeReplay.mount"),
+                rendered.contains("NeoCucumberReplay.mount"),
                 "{template} should mount the viewer"
             );
             assert!(
-                rendered.contains("/static/viewer/oeee-replay.js"),
+                rendered.contains("/static/viewer/neo-cucumber-replay.js"),
                 "{template} should load the viewer bundle"
             );
             // The dimensions reach the mount call as numbers, not as the

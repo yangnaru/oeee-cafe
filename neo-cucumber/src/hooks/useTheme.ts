@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "oeee-theme";
+const STORAGE_KEY = "neo-cucumber-theme";
 
 /** What the OS asks for, when nothing has been chosen here. */
 function systemTheme(): Theme {

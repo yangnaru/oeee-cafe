@@ -71,7 +71,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
 }
 
 /**
- * Renders a replay viewer into `container`. Styling hangs off `oeee-replay-*`
+ * Renders a replay viewer into `container`. Styling hangs off `neo-cucumber-replay-*`
  * class names so the host page keeps control of the look.
  */
 export function mount(
@@ -79,34 +79,34 @@ export function mount(
   options: MountOptions
 ): MountedViewer {
   const labels = labelsFor(options.lang);
-  container.classList.add("oeee-replay");
+  container.classList.add("neo-cucumber-replay");
   container.textContent = "";
 
-  const status = el("p", "oeee-replay-status", labels.loading);
+  const status = el("p", "neo-cucumber-replay-status", labels.loading);
   container.appendChild(status);
 
-  const canvas = el("canvas", "oeee-replay-canvas");
+  const canvas = el("canvas", "neo-cucumber-replay-canvas");
   canvas.width = options.width ?? 300;
   canvas.height = options.height ?? 300;
 
-  const controls = el("div", "oeee-replay-controls");
-  const seek = el("input", "oeee-replay-seek") as HTMLInputElement;
+  const controls = el("div", "neo-cucumber-replay-controls");
+  const seek = el("input", "neo-cucumber-replay-seek") as HTMLInputElement;
   seek.type = "range";
   seek.min = "0";
   seek.value = "0";
   seek.setAttribute("aria-label", labels.seek);
 
-  const buttons = el("div", "oeee-replay-buttons");
-  const playButton = el("button", "oeee-replay-button", labels.play);
+  const buttons = el("div", "neo-cucumber-replay-buttons");
+  const playButton = el("button", "neo-cucumber-replay-button", labels.play);
   playButton.type = "button";
-  const rewindButton = el("button", "oeee-replay-button", labels.rewind);
+  const rewindButton = el("button", "neo-cucumber-replay-button", labels.rewind);
   rewindButton.type = "button";
-  const skipButton = el("button", "oeee-replay-button", labels.skip);
+  const skipButton = el("button", "neo-cucumber-replay-button", labels.skip);
   skipButton.type = "button";
 
-  const speeds = el("div", "oeee-replay-speeds");
+  const speeds = el("div", "neo-cucumber-replay-speeds");
   const speedButtons = SPEEDS.map((speed, index) => {
-    const button = el("button", "oeee-replay-speed", speed.label);
+    const button = el("button", "neo-cucumber-replay-speed", speed.label);
     button.type = "button";
     button.setAttribute("aria-pressed", String(index === DEFAULT_SPEED_INDEX));
     speeds.appendChild(button);

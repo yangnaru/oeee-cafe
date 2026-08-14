@@ -43,7 +43,7 @@ document.getElementById("download")!.addEventListener("click", () => {
     const url = URL.createObjectURL(replay);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "sandbox.pch";
+    anchor.download = "example.pch";
     anchor.click();
     URL.revokeObjectURL(url);
   });

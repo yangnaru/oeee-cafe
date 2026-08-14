@@ -127,23 +127,15 @@ msgid "Share"
 msgstr "分享"
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
-msgid ""
-"This collaborative session has ended due to inactivity. As the owner, you "
-"can save it to the gallery or download it as a PNG."
-msgstr ""
-"由于无活动，此协作会话已结束。作为所有者，您可以将其保存到画廊或下载为 PNG。"
+msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
+msgstr "由于无活动，此协作会话已结束。作为所有者，您可以将其保存到画廊或下载为 PNG。"
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:87
-msgid ""
-"This collaborative session has ended due to inactivity. The session has "
-"already been saved to the gallery, but you can download it as a PNG."
-msgstr ""
-"由于无活动，此协作会话已结束。会话已保存到画廊，但您可以将其下载为 PNG。"
+msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
+msgstr "由于无活动，此协作会话已结束。会话已保存到画廊，但您可以将其下载为 PNG。"
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:89
-msgid ""
-"This collaborative session has ended due to inactivity. You can save your "
-"work locally as a PNG before leaving."
+msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 msgstr "由于无活动，此协作会话已结束。您可以在离开前将您的作品保存为 PNG。"
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:45
@@ -151,238 +143,17 @@ msgid "This session has already been saved. You can only download it as a PNG."
 msgstr "此会话已保存。您只能将其下载为 PNG。"
 
 #: ../frontend/collaborate/components/modals/RoomFullModal.tsx:25
-msgid ""
-"This session is full ({currentUserCount}/{maxUsers} users). Only the first "
-"{maxUsers} users can join a session."
-msgstr ""
-"此会话已满（{currentUserCount}/{maxUsers} 位用户）。只有前 {maxUsers} 位用户"
-"可以加入会话。"
+msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
+msgstr "此会话已满（{currentUserCount}/{maxUsers} 位用户）。只有前 {maxUsers} 位用户可以加入会话。"
 
 #: ../frontend/collaborate/components/Chat.tsx:242
 msgid "Type a message..."
 msgstr "输入消息..."
 
 #: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:19
-msgid ""
-"Unable to authenticate your session. Either the session doesn't exist, or it "
-"has expired. Please return to the lobby."
+msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "无法验证您的会话。会话不存在或已过期。请返回大厅。"
 
 #: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:20
 msgid "You'll be redirected to the post page shortly."
 msgstr "您将稍后被重定向到帖子页面。"
-
-#~ msgid "(you)"
-#~ msgstr "(您)"
-
-#~ msgid "{minutes} min"
-#~ msgstr "{minutes} 分钟"
-
-#~ msgid "💾 Download PNG"
-#~ msgstr "💾 下载 PNG"
-
-#~ msgid "💾 Save as PNG"
-#~ msgstr "💾 保存为 PNG"
-
-#~ msgid "💾 Save to Gallery"
-#~ msgstr "💾 保存到画廊"
-
-#~ msgid "💾 Saving..."
-#~ msgstr "💾 保存中..."
-
-#~ msgid "📄 Download PNG"
-#~ msgstr "📄 下载 PNG"
-
-#~ msgid "🔄 Saving..."
-#~ msgstr "🔄 保存中..."
-
-#~ msgid "Background pen"
-#~ msgstr "背景色画笔"
-
-#~ msgid "Chat"
-#~ msgstr "聊天"
-
-#~ msgid "Color"
-#~ msgstr "颜色"
-
-#~ msgid "Community: {0}"
-#~ msgstr "社区: {0}"
-
-#~ msgid "Custom color picker"
-#~ msgstr "自定义色彩选择器"
-
-#~ msgid "Custom color picker - edits selected palette color"
-#~ msgstr "自定义色彩选择器 - 编辑选中的调色板颜色"
-
-#~ msgid "Dark"
-#~ msgstr "深色"
-
-#~ msgid "Download Replay"
-#~ msgstr "下载回放"
-
-#~ msgid "Edit palette color {0}"
-#~ msgstr "编辑调色板颜色 {0}"
-
-#~ msgid "Eraser"
-#~ msgstr "橡皮擦"
-
-#~ msgid "Failed to download replay file."
-#~ msgstr "下载回放文件失败。"
-
-#~ msgid "Failed to save drawing. Please try again."
-#~ msgstr "保存绘画失败。请重试。"
-
-#~ msgid "Fill"
-#~ msgstr "填充"
-
-#~ msgid "Flip"
-#~ msgstr "水平翻转"
-
-#~ msgid "Foreground pen"
-#~ msgstr "前景色画笔"
-
-#~ msgid "Halftone"
-#~ msgstr "半调"
-
-#~ msgid "Hide chat"
-#~ msgstr "隐藏聊天"
-
-#~ msgid "Left click to select layer, right click to toggle visibility"
-#~ msgstr "左键选择图层，右键切换可见性"
-
-#~ msgid "Light"
-#~ msgstr "浅色"
-
-#~ msgid "Loading replay..."
-#~ msgstr "正在加载回放..."
-
-#~ msgid "No replay to show."
-#~ msgstr "没有可显示的回放。"
-
-#~ msgid "Oeee Cafe"
-#~ msgstr "黄瓜咖啡馆"
-
-#~ msgid "Off"
-#~ msgstr "关闭"
-
-#~ msgid "Offline Drawing ({canvasWidth} × {canvasHeight})"
-#~ msgstr "离线绘画 ({canvasWidth} × {canvasHeight})"
-
-#~ msgid "Opacity"
-#~ msgstr "不透明度"
-
-#~ msgid "Palette color {0}"
-#~ msgstr "调色板颜色 {0}"
-
-#~ msgid "Palette color {0} (selected - edit with color picker below)"
-#~ msgstr "调色板颜色 {0} (已选中 - 使用下方色彩选择器编辑)"
-
-#~ msgid "Pan"
-#~ msgstr "平移"
-
-#~ msgid "Parent Post: {0}"
-#~ msgstr "父帖子: {0}"
-
-#~ msgid "Participants"
-#~ msgstr "参与者"
-
-#~ msgid "Pause"
-#~ msgstr "暂停"
-
-#~ msgid "Pen size"
-#~ msgstr "画笔大小"
-
-#~ msgid "Pick a colour"
-#~ msgstr "选择颜色"
-
-#~ msgid "Play"
-#~ msgstr "播放"
-
-#~ msgid "Redo"
-#~ msgstr "重做"
-
-#~ msgid "Remaining: {remaining}"
-#~ msgstr "剩余：{remaining}"
-
-#~ msgid "Reset"
-#~ msgstr "重置"
-
-#~ msgid "Reset zoom"
-#~ msgstr "重置缩放"
-
-#~ msgid "Rewind"
-#~ msgstr "重新开始"
-
-#~ msgid "Save"
-#~ msgstr "保存"
-
-#~ msgid "Save Drawing"
-#~ msgstr "保存绘画"
-
-#~ msgid "Save drawing to gallery"
-#~ msgstr "保存绘画到画廊"
-
-#~ msgid "Seek"
-#~ msgstr "跳转"
-
-#~ msgid "Shortcuts"
-#~ msgstr "快捷键"
-
-#~ msgid "Show chat"
-#~ msgstr "显示聊天"
-
-#~ msgid "Show/hide background layer"
-#~ msgstr "显示/隐藏背景图层"
-
-#~ msgid "Show/hide foreground layer"
-#~ msgstr "显示/隐藏前景图层"
-
-#~ msgid "Size"
-#~ msgstr "大小"
-
-#~ msgid "Skip to end"
-#~ msgstr "跳到结尾"
-
-#~ msgid "Solid"
-#~ msgstr "实心"
-
-#~ msgid "step {0} of {1}"
-#~ msgstr "第 {0} 步，共 {1} 步"
-
-#~ msgid "Swap pens"
-#~ msgstr "切换画笔"
-
-#~ msgid "Switch to dark"
-#~ msgstr "切换到深色模式"
-
-#~ msgid "Switch to light"
-#~ msgstr "切换到浅色模式"
-
-#~ msgid "This drawing's replay could not be loaded."
-#~ msgstr "无法加载这幅画的回放。"
-
-#~ msgid ""
-#~ "This session is full ({0}/{1} users). Only the first {2} users can join a "
-#~ "session."
-#~ msgstr "此会话已满（{0}/{1} 用户）。只有前 {2} 位用户可以加入会话。"
-
-#~ msgid "Time's up."
-#~ msgstr "设定时间已到。"
-
-#~ msgid "Timer"
-#~ msgstr "计时器"
-
-#~ msgid "Timer off"
-#~ msgstr "计时器已关闭"
-
-#~ msgid "Toggle horizontal flip"
-#~ msgstr "切换水平翻转"
-
-#~ msgid "Undo"
-#~ msgstr "撤销"
-
-#~ msgid "Zoom in"
-#~ msgstr "放大"
-
-#~ msgid "Zoom out"
-#~ msgstr "缩小"

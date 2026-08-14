@@ -1,7 +1,7 @@
 # neo-cucumber
 
-NEO-compatible drawing canvas used by oeee-cafe for offline, collaborative,
-two-tone, relay, banner, and replay workflows.
+NEO-compatible drawing canvas for offline, collaborative, two-tone, relay,
+banner, and replay workflows.
 
 ## Library boundary
 
@@ -44,7 +44,7 @@ that do not request it receive the canvas alone.
 ## Contract principles
 
 - No React types in the public interface.
-- No oeee-cafe routes, identifiers, submission formats, or native bridge.
+- No host routes, identifiers, submission formats, or native bridge.
 - Standard and two-tone behavior are core canvas modes.
 - Continuation images are core through `loadImage()` and are self-contained in
   exported `.pch` files by default.
@@ -59,12 +59,12 @@ that do not request it receive the canvas alone.
 pnpm run build
 ```
 
-This builds the collaborative application, replay viewer, oeee-cafe's offline
-auto-mounting adapter, and the package in `dist-lib/`. The host-specific adapter
-lives outside the library source at
+In this monorepo, this builds the example collaborative application, replay
+viewer, a host-owned offline auto-mounting adapter, and the package in
+`dist-lib/`. The host-specific adapter lives outside the library source at
 [`../frontend/painter/entry.ts`](../frontend/painter/entry.ts).
 
-[`sandbox.html`](sandbox.html) is the library usage example. It mounts the
+[`example.html`](example.html) is the library usage example. It mounts the
 painter through `src/public.ts`, opts into the built-in toolbox, exports PNG and
 replay data, and opens the replay viewer without relying on private components.
 
@@ -74,7 +74,7 @@ package exports.
 
 ## Collaborative consumers
 
-The oeee-cafe collaborative application lives in
+The example host collaborative application lives in
 [`../frontend/collaborate`](../frontend/collaborate). Authentication, room
 metadata, WebSocket lifecycle, chat, participants, and session UI are consumer
 responsibilities.
