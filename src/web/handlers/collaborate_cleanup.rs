@@ -197,6 +197,7 @@ async fn cleanup_ended_sessions(
                     .expect("System time is before UNIX_EPOCH")
                     .as_secs(),
                 seq: None,
+                history_id: None,
                 target_connection: None,
             };
 
@@ -323,6 +324,7 @@ async fn cleanup_inactive_sessions(
                     .expect("System time is before UNIX_EPOCH")
                     .as_secs(),
                 seq: None,
+                history_id: None,
                 target_connection: None,
             };
 

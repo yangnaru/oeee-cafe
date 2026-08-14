@@ -244,6 +244,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     initializeTwoToneCanvas,
     recordText,
     emitOperation,
+    isDrawingRef,
   } = useOfflineDrawing(
     tempLocalUserCanvasRef,
     appRef,
@@ -522,6 +523,28 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     };
   }, [drawingEngine, canvasWidth, canvasHeight, config.mode]);
 
+  const compactCanonicalHistory = useCallback(async (sequence: number): Promise<void> => {
+    const history = synchronizationHistoryRef.current;
+    if (!history) throw new Error("Painter is not in controlled mode");
+    const base = await history.handleResetPoint(sequence);
+    if (!base) return;
+    const [background, foreground] = await Promise.all([
+      layerToPngBlob(base.background, canvasWidth, canvasHeight),
+      layerToPngBlob(base.foreground, canvasWidth, canvasHeight),
+    ]);
+    appliedCheckpointRef.current = {
+      sequence,
+      width: canvasWidth,
+      height: canvasHeight,
+      background,
+      foreground,
+    };
+  }, [canvasWidth, canvasHeight]);
+
+  const isSynchronizationSettled = useCallback((): boolean =>
+    !isDrawingRef.current && !(synchronizationHistoryRef.current?.hasPendingLocal ?? false),
+  [isDrawingRef]);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -537,10 +560,12 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       exportCheckpoint,
       applyCheckpoint,
       exportSessionArchive,
+      compactCanonicalHistory,
+      isSynchronizationSettled,
       // The owning mount adapter replaces this with its React-root teardown.
       unmount: () => {},
     }),
-    [save, exportPng, exportReplay, loadImage, undo, redo, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive],
+    [save, exportPng, exportReplay, loadImage, undo, redo, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive, compactCanonicalHistory, isSynchronizationSettled],
   );
 
   // Keep drawingEngine ref in sync

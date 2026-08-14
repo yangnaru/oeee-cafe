@@ -73,6 +73,10 @@ pub struct RoomMessage {
     // that are part of session history; None for ephemeral messages.
     #[serde(default)]
     pub seq: Option<u64>,
+    // Identity of the canonical history containing `seq`. Comparable
+    // positions must have the same identity.
+    #[serde(default)]
+    pub history_id: Option<Uuid>,
     // When set, the message is delivered only to this connection (e.g. a
     // RESET_REQUEST addressed to the client chosen to upload a session reset).
     #[serde(default)]
@@ -177,6 +181,34 @@ impl RedisStateManager {
         let key = format!("{}{}", RESET_PENDING_PREFIX, room_uuid);
         conn.del::<_, ()>(&key).await?;
         Ok(())
+    }
+
+    pub async fn assign_reset_uploader(
+        &self,
+        room_uuid: Uuid,
+        connection_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("{}{}", RESET_PENDING_PREFIX, room_uuid);
+        redis::cmd("SET")
+            .arg(key)
+            .arg(connection_id)
+            .arg("XX")
+            .arg("EX")
+            .arg(RESET_PENDING_TTL)
+            .query_async::<()>(&mut *conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn is_reset_uploader(
+        &self,
+        room_uuid: Uuid,
+        connection_id: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn = self.pool.get().await?;
+        let key = format!("{}{}", RESET_PENDING_PREFIX, room_uuid);
+        Ok(conn.get::<_, Option<String>>(key).await?.as_deref() == Some(connection_id))
     }
 
     // Connection Registry

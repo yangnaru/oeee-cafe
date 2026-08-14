@@ -5,11 +5,14 @@ use uuid::Uuid;
 
 use crate::redis::RedisPool;
 
-const MESSAGE_HISTORY_TTL: u64 = 3600; // 1 hour TTL
-// v3: entries are "{seq}:{payload}" oldest-first; payloads use 1-byte session
-// user ids and STROKE batches
-const MESSAGE_HISTORY_PREFIX: &str = "oeee:msg_history:v3:";
-const MESSAGE_SEQ_PREFIX: &str = "oeee:msg_seq:";
+// One hour after the final live connection or stored operation.
+const MESSAGE_HISTORY_TTL: u64 = 3600;
+// v4 adds a durable history identity to every canonical envelope. This keeps
+// positions from two Redis/history lifetimes from being compared as though
+// they belonged to the same timeline (Drawpile's HistoryIndex invariant).
+const MESSAGE_HISTORY_PREFIX: &str = "oeee:msg_history:v4:";
+const MESSAGE_SEQ_PREFIX: &str = "oeee:msg_seq:v4:";
+const MESSAGE_HISTORY_ID_PREFIX: &str = "oeee:msg_history_id:v4:";
 const MAX_REDIS_MESSAGES: usize = 50000;
 
 /// Atomically assigns the next per-room sequence number, appends the message to
@@ -23,15 +26,22 @@ const MAX_REDIS_MESSAGES: usize = 50000;
 /// order to every client.
 const SEQUENCE_AND_PUBLISH_SCRIPT: &str = r#"
 local seq = redis.call('INCR', KEYS[1])
+local history_id = redis.call('GET', KEYS[5])
+if not history_id then
+    history_id = ARGV[5]
+    redis.call('SET', KEYS[5], history_id)
+end
 redis.call('RPUSH', KEYS[2], tostring(seq) .. ':' .. ARGV[1])
 redis.call('LTRIM', KEYS[2], -tonumber(ARGV[3]), -1)
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[4], tonumber(ARGV[4]))
+redis.call('EXPIRE', KEYS[5], tonumber(ARGV[4]))
 local envelope = cjson.decode(ARGV[2])
 envelope['seq'] = seq
+envelope['history_id'] = history_id
 redis.call('PUBLISH', KEYS[3], cjson.encode(envelope))
-return seq
+return {seq, history_id}
 "#;
 
 pub struct RedisMessageStore {
@@ -44,6 +54,10 @@ fn history_key(room_uuid: Uuid) -> String {
 
 fn seq_key(room_uuid: Uuid) -> String {
     format!("{}{}", MESSAGE_SEQ_PREFIX, room_uuid)
+}
+
+fn history_id_key(room_uuid: Uuid) -> String {
+    format!("{}{}", MESSAGE_HISTORY_ID_PREFIX, room_uuid)
 }
 
 /// Splits a stored "{seq}:{payload}" entry. Returns None for malformed entries.
@@ -71,7 +85,7 @@ impl RedisMessageStore {
         })?;
 
         let script = redis::Script::new(SEQUENCE_AND_PUBLISH_SCRIPT);
-        let seq: u64 = script
+        let (seq, _history_id): (u64, String) = script
             .key(seq_key(room_uuid))
             .key(history_key(room_uuid))
             .key(channel)
@@ -80,10 +94,12 @@ impl RedisMessageStore {
                 super::redis_state::USER_ID_PREFIX,
                 room_uuid
             ))
+            .key(history_id_key(room_uuid))
             .arg(payload)
             .arg(envelope_json)
             .arg(MAX_REDIS_MESSAGES)
             .arg(MESSAGE_HISTORY_TTL)
+            .arg(Uuid::new_v4().to_string())
             .invoke_async(&mut *conn)
             .await
             .map_err(|e| {
@@ -144,6 +160,59 @@ impl RedisMessageStore {
         Ok(result)
     }
 
+    /// Returns one atomic view of the history identity and ordered entries.
+    /// The identity is created even for an empty room, so its first future
+    /// operation belongs to the same timeline the connecting client saw.
+    pub async fn get_history_snapshot(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<(Uuid, Vec<(u64, Message)>), Box<dyn std::error::Error + Send + Sync>> {
+        const SNAPSHOT_SCRIPT: &str = r#"
+local history_id = redis.call('GET', KEYS[1])
+if not history_id then
+    history_id = ARGV[1]
+    redis.call('SET', KEYS[1], history_id)
+end
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
+redis.call('EXPIRE', KEYS[2], tonumber(ARGV[2]))
+redis.call('EXPIRE', KEYS[3], tonumber(ARGV[2]))
+return {history_id, redis.call('LRANGE', KEYS[2], 0, -1)}
+"#;
+        let mut conn = self.pool.get().await?;
+        let (history_id, entries): (String, Vec<Vec<u8>>) = redis::Script::new(SNAPSHOT_SCRIPT)
+            .key(history_id_key(room_uuid))
+            .key(history_key(room_uuid))
+            .key(seq_key(room_uuid))
+            .arg(Uuid::new_v4().to_string())
+            .arg(MESSAGE_HISTORY_TTL)
+            .invoke_async(&mut *conn)
+            .await?;
+        let history_id = Uuid::parse_str(&history_id)?;
+        let history = entries
+            .iter()
+            .filter_map(|entry| decode_entry(entry))
+            .map(|(seq, payload)| (seq, Message::Binary(payload.to_vec())))
+            .collect();
+        Ok((history_id, history))
+    }
+
+    /// Keep a live session's canonical timeline alive even while nobody is
+    /// drawing. Otherwise Redis expiry could silently restart sequence 1
+    /// underneath clients that kept the WebSocket open.
+    pub async fn touch_history(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn = self.pool.get().await?;
+        let _: () = redis::pipe()
+            .expire(history_id_key(room_uuid), MESSAGE_HISTORY_TTL as i64)
+            .expire(history_key(room_uuid), MESSAGE_HISTORY_TTL as i64)
+            .expire(seq_key(room_uuid), MESSAGE_HISTORY_TTL as i64)
+            .query_async(&mut *conn)
+            .await?;
+        Ok(())
+    }
+
     pub async fn history_len(
         &self,
         room_uuid: Uuid,
@@ -169,6 +238,10 @@ impl RedisMessageStore {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         const APPLY_RESET_SCRIPT: &str = r#"
 local base = tonumber(ARGV[1])
+local current = tonumber(redis.call('GET', KEYS[2]) or '0')
+if base > current then
+    return redis.error_reply('reset base is ahead of canonical history')
+end
 local entries = redis.call('LRANGE', KEYS[1], 0, -1)
 local kept = {}
 for i = 1, #entries do
@@ -196,6 +269,7 @@ return #kept
 
         let script = redis::Script::new(APPLY_RESET_SCRIPT);
         let mut invocation = script.key(history_key(room_uuid));
+        invocation.key(seq_key(room_uuid));
         invocation.arg(base_seq).arg(MESSAGE_HISTORY_TTL);
         for payload in payloads {
             invocation.arg(payload.as_slice());
@@ -222,6 +296,7 @@ return #kept
             .del(&[
                 history_key(room_uuid),
                 seq_key(room_uuid),
+                history_id_key(room_uuid),
                 format!("{}{}", super::redis_state::USER_ID_PREFIX, room_uuid),
             ])
             .await?;
@@ -270,4 +345,3 @@ return #kept
         Ok(())
     }
 }
-

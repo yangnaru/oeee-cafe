@@ -25,21 +25,32 @@ identityElement.textContent = `room: ${room} · actor: ${actorId.slice(0, 8)}`;
 peerLink.href = `${location.pathname}?room=${encodeURIComponent(room)}`;
 
 type ChannelMessage =
-  | { type: "canonical"; entry: CanonicalPainterOperation }
+  | { type: "canonical"; historyId: string; entry: CanonicalPainterOperation }
+  | { type: "syncRequest" }
   | { type: "reset" };
 
-function readHistory(): CanonicalPainterOperation[] {
+interface StoredHistory {
+  historyId: string;
+  entries: CanonicalPainterOperation[];
+}
+
+function readHistory(): StoredHistory {
   const stored = localStorage.getItem(historyKey);
-  if (!stored) return [];
+  if (!stored) return { historyId: crypto.randomUUID(), entries: [] };
   try {
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : [];
+    if (
+      parsed && typeof parsed.historyId === "string" &&
+      Array.isArray(parsed.entries)
+    ) return parsed;
   } catch {
-    return [];
+    // Replaced below with a new, self-identifying timeline.
   }
+  return { historyId: crypto.randomUUID(), entries: [] };
 }
 
 let nextSequence = 1;
+let historyId: string | null = null;
 let applicationChain = Promise.resolve();
 const pending = new Map<number, CanonicalPainterOperation>();
 
@@ -56,10 +67,28 @@ function drainCanonical(): void {
     });
 }
 
-function receiveCanonical(entry: CanonicalPainterOperation): void {
+function receiveCanonical(incomingHistoryId: string, entry: CanonicalPainterOperation): void {
+  if (historyId !== null && incomingHistoryId !== historyId) {
+    location.reload();
+    return;
+  }
+  historyId = incomingHistoryId;
   if (entry.sequence < nextSequence) return;
   pending.set(entry.sequence, entry);
+  if (entry.sequence > nextSequence) reconcileFromStorage();
   drainCanonical();
+}
+
+function reconcileFromStorage(): void {
+  const stored = readHistory();
+  if (historyId !== null && stored.historyId !== historyId) {
+    location.reload();
+    return;
+  }
+  historyId = stored.historyId;
+  for (const entry of stored.entries) {
+    if (entry.sequence >= nextSequence) pending.set(entry.sequence, entry);
+  }
 }
 
 async function publish(operation: LocalPainterOperation): Promise<void> {
@@ -68,12 +97,12 @@ async function publish(operation: LocalPainterOperation): Promise<void> {
   }
   await navigator.locks.request(lockName, async () => {
     const history = readHistory();
-    const sequence = (history.at(-1)?.sequence ?? 0) + 1;
+    const sequence = (history.entries.at(-1)?.sequence ?? 0) + 1;
     const entry: CanonicalPainterOperation = { ...operation, sequence };
-    history.push(entry);
+    history.entries.push(entry);
     localStorage.setItem(historyKey, JSON.stringify(history));
-    receiveCanonical(entry);
-    channel.postMessage({ type: "canonical", entry } satisfies ChannelMessage);
+    receiveCanonical(history.historyId, entry);
+    channel.postMessage({ type: "canonical", historyId: history.historyId, entry } satisfies ChannelMessage);
   });
 }
 
@@ -96,8 +125,17 @@ const painter = mountPainter(painterElement, {
 channel.addEventListener("message", (event: MessageEvent<ChannelMessage>) => {
   if (event.data.type === "reset") {
     location.reload();
+  } else if (event.data.type === "syncRequest") {
+    reconcileFromStorage();
   } else {
-    receiveCanonical(event.data.entry);
+    receiveCanonical(event.data.historyId, event.data.entry);
+  }
+});
+
+window.addEventListener("storage", (event) => {
+  if (event.key === historyKey && event.newValue) {
+    reconcileFromStorage();
+    drainCanonical();
   }
 });
 
@@ -162,9 +200,14 @@ void painter.ready.then(async () => {
   if (!navigator.locks) throw new Error("This collaborative example requires the Web Locks API");
   await navigator.locks.request(lockName, async () => {
     const history = readHistory();
-    for (const entry of history) receiveCanonical(entry);
+    if (!localStorage.getItem(historyKey)) {
+      localStorage.setItem(historyKey, JSON.stringify(history));
+    }
+    historyId = history.historyId;
+    for (const entry of history.entries) receiveCanonical(history.historyId, entry);
     await applicationChain;
   });
+  channel.postMessage({ type: "syncRequest" } satisfies ChannelMessage);
   painter.setInteractionEnabled(true);
   statusElement.textContent = `Synchronized through operation ${nextSequence - 1}`;
 }).catch((error) => {

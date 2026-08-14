@@ -137,6 +137,12 @@ export interface PainterHandle {
   /** Export the canonical log since the last applied checkpoint. */
   exportSessionArchive(): Promise<import("./operations").PainterSessionArchive>;
 
+  /** Compact confirmed history through a server-approved canonical sequence. */
+  compactCanonicalHistory(sequence: number): Promise<void>;
+
+  /** True when no pointer gesture or optimistic operation is outstanding. */
+  isSynchronizationSettled(): boolean;
+
   /** Idempotently release listeners, canvases, controls, and framework roots. */
   unmount(): void;
 }

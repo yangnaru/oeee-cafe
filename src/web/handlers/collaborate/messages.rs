@@ -48,6 +48,8 @@ pub enum MessageType {
     ResetPoint = 0x0D,
     // Tells a connecting client its 1-byte session user id (server -> client)
     Welcome = 0x0E,
+    // Declares the exact canonical position reached by initial replay.
+    CaughtUp = 0x0F,
 }
 
 // Message structures
@@ -204,6 +206,7 @@ pub fn parse_message_type(data: &[u8]) -> Option<MessageType> {
         0x0C => Some(MessageType::ResetBegin),
         0x0D => Some(MessageType::ResetPoint),
         0x0E => Some(MessageType::Welcome),
+        0x0F => Some(MessageType::CaughtUp),
         _ => None,
     }
 }
@@ -327,6 +330,7 @@ async fn broadcast_layers(_db: &Pool<Postgres>, room_uuid: Uuid, state: &AppStat
                     .expect("System time is before UNIX_EPOCH")
                     .as_secs(),
                 seq: None,
+                history_id: None,
                 target_connection: None,
             };
 
@@ -452,6 +456,7 @@ pub async fn handle_end_session_message(data: &[u8], ctx: EndSessionContext<'_>)
                                 .expect("System time is before UNIX_EPOCH")
                                 .as_secs(),
                             seq: None,
+                            history_id: None,
                             target_connection: None,
                         };
 
@@ -526,6 +531,7 @@ pub async fn send_reset_request(room_uuid: Uuid, target_connection: &str, state:
             .expect("System time is before UNIX_EPOCH")
             .as_secs(),
         seq: None,
+        history_id: None,
         target_connection: Some(target_connection.to_string()),
     };
 
@@ -565,6 +571,7 @@ fn to_room_message(msg: &Message, connection_id: &str) -> super::redis_state::Ro
             .unwrap_or_default()
             .as_millis() as u64,
         seq: None,
+        history_id: None,
         target_connection: None,
     }
 }
@@ -674,6 +681,7 @@ pub async fn send_leave_message(
             .expect("System time is before UNIX_EPOCH")
             .as_secs(),
         seq: None,
+        history_id: None,
         target_connection: None,
     };
 

@@ -14,12 +14,45 @@ import {
   encodeText,
   MSG_TYPE,
   REGION_TOOL,
+  unwrapSequenced,
 } from "./binaryProtocol";
 import type { PainterRegionTool as RegionTool } from "neo-cucumber";
 import type { PainterOperation } from "neo-cucumber";
 
 const ID = 3;
 const COLOR = { r: 12, g: 200, b: 255, a: 128 };
+
+describe("canonical history positions", () => {
+  const historyBytes = new Uint8Array([
+    0x12, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78,
+    0x9a, 0xbc, 0xde, 0xf0, 0x12, 0x34, 0x56, 0x78,
+  ]);
+
+  it("unwraps the history identity and sequence together", () => {
+    const wire = new Uint8Array(27);
+    wire[0] = MSG_TYPE.SEQUENCED;
+    wire.set(historyBytes, 1);
+    new DataView(wire.buffer).setBigUint64(17, 42n, true);
+    wire.set([MSG_TYPE.UNDO, ID], 25);
+    expect(unwrapSequenced(wire.buffer)).toEqual({
+      historyId: "12345678-1234-5678-9abc-def012345678",
+      seq: 42,
+      payload: new Uint8Array([MSG_TYPE.UNDO, ID]).buffer,
+    });
+  });
+
+  it("decodes an explicit caught-up boundary", () => {
+    const wire = new Uint8Array(25);
+    wire[0] = MSG_TYPE.CAUGHT_UP;
+    wire.set(historyBytes, 1);
+    new DataView(wire.buffer).setBigUint64(17, 99n, true);
+    expect(decodeMessage(wire.buffer)).toEqual({
+      type: "caughtUp",
+      historyId: "12345678-1234-5678-9abc-def012345678",
+      lastSeq: 99,
+    });
+  });
+});
 
 describe("the public painter operation adapter", () => {
   it("keeps the oeee wire protocol on the consumer side", () => {

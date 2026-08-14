@@ -113,6 +113,12 @@ export function mountOfflinePainter(
     async exportSessionArchive() {
       return (await liveController()).exportSessionArchive();
     },
+    async compactCanonicalHistory(sequence) {
+      return (await liveController()).compactCanonicalHistory(sequence);
+    },
+    isSynchronizationSettled() {
+      return synchronousController().isSynchronizationSettled();
+    },
     unmount() {
       if (!mounted) return;
       mounted = false;

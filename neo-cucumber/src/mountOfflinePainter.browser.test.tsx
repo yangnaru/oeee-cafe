@@ -183,6 +183,11 @@ describe("public painter lifecycle", () => {
     expect(checkpoint.background.type).toBe("image/png");
     const archiveBeforeReset = await painter.exportSessionArchive();
     expect(archiveBeforeReset.operations.map((entry) => entry.id)).toEqual(["bob:1"]);
+    await painter.compactCanonicalHistory(1);
+    const compactedArchive = await painter.exportSessionArchive();
+    expect(compactedArchive.operations).toEqual([]);
+    expect(compactedArchive.checkpoint).toMatchObject({ sequence: 1, width: 24, height: 16 });
+    expect(painter.isSynchronizationSettled()).toBe(true);
 
     await act(async () => {
       await painter.applyCanonicalOperation({

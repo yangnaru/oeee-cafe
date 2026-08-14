@@ -64,7 +64,8 @@ interface WebSocketHookParams {
   onReconnectCanvas: (reconnecting: boolean) => Promise<void> | void;
   onCanvasMessage: (message: DecodedMessage, raw: Uint8Array, sequence?: number) => Promise<void>;
   onWelcome: (sessionId: number) => void;
-  onResetPoint: (baseSequence: number) => Promise<void> | void;
+  onResetPoint: (baseSequence: number, sequence?: number) => Promise<void> | void;
+  verifyCanonicalPosition: () => Promise<boolean>;
 }
 
 export const useWebSocket = ({
@@ -90,11 +91,14 @@ export const useWebSocket = ({
   onCanvasMessage,
   onWelcome,
   onResetPoint,
+  verifyCanonicalPosition,
 }: WebSocketHookParams) => {
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<
     { message: DecodedMessage; raw: Uint8Array; seq?: number }[]
   >([]);
+  const historyIdRef = useRef<string | null>(null);
+  const caughtUpRef = useRef(false);
   const isConnectingRef = useRef(false);
   // Reconnect bookkeeping. `hasConnectedRef` distinguishes the first connect
   // (blank canvas) from a reconnect (canvas still holds pre-disconnect pixels).
@@ -243,6 +247,8 @@ export const useWebSocket = ({
       await onReconnectCanvas(hasConnectedRef.current);
       hasConnectedRef.current = true;
       lastSeqRef.current = 0;
+      historyIdRef.current = null;
+      caughtUpRef.current = false;
       localIdRef.current = null; // reassigned by WELCOME
 
       // Send initial join message to establish user presence
@@ -256,14 +262,10 @@ export const useWebSocket = ({
       // Start catching up phase - drawing will be disabled
       setIsCatchingUp(true);
 
-      // Set a timeout to end catching up phase if no more messages arrive
-      if (catchupTimeoutRef.current) {
-        clearTimeout(catchupTimeoutRef.current);
-      }
-      catchupTimeoutRef.current = window.setTimeout(() => {
-        setIsCatchingUp(false);
-        console.log("Catch-up phase completed");
-      }, 1000); // 1 second timeout for catch-up
+      // The server ends this phase explicitly with CAUGHT_UP. A timer cannot
+      // distinguish an empty history from a delayed or truncated replay.
+      if (catchupTimeoutRef.current) clearTimeout(catchupTimeoutRef.current);
+      catchupTimeoutRef.current = null;
 
       // Set join timestamp after a short delay to let stored messages arrive first
       setTimeout(() => {
@@ -289,6 +291,14 @@ export const useWebSocket = ({
       // has been fully applied so lastSeq always describes the canvas state
       const sequenced = unwrapSequenced(arrayBuffer);
       if (sequenced) {
+        if (historyIdRef.current === null) {
+          historyIdRef.current = sequenced.historyId;
+        } else if (historyIdRef.current !== sequenced.historyId) {
+          console.error("Canonical history identity changed; reconnecting");
+          setIsCatchingUp(true);
+          ws.close(4000, "canonical history changed");
+          return;
+        }
         arrayBuffer = sequenced.payload;
       }
 
@@ -308,6 +318,10 @@ export const useWebSocket = ({
 
         if (sequenced) {
           lastSeqRef.current = Math.max(lastSeqRef.current, sequenced.seq);
+          if (!(await verifyCanonicalPosition())) {
+            setIsCatchingUp(true);
+            ws.close(4000, "canonical sequence gap");
+          }
         }
       }
     };
@@ -386,8 +400,14 @@ export const useWebSocket = ({
       processingMessageRef.current = false;
       console.log(`✅ Processed ${totalMessages} messages from catch-up queue`);
 
-      // End catch-up phase now that queue is empty
-      setIsCatchingUp(false);
+      // Queue exhaustion is not enough: a missing canonical sequence would
+      // otherwise enable editing on an incomplete canvas.
+      if (caughtUpRef.current && await verifyCanonicalPosition()) {
+        setIsCatchingUp(false);
+      } else if (caughtUpRef.current) {
+        console.error("Canonical sequence gap after catch-up; reconnecting");
+        ws.close(4000, "canonical sequence gap");
+      }
     };
 
     // Helper function to handle decoded binary messages (moved inside connectWebSocket)
@@ -445,7 +465,20 @@ export const useWebSocket = ({
           }
 
           case "resetPoint": {
-            await onResetPoint(message.baseSeq);
+            await onResetPoint(message.baseSeq, seq);
+            break;
+          }
+
+          case "caughtUp": {
+            if (historyIdRef.current === null) {
+              historyIdRef.current = message.historyId;
+            }
+            if (historyIdRef.current !== message.historyId) {
+              ws.close(4000, "caught-up history mismatch");
+              break;
+            }
+            lastSeqRef.current = message.lastSeq;
+            caughtUpRef.current = true;
             break;
           }
 
@@ -598,6 +631,7 @@ export const useWebSocket = ({
     onCanvasMessage,
     onWelcome,
     onResetPoint,
+    verifyCanonicalPosition,
   ]);
 
   useEffect(() => {

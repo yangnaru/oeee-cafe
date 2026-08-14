@@ -136,7 +136,8 @@ pub async fn handle_socket(
         }
     };
 
-    let (redis_tx, mut redis_rx) = mpsc::unbounded_channel::<(Option<u64>, Vec<u8>)>();
+    let (redis_tx, mut redis_rx) =
+        mpsc::unbounded_channel::<(Option<(Uuid, u64)>, Vec<u8>)>();
 
     let connection_id_clone = connection_id.clone();
     let redis_task = tokio::spawn(async move {
@@ -147,7 +148,8 @@ pub async fn handle_socket(
                     match serde_json::from_str::<super::redis_state::RoomMessage>(&payload) {
                         Ok(room_msg) => {
                             if should_forward_to_connection(&room_msg, &connection_id_clone) {
-                                if redis_tx.send((room_msg.seq, room_msg.payload)).is_err() {
+                                let position = room_msg.history_id.zip(room_msg.seq);
+                                if redis_tx.send((position, room_msg.payload)).is_err() {
                                     debug!(
                                         "Redis message channel closed for connection {}",
                                         connection_id_clone
@@ -181,7 +183,7 @@ pub async fn handle_socket(
 
     // Send history to new connection, remembering the highest sequence number
     // it contained so the live stream can skip messages history already covered
-    let max_history_seq =
+    let (history_identity, max_history_seq) =
         send_history_to_new_connection(&state, room_uuid, &mut sender, &connection_id).await;
 
     info!(
@@ -210,13 +212,13 @@ pub async fn handle_socket(
                     break;
                 }
                 next = redis_rx.recv() => {
-                    let Some((seq, payload)) = next else {
+                    let Some((position, payload)) = next else {
                         break;
                     };
-                    let msg = match seq {
+                    let msg = match position {
                         // Skip sequenced messages already delivered via history replay
-                        Some(s) if s <= max_history_seq => continue,
-                        Some(s) => Message::Binary(wrap_sequenced(s, &payload)),
+                        Some((history_id, s)) if history_id == history_identity && s <= max_history_seq => continue,
+                        Some((history_id, s)) => Message::Binary(wrap_sequenced(history_id, s, &payload)),
                         None => Message::Binary(payload),
                     };
                     if sender.send(msg).await.is_err() {
@@ -296,6 +298,10 @@ async fn heartbeat_loop(state: AppState, mut info: super::redis_state::Connectio
                 "Heartbeat failed for connection {}: {}",
                 info.connection_id, e
             ),
+        }
+        let store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
+        if let Err(e) = store.touch_history(info.room_id).await {
+            error!("Failed to refresh history lifetime for room {}: {}", info.room_id, e);
         }
     }
 }
@@ -428,9 +434,10 @@ async fn setup_connection_atomically(
 
 // Wraps a history message in the [0x0A][seq: 8 bytes LE][payload] envelope so
 // clients can track their position in the canonical history.
-fn wrap_sequenced(seq: u64, payload: &[u8]) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(9 + payload.len());
+fn wrap_sequenced(history_id: Uuid, seq: u64, payload: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(25 + payload.len());
     buf.push(messages::MessageType::Sequenced as u8);
+    buf.extend_from_slice(history_id.as_bytes());
     buf.extend_from_slice(&seq.to_le_bytes());
     buf.extend_from_slice(payload);
     buf
@@ -475,6 +482,7 @@ mod forwarding_tests {
             payload: vec![msg_type],
             timestamp: 0,
             seq: Some(1),
+            history_id: Some(Uuid::nil()),
             target_connection: None,
         }
     }
@@ -524,18 +532,18 @@ async fn send_history_to_new_connection(
     room_uuid: Uuid,
     sender: &mut SplitSink<WebSocket, Message>,
     connection_id: &str,
-) -> u64 {
+) -> (Uuid, u64) {
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
 
     let mut max_seq = 0;
-    match redis_store.get_history_with_seqs(room_uuid).await {
-        Ok(history) => {
+    match redis_store.get_history_snapshot(room_uuid).await {
+        Ok((history_id, history)) => {
             for (seq, stored_msg) in history.iter() {
                 let payload = match stored_msg {
                     Message::Binary(data) => data.as_slice(),
                     _ => continue,
                 };
-                let wrapped = Message::Binary(wrap_sequenced(*seq, payload));
+                let wrapped = Message::Binary(wrap_sequenced(history_id, *seq, payload));
                 if sender.send(wrapped).await.is_err() {
                     warn!(
                         "Failed to send stored message to new connection {}",
@@ -551,6 +559,14 @@ async fn send_history_to_new_connection(
                 connection_id,
                 max_seq
             );
+            let mut caught_up = Vec::with_capacity(25);
+            caught_up.push(messages::MessageType::CaughtUp as u8);
+            caught_up.extend_from_slice(history_id.as_bytes());
+            caught_up.extend_from_slice(&max_seq.to_le_bytes());
+            if sender.send(Message::Binary(caught_up)).await.is_err() {
+                warn!("Failed to send caught-up marker to {}", connection_id);
+            }
+            return (history_id, max_seq);
         }
         Err(e) => {
             error!(
@@ -559,7 +575,7 @@ async fn send_history_to_new_connection(
             );
         }
     }
-    max_seq
+    (Uuid::nil(), max_seq)
 }
 
 async fn handle_incoming_messages(
@@ -619,7 +635,7 @@ async fn handle_incoming_messages(
                 }
             }
             if data.first() == Some(&(messages::MessageType::ResetBegin as u8)) {
-                pending_reset = parse_reset_begin(data, &ctx);
+                pending_reset = parse_reset_begin(data, &ctx).await;
                 continue;
             }
 
@@ -673,7 +689,7 @@ async fn handle_incoming_messages(
     }
 }
 
-fn parse_reset_begin(data: &[u8], ctx: &SessionContext<'_>) -> Option<PendingReset> {
+async fn parse_reset_begin(data: &[u8], ctx: &SessionContext<'_>) -> Option<PendingReset> {
     if data.len() < 11 {
         warn!(
             "Malformed RESET_BEGIN from connection {} in room {}",
@@ -683,13 +699,35 @@ fn parse_reset_begin(data: &[u8], ctx: &SessionContext<'_>) -> Option<PendingRes
     }
     let base_seq = utils::read_u64_le(data, 1);
     let count = u16::from_le_bytes([data[9], data[10]]);
-    // 2 layers per participant; anything larger than this is malformed
-    if count == 0 || count > 64 {
+    // The shared canvas has exactly one background and one foreground layer.
+    if count != 2 {
         warn!(
             "Rejecting RESET_BEGIN with snapshot count {} from connection {} in room {}",
             count, ctx.connection_id, ctx.room_uuid
         );
         return None;
+    }
+    match ctx
+        .state
+        .redis_state
+        .is_reset_uploader(ctx.room_uuid, ctx.connection_id)
+        .await
+    {
+        Ok(true) => {}
+        Ok(false) => {
+            warn!(
+                "Rejecting reset upload from unselected connection {}",
+                ctx.connection_id
+            );
+            return None;
+        }
+        Err(e) => {
+            error!(
+                "Could not authorize reset uploader {}: {}",
+                ctx.connection_id, e
+            );
+            return None;
+        }
     }
     info!(
         "Session reset upload started for room {} at seq {} ({} snapshots)",
@@ -703,6 +741,21 @@ fn parse_reset_begin(data: &[u8], ctx: &SessionContext<'_>) -> Option<PendingRes
 }
 
 async fn finish_reset(ctx: &SessionContext<'_>, reset: PendingReset) {
+    let valid_layers = reset.payloads.len() == 2
+        && reset.payloads.iter().all(|payload| {
+            payload.len() >= 3
+                && payload[0] == messages::MessageType::Snapshot as u8
+                && (payload[2] == 0 || payload[2] == 1)
+        })
+        && reset.payloads[0][2] != reset.payloads[1][2];
+    if !valid_layers {
+        warn!(
+            "Rejecting malformed reset snapshots from connection {} in room {}",
+            ctx.connection_id, ctx.room_uuid
+        );
+        let _ = ctx.state.redis_state.clear_reset_pending(ctx.room_uuid).await;
+        return;
+    }
     let redis_store = redis_messages::RedisMessageStore::new(ctx.state.redis_pool.clone());
     match redis_store
         .apply_reset(ctx.room_uuid, reset.base_seq, &reset.payloads)
@@ -816,6 +869,16 @@ async fn maybe_request_reset(ctx: &SessionContext<'_>) {
                 "History for room {} reached {} messages - requesting session reset",
                 ctx.room_uuid, history_len
             );
+            if let Err(e) = ctx
+                .state
+                .redis_state
+                .assign_reset_uploader(ctx.room_uuid, &conn_id)
+                .await
+            {
+                error!("Failed to assign reset uploader for room {}: {}", ctx.room_uuid, e);
+                let _ = ctx.state.redis_state.clear_reset_pending(ctx.room_uuid).await;
+                return;
+            }
             messages::send_reset_request(ctx.room_uuid, &conn_id, ctx.state).await;
         }
         None => {

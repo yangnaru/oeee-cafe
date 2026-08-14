@@ -543,7 +543,10 @@ export class CanvasHistory {
    * Squashes all entries at or below the session reset's base sequence into a
    * new base savepoint. Their undo state is frozen; memory is reclaimed.
    */
-  async handleResetPoint(baseSeq: number): Promise<void> {
+  async handleResetPoint(baseSeq: number): Promise<{
+    foreground: Uint8ClampedArray;
+    background: Uint8ClampedArray;
+  } | null> {
     let cut = 0;
     while (
       cut < this.entries.length &&
@@ -552,7 +555,7 @@ export class CanvasHistory {
     ) {
       cut++;
     }
-    if (cut === 0) return;
+    if (cut === 0) return null;
 
     // Compute the state at the cut into temporary buffers
     const sp = this.savepointFor(cut);
@@ -569,6 +572,9 @@ export class CanvasHistory {
     }
 
     this.entries = this.entries.slice(cut);
+    this.canonicalLog = this.canonicalLog.filter(
+      (entry) => entry.sequence > baseSeq,
+    );
     this.savepoints = [
       { index: 0, foreground: layers.foreground, background: layers.background, strokes },
       ...this.savepoints
@@ -576,6 +582,10 @@ export class CanvasHistory {
         .map((s) => ({ ...s, index: s.index - cut })),
     ];
     this.notify();
+    return {
+      foreground: new Uint8ClampedArray(layers.foreground),
+      background: new Uint8ClampedArray(layers.background),
+    };
   }
 
   private async applyCanonical(

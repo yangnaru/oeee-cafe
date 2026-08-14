@@ -70,7 +70,7 @@ export const MSG_TYPE = {
   END_SESSION: 0x07,
   SESSION_EXPIRED: 0x08,
   LEAVE: 0x09,
-  // Wraps a history message with its canonical sequence number (server -> client)
+  // Wraps a history message with its history identity and canonical position.
   SEQUENCED: 0x0a,
   // Asks this client to upload a session reset (server -> client)
   RESET_REQUEST: 0x0b,
@@ -80,6 +80,8 @@ export const MSG_TYPE = {
   RESET_POINT: 0x0d,
   // Tells a connecting client its 1-byte session user id (server -> client)
   WELCOME: 0x0e,
+  // Declares the history identity and exact position reached by replay.
+  CAUGHT_UP: 0x0f,
 
   // Client messages (>= 0x10) - server just broadcasts
   FILL: 0x12,
@@ -464,19 +466,21 @@ export function encodeUndo(userId: number, redo: boolean): ArrayBuffer {
 }
 
 /**
- * Unwrap a SEQUENCED envelope (0x0A): [0x0A][seq:8][payload]
+ * Unwrap a SEQUENCED envelope (0x0A):
+ * [0x0A][history UUID:16][seq:8][payload]
  * Returns null if the buffer is not a sequenced envelope.
  */
 export function unwrapSequenced(
   data: ArrayBuffer
-): { seq: number; payload: ArrayBuffer } | null {
+): { historyId: string; seq: number; payload: ArrayBuffer } | null {
   const buffer = new Uint8Array(data);
-  if (buffer.length < 10 || buffer[0] !== MSG_TYPE.SEQUENCED) {
+  if (buffer.length < 26 || buffer[0] !== MSG_TYPE.SEQUENCED) {
     return null;
   }
   return {
-    seq: readUint64LE(buffer, 1),
-    payload: data.slice(9),
+    historyId: bytesToUuid(buffer.slice(1, 17)),
+    seq: readUint64LE(buffer, 17),
+    payload: data.slice(25),
   };
 }
 
@@ -773,6 +777,12 @@ export interface ResetPointMessage {
   baseSeq: number;
 }
 
+export interface CaughtUpMessage {
+  type: "caughtUp";
+  historyId: string;
+  lastSeq: number;
+}
+
 export interface UndoPointMessage {
   type: "undoPoint";
   userId: number;
@@ -820,6 +830,7 @@ export type DecodedMessage =
   | ChatMessage
   | ResetRequestMessage
   | ResetPointMessage
+  | CaughtUpMessage
   | UndoPointMessage
   | UndoMessage
   | StrokeMessage
@@ -1030,6 +1041,14 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       return {
         type: "resetPoint",
         baseSeq: readUint64LE(buffer, 1),
+      };
+
+    case MSG_TYPE.CAUGHT_UP:
+      if (buffer.length < 25) return null;
+      return {
+        type: "caughtUp",
+        historyId: bytesToUuid(buffer.slice(1, 17)),
+        lastSeq: readUint64LE(buffer, 17),
       };
 
     case MSG_TYPE.UNDO_POINT:

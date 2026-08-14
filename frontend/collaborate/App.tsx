@@ -81,6 +81,11 @@ export default function App() {
   const processingMessageRef = useRef(false);
   const isCatchingUpRef = useRef(true);
   const pendingIdsRef = useRef(new Map<string, string[]>());
+  const expectedSequenceRef = useRef(1);
+  const appliedSequenceRef = useRef(0);
+  const canonicalOperationsRef = useRef(new Map<number, CanonicalPainterOperation>());
+  const snapshotPairsRef = useRef(new Map<number, Partial<Pick<PainterCheckpoint, "background" | "foreground">>>());
+  const canonicalDrainRef = useRef<Promise<void>>(Promise.resolve());
   const chatAddMessageRef = useRef<((message: {
     id: string; type: "join" | "leave" | "user"; userId: string;
     username: string; message: string; timestamp: number;
@@ -132,21 +137,61 @@ export default function App() {
     );
   }, [connectionState, isCatchingUp]);
 
-  const applySnapshot = useCallback(async (
-    layer: "foreground" | "background", png: Blob, sequence: number,
-  ) => {
-    const painter = painterRef.current;
-    if (!painter) return;
-    const current = await painter.exportCheckpoint(sequence);
-    await painter.applyCheckpoint({ ...current, sequence, [layer]: png });
-  }, []);
+  const drainCanonical = useCallback(async () => {
+    canonicalDrainRef.current = canonicalDrainRef.current.then(async () => {
+      const painter = painterRef.current;
+      if (!painter || !canvasMeta) return;
+      while (true) {
+        const expected = expectedSequenceRef.current;
+        const operation = canonicalOperationsRef.current.get(expected);
+        if (operation) {
+          canonicalOperationsRef.current.delete(expected);
+          await painter.applyCanonicalOperation(operation);
+          appliedSequenceRef.current = expected;
+          expectedSequenceRef.current = expected + 1;
+          continue;
+        }
+
+        // A checkpoint is a legal jump over compacted history. Both layers
+        // must arrive before it replaces the canvas and advances the sequence.
+        const checkpointSequence = [...snapshotPairsRef.current.entries()]
+          .filter(([sequence, pair]) =>
+            sequence >= expected && pair.background && pair.foreground,
+          )
+          .map(([sequence]) => sequence)
+          .sort((a, b) => a - b)[0];
+        if (checkpointSequence === undefined) break;
+        const pair = snapshotPairsRef.current.get(checkpointSequence)!;
+        await painter.applyCheckpoint({
+          sequence: checkpointSequence,
+          width: canvasMeta.width,
+          height: canvasMeta.height,
+          background: pair.background!,
+          foreground: pair.foreground!,
+        });
+        snapshotPairsRef.current.delete(checkpointSequence);
+        for (const sequence of canonicalOperationsRef.current.keys()) {
+          if (sequence <= checkpointSequence) canonicalOperationsRef.current.delete(sequence);
+        }
+        appliedSequenceRef.current = checkpointSequence;
+        expectedSequenceRef.current = checkpointSequence + 1;
+      }
+    });
+    await canonicalDrainRef.current;
+  }, [canvasMeta]);
 
   const onCanvasMessage = useCallback(async (
-    message: DecodedMessage, raw: Uint8Array, sequence = lastSeqRef.current + 1,
+    message: DecodedMessage, raw: Uint8Array, sequence?: number,
   ) => {
+    if (sequence === undefined) {
+      throw new Error("Received an unsequenced canvas-history message");
+    }
     if (message.type === "snapshot") {
       const pngBytes = new Uint8Array(message.pngData).slice();
-      await applySnapshot(message.layer, new Blob([pngBytes.buffer as ArrayBuffer], { type: "image/png" }), sequence);
+      const pair = snapshotPairsRef.current.get(sequence) ?? {};
+      pair[message.layer] = new Blob([pngBytes.buffer as ArrayBuffer], { type: "image/png" });
+      snapshotPairsRef.current.set(sequence, pair);
+      await drainCanonical();
       return;
     }
     const operation = decodePainterOperation(message);
@@ -161,11 +206,16 @@ export default function App() {
       sequence,
       operation,
     };
-    await painterRef.current?.applyCanonicalOperation(canonical);
-  }, [applySnapshot]);
+    canonicalOperationsRef.current.set(sequence, canonical);
+    await drainCanonical();
+  }, [drainCanonical]);
 
   const onReconnectCanvas = useCallback(async (reconnecting: boolean) => {
     pendingIdsRef.current.clear();
+    canonicalOperationsRef.current.clear();
+    snapshotPairsRef.current.clear();
+    expectedSequenceRef.current = 1;
+    appliedSequenceRef.current = 0;
     if (!reconnecting || !canvasMeta || !painterRef.current) return;
     const layer = await blankLayer(canvasMeta.width, canvasMeta.height);
     const checkpoint: PainterCheckpoint = {
@@ -175,18 +225,42 @@ export default function App() {
     await painterRef.current.applyCheckpoint(checkpoint);
   }, [canvasMeta]);
 
-  const handleResetPoint = useCallback(async (baseSequence: number) => {
+  const handleResetPoint = useCallback(async (baseSequence: number, sequence?: number) => {
     const painter = painterRef.current;
     if (!painter) return;
-    await painter.applyCheckpoint(await painter.exportCheckpoint(baseSequence));
-  }, []);
+    await drainCanonical();
+    await painter.compactCanonicalHistory(baseSequence);
+    if (sequence !== undefined) {
+      appliedSequenceRef.current = sequence;
+      expectedSequenceRef.current = sequence + 1;
+    }
+  }, [drainCanonical]);
+
+  const verifyCanonicalPosition = useCallback(async (): Promise<boolean> => {
+    await drainCanonical();
+    return appliedSequenceRef.current >= lastSeqRef.current;
+  }, [drainCanonical]);
 
   const handleResetRequest = useCallback(async () => {
     const painter = painterRef.current;
     const ws = wsRef.current;
     const localId = localIdRef.current;
     if (!painter || !ws || ws.readyState !== WebSocket.OPEN || localId === null) return;
-    const checkpoint = await painter.exportCheckpoint(lastSeqRef.current);
+    // A reset checkpoint must describe confirmed canonical state, never a
+    // pointer gesture or optimistic fork the server has not sequenced yet.
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await drainCanonical();
+      if (
+        painter.isSynchronizationSettled() &&
+        appliedSequenceRef.current >= lastSeqRef.current
+      ) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (
+      !painter.isSynchronizationSettled() ||
+      appliedSequenceRef.current < lastSeqRef.current
+    ) return;
+    const checkpoint = await painter.exportCheckpoint(appliedSequenceRef.current);
     const snapshots = await Promise.all([
       encodeSnapshot(localId, "background", checkpoint.background),
       encodeSnapshot(localId, "foreground", checkpoint.foreground),
@@ -195,7 +269,7 @@ export default function App() {
     snapshots.forEach((snapshot) => ws.send(snapshot));
   // wsRef is created by the WebSocket hook below and is stable for its lifetime.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [drainCanonical]);
 
   const { wsRef, connectWebSocket } = useWebSocket({
     canvasMeta, userIdRef, userLoginNameRef, localUserJoinTimeRef,
@@ -208,6 +282,7 @@ export default function App() {
     handleResetRequest, onReconnectCanvas, onCanvasMessage,
     onWelcome: (id) => { localIdRef.current = id; },
     onResetPoint: handleResetPoint,
+    verifyCanonicalPosition,
   });
 
   const initializeApp = useCallback(async () => {
