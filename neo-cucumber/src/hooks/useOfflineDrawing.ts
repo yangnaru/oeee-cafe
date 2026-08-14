@@ -68,6 +68,7 @@ export const useOfflineDrawing = (
   onHoverMove?: (at: { x: number; y: number } | null) => void,
   isDrawingDisabled: boolean = false,
   onOperation?: (operation: PainterOperation) => void,
+  onPointerRelease?: () => void,
 ) => {
   // Initialize replay recording
   const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
@@ -86,11 +87,23 @@ export const useOfflineDrawing = (
   const pendingStrokeRef = useRef<
     Extract<PainterOperation, { kind: "stroke" }> | null
   >(null);
+  const strokeBoundaryEmittedRef = useRef(false);
 
   const emitOperation = useCallback((operation: PainterOperation) => {
     if (!onOperation) return;
     if (operation.kind !== "undo" && operation.kind !== "undo-boundary") {
       onOperation({ kind: "undo-boundary" });
+    }
+    onOperation(operation);
+  }, [onOperation]);
+
+  const emitStrokeOperation = useCallback((
+    operation: Extract<PainterOperation, { kind: "stroke" }>,
+  ) => {
+    if (!onOperation) return;
+    if (!strokeBoundaryEmittedRef.current) {
+      onOperation({ kind: "undo-boundary" });
+      strokeBoundaryEmittedRef.current = true;
     }
     onOperation(operation);
   }, [onOperation]);
@@ -106,6 +119,7 @@ export const useOfflineDrawing = (
         drawingState.layerType === "foreground" ? 1 : 0;
       strokeMaskRef.current = maskFrom(drawingState);
       pendingStrokeRef.current = null;
+      strokeBoundaryEmittedRef.current = false;
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawingState.layerType, drawingState.maskType, drawingState.maskColor]),
 
@@ -155,6 +169,15 @@ export const useOfflineDrawing = (
         } else {
           pendingStrokeRef.current.points.push(to);
         }
+        emitStrokeOperation({
+          kind: "stroke",
+          layer: layer === 1 ? "foreground" : "background",
+          brushSize,
+          brush: brushType as PainterBrush,
+          color: { r: safeR, g: safeG, b: safeB, a: alpha },
+          points: [{ x: Math.round(fromX), y: Math.round(fromY) }, to],
+          mask: strokeMaskRef.current,
+        });
 
         // Only create action frame and push header once per stroke
         if (!hasCreatedStepRef.current) {
@@ -189,7 +212,7 @@ export const useOfflineDrawing = (
           actionRecorderRef.current.push(Math.round(toX), Math.round(toY));
         }
       },
-      [drawingState.layerType]
+      [drawingState.layerType, emitStrokeOperation]
     ),
 
     onDrawPoint: useCallback(
@@ -230,6 +253,7 @@ export const useOfflineDrawing = (
           points: [{ x: Math.round(x), y: Math.round(y) }],
           mask: strokeMaskRef.current,
         };
+        emitStrokeOperation(pendingStrokeRef.current);
 
         // Single point stroke - create new action frame
         if (!hasCreatedStepRef.current) {
@@ -255,7 +279,7 @@ export const useOfflineDrawing = (
           Math.round(y)
         );
       },
-      [drawingState.layerType]
+      [drawingState.layerType, emitStrokeOperation]
     ),
 
     onFill: useCallback(
@@ -401,14 +425,15 @@ export const useOfflineDrawing = (
     ),
 
     onPointerUp: useCallback(() => {
-      if (pendingStrokeRef.current) {
+      if (pendingStrokeRef.current && !onOperation) {
         emitOperation(pendingStrokeRef.current);
-        pendingStrokeRef.current = null;
       }
+      pendingStrokeRef.current = null;
       isFirstPointRef.current = false;
       hasCreatedStepRef.current = false;
       strokeLayerRef.current = null;
-    }, [emitOperation]),
+      onPointerRelease?.();
+    }, [emitOperation, onOperation, onPointerRelease]),
   };
 
   // Get base drawing functionality

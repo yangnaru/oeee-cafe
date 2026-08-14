@@ -20,6 +20,7 @@ import {
   decodePainterOperation,
   encodeEndSession,
   encodePainterOperation,
+  encodePointerUp,
   encodeResetBegin,
   encodeSnapshot,
   type DecodedMessage,
@@ -123,6 +124,15 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const onLocalPointerUp = useCallback(() => {
+    const ws = wsRef.current;
+    const localId = localIdRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || localId === null) return;
+    ws.send(encodePointerUp(localId));
+  // wsRef is created by the WebSocket hook below and is stable for its lifetime.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const element = painterElementRef.current;
     if (!element || !canvasMeta || painterRef.current) return;
@@ -131,7 +141,11 @@ export default function App() {
       height: canvasMeta.height,
       mode: { kind: "standard" },
       controls: { kind: "toolbox" },
-      synchronization: { actorId: userIdRef.current, onOperation: onLocalOperation },
+      synchronization: {
+        actorId: userIdRef.current,
+        onOperation: onLocalOperation,
+        onPointerUp: onLocalPointerUp,
+      },
     });
     painterRef.current = painter;
     void painter.ready.then(() => painter.setInteractionEnabled(false));
@@ -139,7 +153,7 @@ export default function App() {
       painter.unmount();
       if (painterRef.current === painter) painterRef.current = null;
     };
-  }, [canvasMeta, onLocalOperation]);
+  }, [canvasMeta, onLocalOperation, onLocalPointerUp]);
 
   useEffect(() => {
     painterRef.current?.setInteractionEnabled(

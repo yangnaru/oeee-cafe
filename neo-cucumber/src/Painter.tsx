@@ -262,6 +262,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     handleHoverMove,
     !interactionEnabled,
     emitLocalOperation,
+    synchronization?.onPointerUp,
   );
   previewEngineRef.current = drawingEngine ?? null;
 

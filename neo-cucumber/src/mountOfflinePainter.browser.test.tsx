@@ -115,6 +115,7 @@ describe("public painter lifecycle", () => {
 
   it("emits framework-neutral operations for controlled hosts", async () => {
     const operations: import("./operations").LocalPainterOperation[] = [];
+    let pointerUps = 0;
     const element = document.createElement("div");
     document.body.appendChild(element);
     let painter!: ReturnType<typeof mount>;
@@ -127,6 +128,7 @@ describe("public painter lifecycle", () => {
         synchronization: {
           actorId: "alice",
           onOperation: (operation) => operations.push(operation),
+          onPointerUp: () => { pointerUps += 1; },
         },
       });
     });
@@ -149,12 +151,20 @@ describe("public painter lifecycle", () => {
     };
     await send("pointerdown", 10, 12);
     await send("pointermove", 30, 32);
+    expect(operations.map((entry) => entry.operation.kind)).toEqual([
+      "undo-boundary",
+      "stroke",
+      "stroke",
+    ]);
+    expect(pointerUps).toBe(0);
     await send("pointerup", 30, 32);
 
     expect(operations.map((entry) => entry.operation.kind)).toEqual([
       "undo-boundary",
       "stroke",
+      "stroke",
     ]);
+    expect(pointerUps).toBe(1);
     expect(operations[0].actorId).toBe("alice");
     expect(operations[0].id).not.toBe(operations[1].id);
     expect(operations[1].operation).toMatchObject({
