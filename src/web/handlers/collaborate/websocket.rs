@@ -477,12 +477,14 @@ fn should_forward_to_connection(
     // Echo every stored client drawing message back to its sender in canonical
     // server order so the client can confirm its optimistic fork. Keeping an
     // explicit list here lost newer operations (LINE was the first visible
-    // casualty) whenever the protocol grew. POINTER_UP is the sole ephemeral
-    // client message and must not enter reconciliation. Snapshot is a stored
+    // casualty) whenever the protocol grew. Pointer messages are ephemeral
+    // and must not enter reconciliation. Snapshot is a stored
     // server-range message; chat is echoed as delivery confirmation.
     match room_msg.payload.first().copied() {
         Some(0x02) | Some(0x03) => true,
-        Some(msg_type) if messages::is_client_message(msg_type) => msg_type != 0x13,
+        Some(msg_type) if messages::is_client_message(msg_type) => {
+            msg_type != 0x13 && msg_type != 0x1c
+        }
         _ => false,
     }
 }
@@ -542,18 +544,22 @@ mod forwarding_tests {
 
     #[test]
     fn does_not_echo_ephemeral_pointer_updates_to_the_sender() {
-        assert!(!should_forward_to_connection(
-            &message("same", 0x13),
-            "same"
-        ));
+        for msg_type in [0x13, 0x1c] {
+            assert!(!should_forward_to_connection(
+                &message("same", msg_type),
+                "same"
+            ));
+        }
     }
 
     #[test]
     fn forwards_messages_from_other_connections() {
-        assert!(should_forward_to_connection(
-            &message("other", 0x13),
-            "same"
-        ));
+        for msg_type in [0x13, 0x1c] {
+            assert!(should_forward_to_connection(
+                &message("other", msg_type),
+                "same"
+            ));
+        }
     }
 
     #[test]

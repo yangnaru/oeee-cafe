@@ -57,6 +57,8 @@ export interface PainterOptions {
   synchronization?: {
     actorId: string;
     onOperation(operation: import("./operations").LocalPainterOperation): void;
+    /** Ephemeral canvas-space hover position, or null after leaving. */
+    onPointerMove?: (position: import("./operations").PainterPoint | null) => void;
     /** Called when a pointer stroke ends so hosts can retire remote cursors. */
     onPointerUp?: () => void;
   };

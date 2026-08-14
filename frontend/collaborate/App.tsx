@@ -19,6 +19,7 @@ import { SessionEndingModal } from "./components/modals/SessionEndingModal";
 import {
   decodePainterOperation,
   encodeEndSession,
+  encodeMovePointer,
   encodePainterOperation,
   encodePointerUp,
   encodeResetBegin,
@@ -89,6 +90,8 @@ export default function App() {
   const processingMessageRef = useRef(false);
   const isCatchingUpRef = useRef(true);
   const pendingIdsRef = useRef(new Map<string, string[]>());
+  const pointerFrameRef = useRef<number | null>(null);
+  const pendingPointerRef = useRef<{ x: number; y: number } | null>(null);
   const expectedSequenceRef = useRef(1);
   const appliedSequenceRef = useRef(0);
   const canonicalOperationsRef = useRef(new Map<number, CanonicalPainterOperation>());
@@ -133,6 +136,29 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const onLocalPointerMove = useCallback((position: { x: number; y: number } | null) => {
+    if (!position) {
+      pendingPointerRef.current = null;
+      if (pointerFrameRef.current !== null) cancelAnimationFrame(pointerFrameRef.current);
+      pointerFrameRef.current = null;
+      onLocalPointerUp();
+      return;
+    }
+    pendingPointerRef.current = position;
+    if (pointerFrameRef.current !== null) return;
+    pointerFrameRef.current = requestAnimationFrame(() => {
+      pointerFrameRef.current = null;
+      const point = pendingPointerRef.current;
+      const ws = wsRef.current;
+      const localId = localIdRef.current;
+      if (point && ws?.readyState === WebSocket.OPEN && localId !== null) {
+        ws.send(encodeMovePointer(localId, point.x, point.y));
+      }
+    });
+  // wsRef is created by the WebSocket hook below and is stable for its lifetime.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onLocalPointerUp]);
+
   useEffect(() => {
     const element = painterElementRef.current;
     if (!element || !canvasMeta || painterRef.current) return;
@@ -144,6 +170,7 @@ export default function App() {
       synchronization: {
         actorId: userIdRef.current,
         onOperation: onLocalOperation,
+        onPointerMove: onLocalPointerMove,
         onPointerUp: onLocalPointerUp,
       },
     });
@@ -153,7 +180,11 @@ export default function App() {
       painter.unmount();
       if (painterRef.current === painter) painterRef.current = null;
     };
-  }, [canvasMeta, onLocalOperation, onLocalPointerUp]);
+  }, [canvasMeta, onLocalOperation, onLocalPointerMove, onLocalPointerUp]);
+
+  useEffect(() => () => {
+    if (pointerFrameRef.current !== null) cancelAnimationFrame(pointerFrameRef.current);
+  }, []);
 
   useEffect(() => {
     painterRef.current?.setInteractionEnabled(

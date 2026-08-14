@@ -379,6 +379,8 @@ export const useWebSocket = ({
       const raw = new Uint8Array(arrayBuffer);
 
       if (isCatchingUpRef.current) {
+        // Pointer metadata describes the present moment, not replay state.
+        if (message.type === "movePointer" || message.type === "pointerup") return;
         // During catch-up, queue messages for sequential processing
         messageQueueRef.current.push({ message, raw, seq: sequenced?.seq });
         // Process queue immediately if not already processing
@@ -618,6 +620,17 @@ export const useWebSocket = ({
             // Hide cursor for remote users when they stop drawing
             if (message.userId !== localIdRef.current) {
               hideCursor(String(message.userId));
+            }
+            break;
+          }
+
+          case "movePointer": {
+            if (message.userId !== localIdRef.current) {
+              const username =
+                idNamesRef.current.get(message.userId) || `#${message.userId}`;
+              createOrUpdateCursor(
+                String(message.userId), message.x, message.y, username,
+              );
             }
             break;
           }

@@ -211,6 +211,13 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
   const [handleHoverMove, setHoverHandler] = useDeferredHandler<
     { x: number; y: number } | null
   >();
+  const handleSynchronizedHover = useCallback(
+    (at: { x: number; y: number } | null) => {
+      handleHoverMove(at);
+      synchronization?.onPointerMove?.(at);
+    },
+    [handleHoverMove, synchronization],
+  );
 
   const tempCanvasContainerRef = useRef<HTMLDivElement>(null);
   const tempLocalUserCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -259,7 +266,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     handleLinePreview,
     handleTextPlace,
     handleBezierPreview,
-    handleHoverMove,
+    handleSynchronizedHover,
     !interactionEnabled,
     emitLocalOperation,
     synchronization?.onPointerUp,

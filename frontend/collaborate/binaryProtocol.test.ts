@@ -10,6 +10,7 @@ import {
   encodeBezier,
   encodeEraseAll,
   encodeLine,
+  encodeMovePointer,
   encodeRegion,
   encodeText,
   MSG_TYPE,
@@ -64,6 +65,17 @@ describe("canonical history positions", () => {
       historyId: "12345678-1234-5678-9abc-def012345678",
       afterSeq: 40,
       lastSeq: 99,
+    });
+  });
+});
+
+describe("ephemeral pointer positions", () => {
+  it("round-trips signed quarter-pixel canvas coordinates", () => {
+    expect(decodeMessage(encodeMovePointer(ID, -12.25, 1023.75))).toEqual({
+      type: "movePointer",
+      userId: ID,
+      x: -12.25,
+      y: 1023.75,
     });
   });
 });

@@ -88,6 +88,8 @@ export const MSG_TYPE = {
   // Client messages (>= 0x10) - server just broadcasts
   FILL: 0x12,
   POINTER_UP: 0x13,
+  // Ephemeral collaborator pointer position; never enters canvas history.
+  MOVE_POINTER: 0x1c,
   // Marks the start of an undoable operation (stroke or fill)
   UNDO_POINT: 0x14,
   // Undo (or redo) the sender's most recent operation
@@ -514,6 +516,18 @@ export function encodePointerUp(userId: number): ArrayBuffer {
   return buffer.buffer;
 }
 
+/** Drawpile-style quarter-pixel fixed-point pointer position. */
+export function encodeMovePointer(userId: number, x: number, y: number): ArrayBuffer {
+  const buffer = new ArrayBuffer(10);
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  bytes[0] = MSG_TYPE.MOVE_POINTER;
+  bytes[1] = userId;
+  view.setInt32(2, Math.round(x * 4), true);
+  view.setInt32(6, Math.round(y * 4), true);
+  return buffer;
+}
+
 // Decoded message types
 /**
  * Encode REGION message (0x17)
@@ -808,6 +822,13 @@ export interface PointerUpMessage {
   userId: number;
 }
 
+export interface MovePointerMessage {
+  type: "movePointer";
+  userId: number;
+  x: number;
+  y: number;
+}
+
 export interface EndSessionMessage {
   type: "endSession";
   userId: string;
@@ -846,6 +867,7 @@ export type DecodedMessage =
   | StrokeMessage
   | FillMessage
   | PointerUpMessage
+  | MovePointerMessage
   | EndSessionMessage
   | SessionExpiredMessage
   | LeaveMessage;
@@ -1141,6 +1163,17 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         type: "pointerup",
         userId: buffer[1],
       };
+
+    case MSG_TYPE.MOVE_POINTER: {
+      if (buffer.length < 10) return null;
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      return {
+        type: "movePointer",
+        userId: buffer[1],
+        x: view.getInt32(2, true) / 4,
+        y: view.getInt32(6, true) / 4,
+      };
+    }
 
     case MSG_TYPE.END_SESSION: {
       if (buffer.length < 19) return null;

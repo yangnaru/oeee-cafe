@@ -509,11 +509,12 @@ pub fn should_store_message(msg: &Message) -> bool {
         // - Chat messages (ephemeral conversation)
         // - JOIN messages (current participants sent via JOIN_RESPONSE)
         // - LEAVE messages (current participants tracked in Redis presence)
-        // - POINTER_UP (live cursor signal, meaningless in history replay)
+        // - POINTER_UP and MOVE_POINTER (live cursor signals)
         msg_type != MessageType::Chat as u8
             && msg_type != MessageType::Join as u8
             && msg_type != MessageType::Leave as u8
             && msg_type != 0x13
+            && msg_type != 0x1c
     } else {
         true
     }
