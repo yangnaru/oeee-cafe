@@ -15,6 +15,8 @@ dist-ssr
 # so a bare `cargo run` could serve /static/viewer without a node build first;
 # run `pnpm run build:viewer` once instead.
 dist-viewer
+dist-offline
+dist-lib
 *.local
 
 # Editor directories and files

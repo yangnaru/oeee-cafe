@@ -27,6 +27,7 @@ use data_encoding::BASE64;
 use data_url::DataUrl;
 use minijinja::context;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha256::digest;
 use sqlx::postgres::types::PgInterval;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -64,9 +65,9 @@ pub async fn start_draw(
 ) -> Result<Html<String>, AppError> {
     let tool = input.tool.as_deref().unwrap_or("neo");
     let template_filename = match tool {
-        "neo" => "draw_post_neo.jinja",
+        "neo" => "draw_post_cucumber.jinja",
         "tegaki" => "draw_post_tegaki.jinja",
-        _ => "draw_post_neo.jinja",
+        _ => "draw_post_cucumber.jinja",
     };
 
     let db = &state.db_pool;
@@ -98,6 +99,27 @@ pub async fn start_draw(
     };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
+    let painter_mode = match community.as_ref().and_then(|community| {
+        Some((
+            community.background_color.as_ref()?,
+            community.foreground_color.as_ref()?,
+        ))
+    }) {
+        Some((background_color, foreground_color)) => json!({
+            "kind": "two-tone",
+            "backgroundColor": background_color,
+            "foregroundColor": foreground_color,
+        }),
+        None => json!({ "kind": "standard" }),
+    };
+    let painter_config = serde_json::to_string(&json!({
+        "width": input.width.parse::<u32>()?,
+        "height": input.height.parse::<u32>()?,
+        "communityId": input.community_id.clone(),
+        "parentPostId": input.parent_post_id.clone(),
+        "locale": ftl_lang.clone(),
+        "mode": painter_mode,
+    }))?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         community_name => community.as_ref().map(|c| c.name.clone()),
@@ -112,7 +134,8 @@ pub async fn start_draw(
         parent_post_id => input.parent_post_id,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
-        ftl_lang
+        ftl_lang,
+        painter_config
     })?;
 
     Ok(Html(rendered))
@@ -152,30 +175,6 @@ pub async fn start_draw_mobile(
         None
     };
 
-    // If community has defined colors, redirect to neo-cucumber offline mode
-    if let Some(ref comm) = community {
-        if let (Some(bg), Some(fg)) = (&comm.background_color, &comm.foreground_color) {
-            // URL encode the color values (they contain # which needs to be %23)
-            let bg_encoded = bg.replace('#', "%23");
-            let fg_encoded = fg.replace('#', "%23");
-
-            let mut redirect_url = format!(
-                "/collaborate/?offline=true&width={}&height={}&twoTone=true&backgroundColor={}&foregroundColor={}",
-                input.width, input.height, bg_encoded, fg_encoded
-            );
-
-            if let Some(cid) = community_id {
-                redirect_url.push_str(&format!("&community_id={}", cid));
-            }
-
-            if let Some(ref parent_id) = input.parent_post_id {
-                redirect_url.push_str(&format!("&parent_post_id={}", parent_id));
-            }
-
-            return Ok(Redirect::to(&redirect_url).into_response());
-        }
-    }
-
     // Query parent post if parent_post_id is provided
     let parent_post = if let Some(ref parent_post_id) = input.parent_post_id {
         let parent_uuid = Uuid::parse_str(parent_post_id).ok();
@@ -191,11 +190,32 @@ pub async fn start_draw_mobile(
     let tool = &input.tool;
     let template_filename = match tool.as_str() {
         "tegaki" => "draw_post_tegaki_mobile.jinja",
-        "neo" => "draw_post_neo_mobile.jinja",
-        _ => "draw_post_neo_mobile.jinja", // fallback to neo
+        "neo" => "draw_post_cucumber_mobile.jinja",
+        _ => "draw_post_cucumber_mobile.jinja",
     };
 
     let template: minijinja::Template<'_, '_> = state.env.get_template(template_filename)?;
+    let painter_mode = match community.as_ref().and_then(|community| {
+        Some((
+            community.background_color.as_ref()?,
+            community.foreground_color.as_ref()?,
+        ))
+    }) {
+        Some((background_color, foreground_color)) => json!({
+            "kind": "two-tone",
+            "backgroundColor": background_color,
+            "foregroundColor": foreground_color,
+        }),
+        None => json!({ "kind": "standard" }),
+    };
+    let painter_config = serde_json::to_string(&json!({
+        "width": input.width.parse::<u32>()?,
+        "height": input.height.parse::<u32>()?,
+        "communityId": community_id.map(|id| id.to_string()),
+        "parentPostId": input.parent_post_id.clone(),
+        "locale": ftl_lang.clone(),
+        "mode": painter_mode,
+    }))?;
     let rendered = template.render(context! {
         current_user => auth_session.user,
         community_name => community.as_ref().map(|c| c.name.clone()),
@@ -209,7 +229,8 @@ pub async fn start_draw_mobile(
         parent_post => parent_post,
         parent_post_id => input.parent_post_id,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        ftl_lang
+        ftl_lang,
+        painter_config
     })?;
 
     Ok(Html(rendered).into_response())
@@ -426,7 +447,7 @@ pub async fn draw_finish(
         "neo" => Tool::Neo,
         "tegaki" => Tool::Tegaki,
         "cucumber" => Tool::Cucumber,
-        "neo-cucumber-offline" => Tool::Cucumber,
+        "neo-cucumber-offline" => Tool::NeoCucumber,
         _ => return Ok(StatusCode::BAD_REQUEST.into_response()),
     };
     let post_draft = PostDraft {
@@ -626,11 +647,23 @@ pub async fn start_banner_draw(
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
     let template: minijinja::Template<'_, '_> = state.env.get_template("draw_banner.jinja")?;
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+    let painter_config = serde_json::to_string(&json!({
+        "width": 200,
+        "height": 40,
+        "locale": ftl_lang.clone(),
+        "submission": {
+            "kind": "banner",
+            "profileUrl": format!("/@{}", current_user.login_name),
+        },
+        "mode": { "kind": "standard" },
+    }))?;
     let rendered = template.render(context! {
         width => 200,
         height => 40,
         current_user => auth_session.user,
         ftl_lang,
+        painter_config,
     })?;
 
     Ok(Html(rendered))
@@ -660,11 +693,23 @@ pub async fn start_banner_draw_mobile(
     }
 
     let template: minijinja::Template<'_, '_> = state.env.get_template("draw_banner_mobile.jinja")?;
+    let current_user = auth_session.user.as_ref().ok_or(AppError::Unauthorized)?;
+    let painter_config = serde_json::to_string(&json!({
+        "width": 200,
+        "height": 40,
+        "locale": ftl_lang.clone(),
+        "submission": {
+            "kind": "banner",
+            "profileUrl": format!("/@{}", current_user.login_name),
+        },
+        "mode": { "kind": "standard" },
+    }))?;
     let rendered = template.render(context! {
         width => 200,
         height => 40,
         current_user => auth_session.user,
         ftl_lang,
+        painter_config,
     })?;
 
     Ok(Html(rendered))

@@ -6,7 +6,14 @@
     <title>oeee painter sandbox</title>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/sandbox.tsx"></script>
+    <div id="painter"></div>
+    <div style="position:fixed;bottom:0;left:0;right:0;z-index:80;padding:8px;background:#ccccff">
+      <button id="replay" type="button">Replay what I drew</button>
+      <button id="download" type="button">Download .pch</button>
+      <label>Open a .pch… <input id="open" type="file" accept=".pch,application/octet-stream" /></label>
+      <span id="status"></span>
+      <div id="viewer"></div>
+    </div>
+    <script type="module" src="/src/sandbox.ts"></script>
   </body>
 </html>

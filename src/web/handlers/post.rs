@@ -45,6 +45,7 @@ use axum::{extract::State, http::StatusCode, response::Html, Form};
 use axum_messages::Messages;
 use minijinja::context;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use urlencoding;
 use uuid::Uuid;
 
@@ -356,7 +357,7 @@ pub async fn post_relay_view(
     }
     // Personal posts (community_id is None) are always accessible
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("draw_post_neo.jinja")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("draw_post_cucumber.jinja")?;
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
 
@@ -385,25 +386,55 @@ pub async fn post_relay_view(
     let community = find_community_by_id(&mut tx, community_id)
         .await?
         .ok_or_else(|| AppError::NotFound("Resource".to_string()))?;
+    let width = post.get("image_width")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing image_width".to_string()))?
+        .parse::<u32>()?;
+    let height = post.get("image_height")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing image_height".to_string()))?
+        .parse::<u32>()?;
+    let image_filename = post.get("image_filename")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing image_filename".to_string()))?;
+    let painter_mode = match (&community.background_color, &community.foreground_color) {
+        (Some(background), Some(foreground)) => json!({
+            "kind": "two-tone",
+            "backgroundColor": background,
+            "foregroundColor": foreground,
+        }),
+        _ => json!({ "kind": "standard" }),
+    };
+    let painter_config = serde_json::to_string(&json!({
+        "width": width,
+        "height": height,
+        "communityId": community_id.to_string(),
+        "parentPostId": uuid.to_string(),
+        "initialImageUrl": format!(
+            "{}/image/{}/{}?relay={}",
+            state.config.r2_public_endpoint_url,
+            &image_filename[..2],
+            image_filename,
+            uuid,
+        ),
+        "locale": ftl_lang.clone(),
+        "submission": { "kind": "post" },
+        "mode": painter_mode,
+    }))?;
     let rendered = template.render(context! {
         parent_post => post.clone(),
         current_user => auth_session.user,
         community_name => community.name,
-        width => post.get("image_width")
-            .and_then(|v| v.as_ref())
-            .ok_or_else(|| AppError::InvalidFormData("Missing image_width".to_string()))?
-            .parse::<u32>()?,
-        height => post.get("image_height")
-            .and_then(|v| v.as_ref())
-            .ok_or_else(|| AppError::InvalidFormData("Missing image_height".to_string()))?
-            .parse::<u32>()?,
+        width => width,
+        height => height,
         background_color => community.background_color,
         foreground_color => community.foreground_color,
         community_id => community_id.to_string(),
         is_relay => true,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
-        ftl_lang
+        ftl_lang,
+        painter_config
     })?;
 
     Ok(Html(rendered).into_response())
@@ -2745,7 +2776,7 @@ pub async fn post_relay_view_by_login_name(
     }
     let post = post.ok_or_else(|| AppError::NotFound("Post".to_string()))?;
 
-    let template: minijinja::Template<'_, '_> = state.env.get_template("draw_post_neo.jinja")?;
+    let template: minijinja::Template<'_, '_> = state.env.get_template("draw_post_cucumber.jinja")?;
 
     // Relay only works for community posts, not personal posts
     let post_data = post.clone();
@@ -2772,27 +2803,57 @@ pub async fn post_relay_view_by_login_name(
 
     let common_ctx =
         CommonContext::build(&mut tx, auth_session.user.as_ref().map(|u| u.id)).await?;
+    let width = post.get("image_width")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing image_width".to_string()))?
+        .parse::<u32>()?;
+    let height = post.get("image_height")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing image_height".to_string()))?
+        .parse::<u32>()?;
+    let image_filename = post.get("image_filename")
+        .and_then(|v| v.as_ref())
+        .ok_or_else(|| AppError::InvalidFormData("Missing image_filename".to_string()))?;
+    let painter_mode = match (&community.background_color, &community.foreground_color) {
+        (Some(background), Some(foreground)) => json!({
+            "kind": "two-tone",
+            "backgroundColor": background,
+            "foregroundColor": foreground,
+        }),
+        _ => json!({ "kind": "standard" }),
+    };
+    let painter_config = serde_json::to_string(&json!({
+        "width": width,
+        "height": height,
+        "communityId": community_id.to_string(),
+        "parentPostId": uuid.to_string(),
+        "initialImageUrl": format!(
+            "{}/image/{}/{}?relay={}",
+            state.config.r2_public_endpoint_url,
+            &image_filename[..2],
+            image_filename,
+            uuid,
+        ),
+        "locale": ftl_lang.clone(),
+        "submission": { "kind": "post" },
+        "mode": painter_mode,
+    }))?;
 
     let rendered = template
         .render(context! {
             parent_post => post.clone(),
             current_user => auth_session.user,
                 community_name => community.name,
-            width => post.get("image_width")
-            .and_then(|v| v.as_ref())
-            .ok_or_else(|| AppError::InvalidFormData("Missing image_width".to_string()))?
-            .parse::<u32>()?,
-            height => post.get("image_height")
-            .and_then(|v| v.as_ref())
-            .ok_or_else(|| AppError::InvalidFormData("Missing image_height".to_string()))?
-            .parse::<u32>()?,
+            width => width,
+            height => height,
             background_color => community.background_color,
             foreground_color => community.foreground_color,
             community_id => community_id.to_string(),
             is_relay => true,
             draft_post_count => common_ctx.draft_post_count,
             unread_notification_count => common_ctx.unread_notification_count,
-            ftl_lang
+            ftl_lang,
+            painter_config
         })
         .map_err(|e| AppError::from(anyhow::anyhow!("Template render error: {}", e)))?;
     Ok(Html(rendered).into_response())

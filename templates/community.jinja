@@ -66,11 +66,8 @@
        is gone; the form is what people came for, so it stands on its own. #}
     {% if current_user and community.background_color %}
       <div class="community-drawing-card">
-        <form action="/collaborate/" method="get" onsubmit="setOrientationDimensions(event, this)">
-          <input type="hidden" name="offline" value="true" />
-          <input type="hidden" name="twoTone" value="true" />
-          <input type="hidden" name="backgroundColor" value="{{ community.background_color }}" />
-          <input type="hidden" name="foregroundColor" value="{{ community.foreground_color }}" />
+        <form action="/draw" method="post" onsubmit="setOrientationDimensions(event, this)">
+          <input type="hidden" name="tool" value="neo" />
           <input type="hidden" name="community_id" value="{{ community_id }}" />
           <input type="hidden" name="width" value="640" />
           <input type="hidden" name="height" value="480" />
@@ -106,7 +103,7 @@
         <form action="/draw" method="post">
           <input type="hidden" name="community_id" value="{{ community_id }}" />
           <select name="tool" title="{{ ftl_get_message('community-drawing-tool') }}">
-            <option value="neo" selected>PaintBBS NEO</option>
+            <option value="neo" selected>Neo Cucumber</option>
             <option value="tegaki">Tegaki</option>
           </select>
           <select name="width" title="{{ ftl_get_message('community-drawing-width') }}">

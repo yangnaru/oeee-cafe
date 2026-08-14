@@ -22,7 +22,6 @@ interface SimplifiedToolboxProps {
   selectedPaletteIndex: number;
   canUndo: boolean;
   canRedo: boolean;
-  isSaving: boolean;
   timerMinutes: number;
   timerRemainingSeconds: number;
   onBrushSizeChange: (size: number) => void;
@@ -30,7 +29,6 @@ interface SimplifiedToolboxProps {
   onTimerChange: (minutes: number) => void;
   onUndo: () => void;
   onRedo: () => void;
-  onSave: () => void;
 }
 
 const formatRemaining = (seconds: number): string => {
@@ -44,7 +42,6 @@ export const SimplifiedToolbox = ({
   selectedPaletteIndex,
   canUndo,
   canRedo,
-  isSaving,
   timerMinutes,
   timerRemainingSeconds,
   onBrushSizeChange,
@@ -52,7 +49,6 @@ export const SimplifiedToolbox = ({
   onTimerChange,
   onUndo,
   onRedo,
-  onSave,
 }: SimplifiedToolboxProps) => {
   const { t } = useLingui();
   const { theme, toggle: toggleTheme } = useTheme();
@@ -180,16 +176,6 @@ export const SimplifiedToolbox = ({
           <Trans>Redo</Trans>
         </button>
       </div>
-
-      {/* Save Button */}
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={isSaving}
-        className={`${NEO_BUTTON} w-full disabled:cursor-not-allowed`}
-      >
-        {isSaving ? <Trans>Saving...</Trans> : <Trans>Save Drawing</Trans>}
-      </button>
 
       <button
         type="button"

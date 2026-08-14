@@ -1,7 +1,16 @@
 {% extends "base.jinja" %}
-{% block title %}{{ super() }} | {{ ftl_get_message("profile-draw-banner") }}{% endblock title %}
+{% block title %}
+  {{ super() }} |
+  {% if parent_post %}Re: {{ parent_post.title }}{% else %}{{ ftl_get_message("community-drawing-new") }}{% endif %}
+  {% if community_name %} @ {{ community_name }}{% endif %}
+{% endblock title %}
 {% block content %}
-  <div class="center"><h2>{{ ftl_get_message("profile-draw-banner") }}</h2></div>
+  <div class="center">
+    <h2>
+      {% if parent_post %}Re: {{ parent_post.title }}{% else %}{{ ftl_get_message("community-drawing-new") }}{% endif %}
+      {% if community_name %} @ {{ community_name }}{% endif %}
+    </h2>
+  </div>
   <link rel="stylesheet"
         href="{{ '/static/neo-cucumber/offline.css' | cachebuster | safe }}" />
   <div id="neo-cucumber-root"></div>

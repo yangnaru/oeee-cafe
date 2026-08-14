@@ -90,7 +90,7 @@
       <div class="post-detail-container">
         {# LEFT COLUMN: Image #}
         <div class="post-detail-left">
-          {% if post.image_tool == "neo" and post.allow_relay == "true" %}
+          {% if post.image_tool in ["neo", "neo-cucumber", "cucumber"] and post.allow_relay == "true" %}
             <a href="/@{{ post.community_slug if post.community_slug else post.login_name }}/{{ post_id }}/relay">
               <img class="post-image-full"
                    width="{{ post.image_width }}"
@@ -181,7 +181,7 @@
           <div class="post-actions">
             {% if current_user %}
               <div class="post-action-buttons">
-                {% if post.image_tool == "neo" and post.allow_relay == "true" %}
+                {% if post.image_tool in ["neo", "neo-cucumber", "cucumber"] and post.allow_relay == "true" %}
                   <button type="button" onclick="window.location.href='/@{{ post.community_slug if post.community_slug else post.login_name }}/{{ post_id }}/relay'">{{ ftl_get_message("post-relay") }}</button>
                 {% endif %}
                 <button type="button" onclick="document.getElementById('reply-form-{{ post_id }}').style.display = document.getElementById('reply-form-{{ post_id }}').style.display === 'none' ? 'block' : 'none'">{{ ftl_get_message("post-reply-with-drawing") }}</button>
@@ -209,11 +209,8 @@
               <fieldset id="reply-form-{{ post_id }}" style="display: none;">
                 <legend>{{ ftl_get_message("post-reply-select-tool") }}</legend>
                 {% if post_community and post_community.background_color and post_community.foreground_color %}
-                  <form action="/collaborate/" method="get" onsubmit="setOrientationDimensions(event, this)">
-                    <input type="hidden" name="offline" value="true" />
-                    <input type="hidden" name="twoTone" value="true" />
-                    <input type="hidden" name="backgroundColor" value="{{ post_community.background_color }}" />
-                    <input type="hidden" name="foregroundColor" value="{{ post_community.foreground_color }}" />
+                  <form action="/draw" method="post" onsubmit="setOrientationDimensions(event, this)">
+                    <input type="hidden" name="tool" value="neo" />
                     <input type="hidden" name="community_id" value="{{ post.community_id }}" />
                     <input type="hidden" name="parent_post_id" value="{{ post_id }}" />
                     <input type="hidden" name="width" value="640" />
@@ -247,7 +244,7 @@
                     <input type="hidden" name="community_id" value="{{ post.community_id }}" />
                     {% endif %}
                     <select name="tool">
-                      <option value="neo" selected>PaintBBS NEO</option>
+                      <option value="neo" selected>Neo Cucumber</option>
                       <option value="tegaki">Tegaki</option>
                       <option value="cucumber">Cucumber</option>
                     </select>

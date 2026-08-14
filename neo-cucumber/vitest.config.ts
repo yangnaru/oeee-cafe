@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 import { playwright } from "@vitest/browser-playwright";
 import path from "node:path";
+import { lingui } from "@lingui/vite-plugin";
 
 // The canonical NEO sources live outside this package and are loaded as raw
 // text by the fidelity tests, so Vite has to be allowed to serve them.
@@ -12,7 +13,11 @@ export default defineConfig({
   // Tailwind too: component tests render the real components, and without it
   // they render unstyled -- which quietly turns any assertion about layout or
   // colour into an assertion about the browser's defaults.
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react({ plugins: [["@lingui/swc-plugin", {}]] }),
+    tailwindcss(),
+    lingui(),
+  ],
   server: {
     fs: {
       allow: [repoRoot],

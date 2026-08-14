@@ -1,11 +1,25 @@
 {
   "name": "neo-cucumber",
-  "private": true,
   "version": "0.0.0",
   "type": "module",
+  "files": [
+    "dist-lib/neo-cucumber.js",
+    "dist-lib/style.css",
+    "dist-lib/types/public.d.ts"
+  ],
+  "main": "./dist-lib/neo-cucumber.js",
+  "types": "./dist-lib/types/public.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-lib/types/public.d.ts",
+      "import": "./dist-lib/neo-cucumber.js"
+    },
+    "./style.css": "./dist-lib/style.css"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && vite build --config vite.viewer.config.ts",
+    "build": "tsc -b && vite build && vite build --config vite.viewer.config.ts && vite build --config vite.offline.config.ts && pnpm run build:library",
+    "build:library": "vite build --config vite.library.config.ts && tsc -p tsconfig.lib.json",
     "lint": "eslint .",
     "test": "vitest run",
     "preview": "vite preview",
@@ -21,9 +35,11 @@
     "@sentry/react": "^10.12.0",
     "@tailwindcss/vite": "^4.1.14",
     "lz-string": "^1.5.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
     "tailwindcss": "^4.1.13"
+  },
+  "peerDependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
@@ -42,6 +58,8 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.4.0",
     "playwright": "^1.62.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
     "typescript": "~5.9.2",
     "typescript-eslint": "^8.39.1",
     "vite": "^7.1.7",

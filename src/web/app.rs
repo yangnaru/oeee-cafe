@@ -144,7 +144,6 @@ impl App {
         let auth_layer = AuthManagerLayerBuilder::new(authn_backend, session_layer).build();
 
         let static_router = Router::new()
-            .nest_service("/static/neo/dist", ServeDir::new("neo/dist"))
             .nest_service(
                 "/static/viewer",
                 ServeDir::new("neo-cucumber/dist-viewer"),
@@ -155,6 +154,10 @@ impl App {
             .nest_service(
                 "/collaborate/assets",
                 ServeDir::new("neo-cucumber/dist/assets"),
+            )
+            .nest_service(
+                "/static/neo-cucumber",
+                ServeDir::new("neo-cucumber/dist-offline"),
             )
             .nest_service("/static", ServeDir::new("static"));
 

@@ -61,7 +61,7 @@ pub async fn create_banner(
         banner_draft.height,
         banner_draft.image_filename,
         banner_draft.replay_filename,
-        Tool::Neo as _
+        Tool::NeoCucumber as _
     )
     .fetch_one(&mut **tx)
     .await?;

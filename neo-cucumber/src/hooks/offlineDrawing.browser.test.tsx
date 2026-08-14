@@ -12,6 +12,7 @@ import {
   readPixels,
   replayWithNeo,
 } from "../test/neoHarness";
+import { NeoReplay } from "../neo/NeoReplay";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -275,6 +276,35 @@ describe("offline drawing end to end", () => {
 
     const replayed = await replayThroughNeo(api);
     expect(replayed.items[replayed.items.length - 1][0]).toBe("restore");
+    expectMatch(api, replayed);
+  });
+
+  it("records a continued image as an opening restore", async () => {
+    const source = document.createElement("canvas");
+    source.width = W;
+    source.height = H;
+    const context = source.getContext("2d")!;
+    context.fillStyle = "#317842";
+    context.fillRect(0, 0, W, H);
+
+    const { api, strokeThrough } = await mountOfflineDrawing(drawingState());
+    await act(async () => {
+      await api.initializeFromImage(source.toDataURL("image/png"));
+    });
+    await strokeThrough([
+      [10, 10],
+      [60, 40],
+    ]);
+
+    const decoded = await decodePCH(api.getReplayBlob());
+    const replay = new NeoReplay(W, H);
+    await replay.playAll(decoded.items);
+    const replayed = {
+      background: replay.getLayerPixels(LAYER.BACKGROUND),
+      items: decoded.items,
+    };
+    expect(replayed.items[0][0]).toBe("restore");
+    expect(replayed.items[1][0]).toBe("freeHand");
     expectMatch(api, replayed);
   });
 });

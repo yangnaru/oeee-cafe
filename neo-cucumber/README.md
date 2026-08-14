@@ -1,69 +1,68 @@
-# React + TypeScript + Vite
+# neo-cucumber
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+NEO-compatible drawing canvas used by oeee-cafe for offline, collaborative,
+two-tone, relay, banner, and replay workflows.
 
-Currently, two official plugins are available:
+## Library boundary
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The public contract is defined in [`src/public.ts`](src/public.ts). The canvas
+internals and imperative mount implement this lifecycle and are distributed as
+the package's root export.
 
-## Expanding the ESLint configuration
+The library's core is the drawing canvas and this lifecycle:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+```ts
+import { mount } from "neo-cucumber";
+import "neo-cucumber/style.css";
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+const painter = mount(element, {
+  width: 640,
+  height: 480,
+  mode: { kind: "standard" },
+  controls: { kind: "toolbox" },
+});
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+await painter.ready;
+await painter.loadImage(parentImage);
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+const { png, replay, strokeCount } = await painter.save();
+painter.unmount();
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+`save()` is an atomic local export. It never uploads, redirects, or calls a
+native bridge. Hosts own persistence and completion behavior.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The built-in toolbox is an optional maintained preset. Its React components,
+props, drawing state, and callbacks are not part of the public API. Consumers
+that do not request it receive the canvas alone.
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Contract principles
+
+- No React types in the public interface.
+- No oeee-cafe routes, identifiers, submission formats, or native bridge.
+- Standard and two-tone behavior are core canvas modes.
+- Continuation images are core through `loadImage()` and are self-contained in
+  exported `.pch` files by default.
+- PNG and replay exports do not mutate visible artwork.
+- `unmount()` is idempotent and all later asynchronous operations reject.
+- Public compatibility applies only to exports from `src/public.ts` once a
+  package build is introduced.
+
+## Current application builds
+
+```bash
+pnpm run build
 ```
+
+This builds the collaborative application, replay viewer, oeee-cafe's offline
+auto-mounting adapter, and the package in `dist-lib/`. The host-specific adapter
+lives outside the library source at
+[`../frontend/painter/entry.ts`](../frontend/painter/entry.ts).
+
+[`sandbox.html`](sandbox.html) is the library usage example. It mounts the
+painter through `src/public.ts`, opts into the built-in toolbox, exports PNG and
+replay data, and opens the replay viewer without relying on private components.
+
+The package exposes only `neo-cucumber` and `neo-cucumber/style.css`. React and
+React DOM are peer dependencies; private canvas and toolbox modules are not
+package exports.

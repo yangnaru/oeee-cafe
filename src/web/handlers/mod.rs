@@ -980,4 +980,62 @@ mod template_tests {
             );
         }
     }
+
+    #[test]
+    fn drawing_pages_mount_the_offline_painter() {
+        let env = test_support::env();
+        let config = r##"{"width":640,"height":480,"communityId":"9c881320-2b43-4afa-b2bb-7128c8a3e985","mode":{"kind":"two-tone","backgroundColor":"#ffffff","foregroundColor":"#000000"}}"##;
+
+        for template_name in [
+            "draw_post_cucumber.jinja",
+            "draw_post_cucumber_mobile.jinja",
+        ] {
+            let rendered = env
+                .get_template(template_name)
+                .unwrap_or_else(|e| panic!("{template_name} loads: {e:#}"))
+                .render(context! {
+                    painter_config => config,
+                    parent_post => json!(null),
+                    community_name => "Two Tone",
+                    current_user => json!(null),
+                    messages => Vec::<serde_json::Value>::new(),
+                    draft_post_count => 0,
+                    unread_notification_count => 0,
+                    ftl_lang => "en",
+                })
+                .unwrap_or_else(|e| panic!("{template_name} renders: {e:#}"));
+
+            assert!(rendered.contains("id=\"neo-cucumber-root\""));
+            assert!(rendered.contains("/static/neo-cucumber/offline.js"));
+            assert!(rendered.contains("/static/neo-cucumber/offline.css"));
+            assert!(rendered.contains("\"kind\":\"two-tone\""));
+            assert!(!rendered.contains("neo.js"));
+        }
+    }
+
+    #[test]
+    fn banner_pages_mount_the_small_offline_painter() {
+        let env = test_support::env();
+        let config = r#"{"width":200,"height":40,"submission":{"kind":"banner","profileUrl":"/@artist"},"mode":{"kind":"standard"}}"#;
+
+        for template_name in ["draw_banner.jinja", "draw_banner_mobile.jinja"] {
+            let rendered = env
+                .get_template(template_name)
+                .unwrap_or_else(|e| panic!("{template_name} loads: {e:#}"))
+                .render(context! {
+                    painter_config => config,
+                    current_user => json!({ "login_name": "artist" }),
+                    messages => Vec::<serde_json::Value>::new(),
+                    draft_post_count => 0,
+                    unread_notification_count => 0,
+                    ftl_lang => "en",
+                })
+                .unwrap_or_else(|e| panic!("{template_name} renders: {e:#}"));
+
+            assert!(rendered.contains("/static/neo-cucumber/offline.js"));
+            assert!(rendered.contains("\"height\":40"));
+            assert!(rendered.contains("\"kind\":\"banner\""));
+            assert!(!rendered.contains("neo.js"));
+        }
+    }
 }

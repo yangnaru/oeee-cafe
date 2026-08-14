@@ -1,7 +1,16 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useCanvasView, useDeferredHandler } from "./hooks/useCanvasView";
 import "./App.css";
-import { Trans, useLingui } from "@lingui/react/macro";
+import { useLingui } from "@lingui/react/macro";
 import { ToolboxPanels } from "./components/ToolboxPanels";
 import { NEO_BUTTON } from "./components/neo/neoClasses";
 import { ALL_TOOLS } from "./constants/drawing";
@@ -11,14 +20,12 @@ import { useDrawingState } from "./hooks/useDrawingState";
 import { useDrawingTimer } from "./hooks/useDrawingTimer";
 import { useTwoToneShortcuts } from "./hooks/useTwoToneShortcuts";
 import { usePainterShortcuts } from "./hooks/usePainterShortcuts";
-import { isSandbox, sandboxBridge } from "./sandbox/bridge";
 import { ShortcutHelp } from "./components/ShortcutHelp";
 import type { ShortcutAction } from "./constants/shortcuts";
 import { MAX_BRUSH_SIZE, MIN_BRUSH_SIZE } from "./constants/drawing";
 import { useZoomControls } from "./hooks/useZoomControls";
 import { useOfflineCanvas } from "./hooks/useOfflineCanvas";
 import { compositeLayersToCanvas } from "./utils/canvasExport";
-import { NativeBridge } from "./utils/nativeBridge";
 import {
   type Backdrop,
   type BezierPreviewStyle,
@@ -31,62 +38,59 @@ import type { RegionRect } from "./neo/regionDrag";
 import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 import { previewBackdrop as backdropFromCanvasStack } from "./neo/previewBackdrop";
 import { PainterWorkspace } from "./components/PainterWorkspace";
+import type {
+  ImageSource,
+  PainterExport,
+  PainterHandle,
+  PainterOptions,
+} from "./public";
 
-// Validation constants
-const MIN_DIMENSION = 100;
-const MAX_WIDTH = 1000;
-const MAX_HEIGHT = 800;
-const DEFAULT_WIDTH = 300;
-const DEFAULT_HEIGHT = 300;
+interface PainterProps {
+  config: PainterOptions;
+}
 
-function OfflineApp() {
+function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Failed to encode canvas as PNG"));
+    }, "image/png");
+  });
+}
+
+const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
+  { config },
+  ref,
+) {
   const { t } = useLingui();
-  const isDevelopment = import.meta.env.DEV;
 
-  // Extract and validate dimensions and context from URL parameters
-  const { canvasWidth, canvasHeight, communityId, parentPostId, twoToneConfig } =
+  // The reusable painter receives its complete configuration from its host.
+  const {
+    canvasWidth,
+    canvasHeight,
+    controls,
+    twoToneConfig,
+  } =
     useMemo(() => {
-      const params = new URLSearchParams(window.location.search);
-      const widthParam = params.get("width");
-      const heightParam = params.get("height");
-
-      // Parse and validate width
-      let width = widthParam ? parseInt(widthParam, 10) : DEFAULT_WIDTH;
-      if (isNaN(width) || width < MIN_DIMENSION || width > MAX_WIDTH) {
-        width = DEFAULT_WIDTH;
-      }
-
-      // Parse and validate height
-      let height = heightParam ? parseInt(heightParam, 10) : DEFAULT_HEIGHT;
-      if (isNaN(height) || height < MIN_DIMENSION || height > MAX_HEIGHT) {
-        height = DEFAULT_HEIGHT;
-      }
-
-      // Extract community_id and parent_post_id
-      const communityId = params.get("community_id") || null;
-      const parentPostId = params.get("parent_post_id") || null;
-
-      // Parse two-tone mode parameters
-      const twoTone = params.get("twoTone") === "true";
-      const twoToneConfig = twoTone ? {
-        enabled: true,
-        backgroundColor: params.get("backgroundColor") || "#ffffff",
-        foregroundColor: params.get("foregroundColor") || "#000000"
-      } : null;
-
-      // Debug logging
-      if (twoToneConfig) {
-        console.log("Two-tone config parsed:", twoToneConfig);
-      }
+      const resolved = config;
+      const width = resolved.width;
+      const height = resolved.height;
+      const twoToneConfig =
+        resolved.mode.kind === "two-tone"
+          ? {
+              enabled: true,
+              backgroundColor: resolved.mode.backgroundColor,
+              foregroundColor: resolved.mode.foregroundColor,
+            }
+          : null;
 
       return {
         canvasWidth: width,
         canvasHeight: height,
-        communityId,
-        parentPostId,
+        controls: resolved.controls,
         twoToneConfig,
       };
-    }, []);
+    }, [config]);
 
   const {
     drawingState,
@@ -108,10 +112,6 @@ function OfflineApp() {
   // Use useLayoutEffect to ensure synchronous execution before first paint
   useLayoutEffect(() => {
     if (twoToneConfig) {
-      console.log("Calling initializeForTwoTone with:", {
-        bg: twoToneConfig.backgroundColor,
-        fg: twoToneConfig.foregroundColor
-      });
       initializeForTwoTone(
         twoToneConfig.backgroundColor,
         twoToneConfig.foregroundColor
@@ -123,20 +123,6 @@ function OfflineApp() {
     canUndo: false,
     canRedo: false,
   });
-
-  // Debug: Log palette colors whenever they change
-  useEffect(() => {
-    console.log("Current paletteColors:", paletteColors);
-  }, [paletteColors]);
-
-  // Store community and parent post context from URL parameters
-  const [drawingContext] = useState({
-    communityId,
-    parentPostId,
-  });
-
-  // Save state
-  const [isSaving, setIsSaving] = useState(false);
 
   const appRef = useRef<HTMLDivElement>(null);
   /**
@@ -226,9 +212,10 @@ function OfflineApp() {
     redo,
     drawingEngine,
     getReplayBlob,
-    getStartTime,
     getActionCount,
+    getInitializationActionCount,
     addRestoreAction,
+    initializeFromImage,
     initializeTwoToneCanvas,
     recordText,
   } = useOfflineDrawing(
@@ -248,6 +235,32 @@ function OfflineApp() {
     handleHoverMove
   );
   previewEngineRef.current = drawingEngine ?? null;
+
+  const readinessRef = useRef<{
+    promise: Promise<void>;
+    resolve: () => void;
+  } | null>(null);
+  if (!readinessRef.current) {
+    let resolve = () => {};
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    readinessRef.current = { promise, resolve };
+  }
+  useEffect(() => {
+    if (drawingEngine) readinessRef.current?.resolve();
+  }, [drawingEngine]);
+
+  const actionCount = getActionCount();
+  const onChange = config?.onChange;
+  useEffect(() => {
+    onChange?.({
+      canUndo: historyState.canUndo,
+      canRedo: historyState.canRedo,
+      strokeCount: actionCount,
+      dirty: actionCount > 0,
+    });
+  }, [onChange, historyState.canUndo, historyState.canRedo, actionCount]);
 
   // Focus the box as soon as it appears, so typing just works
   useEffect(() => {
@@ -316,7 +329,7 @@ function OfflineApp() {
     });
 
   // Canvas management
-  const { canvasContainerRef, downloadCanvasAsPNG } = useOfflineCanvas({
+  const { canvasContainerRef } = useOfflineCanvas({
     canvasWidth,
     canvasHeight,
     drawingEngine,
@@ -334,125 +347,78 @@ function OfflineApp() {
   });
   setHoverHandler(paintCursor);
 
-  // Save drawing handler
-  const handleSaveDrawing = useCallback(async () => {
-    if (!drawingEngine || isSaving) return;
+  const exportPng = useCallback(async (): Promise<Blob> => {
+    if (!drawingEngine) throw new Error("Painter is not ready");
+    const layers = [
+      drawingEngine.getLayerCanvas("background"),
+      drawingEngine.getLayerCanvas("foreground"),
+    ].filter((canvas): canvas is HTMLCanvasElement => canvas !== null);
+    const composited = compositeLayersToCanvas(canvasWidth, canvasHeight, layers);
+    if (!composited) throw new Error("Failed to composite canvas layers");
+    return canvasToPng(composited);
+  }, [drawingEngine, canvasWidth, canvasHeight]);
 
-    setIsSaving(true);
-    try {
-      // Get composited canvas as PNG
-      const bgLayer = drawingEngine.getLayerCanvas("background");
-      const fgLayer = drawingEngine.getLayerCanvas("foreground");
-      const layers = [bgLayer, fgLayer].filter(
-        (canvas): canvas is HTMLCanvasElement => canvas !== null
-      );
-      const composited = compositeLayersToCanvas(
-        canvasWidth,
-        canvasHeight,
-        layers
-      );
+  const exportReplay = useCallback(async (): Promise<Blob> => {
+    if (!drawingEngine) throw new Error("Painter is not ready");
+    addRestoreAction();
+    return getReplayBlob();
+  }, [drawingEngine, addRestoreAction, getReplayBlob]);
 
-      if (!composited) {
-        throw new Error("Failed to composite canvas layers");
-      }
-
-      const imageDataURL = composited.toDataURL("image/png");
-
-      // Add restore action with final layer states (enables animation skip in Neo)
-      addRestoreAction();
-
-      // Get replay blob
-      const replayBlob = getReplayBlob();
-
-      // Create form data
-      const formData = new FormData();
-      formData.append("image", imageDataURL);
-      formData.append("animation", replayBlob);
-      formData.append("width", canvasWidth.toString());
-      formData.append("height", canvasHeight.toString());
-      // Use "cucumber" tool name for two-tone mode, otherwise "neo-cucumber-offline"
-      formData.append("tool", twoToneConfig ? "cucumber" : "neo-cucumber-offline");
-      formData.append("security_timer", getStartTime().toString());
-      // Recorded actions minus the ones that aren't user strokes: the restore
-      // frame just added, plus two-tone's initial background fill.
-      const nonStrokeActions = twoToneConfig ? 2 : 1;
-      const strokeCount = Math.max(0, getActionCount() - nonStrokeActions);
-      formData.append("security_count", strokeCount.toString());
-
-      if (drawingContext.communityId) {
-        formData.append("community_id", drawingContext.communityId);
-      }
-      if (drawingContext.parentPostId) {
-        formData.append("parent_post_id", drawingContext.parentPostId);
-      }
-
-      // POST to server
-      const response = await fetch("/draw/finish", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (data?.error) {
-        alert(data.error);
-      } else {
-        // Check if running in native mobile app
-        if (NativeBridge.isNativeEnvironment()) {
-          // Notify native app of completion
-          NativeBridge.postMessage({
-            type: 'drawing_complete',
-            postId: data.post_id,
-            communityId: data.community_id,
-            imageUrl: data.image_url
-          });
-        } else {
-          // Web environment: redirect to publish page
-          window.location.href = `/posts/${data.post_id}/publish`;
-        }
-      }
-    } catch (error) {
-      alert(t`Failed to save drawing. Please try again.`);
-      console.error(error);
-    } finally {
-      setIsSaving(false);
-    }
+  const save = useCallback(async (): Promise<PainterExport> => {
+    // Start both captures in the same JavaScript turn. exportPng snapshots the
+    // composited pixels and exportReplay snapshots the action list before
+    // either promise yields back to pointer input.
+    const pngPromise = exportPng();
+    const replayPromise = exportReplay();
+    const [png, replay] = await Promise.all([pngPromise, replayPromise]);
+    const nonStrokeActions = 1 + getInitializationActionCount();
+    return {
+      png,
+      replay,
+      width: canvasWidth,
+      height: canvasHeight,
+      strokeCount: Math.max(0, getActionCount() - nonStrokeActions),
+    };
   }, [
-    drawingEngine,
+    exportPng,
+    exportReplay,
     canvasWidth,
     canvasHeight,
-    getReplayBlob,
-    getStartTime,
     getActionCount,
-    addRestoreAction,
-    drawingContext,
-    isSaving,
-    twoToneConfig,
-    t,
+    getInitializationActionCount,
   ]);
 
-  // Download replay handler for debugging
-  const handleDownloadReplay = useCallback(() => {
-    if (!drawingEngine) return;
+  const loadImage = useCallback(
+    async (source: ImageSource): Promise<void> => {
+      let objectUrl: string | null = null;
+      try {
+        const url =
+          source instanceof Blob
+            ? (objectUrl = URL.createObjectURL(source))
+            : source instanceof URL
+              ? source.href
+              : source;
+        await initializeFromImage(url);
+      } finally {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      }
+    },
+    [initializeFromImage],
+  );
 
-    try {
-      // Add restore action before downloading
-      addRestoreAction();
-
-      const replayBlob = getReplayBlob();
-      const url = URL.createObjectURL(replayBlob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `offline-drawing-${Date.now()}.pch`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      alert(t`Failed to download replay file.`);
-      console.error(error);
-    }
-  }, [drawingEngine, getReplayBlob, addRestoreAction, t]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      ready: readinessRef.current!.promise,
+      save,
+      exportPng,
+      exportReplay,
+      loadImage,
+      // The owning mount adapter replaces this with its React-root teardown.
+      unmount: () => {},
+    }),
+    [save, exportPng, exportReplay, loadImage],
+  );
 
   // Keep drawingEngine ref in sync
   const drawingEngineRef = useRef(drawingEngine);
@@ -483,12 +449,17 @@ function OfflineApp() {
   }, [drawingEngine]);
 
 
-  // Initialize two-tone canvas fill when drawing engine is ready
+  // Two-tone canvases open on their fixed background. Continuation images are
+  // loaded explicitly by the host through PainterHandle.loadImage().
   useEffect(() => {
     if (drawingEngine && twoToneConfig) {
       initializeTwoToneCanvas(twoToneConfig.backgroundColor);
     }
-  }, [drawingEngine, twoToneConfig, initializeTwoToneCanvas]);
+  }, [
+    drawingEngine,
+    twoToneConfig,
+    initializeTwoToneCanvas,
+  ]);
 
   // Drawing alarm, offered in two-tone mode
   const handleTimerExpire = useCallback(() => {
@@ -514,18 +485,6 @@ function OfflineApp() {
   );
 
   const [showShortcuts, setShowShortcuts] = useState(false);
-
-  // The local test page reaches the recorder through here. Production never
-  // sets the flag, so this stays inert.
-  useEffect(() => {
-    if (!isSandbox()) return;
-    sandboxBridge.getReplayBlob = getReplayBlob;
-    sandboxBridge.addRestoreAction = async () => {
-      await addRestoreAction();
-    };
-    sandboxBridge.width = canvasWidth;
-    sandboxBridge.height = canvasHeight;
-  }, [getReplayBlob, addRestoreAction, canvasWidth, canvasHeight]);
 
   /**
    * The full painter's shortcuts. Two-tone mode keeps Tegaki's pen semantics
@@ -614,62 +573,6 @@ function OfflineApp() {
 
   return (
     <div className="w-full app-container flex flex-col">
-      {/* Simple header */}
-      <div className="w-full bg-main border-b border-main p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold">
-              <Trans>Offline Drawing ({canvasWidth} × {canvasHeight})</Trans>
-            </h1>
-            {(drawingContext.communityId || drawingContext.parentPostId) && (
-              <div className="text-sm text-gray-600 mt-1">
-                {drawingContext.communityId && (
-                  <span>
-                    <Trans>Community: {drawingContext.communityId}</Trans>
-                  </span>
-                )}
-                {drawingContext.communityId && drawingContext.parentPostId && (
-                  <span className="mx-2">•</span>
-                )}
-                {drawingContext.parentPostId && (
-                  <span>
-                    <Trans>Parent Post: {drawingContext.parentPostId}</Trans>
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleSaveDrawing}
-              disabled={isSaving || !drawingContext.communityId}
-              className="px-4 py-2 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? <Trans>Saving...</Trans> : <Trans>Save Drawing</Trans>}
-            </button>
-            {isDevelopment && (
-              <>
-                <button
-                  type="button"
-                  onClick={downloadCanvasAsPNG}
-                  className="px-4 py-2 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
-                >
-                  <Trans>Download PNG</Trans>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDownloadReplay}
-                  className="px-4 py-2 border border-main bg-main text-main cursor-pointer hover:bg-highlight hover:text-white"
-                >
-                  <Trans>Download Replay</Trans>
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
       <div className="flex-1 flex overflow-hidden">
         <PainterWorkspace
           workspaceRef={appRef}
@@ -690,11 +593,11 @@ function OfflineApp() {
             onDismissText: () => setTextAt(null),
           }}
         >
-            <ShortcutHelp
+            {controls.kind === "toolbox" && <ShortcutHelp
               open={showShortcuts}
               onClose={() => setShowShortcuts(false)}
-            />
-            {twoToneConfig === null && (
+            />}
+            {controls.kind === "toolbox" && twoToneConfig === null && (
               // A shortcut nobody can find is a shortcut nobody uses, so the
               // key that opens the list is also a button.
               <button
@@ -707,14 +610,13 @@ function OfflineApp() {
                 ?
               </button>
             )}
-            {twoToneConfig ? (
+            {controls.kind === "none" ? null : twoToneConfig ? (
               <SimplifiedToolbox
                 brushSize={drawingState.brushSize}
                 paletteColors={paletteColors}
                 selectedPaletteIndex={selectedPaletteIndex}
                 canUndo={historyState.canUndo}
                 canRedo={historyState.canRedo}
-                isSaving={isSaving}
                 timerMinutes={timerMinutes}
                 timerRemainingSeconds={timerRemainingSeconds}
                 onBrushSizeChange={setPenSize}
@@ -722,7 +624,6 @@ function OfflineApp() {
                 onTimerChange={handleTimerChange}
                 onUndo={undo}
                 onRedo={redo}
-                onSave={handleSaveDrawing}
               />
             ) : (
               <ToolboxPanels
@@ -758,6 +659,6 @@ function OfflineApp() {
       </div>
     </div>
   );
-}
+});
 
-export default OfflineApp;
+export default Painter;

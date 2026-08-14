@@ -68,7 +68,6 @@ export const useOfflineDrawing = (
 ) => {
   // Initialize replay recording
   const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
-  const startTimeRef = useRef<number>(Date.now());
   const isFirstPointRef = useRef<boolean>(false);
   const hasCreatedStepRef = useRef<boolean>(false);
   // Layer captured at pointer down, alongside the settings useBaseDrawing
@@ -390,6 +389,55 @@ export const useOfflineDrawing = (
 
   // Track if we've already initialized to prevent double-init
   const hasInitializedTwoToneRef = useRef(false);
+  const hasInitializedImageRef = useRef(false);
+  const initializationActionCountRef = useRef(0);
+
+  const initializeFromImage = useCallback(async (imageUrl: string) => {
+    if (hasInitializedImageRef.current) return;
+
+    const engine = baseDrawing.drawingEngine;
+    const history = baseDrawing.history;
+    if (!engine || !history) return;
+    hasInitializedImageRef.current = true;
+
+    try {
+      const response = await fetch(imageUrl);
+      if (!response.ok) throw new Error(`Image request failed: ${response.status}`);
+      const blob = await response.blob();
+      const bitmap = await createImageBitmap(blob);
+      const width = canvasWidth || 300;
+      const height = canvasHeight || 300;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Failed to create image canvas");
+      context.imageSmoothingEnabled = false;
+      context.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+
+      engine.layers.background.set(context.getImageData(0, 0, width, height).data);
+      engine.layers.foreground.fill(0);
+      engine.updateAllDOMCanvasesImmediate();
+      history.saveState(
+        engine.layers.foreground,
+        engine.layers.background,
+        "both",
+        true,
+      );
+
+      actionRecorderRef.current.step();
+      actionRecorderRef.current.push(
+        "restore",
+        canvas.toDataURL("image/png"),
+        engine.getLayerCanvas("foreground")!.toDataURL("image/png"),
+      );
+      initializationActionCountRef.current++;
+    } catch (error) {
+      hasInitializedImageRef.current = false;
+      throw error;
+    }
+  }, [baseDrawing.drawingEngine, baseDrawing.history, canvasWidth, canvasHeight]);
 
   // Initialize two-tone canvas with background color fill
   const initializeTwoToneCanvas = useCallback((backgroundColor: string) => {
@@ -443,6 +491,7 @@ export const useOfflineDrawing = (
     const color = (255 << 24) | (b << 16) | (g << 8) | r;
     actionRecorderRef.current.step();
     actionRecorderRef.current.push("floodFill", 0, 0, 0, color);
+    initializationActionCountRef.current++;
   }, [baseDrawing.drawingEngine, baseDrawing.history]);
 
   // Return enhanced interface with replay functionality
@@ -452,8 +501,8 @@ export const useOfflineDrawing = (
     redo: wrappedRedo,
     getReplayBlob: () =>
       actionRecorderRef.current.getReplayBlob(canvasWidth || 300, canvasHeight || 300),
-    getStartTime: () => startTimeRef.current,
     getActionCount: () => actionRecorderRef.current.getActionCount(),
+    getInitializationActionCount: () => initializationActionCountRef.current,
     /** NEO's frame: ["text", layer, x, y, color, alpha, string, size, family] */
     recordText: (
       layer: "foreground" | "background",
@@ -473,6 +522,7 @@ export const useOfflineDrawing = (
       );
     },
     addRestoreAction,
+    initializeFromImage,
     initializeTwoToneCanvas,
   };
 };
