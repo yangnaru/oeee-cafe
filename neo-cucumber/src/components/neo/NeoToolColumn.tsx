@@ -7,7 +7,7 @@ import { NeoSizeSlider } from "./NeoSizeSlider";
 import { NeoToolSet } from "./NeoToolSet";
 import { NEO_COLUMN } from "./neoClasses";
 import { NEO_DEFAULT_RESERVES, type NeoReserve } from "../../neo/toolboxSpec";
-import type { DrawingState } from "../../types/collaboration";
+import type { DrawingState } from "../../types/drawing";
 import type { DrawType, ToolId } from "../../neo/tools";
 
 interface NeoToolColumnProps {

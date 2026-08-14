@@ -12,9 +12,13 @@ import {
   encodeText,
   encodeUndo,
   encodeUndoPoint,
-} from "./binaryProtocol";
+} from "../../../frontend/collaborate/binaryProtocol";
 import { type DrawingEngine } from "../DrawingEngine";
-import { WIRE_BRUSH_TYPES } from "../types/collaboration";
+import { WIRE_BRUSH_TYPES } from "../types/drawing";
+import {
+  isHistoryOperation,
+  type HistoryStroke,
+} from "../synchronization/historyOperations";
 
 vi.mock("./canvasSnapshot", () => ({
   pngDataToLayer: vi.fn(async () => new Uint8ClampedArray(SIZE * SIZE * 4).fill(7)),
@@ -164,9 +168,33 @@ function stroke(userId: number, x: number, y: number, r: number): ArrayBuffer {
   ]);
 }
 
+function historyOperation(bytes: ArrayBuffer) {
+  const message = decodeMessage(bytes);
+  if (!message || !isHistoryOperation(message)) {
+    throw new Error("expected a history operation");
+  }
+  return message;
+}
+
+function encodeHistoryStroke(stroke: HistoryStroke): ArrayBuffer {
+  return encodeStroke(
+    Number(stroke.userId), stroke.layer, stroke.brushSize, stroke.brushType,
+    stroke.color.r, stroke.color.g, stroke.color.b, stroke.color.a,
+    stroke.points, stroke.mask,
+  );
+}
+
+function flushStroke(history: CanvasHistory): ArrayBuffer {
+  const stroke = history.flushLocalStroke();
+  if (!stroke) throw new Error("expected a flushed stroke");
+  const bytes = encodeHistoryStroke(stroke);
+  history.commitLocalStroke(bytes, stroke);
+  return bytes;
+}
+
 // Dispatches a locally generated non-stroke message (undo point, undo, fill)
 function local(history: CanvasHistory, bytes: ArrayBuffer) {
-  history.handleLocal(bytes, decodeMessage(bytes)!);
+  history.handleLocal(bytes, historyOperation(bytes));
 }
 
 // Draws one local segment and flushes it into a STROKE fork entry
@@ -184,17 +212,42 @@ function localStroke(
     x,
     y
   );
-  const bytes = history.flushLocalStroke();
-  if (!bytes) throw new Error("expected a flushed stroke");
-  return bytes;
+  return flushStroke(history);
 }
 
 // Delivers a message from the canonical server stream
 async function remote(history: CanvasHistory, bytes: ArrayBuffer, seq?: number) {
-  await history.handleRemote(new Uint8Array(bytes), decodeMessage(bytes)!, seq);
+  await history.handleRemote(new Uint8Array(bytes), historyOperation(bytes), seq);
 }
 
 describe("canonical application", () => {
+  it("reconciles public operation envelopes by operation id", async () => {
+    const { engine, history } = setup();
+    history.setLocalUserId("local");
+    const operation = {
+      kind: "stroke" as const,
+      layer: "foreground" as const,
+      brushSize: 1,
+      brush: "solid" as const,
+      color: { r: 75, g: 0, b: 0, a: 255 },
+      points: [{ x: 3, y: 4 }],
+      mask: { type: 0, r: 0, g: 0, b: 0 },
+    };
+
+    history.handleLocalOperation({ id: "op-1", actorId: "local", operation });
+    expect(red(engine, 3, 4)).toBe(75);
+    expect(history.hasPendingLocal).toBe(true);
+
+    await history.handleCanonicalOperation({
+      id: "op-1",
+      actorId: "local",
+      operation,
+      sequence: 1,
+    });
+    expect(red(engine, 3, 4)).toBe(75);
+    expect(history.hasPendingLocal).toBe(false);
+  });
+
   it("applies remote strokes in server order, last writer wins", async () => {
     const { engine, history } = setup();
     await remote(history, stroke(REMOTE, 1, 1, 50), 1);
@@ -296,8 +349,7 @@ describe("local fork reconciliation", () => {
     expect(red(engine, 5, 5)).toBe(100); // open batch replayed on top
 
     // Flush and echo everything; the canvas must not change
-    const mine = history.flushLocalStroke();
-    expect(mine).not.toBeNull();
+    const mine = flushStroke(history);
     await remote(history, encodeUndoPoint(LOCAL), 2);
     await remote(history, mine!, 3);
     expect(red(engine, 5, 5)).toBe(100);
@@ -600,8 +652,7 @@ describe("masks over the wire", () => {
     history.addLocalSegment(
       "foreground", 1, "solid", { r: 50, g: 0, b: 0, a: 255 }, 1, 1, MASK
     );
-    const bytes = history.flushLocalStroke();
-    if (!bytes) throw new Error("expected a flushed stroke");
+    const bytes = flushStroke(history);
 
     // A second client, which has only the bytes
     const receiver = setup();
@@ -617,14 +668,14 @@ describe("masks over the wire", () => {
     masked.history.addLocalSegment(
       "foreground", 1, "solid", { r: 50, g: 0, b: 0, a: 255 }, 1, 1, MASK
     );
-    await remote(receiver.history, masked.history.flushLocalStroke()!, 1);
+    await remote(receiver.history, flushStroke(masked.history), 1);
 
     // Then an unmasked one from someone else must not inherit it
     const plain = setup();
     plain.history.addLocalSegment(
       "foreground", 1, "solid", { r: 60, g: 0, b: 0, a: 255 }, 2, 2
     );
-    await remote(receiver.history, plain.history.flushLocalStroke()!, 2);
+    await remote(receiver.history, flushStroke(plain.history), 2);
 
     // Both came from the same session id, so the second continues the first's
     // stroke rather than starting a dot -- what matters here is the mask.
@@ -638,7 +689,7 @@ describe("masks over the wire", () => {
     sender.history.addLocalSegment(
       "foreground", 1, "solid", { r: 50, g: 0, b: 0, a: 255 }, 1, 1, MASK
     );
-    const bytes = sender.history.flushLocalStroke()!;
+    const bytes = flushStroke(sender.history);
 
     await remote(history, encodeUndoPoint(REMOTE), 1);
     await remote(history, bytes, 2);

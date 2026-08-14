@@ -5,7 +5,8 @@
   "files": [
     "dist-lib/neo-cucumber.js",
     "dist-lib/style.css",
-    "dist-lib/types/public.d.ts"
+    "dist-lib/types/public.d.ts",
+    "dist-lib/types/operations.d.ts"
   ],
   "main": "./dist-lib/neo-cucumber.js",
   "types": "./dist-lib/types/public.d.ts",
@@ -20,7 +21,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build && vite build --config vite.viewer.config.ts && vite build --config vite.offline.config.ts && pnpm run build:library",
     "build:library": "vite build --config vite.library.config.ts && tsc -p tsconfig.lib.json",
-    "lint": "eslint .",
+    "lint": "cd .. && eslint --config neo-cucumber/eslint.config.js neo-cucumber frontend",
     "test": "vitest run",
     "preview": "vite preview",
     "extract": "lingui extract",

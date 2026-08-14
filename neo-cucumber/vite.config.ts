@@ -10,6 +10,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   base: "/collaborate/",
+  resolve: {
+    alias: [
+      { find: /^neo-cucumber$/, replacement: resolve(__dirname, "src/public.ts") },
+      { find: /^neo-cucumber\/style\.css$/, replacement: resolve(__dirname, "src/App.css") },
+      { find: "react", replacement: resolve(__dirname, "node_modules/react") },
+      { find: "react-dom", replacement: resolve(__dirname, "node_modules/react-dom") },
+      { find: "@lingui/core", replacement: resolve(__dirname, "node_modules/@lingui/core") },
+      { find: "@lingui/react", replacement: resolve(__dirname, "node_modules/@lingui/react") },
+      { find: "@sentry/react", replacement: resolve(__dirname, "node_modules/@sentry/react") },
+      { find: "@iconify/react", replacement: resolve(__dirname, "node_modules/@iconify/react") },
+    ],
+  },
   server: {
     allowedHosts: true,
   },

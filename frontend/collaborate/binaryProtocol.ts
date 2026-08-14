@@ -1,6 +1,11 @@
-import type { WireBrushType } from "../types/collaboration";
-import type { RegionTool } from "../neo/tools";
-import { NO_MASK, type Mask } from "../neo/mask";
+import type {
+  PainterOperation,
+  PainterBrush as WireBrushType,
+  PainterMask as Mask,
+  PainterRegionTool as RegionTool,
+} from "neo-cucumber";
+
+const NO_MASK: Mask = { type: 0, r: 0, g: 0, b: 0 };
 /**
  * Binary WebSocket protocol for efficient collaborative drawing
  *
@@ -48,7 +53,7 @@ function withMask(base: Uint8Array, mask: WireMask | undefined): ArrayBuffer {
 /** Reads the mask occupying the four bytes at `end`. */
 function readMask(buffer: Uint8Array, end: number): WireMask {
   return {
-    type: buffer[end],
+    type: buffer[end] as Mask["type"],
     r: buffer[end + 1],
     g: buffer[end + 2],
     b: buffer[end + 3],
@@ -1138,5 +1143,36 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
 
     default:
       return null;
+  }
+}
+
+/** Encode the library's transport-neutral operation into oeee's room wire format. */
+export function encodePainterOperation(userId: number, operation: PainterOperation): ArrayBuffer {
+  switch (operation.kind) {
+    case "undo-boundary": return encodeUndoPoint(userId);
+    case "undo": return encodeUndo(userId, operation.redo);
+    case "stroke": return encodeStroke(userId, operation.layer, operation.brushSize, operation.brush, operation.color.r, operation.color.g, operation.color.b, operation.color.a, operation.points, operation.mask);
+    case "fill": return encodeFill(userId, operation.layer, operation.at.x, operation.at.y, operation.color.r, operation.color.g, operation.color.b, operation.color.a, operation.mask);
+    case "line": return encodeLine(userId, operation.layer, operation.brushSize, operation.brush, operation.color, operation.from, operation.to, operation.mask);
+    case "bezier": return encodeBezier(userId, operation.layer, operation.brushSize, operation.brush, operation.color, operation.points, operation.mask);
+    case "region": return encodeRegion(userId, operation.layer, operation.tool, operation.rect, operation.color, operation.brushSize, operation.mask);
+    case "text": return encodeText(userId, operation.layer, operation.at.x, operation.at.y, operation.text, operation.color, operation.brushSize, operation.mask);
+    case "clear-layer": return encodeEraseAll(userId, operation.layer);
+  }
+}
+
+/** Decode an oeee room drawing message into the library's public vocabulary. */
+export function decodePainterOperation(message: DecodedMessage): PainterOperation | null {
+  switch (message.type) {
+    case "undoPoint": return { kind: "undo-boundary" };
+    case "undo": return { kind: "undo", redo: message.redo };
+    case "stroke": return { kind: "stroke", layer: message.layer, brushSize: message.brushSize, brush: message.brushType, color: message.color, points: message.points, mask: message.mask };
+    case "fill": return { kind: "fill", layer: message.layer, at: { x: message.x, y: message.y }, color: message.color, mask: message.mask };
+    case "line": return { kind: "line", layer: message.layer, brushSize: message.brushSize, brush: message.brushType, color: message.color, from: message.from, to: message.to, mask: message.mask };
+    case "bezier": return { kind: "bezier", layer: message.layer, brushSize: message.brushSize, brush: message.brushType, color: message.color, points: message.points as [number, number, number, number, number, number, number, number], mask: message.mask };
+    case "region": return { kind: "region", layer: message.layer, tool: message.tool, rect: message.rect, color: message.color, brushSize: message.brushSize, mask: message.mask };
+    case "text": return { kind: "text", layer: message.layer, at: { x: message.x, y: message.y }, text: message.text, color: message.color, brushSize: message.brushSize, mask: message.mask };
+    case "eraseAll": return { kind: "clear-layer", layer: message.layer };
+    default: return null;
   }
 }

@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
 
-interface SessionExpiredModalProps {
+export interface SessionExpiredModalProps {
   isOpen: boolean;
   isOwner: boolean;
   canvasMeta: {

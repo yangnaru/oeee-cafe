@@ -24,7 +24,7 @@ const NON_NEO_TOOL_ICONS: Record<string, string> = {
   paste: "material-symbols:content-paste",
   pan: "material-symbols:pan-tool",
 };
-import type { DrawingState } from "../types/collaboration";
+import type { DrawingState } from "../types/drawing";
 
 interface HistoryState {
   canUndo: boolean;

@@ -25,6 +25,11 @@ const painter = mount(element, {
 await painter.ready;
 await painter.loadImage(parentImage);
 
+painter.setInteractionEnabled(false);
+painter.undo();
+painter.redo();
+painter.setInteractionEnabled(true);
+
 const { png, replay, strokeCount } = await painter.save();
 painter.unmount();
 ```
@@ -66,3 +71,44 @@ replay data, and opens the replay viewer without relying on private components.
 The package exposes only `neo-cucumber` and `neo-cucumber/style.css`. React and
 React DOM are peer dependencies; private canvas and toolbox modules are not
 package exports.
+
+## Collaborative consumers
+
+The oeee-cafe collaborative application lives in
+[`../frontend/collaborate`](../frontend/collaborate). Authentication, room
+metadata, WebSocket lifecycle, chat, participants, and session UI are consumer
+responsibilities.
+
+The root package also exports transport-neutral `PainterOperation`,
+`CanonicalPainterOperation`, `PainterCheckpoint`, and `PainterSessionArchive`
+types. A host enables controlled mode with a stable actor ID and sends emitted
+operations through its own transport:
+
+```ts
+const painter = mount(element, {
+  width: 640,
+  height: 480,
+  mode: { kind: "standard" },
+  controls: { kind: "toolbox" },
+  synchronization: {
+    actorId: currentParticipantId,
+    onOperation: (entry) => socket.send(encodeForMyProtocol(entry)),
+  },
+});
+
+socket.onmessage = async (event) => {
+  const canonical = decodeMyProtocol(event.data);
+  await painter.applyCanonicalOperation(canonical);
+};
+```
+
+The host may use `exportCheckpoint(sequence)` and `applyCheckpoint(checkpoint)`
+to compact or join a room. `exportSessionArchive()` preserves actor IDs and
+canonical ordering since the last applied checkpoint.
+
+`.pch` remains a NEO-compatible, single-canvas replay. It has no actor or
+concurrency model, so simultaneous participants are represented by their
+canonical server order rather than as simultaneous tracks. Consumers that need
+authorship, exact interleaving, or later collaborative editing should persist
+the session archive (or a custom serialized form of it) alongside the flattened
+`.pch` export.

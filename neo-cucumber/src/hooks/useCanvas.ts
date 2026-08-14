@@ -1,6 +1,5 @@
 import { useCallback, useRef, useEffect } from "react";
 import { DrawingEngine } from "../DrawingEngine";
-import { type CollaborationMeta } from "../types/collaboration";
 import {
   compositeLayersToCanvas,
   downloadCanvasAsPNG as downloadCanvas,
@@ -8,7 +7,7 @@ import {
 import { CANVAS_Z_INDEX } from "../neo/canvasStack";
 
 interface CanvasHookParams {
-  canvasMeta: CollaborationMeta | null;
+  canvasMeta: { width: number; height: number } | null;
   drawingEngine: DrawingEngine | null;
   currentZoom: number;
   drawingState: {

@@ -4,9 +4,8 @@ import {
   encodeJoin,
   unwrapSequenced,
   type DecodedMessage,
-} from "../utils/binaryProtocol";
-import { type CollaborationMeta } from "../types/collaboration";
-import { type CanvasHistory } from "../utils/canvasHistory";
+} from "../binaryProtocol";
+import { type CollaborationMeta } from "../types";
 
 export type ConnectionState = "disconnected" | "connecting" | "connected";
 
@@ -35,7 +34,6 @@ interface WebSocketHookParams {
   userIdRef: React.RefObject<string | null>;
   userLoginNameRef: React.RefObject<string>;
   localUserJoinTimeRef: React.RefObject<number>;
-  canvasHistoryRef: React.RefObject<CanvasHistory | null>;
   participantsRef: React.RefObject<Map<string, Participant>>;
   localIdRef: React.RefObject<number | null>;
   lastSeqRef: React.RefObject<number>;
@@ -63,13 +61,16 @@ interface WebSocketHookParams {
     timestamp: number;
   }) => void;
   handleResetRequest: () => void;
+  onReconnectCanvas: (reconnecting: boolean) => Promise<void> | void;
+  onCanvasMessage: (message: DecodedMessage, raw: Uint8Array, sequence?: number) => Promise<void>;
+  onWelcome: (sessionId: number) => void;
+  onResetPoint: (baseSequence: number) => Promise<void> | void;
 }
 
 export const useWebSocket = ({
   canvasMeta,
   userIdRef,
   localUserJoinTimeRef,
-  canvasHistoryRef,
   participantsRef,
   localIdRef,
   lastSeqRef,
@@ -85,6 +86,10 @@ export const useWebSocket = ({
   clearParticipants,
   addChatMessage,
   handleResetRequest,
+  onReconnectCanvas,
+  onCanvasMessage,
+  onWelcome,
+  onResetPoint,
 }: WebSocketHookParams) => {
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<
@@ -225,7 +230,7 @@ export const useWebSocket = ({
 
     const ws = wsRef.current!;
 
-    ws.onopen = () => {
+    ws.onopen = async () => {
       console.log("WebSocket connected successfully:", ws.url);
       setConnectionState("connected");
       isConnectingRef.current = false;
@@ -235,11 +240,7 @@ export const useWebSocket = ({
       // scratch, so any local history state is stale. On a reconnect the
       // canvas still shows the pre-disconnect drawing, which that replay
       // would then draw over a second time - blank it first.
-      if (hasConnectedRef.current) {
-        canvasHistoryRef.current?.resetToBlankCanvas();
-      } else {
-        canvasHistoryRef.current?.reset();
-      }
+      await onReconnectCanvas(hasConnectedRef.current);
       hasConnectedRef.current = true;
       lastSeqRef.current = 0;
       localIdRef.current = null; // reassigned by WELCOME
@@ -411,9 +412,7 @@ export const useWebSocket = ({
           case "snapshot":
           case "undoPoint":
           case "undo": {
-            if (raw) {
-              await canvasHistoryRef.current?.handleRemote(raw, message, seq);
-            }
+            if (raw) await onCanvasMessage(message, raw, seq);
 
             // Show remote users' cursors at their latest drawing position
             if (
@@ -441,12 +440,12 @@ export const useWebSocket = ({
           case "welcome": {
             console.log("Assigned session user id:", message.sessionId);
             localIdRef.current = message.sessionId;
-            canvasHistoryRef.current?.setLocalUserId(message.sessionId);
+            onWelcome(message.sessionId);
             break;
           }
 
           case "resetPoint": {
-            await canvasHistoryRef.current?.handleResetPoint(message.baseSeq);
+            await onResetPoint(message.baseSeq);
             break;
           }
 
@@ -577,7 +576,6 @@ export const useWebSocket = ({
   }, [
     getWebSocketUrl,
     canvasMeta,
-    canvasHistoryRef,
     localIdRef,
     lastSeqRef,
     setConnectionState,
@@ -596,6 +594,10 @@ export const useWebSocket = ({
     userIdRef,
     clearReconnectTimer,
     scheduleReconnect,
+    onReconnectCanvas,
+    onCanvasMessage,
+    onWelcome,
+    onResetPoint,
   ]);
 
   useEffect(() => {

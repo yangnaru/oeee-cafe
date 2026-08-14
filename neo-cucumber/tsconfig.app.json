@@ -10,7 +10,17 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "paths": {
-      "neo-cucumber": ["./src/public.ts"]
+      "neo-cucumber": ["./src/public.ts"],
+      "neo-cucumber/style.css": ["./src/App.css"],
+      "react": ["./node_modules/@types/react/index.d.ts"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"],
+      "@lingui/core": ["./node_modules/@lingui/core"],
+      "@lingui/react": ["./node_modules/@lingui/react"],
+      "@lingui/react/*": ["./node_modules/@lingui/react/*"],
+      "@sentry/react": ["./node_modules/@sentry/react"],
+      "@iconify/react": ["./node_modules/@iconify/react"],
+      "vitest": ["./node_modules/vitest"]
     },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
@@ -26,5 +36,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src", "../frontend/painter"]
+  "include": ["src", "../frontend/painter", "../frontend/collaborate"]
 }

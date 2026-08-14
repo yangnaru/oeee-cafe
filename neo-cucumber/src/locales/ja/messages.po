@@ -46,9 +46,9 @@ msgstr "{minutes}分"
 #~ msgid "🔄 Saving..."
 #~ msgstr "🔄 保存中..."
 
-#: src/components/modals/AuthErrorModal.tsx:16
-msgid "Authentication Failed"
-msgstr "認証に失敗しました"
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:16
+#~ msgid "Authentication Failed"
+#~ msgstr "認証に失敗しました"
 
 #: src/components/SimplifiedToolbox.tsx:63
 #: src/components/SimplifiedToolbox.tsx:97
@@ -56,9 +56,9 @@ msgstr "認証に失敗しました"
 msgid "Background pen"
 msgstr "背景色ペン"
 
-#: src/components/SessionHeader.tsx:56
-msgid "by"
-msgstr "作成者:"
+#: ../frontend/collaborate/components/SessionHeader.tsx:56
+#~ msgid "by"
+#~ msgstr "作成者:"
 
 #: src/App.tsx:899
 #~ msgid "Chat"
@@ -72,21 +72,21 @@ msgstr "色"
 #~ msgid "Community: {0}"
 #~ msgstr "コミュニティ: {0}"
 
-#: src/components/SessionHeader.tsx:71
-msgid "Connected"
-msgstr "接続済み"
+#: ../frontend/collaborate/components/SessionHeader.tsx:71
+#~ msgid "Connected"
+#~ msgstr "接続済み"
 
-#: src/components/SessionHeader.tsx:77
-msgid "Connecting"
-msgstr "接続中"
+#: ../frontend/collaborate/components/SessionHeader.tsx:77
+#~ msgid "Connecting"
+#~ msgstr "接続中"
 
-#: src/components/modals/ConnectionStatusModal.tsx:58
-msgid "Connecting..."
-msgstr "接続中..."
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:58
+#~ msgid "Connecting..."
+#~ msgstr "接続中..."
 
-#: src/components/modals/ConnectionStatusModal.tsx:36
-msgid "Connection lost. Your work is saved locally."
-msgstr "接続が失われました。作業はローカルに保存されました。"
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:36
+#~ msgid "Connection lost. Your work is saved locally."
+#~ msgstr "接続が失われました。作業はローカルに保存されました。"
 
 #: src/components/ColorPalette.tsx:59
 #~ msgid "Custom color picker"
@@ -101,14 +101,14 @@ msgstr "接続が失われました。作業はローカルに保存されまし
 msgid "Dark"
 msgstr "ダーク"
 
-#: src/components/SessionHeader.tsx:83
-msgid "Disconnected"
-msgstr "切断済み"
+#: ../frontend/collaborate/components/SessionHeader.tsx:83
+#~ msgid "Disconnected"
+#~ msgstr "切断済み"
 
-#: src/components/modals/ConnectionStatusModal.tsx:49
-#: src/components/SessionExpiredModal.tsx:142
-msgid "Download PNG"
-msgstr "PNG をダウンロード"
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:49
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:142
+#~ msgid "Download PNG"
+#~ msgstr "PNG をダウンロード"
 
 #: src/OfflineApp.tsx:708
 #~ msgid "Download Replay"
@@ -130,9 +130,9 @@ msgstr "PNG をダウンロード"
 #~ msgid "Failed to save drawing. Please try again."
 #~ msgstr "描画の保存に失敗しました。もう一度お試しください。"
 
-#: src/components/SessionExpiredModal.tsx:49
-msgid "Failed to save session. Please try downloading as PNG instead."
-msgstr "セッションの保存に失敗しました。代わりに PNG としてダウンロードしてください。"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:49
+#~ msgid "Failed to save session. Please try downloading as PNG instead."
+#~ msgstr "セッションの保存に失敗しました。代わりに PNG としてダウンロードしてください。"
 
 #: src/App.tsx:1917
 #~ msgid "Fill"
@@ -153,10 +153,10 @@ msgstr ""
 msgid "Foreground pen"
 msgstr "描画色ペン"
 
-#: src/components/modals/AuthErrorModal.tsx:28
-#: src/components/modals/RoomFullModal.tsx:35
-msgid "Go to Lobby"
-msgstr "ロビーに戻る"
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:28
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:35
+#~ msgid "Go to Lobby"
+#~ msgstr "ロビーに戻る"
 
 #: src/App.tsx:1913
 #~ msgid "Halftone"
@@ -167,13 +167,13 @@ msgstr "ロビーに戻る"
 #~ msgid "Hide chat"
 #~ msgstr "チャットを隠す"
 
-#: src/components/modals/InitializationErrorModal.tsx:18
-msgid "Initialization Failed"
-msgstr "初期化に失敗しました"
+#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:18
+#~ msgid "Initialization Failed"
+#~ msgstr "初期化に失敗しました"
 
-#: src/components/modals/LoadingModal.tsx:13
-msgid "Initializing collaboration session..."
-msgstr "コラボレーションセッションを初期化中..."
+#: ../frontend/collaborate/components/modals/LoadingModal.tsx:13
+#~ msgid "Initializing collaboration session..."
+#~ msgstr "コラボレーションセッションを初期化中..."
 
 #: src/components/ToolboxPanel.tsx:340
 #~ msgid "Left click to select layer, right click to toggle visibility"
@@ -184,21 +184,21 @@ msgstr "コラボレーションセッションを初期化中..."
 msgid "Light"
 msgstr "ライト"
 
-#: src/components/SessionHeader.tsx:89
-msgid "Loading"
-msgstr "読み込み中"
+#: ../frontend/collaborate/components/SessionHeader.tsx:89
+#~ msgid "Loading"
+#~ msgstr "読み込み中"
 
 #: src/viewer/ViewerApp.tsx:133
 #~ msgid "Loading replay..."
 #~ msgstr "リプレイを読み込み中..."
 
-#: src/components/modals/LoadingModal.tsx:12
-msgid "Loading..."
-msgstr "読み込み中..."
+#: ../frontend/collaborate/components/modals/LoadingModal.tsx:12
+#~ msgid "Loading..."
+#~ msgstr "読み込み中..."
 
-#: src/components/modals/ConnectionStatusModal.tsx:25
-msgid "LOADING..."
-msgstr "読み込み中..."
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
+#~ msgid "LOADING..."
+#~ msgstr "読み込み中..."
 
 #: src/viewer/ViewerApp.tsx:45
 #~ msgid "No replay to show."
@@ -240,11 +240,10 @@ msgstr "オフ"
 #~ msgid "Participants"
 #~ msgstr "参加者"
 
-#. placeholder {0}: participants.size
-#: src/components/Chat.tsx:163
-#: src/components/Chat.tsx:164
-msgid "Participants ({0})"
-msgstr ""
+#: ../frontend/collaborate/components/Chat.tsx:163
+#: ../frontend/collaborate/components/Chat.tsx:164
+#~ msgid "Participants ({0})"
+#~ msgstr ""
 
 #: src/viewer/ViewerApp.tsx:153
 #~ msgid "Pause"
@@ -263,9 +262,9 @@ msgstr "色を選ぶ"
 #~ msgid "Play"
 #~ msgstr "再生"
 
-#: src/components/modals/ConnectionStatusModal.tsx:43
-msgid "Reconnect"
-msgstr "再接続"
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:43
+#~ msgid "Reconnect"
+#~ msgstr "再接続"
 
 #: src/components/SimplifiedToolbox.tsx:66
 #: src/components/SimplifiedToolbox.tsx:176
@@ -285,14 +284,14 @@ msgstr "残り: {remaining}"
 msgid "Reset zoom"
 msgstr "ズームを戻す"
 
-#: src/components/modals/InitializationErrorModal.tsx:25
-#: src/components/modals/RoomFullModal.tsx:41
-msgid "Retry"
-msgstr "再試行"
+#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:25
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:41
+#~ msgid "Retry"
+#~ msgstr "再試行"
 
-#: src/components/SessionExpiredModal.tsx:163
-msgid "Return to Lobby"
-msgstr "ロビーに戻る"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:163
+#~ msgid "Return to Lobby"
+#~ msgstr "ロビーに戻る"
 
 #: src/viewer/ViewerApp.tsx:160
 #~ msgid "Rewind"
@@ -302,9 +301,9 @@ msgstr "ロビーに戻る"
 msgid "Save"
 msgstr "保存"
 
-#: src/components/SessionExpiredModal.tsx:154
-msgid "Save as PNG"
-msgstr "PNG として保存"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:154
+#~ msgid "Save as PNG"
+#~ msgstr "PNG として保存"
 
 #: src/components/SimplifiedToolbox.tsx:180
 #: src/OfflineApp.tsx:692
@@ -315,37 +314,37 @@ msgstr "PNG として保存"
 msgid "Save drawing to gallery"
 msgstr "描画をギャラリーに保存"
 
-#: src/components/SessionExpiredModal.tsx:122
-msgid "Save to Gallery"
-msgstr "ギャラリーに保存"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:122
+#~ msgid "Save to Gallery"
+#~ msgstr "ギャラリーに保存"
 
-#: src/components/SessionExpiredModal.tsx:113
-msgid "Saving..."
-msgstr "保存中..."
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:113
+#~ msgid "Saving..."
+#~ msgstr "保存中..."
 
 #: src/viewer/ViewerApp.tsx:143
 #~ msgid "Seek"
 #~ msgstr "シーク"
 
-#: src/components/Chat.tsx:241
-msgid "Send"
-msgstr "送信"
+#: ../frontend/collaborate/components/Chat.tsx:241
+#~ msgid "Send"
+#~ msgstr "送信"
 
-#: src/components/SessionExpiredModal.tsx:82
-msgid "Session Expired"
-msgstr "セッションが期限切れです"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:82
+#~ msgid "Session Expired"
+#~ msgstr "セッションが期限切れです"
 
-#: src/components/modals/RoomFullModal.tsx:22
-msgid "Session Full"
-msgstr "セッション満員"
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:22
+#~ msgid "Session Full"
+#~ msgstr "セッション満員"
 
-#: src/components/modals/SessionEndingModal.tsx:15
-msgid "Session is ending. The drawing is being saved to the gallery..."
-msgstr "セッションが終了します。描画をギャラリーに保存中..."
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:15
+#~ msgid "Session is ending. The drawing is being saved to the gallery..."
+#~ msgstr "セッションが終了します。描画をギャラリーに保存中..."
 
-#: src/components/SessionHeader.tsx:66
-msgid "Share"
-msgstr "共有"
+#: ../frontend/collaborate/components/SessionHeader.tsx:66
+#~ msgid "Share"
+#~ msgstr "共有"
 
 #: src/components/SimplifiedToolbox.tsx:201
 msgid "Shortcuts"
@@ -394,35 +393,35 @@ msgstr "ダークモードに切り替え"
 msgid "Switch to light"
 msgstr "ライトモードに切り替え"
 
-#: src/components/SessionExpiredModal.tsx:88
-msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
-msgstr "非アクティブのためコラボレーションセッションが終了しました。オーナーとして、ギャラリーに保存するか PNG としてダウンロードできます。"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
+#~ msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
+#~ msgstr "非アクティブのためコラボレーションセッションが終了しました。オーナーとして、ギャラリーに保存するか PNG としてダウンロードできます。"
 
-#: src/components/SessionExpiredModal.tsx:87
-msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
-msgstr "非アクティブのためコラボレーションセッションが終了しました。セッションはすでにギャラリーに保存されていますが、PNG としてダウンロードできます。"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:87
+#~ msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
+#~ msgstr "非アクティブのためコラボレーションセッションが終了しました。セッションはすでにギャラリーに保存されていますが、PNG としてダウンロードできます。"
 
-#: src/components/SessionExpiredModal.tsx:89
-msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
-msgstr "非アクティブのためコラボレーションセッションが終了しました。退出前にローカルに PNG として保存できます。"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:89
+#~ msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
+#~ msgstr "非アクティブのためコラボレーションセッションが終了しました。退出前にローカルに PNG として保存できます。"
 
 #: src/viewer/ViewerApp.tsx:81
 #~ msgid "This drawing's replay could not be loaded."
 #~ msgstr "この絵のリプレイを読み込めませんでした。"
 
-#: src/components/SessionExpiredModal.tsx:45
-msgid "This session has already been saved. You can only download it as a PNG."
-msgstr "このセッションはすでに保存されています。PNG としてのみダウンロードできます。"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:45
+#~ msgid "This session has already been saved. You can only download it as a PNG."
+#~ msgstr "このセッションはすでに保存されています。PNG としてのみダウンロードできます。"
 
 #: src/App.tsx:1750
 #~ msgid "This session is full ({0}/{1} users). Only the first {2} users can join a session."
 #~ msgstr "このセッションは満員です（{0}/{1}ユーザー）。最初の{2}ユーザーのみがセッションに参加できます。"
 
-#: src/components/modals/RoomFullModal.tsx:25
-msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
-msgstr "このセッションは満員です（{currentUserCount}/{maxUsers}ユーザー）。最初の{maxUsers}ユーザーのみがセッションに参加できます。"
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:25
+#~ msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
+#~ msgstr "このセッションは満員です（{currentUserCount}/{maxUsers}ユーザー）。最初の{maxUsers}ユーザーのみがセッションに参加できます。"
 
-#: src/Painter.tsx:466
+#: src/Painter.tsx:589
 msgid "Time's up."
 msgstr "設定時間が経過しました。"
 
@@ -438,13 +437,13 @@ msgstr "タイマー：オフ"
 msgid "Toggle horizontal flip"
 msgstr "左右反転を切り替え"
 
-#: src/components/Chat.tsx:232
-msgid "Type a message..."
-msgstr "メッセージを入力..."
+#: ../frontend/collaborate/components/Chat.tsx:232
+#~ msgid "Type a message..."
+#~ msgstr "メッセージを入力..."
 
-#: src/components/modals/AuthErrorModal.tsx:19
-msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
-msgstr "セッションを認証できません。セッションが存在しないか、期限切れです。ロビーに戻ってください。"
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:19
+#~ msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
+#~ msgstr "セッションを認証できません。セッションが存在しないか、期限切れです。ロビーに戻ってください。"
 
 #: src/components/SimplifiedToolbox.tsx:65
 #: src/components/SimplifiedToolbox.tsx:168
@@ -452,9 +451,9 @@ msgstr "セッションを認証できません。セッションが存在しな
 msgid "Undo"
 msgstr "元に戻す"
 
-#: src/components/modals/SessionEndingModal.tsx:20
-msgid "You'll be redirected to the post page shortly."
-msgstr "まもなく投稿ページにリダイレクトされます。"
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:20
+#~ msgid "You'll be redirected to the post page shortly."
+#~ msgstr "まもなく投稿ページにリダイレクトされます。"
 
 #: src/components/ToolboxPanel.tsx:179
 msgid "Zoom in"

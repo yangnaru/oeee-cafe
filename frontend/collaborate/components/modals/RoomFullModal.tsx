@@ -1,7 +1,7 @@
 import { Trans } from "@lingui/react/macro";
 import { ModalWrapper } from "./ModalWrapper";
 
-interface RoomFullModalProps {
+export interface RoomFullModalProps {
   isOpen: boolean;
   currentUserCount: number;
   maxUsers: number;

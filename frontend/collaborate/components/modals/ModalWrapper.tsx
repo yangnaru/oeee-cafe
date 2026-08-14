@@ -1,6 +1,6 @@
 import React from "react";
 
-interface ModalWrapperProps {
+export interface ModalWrapperProps {
   isOpen: boolean;
   children: React.ReactNode;
   className?: string;

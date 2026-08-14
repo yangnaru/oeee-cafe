@@ -4,8 +4,7 @@ import App from "./App.tsx";
 import { I18nProvider } from "@lingui/react";
 import { i18n } from "@lingui/core";
 import * as Sentry from "@sentry/react";
-import { setupI18n, fetchPreferredLocale } from "./utils/i18n";
-import { installNeoGround } from "./neo/neoBackground";
+import { setupI18n, fetchPreferredLocale } from "./i18n";
 import { DefaultI18n } from "./components/DefaultI18n";
 
 Sentry.init({
@@ -33,6 +32,3 @@ createRoot(document.getElementById("root")!).render(
     </I18nProvider>
   </StrictMode>
 );
-
-// NEO draws its ground as a generated tile rather than a flat colour
-installNeoGround();

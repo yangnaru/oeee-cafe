@@ -46,9 +46,9 @@ msgstr "{minutes} 分钟"
 #~ msgid "🔄 Saving..."
 #~ msgstr "🔄 保存中..."
 
-#: src/components/modals/AuthErrorModal.tsx:16
-msgid "Authentication Failed"
-msgstr "验证失败"
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:16
+#~ msgid "Authentication Failed"
+#~ msgstr "验证失败"
 
 #: src/components/SimplifiedToolbox.tsx:63
 #: src/components/SimplifiedToolbox.tsx:97
@@ -56,9 +56,9 @@ msgstr "验证失败"
 msgid "Background pen"
 msgstr "背景色画笔"
 
-#: src/components/SessionHeader.tsx:56
-msgid "by"
-msgstr "作者:"
+#: ../frontend/collaborate/components/SessionHeader.tsx:56
+#~ msgid "by"
+#~ msgstr "作者:"
 
 #: src/App.tsx:899
 #~ msgid "Chat"
@@ -72,21 +72,21 @@ msgstr "颜色"
 #~ msgid "Community: {0}"
 #~ msgstr "社区: {0}"
 
-#: src/components/SessionHeader.tsx:71
-msgid "Connected"
-msgstr "已连接"
+#: ../frontend/collaborate/components/SessionHeader.tsx:71
+#~ msgid "Connected"
+#~ msgstr "已连接"
 
-#: src/components/SessionHeader.tsx:77
-msgid "Connecting"
-msgstr "连接中"
+#: ../frontend/collaborate/components/SessionHeader.tsx:77
+#~ msgid "Connecting"
+#~ msgstr "连接中"
 
-#: src/components/modals/ConnectionStatusModal.tsx:58
-msgid "Connecting..."
-msgstr "连接中..."
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:58
+#~ msgid "Connecting..."
+#~ msgstr "连接中..."
 
-#: src/components/modals/ConnectionStatusModal.tsx:36
-msgid "Connection lost. Your work is saved locally."
-msgstr "连接丢失。您的作品已本地保存。"
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:36
+#~ msgid "Connection lost. Your work is saved locally."
+#~ msgstr "连接丢失。您的作品已本地保存。"
 
 #: src/components/ColorPalette.tsx:59
 #~ msgid "Custom color picker"
@@ -101,14 +101,14 @@ msgstr "连接丢失。您的作品已本地保存。"
 msgid "Dark"
 msgstr "深色"
 
-#: src/components/SessionHeader.tsx:83
-msgid "Disconnected"
-msgstr "已断开"
+#: ../frontend/collaborate/components/SessionHeader.tsx:83
+#~ msgid "Disconnected"
+#~ msgstr "已断开"
 
-#: src/components/modals/ConnectionStatusModal.tsx:49
-#: src/components/SessionExpiredModal.tsx:142
-msgid "Download PNG"
-msgstr "下载 PNG"
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:49
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:142
+#~ msgid "Download PNG"
+#~ msgstr "下载 PNG"
 
 #: src/OfflineApp.tsx:708
 #~ msgid "Download Replay"
@@ -130,9 +130,9 @@ msgstr "下载 PNG"
 #~ msgid "Failed to save drawing. Please try again."
 #~ msgstr "保存绘画失败。请重试。"
 
-#: src/components/SessionExpiredModal.tsx:49
-msgid "Failed to save session. Please try downloading as PNG instead."
-msgstr "保存会话失败。请尝试下载为 PNG。"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:49
+#~ msgid "Failed to save session. Please try downloading as PNG instead."
+#~ msgstr "保存会话失败。请尝试下载为 PNG。"
 
 #: src/App.tsx:1917
 #~ msgid "Fill"
@@ -153,10 +153,10 @@ msgstr ""
 msgid "Foreground pen"
 msgstr "前景色画笔"
 
-#: src/components/modals/AuthErrorModal.tsx:28
-#: src/components/modals/RoomFullModal.tsx:35
-msgid "Go to Lobby"
-msgstr "去大厅"
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:28
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:35
+#~ msgid "Go to Lobby"
+#~ msgstr "去大厅"
 
 #: src/App.tsx:1913
 #~ msgid "Halftone"
@@ -167,13 +167,13 @@ msgstr "去大厅"
 #~ msgid "Hide chat"
 #~ msgstr "隐藏聊天"
 
-#: src/components/modals/InitializationErrorModal.tsx:18
-msgid "Initialization Failed"
-msgstr "初始化失败"
+#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:18
+#~ msgid "Initialization Failed"
+#~ msgstr "初始化失败"
 
-#: src/components/modals/LoadingModal.tsx:13
-msgid "Initializing collaboration session..."
-msgstr "正在初始化协作会话..."
+#: ../frontend/collaborate/components/modals/LoadingModal.tsx:13
+#~ msgid "Initializing collaboration session..."
+#~ msgstr "正在初始化协作会话..."
 
 #: src/components/ToolboxPanel.tsx:340
 #~ msgid "Left click to select layer, right click to toggle visibility"
@@ -184,21 +184,21 @@ msgstr "正在初始化协作会话..."
 msgid "Light"
 msgstr "浅色"
 
-#: src/components/SessionHeader.tsx:89
-msgid "Loading"
-msgstr "加载中"
+#: ../frontend/collaborate/components/SessionHeader.tsx:89
+#~ msgid "Loading"
+#~ msgstr "加载中"
 
 #: src/viewer/ViewerApp.tsx:133
 #~ msgid "Loading replay..."
 #~ msgstr "正在加载回放..."
 
-#: src/components/modals/LoadingModal.tsx:12
-msgid "Loading..."
-msgstr "加载中..."
+#: ../frontend/collaborate/components/modals/LoadingModal.tsx:12
+#~ msgid "Loading..."
+#~ msgstr "加载中..."
 
-#: src/components/modals/ConnectionStatusModal.tsx:25
-msgid "LOADING..."
-msgstr "加载中..."
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
+#~ msgid "LOADING..."
+#~ msgstr "加载中..."
 
 #: src/viewer/ViewerApp.tsx:45
 #~ msgid "No replay to show."
@@ -240,11 +240,10 @@ msgstr "关闭"
 #~ msgid "Participants"
 #~ msgstr "参与者"
 
-#. placeholder {0}: participants.size
-#: src/components/Chat.tsx:163
-#: src/components/Chat.tsx:164
-msgid "Participants ({0})"
-msgstr ""
+#: ../frontend/collaborate/components/Chat.tsx:163
+#: ../frontend/collaborate/components/Chat.tsx:164
+#~ msgid "Participants ({0})"
+#~ msgstr ""
 
 #: src/viewer/ViewerApp.tsx:153
 #~ msgid "Pause"
@@ -263,9 +262,9 @@ msgstr "选择颜色"
 #~ msgid "Play"
 #~ msgstr "播放"
 
-#: src/components/modals/ConnectionStatusModal.tsx:43
-msgid "Reconnect"
-msgstr "重新连接"
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:43
+#~ msgid "Reconnect"
+#~ msgstr "重新连接"
 
 #: src/components/SimplifiedToolbox.tsx:66
 #: src/components/SimplifiedToolbox.tsx:176
@@ -285,14 +284,14 @@ msgstr "剩余：{remaining}"
 msgid "Reset zoom"
 msgstr "重置缩放"
 
-#: src/components/modals/InitializationErrorModal.tsx:25
-#: src/components/modals/RoomFullModal.tsx:41
-msgid "Retry"
-msgstr "重试"
+#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:25
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:41
+#~ msgid "Retry"
+#~ msgstr "重试"
 
-#: src/components/SessionExpiredModal.tsx:163
-msgid "Return to Lobby"
-msgstr "返回大厅"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:163
+#~ msgid "Return to Lobby"
+#~ msgstr "返回大厅"
 
 #: src/viewer/ViewerApp.tsx:160
 #~ msgid "Rewind"
@@ -302,9 +301,9 @@ msgstr "返回大厅"
 msgid "Save"
 msgstr "保存"
 
-#: src/components/SessionExpiredModal.tsx:154
-msgid "Save as PNG"
-msgstr "保存为 PNG"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:154
+#~ msgid "Save as PNG"
+#~ msgstr "保存为 PNG"
 
 #: src/components/SimplifiedToolbox.tsx:180
 #: src/OfflineApp.tsx:692
@@ -315,37 +314,37 @@ msgstr "保存为 PNG"
 msgid "Save drawing to gallery"
 msgstr "保存绘画到画廊"
 
-#: src/components/SessionExpiredModal.tsx:122
-msgid "Save to Gallery"
-msgstr "保存到画廊"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:122
+#~ msgid "Save to Gallery"
+#~ msgstr "保存到画廊"
 
-#: src/components/SessionExpiredModal.tsx:113
-msgid "Saving..."
-msgstr "保存中..."
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:113
+#~ msgid "Saving..."
+#~ msgstr "保存中..."
 
 #: src/viewer/ViewerApp.tsx:143
 #~ msgid "Seek"
 #~ msgstr "跳转"
 
-#: src/components/Chat.tsx:241
-msgid "Send"
-msgstr "发送"
+#: ../frontend/collaborate/components/Chat.tsx:241
+#~ msgid "Send"
+#~ msgstr "发送"
 
-#: src/components/SessionExpiredModal.tsx:82
-msgid "Session Expired"
-msgstr "会话过期"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:82
+#~ msgid "Session Expired"
+#~ msgstr "会话过期"
 
-#: src/components/modals/RoomFullModal.tsx:22
-msgid "Session Full"
-msgstr "会话已满"
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:22
+#~ msgid "Session Full"
+#~ msgstr "会话已满"
 
-#: src/components/modals/SessionEndingModal.tsx:15
-msgid "Session is ending. The drawing is being saved to the gallery..."
-msgstr "会话即将结束。正在保存绘画到画廊..."
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:15
+#~ msgid "Session is ending. The drawing is being saved to the gallery..."
+#~ msgstr "会话即将结束。正在保存绘画到画廊..."
 
-#: src/components/SessionHeader.tsx:66
-msgid "Share"
-msgstr "分享"
+#: ../frontend/collaborate/components/SessionHeader.tsx:66
+#~ msgid "Share"
+#~ msgstr "分享"
 
 #: src/components/SimplifiedToolbox.tsx:201
 msgid "Shortcuts"
@@ -394,35 +393,35 @@ msgstr "切换到深色模式"
 msgid "Switch to light"
 msgstr "切换到浅色模式"
 
-#: src/components/SessionExpiredModal.tsx:88
-msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
-msgstr "由于无活动，此协作会话已结束。作为所有者，您可以将其保存到画廊或下载为 PNG。"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
+#~ msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
+#~ msgstr "由于无活动，此协作会话已结束。作为所有者，您可以将其保存到画廊或下载为 PNG。"
 
-#: src/components/SessionExpiredModal.tsx:87
-msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
-msgstr "由于无活动，此协作会话已结束。会话已保存到画廊，但您可以将其下载为 PNG。"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:87
+#~ msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
+#~ msgstr "由于无活动，此协作会话已结束。会话已保存到画廊，但您可以将其下载为 PNG。"
 
-#: src/components/SessionExpiredModal.tsx:89
-msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
-msgstr "由于无活动，此协作会话已结束。您可以在离开前将您的作品保存为 PNG。"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:89
+#~ msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
+#~ msgstr "由于无活动，此协作会话已结束。您可以在离开前将您的作品保存为 PNG。"
 
 #: src/viewer/ViewerApp.tsx:81
 #~ msgid "This drawing's replay could not be loaded."
 #~ msgstr "无法加载这幅画的回放。"
 
-#: src/components/SessionExpiredModal.tsx:45
-msgid "This session has already been saved. You can only download it as a PNG."
-msgstr "此会话已保存。您只能将其下载为 PNG。"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:45
+#~ msgid "This session has already been saved. You can only download it as a PNG."
+#~ msgstr "此会话已保存。您只能将其下载为 PNG。"
 
 #: src/App.tsx:1750
 #~ msgid "This session is full ({0}/{1} users). Only the first {2} users can join a session."
 #~ msgstr "此会话已满（{0}/{1} 用户）。只有前 {2} 位用户可以加入会话。"
 
-#: src/components/modals/RoomFullModal.tsx:25
-msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
-msgstr "此会话已满（{currentUserCount}/{maxUsers} 位用户）。只有前 {maxUsers} 位用户可以加入会话。"
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:25
+#~ msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
+#~ msgstr "此会话已满（{currentUserCount}/{maxUsers} 位用户）。只有前 {maxUsers} 位用户可以加入会话。"
 
-#: src/Painter.tsx:466
+#: src/Painter.tsx:589
 msgid "Time's up."
 msgstr "设定时间已到。"
 
@@ -438,13 +437,13 @@ msgstr "计时器已关闭"
 msgid "Toggle horizontal flip"
 msgstr "切换水平翻转"
 
-#: src/components/Chat.tsx:232
-msgid "Type a message..."
-msgstr "输入消息..."
+#: ../frontend/collaborate/components/Chat.tsx:232
+#~ msgid "Type a message..."
+#~ msgstr "输入消息..."
 
-#: src/components/modals/AuthErrorModal.tsx:19
-msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
-msgstr "无法验证您的会话。会话不存在或已过期。请返回大厅。"
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:19
+#~ msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
+#~ msgstr "无法验证您的会话。会话不存在或已过期。请返回大厅。"
 
 #: src/components/SimplifiedToolbox.tsx:65
 #: src/components/SimplifiedToolbox.tsx:168
@@ -452,9 +451,9 @@ msgstr "无法验证您的会话。会话不存在或已过期。请返回大厅
 msgid "Undo"
 msgstr "撤销"
 
-#: src/components/modals/SessionEndingModal.tsx:20
-msgid "You'll be redirected to the post page shortly."
-msgstr "您将稍后被重定向到帖子页面。"
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:20
+#~ msgid "You'll be redirected to the post page shortly."
+#~ msgstr "您将稍后被重定向到帖子页面。"
 
 #: src/components/ToolboxPanel.tsx:179
 msgid "Zoom in"

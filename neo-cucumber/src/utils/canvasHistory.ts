@@ -20,29 +20,35 @@
  */
 
 import { DrawingEngine } from "../DrawingEngine";
+import { NO_MASK, type Mask } from "../neo/mask";
+import type {
+  HistoryActorId,
+  HistoryOperation,
+  HistorySnapshot,
+  HistoryStroke,
+} from "../synchronization/historyOperations";
 import {
-  decodeMessage,
-  encodeStroke,
-  NO_WIRE_MASK,
-  type WireMask,
-  type DecodedMessage,
-  type SnapshotMessage,
-  type StrokeMessage,
-} from "./binaryProtocol";
+  fromHistoryOperation,
+  toHistoryOperation,
+} from "../synchronization/historyOperations";
+import type {
+  CanonicalPainterOperation,
+  LocalPainterOperation,
+} from "../operations";
 import { pngDataToLayer } from "./canvasSnapshot";
 import { extentFor, fontSizeForBrush, TEXT_FONT_FAMILY } from "../neo/tools";
-import type { WireBrushType } from "../types/collaboration";
+import type { WireBrushType } from "../types/drawing";
 
 type LayerName = "foreground" | "background";
 type StrokeState = [[number, number], [number, number]] | null;
 // Keyed by 1-byte session user id
-type StrokeStates = Map<number, StrokeState>;
+type StrokeStates = Map<HistoryActorId, StrokeState>;
 
 type UndoState = "done" | "undone" | "gone";
 
 interface Entry {
   seq?: number;
-  msg: DecodedMessage;
+  msg: HistoryOperation;
   undo: UndoState;
 }
 
@@ -59,8 +65,8 @@ type Area =
   | { kind: "everything" };
 
 interface ForkEntry {
-  bytes: Uint8Array;
-  msg: DecodedMessage;
+  id: string;
+  msg: HistoryOperation;
   area: Area;
 }
 
@@ -71,7 +77,7 @@ interface OpenBatch {
   brushSize: number;
   brushType: WireBrushType;
   color: { r: number; g: number; b: number; a: number };
-  mask: WireMask;
+  mask: Mask;
   points: { x: number; y: number }[];
   area: { kind: "pixels"; layer: LayerName; x0: number; y0: number; x1: number; y1: number };
 }
@@ -79,12 +85,10 @@ interface OpenBatch {
 const SAVEPOINT_INTERVAL = 64;
 const MAX_SAVEPOINTS = 8;
 
-function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
+function transportId(bytes: Uint8Array): string {
+  let result = "";
+  for (const byte of bytes) result += byte.toString(16).padStart(2, "0");
+  return result;
 }
 
 function cloneStrokes(strokes: StrokeStates): StrokeStates {
@@ -103,7 +107,7 @@ function cloneStrokes(strokes: StrokeStates): StrokeStates {
   return copy;
 }
 
-function affectedArea(msg: DecodedMessage): Area {
+function affectedArea(msg: HistoryOperation): Area {
   switch (msg.type) {
     case "stroke": {
       const pad = msg.brushSize;
@@ -193,39 +197,22 @@ function areasConcurrent(a: Area, b: Area): boolean {
   return a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0;
 }
 
-function isHistoryMessage(msg: DecodedMessage): boolean {
-  switch (msg.type) {
-    case "stroke":
-    case "fill":
-    case "region":
-    case "line":
-    case "bezier":
-    case "eraseAll":
-    case "text":
-    case "snapshot":
-    case "undoPoint":
-    case "undo":
-      return true;
-    default:
-      return false;
-  }
-}
-
 export class CanvasHistory {
   private engine: DrawingEngine;
   // 1-byte session user id assigned by the server's WELCOME; -1 until known
-  private localUserId = -1;
+  private localUserId: HistoryActorId = -1;
   private onChange?: (canUndo: boolean, canRedo: boolean) => void;
 
   private entries: Entry[] = [];
   private savepoints: Savepoint[] = [];
   private fork: ForkEntry[] = [];
+  private canonicalLog: CanonicalPainterOperation[] = [];
   private openBatch: OpenBatch | null = null;
   // Per-user stroke continuation state of the currently rendered canvas
   private liveStrokes: StrokeStates = new Map();
   /** One clipboard per user, so a paste replays the sender's copy. */
-  private readonly clipboards = new Map<number, ImageData | null>();
-  private snapshotCache = new WeakMap<SnapshotMessage, Uint8ClampedArray>();
+  private readonly clipboards = new Map<HistoryActorId, ImageData | null>();
+  private snapshotCache = new WeakMap<HistorySnapshot, Uint8ClampedArray>();
 
   constructor(
     engine: DrawingEngine,
@@ -236,7 +223,7 @@ export class CanvasHistory {
     this.reset();
   }
 
-  setLocalUserId(id: number): void {
+  setLocalUserId(id: HistoryActorId): void {
     this.localUserId = id;
   }
 
@@ -259,6 +246,7 @@ export class CanvasHistory {
   reset(): void {
     this.entries = [];
     this.fork = [];
+    this.canonicalLog = [];
     this.openBatch = null;
     this.liveStrokes = new Map();
     this.savepoints = [
@@ -328,10 +316,22 @@ export class CanvasHistory {
    * against the server's echo) and applies drawing messages optimistically.
    * UNDO and UNDO_POINT only take effect when echoed, like in Drawpile.
    */
-  handleLocal(bytes: ArrayBuffer, msg: DecodedMessage): void {
-    if (!isHistoryMessage(msg)) return;
+  handleLocal(bytes: ArrayBuffer, msg: HistoryOperation): void {
+    if (msg.type === "snapshot") {
+      throw new Error("Snapshots cannot be optimistic local operations");
+    }
+    this.handleLocalOperation({
+      id: transportId(new Uint8Array(bytes)),
+      actorId: String(msg.userId),
+      operation: fromHistoryOperation(msg),
+    });
+  }
+
+  /** Applies an optimistic operation emitted through the public API. */
+  handleLocalOperation(entry: LocalPainterOperation): void {
+    const msg = toHistoryOperation(entry.actorId, entry.operation);
     this.fork.push({
-      bytes: new Uint8Array(bytes),
+      id: entry.id,
       msg,
       area: affectedArea(msg),
     });
@@ -343,6 +343,20 @@ export class CanvasHistory {
       this.applyDrawSync(msg, this.engine.layers, this.liveStrokes);
     }
     // Update undo/redo button state immediately (projected over the fork)
+    this.notify();
+  }
+
+  /**
+   * Registers an operation the interactive canvas has already painted.
+   * Controlled mounts use this path because pointer latency stays local while
+   * canonical ordering remains owned by this history.
+   */
+  registerOptimisticOperation(entry: LocalPainterOperation): void {
+    const msg = toHistoryOperation(entry.actorId, entry.operation);
+    this.fork.push({ id: entry.id, msg, area: affectedArea(msg) });
+    if (msg.type === "undoPoint") {
+      this.liveStrokes.set(entry.actorId, null);
+    }
     this.notify();
   }
 
@@ -359,9 +373,9 @@ export class CanvasHistory {
     color: { r: number; g: number; b: number; a: number },
     x: number,
     y: number,
-    mask: WireMask = NO_WIRE_MASK
+    mask: Mask = NO_MASK
   ): number {
-    if (this.localUserId < 0) return 0;
+    if (this.localUserId === -1) return 0;
     if (!this.openBatch) {
       this.openBatch = {
         layer,
@@ -398,30 +412,32 @@ export class CanvasHistory {
   }
 
   /**
-   * Encodes the open batch into a STROKE message, moves it into the fork,
-   * and returns the exact bytes to send (null if there is nothing to flush).
+   * Closes the open batch and returns its semantic stroke. The transport
+   * encodes it, then calls `commitLocalStroke` with the opaque bytes it sent.
    */
-  flushLocalStroke(): ArrayBuffer | null {
+  flushLocalStroke(): HistoryStroke | null {
     const batch = this.openBatch;
     this.openBatch = null;
     if (!batch || batch.points.length === 0) return null;
+    return {
+      type: "stroke",
+      userId: this.localUserId,
+      layer: batch.layer,
+      brushSize: batch.brushSize,
+      brushType: batch.brushType,
+      color: batch.color,
+      points: batch.points,
+      mask: batch.mask,
+    };
+  }
 
-    const bytes = encodeStroke(
-      this.localUserId,
-      batch.layer,
-      batch.brushSize,
-      batch.brushType,
-      batch.color.r,
-      batch.color.g,
-      batch.color.b,
-      batch.color.a,
-      batch.points,
-      batch.mask
-    );
-    const msg = decodeMessage(bytes);
-    if (!msg) return null;
-    this.fork.push({ bytes: new Uint8Array(bytes), msg, area: batch.area });
-    return bytes;
+  /** Registers the transport token used to recognize this stroke's echo. */
+  commitLocalStroke(bytes: ArrayBuffer, msg: HistoryStroke): void {
+    this.fork.push({
+      id: transportId(new Uint8Array(bytes)),
+      msg,
+      area: affectedArea(msg),
+    });
   }
 
   /**
@@ -430,14 +446,39 @@ export class CanvasHistory {
    */
   async handleRemote(
     raw: Uint8Array,
-    msg: DecodedMessage,
+    msg: HistoryOperation,
     seq?: number
   ): Promise<void> {
-    if (!isHistoryMessage(msg)) return;
+    return this.handleCanonicalMessage(transportId(raw), msg, seq);
+  }
 
+  /** Applies a server-ordered operation and reconciles any optimistic fork. */
+  async handleCanonicalOperation(
+    entry: CanonicalPainterOperation,
+    sequenceOverride?: number,
+  ): Promise<void> {
+    const msg = toHistoryOperation(entry.actorId, entry.operation);
+    const seq = sequenceOverride ?? entry.sequence;
+    await this.handleCanonicalMessage(entry.id, msg, seq);
+    this.canonicalLog.push({ ...entry, sequence: seq });
+  }
+
+  /** Canonical transport-neutral log since the most recent reset/checkpoint. */
+  getCanonicalOperations(): CanonicalPainterOperation[] {
+    return this.canonicalLog.map((entry) => ({
+      ...entry,
+      operation: structuredClone(entry.operation),
+    }));
+  }
+
+  private async handleCanonicalMessage(
+    id: string,
+    msg: HistoryOperation,
+    seq?: number,
+  ): Promise<void> {
     // Echo of our own fork head: already on the canvas (except undo/undoPoint
     // which take effect now)
-    if (this.fork.length > 0 && bytesEqual(this.fork[0].bytes, raw)) {
+    if (this.fork.length > 0 && this.fork[0].id === id) {
       this.fork.shift();
       if (msg.type === "undo") {
         await this.processUndo(msg.userId, msg.redo);
@@ -538,7 +579,7 @@ export class CanvasHistory {
   }
 
   private async applyCanonical(
-    msg: DecodedMessage,
+    msg: HistoryOperation,
     seq: number | undefined,
     { replay }: { replay: boolean }
   ): Promise<void> {
@@ -565,7 +606,7 @@ export class CanvasHistory {
 
   /** Appends an undo point; a new operation by a user kills their redo. */
   private appendUndoPoint(
-    msg: DecodedMessage & { type: "undoPoint" },
+    msg: Extract<HistoryOperation, { type: "undoPoint" }>,
     seq?: number
   ): void {
     for (const entry of this.entries) {
@@ -581,7 +622,7 @@ export class CanvasHistory {
   }
 
   /** Marks entries and replays; no-op if there is nothing to undo/redo. */
-  private async processUndo(userId: number, redo: boolean): Promise<void> {
+  private async processUndo(userId: HistoryActorId, redo: boolean): Promise<void> {
     const first = this.markUndo(userId, redo);
     if (first < 0) return;
     await this.replayFrom(this.savepointFor(first));
@@ -595,7 +636,7 @@ export class CanvasHistory {
    * end of history become undone. Redo: the user's entries from their
    * earliest undone undo point to their next undo point become done again.
    */
-  private markUndo(userId: number, redo: boolean): number {
+  private markUndo(userId: HistoryActorId, redo: boolean): number {
     let first = -1;
     if (redo) {
       first = this.entries.findIndex(
@@ -713,7 +754,7 @@ export class CanvasHistory {
 
   /** Applies a message to the given layer buffers (snapshot decode is async). */
   private async applyMessage(
-    msg: DecodedMessage,
+    msg: HistoryOperation,
     layers: Record<string, Uint8ClampedArray>,
     strokes: StrokeStates
   ): Promise<void> {
@@ -738,7 +779,7 @@ export class CanvasHistory {
   }
 
   /** Points the engine at a mask, or at none. */
-  private useMask(mask: WireMask | undefined): void {
+  private useMask(mask: Mask | undefined): void {
     this.engine.maskType = mask?.type ?? 0;
     if (mask && mask.type !== 0) {
       this.engine.maskColor = [mask.r, mask.g, mask.b];
@@ -746,7 +787,7 @@ export class CanvasHistory {
   }
 
   private applyDrawSync(
-    msg: DecodedMessage,
+    msg: HistoryOperation,
     layers: Record<string, Uint8ClampedArray>,
     strokes: StrokeStates
   ): void {
@@ -831,8 +872,8 @@ export class CanvasHistory {
    * (set by their UNDO_POINT) starts a new stroke with a dot.
    */
   private applyStrokePoints(
-    userId: number,
-    props: Pick<StrokeMessage, "layer" | "brushSize" | "brushType" | "color" | "mask">,
+    userId: HistoryActorId,
+    props: Pick<HistoryStroke, "layer" | "brushSize" | "brushType" | "color" | "mask">,
     points: { x: number; y: number }[],
     layers: Record<string, Uint8ClampedArray>,
     strokes: StrokeStates

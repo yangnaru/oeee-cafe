@@ -8,7 +8,7 @@ import neoScript from "../../../neo/dist/paintbbs-oeee-1.7.0.js?raw";
 import neoStyles from "../../../neo/dist/paintbbs-oeee-1.7.0.css?raw";
 import { NeoToolColumn } from "../components/neo/NeoToolColumn";
 import { ALL_TOOLS, DEFAULT_PALETTE_COLORS } from "../constants/drawing";
-import type { DrawingState } from "../types/collaboration";
+import type { DrawingState } from "../types/drawing";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { useCanvasHistory } from "./useCanvasHistory";
-import type { BrushType, DrawingState } from "../types/collaboration";
+import type { BrushType, DrawingState } from "../types/drawing";
 import {
   brushTypeFor,
   isImmediateTool,
@@ -29,7 +29,7 @@ function bezierPreviewPoints(points: number[]): number[] {
  * offer line or bezier. A copy that has to be kept in step by hand will not
  * be, so there is only one now.
  */
-export type { DrawingState } from "../types/collaboration";
+export type { DrawingState } from "../types/drawing";
 
 /** The mask a stroke is drawn through, as the engine wants it. */
 function applyMask(engine: DrawingEngine, state: DrawingState): void {

@@ -15,7 +15,8 @@ import { BufferSurface } from "./PixelSurface";
 import { NeoReplay, decodePCH as decodeReplay } from "./NeoReplay";
 import { describeDifference, firstPixelDifference } from "../test/neoHarness";
 import { CanvasHistory } from "../utils/canvasHistory";
-import { decodeMessage, encodeRegion } from "../utils/binaryProtocol";
+import { decodeMessage, encodeRegion } from "../../../frontend/collaborate/binaryProtocol";
+import { isHistoryOperation } from "../synchronization/historyOperations";
 
 const W = 48;
 const H = 48;
@@ -220,6 +221,7 @@ describe("eraseRect end to end", () => {
       SIZE
     );
     const message = decodeMessage(bytes)!;
+    if (!isHistoryOperation(message)) throw new Error("expected history operation");
 
     history.handleLocal(bytes, message);
     const inside = ((RECT.y + 2) * W + RECT.x + 2) * 4 + 3;

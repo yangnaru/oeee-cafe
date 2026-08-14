@@ -1,5 +1,19 @@
 import { mountOfflinePainter } from "./mountOfflinePainter";
 
+export type {
+  CanonicalPainterOperation,
+  LocalPainterOperation,
+  PainterBrush,
+  PainterCheckpoint,
+  PainterColor,
+  PainterLayer,
+  PainterMask,
+  PainterOperation,
+  PainterPoint,
+  PainterRegionTool,
+  PainterSessionArchive,
+} from "./operations";
+
 /**
  * Public API for neo-cucumber.
  *
@@ -39,6 +53,11 @@ export interface PainterOptions {
   onChange?: (state: PainterChange) => void;
   /** Called for asynchronous errors that cannot be returned to the caller. */
   onError?: (error: PainterError) => void;
+  /** Optional controlled-operation sink used by collaborative hosts. */
+  synchronization?: {
+    actorId: string;
+    onOperation(operation: import("./operations").LocalPainterOperation): void;
+  };
 }
 
 export interface PainterChange {
@@ -96,6 +115,27 @@ export interface PainterHandle {
    * Loading before the first user edit is the supported continuation flow.
    */
   loadImage(source: ImageSource): Promise<void>;
+
+  /** Undo or redo through the painter's active history policy. */
+  undo(): void;
+  redo(): void;
+
+  /** Enable or suspend pointer-driven editing without unmounting the painter. */
+  setInteractionEnabled(enabled: boolean): void;
+
+  /** Apply a server-ordered echo or remote operation in controlled mode. */
+  applyCanonicalOperation(
+    operation: import("./operations").CanonicalPainterOperation,
+  ): Promise<void>;
+
+  /** Capture both editable layers at a canonical compaction boundary. */
+  exportCheckpoint(sequence: number): Promise<import("./operations").PainterCheckpoint>;
+
+  /** Replace both editable layers and reset controlled history to a checkpoint. */
+  applyCheckpoint(checkpoint: import("./operations").PainterCheckpoint): Promise<void>;
+
+  /** Export the canonical log since the last applied checkpoint. */
+  exportSessionArchive(): Promise<import("./operations").PainterSessionArchive>;
 
   /** Idempotently release listeners, canvases, controls, and framework roots. */
   unmount(): void;

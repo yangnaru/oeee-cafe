@@ -12,11 +12,7 @@ export type BrushType =
   | "fill"
   | "pan";
 
-/**
- * The drawing tools the collaborative wire format carries. Every brush type
- * the engine rasterises has a code; fill and pan are excluded because neither
- * travels as a stroke -- fill is its own message and pan draws nothing.
- */
+/** Brush types that can be represented as stroke operations. */
 export type WireBrushType =
   | "solid"
   | "halftone"
@@ -39,6 +35,7 @@ export const WIRE_BRUSH_TYPES: readonly WireBrushType[] = [
 export function isWireBrushType(type: string): type is WireBrushType {
   return (WIRE_BRUSH_TYPES as readonly string[]).includes(type);
 }
+
 export type LayerType = "foreground" | "background";
 
 export interface DrawingState {
@@ -46,14 +43,8 @@ export interface DrawingState {
   opacity: number;
   color: string;
   brushType: ToolId;
-  /** How the tool lays marks down; defaults to freehand. */
   drawType?: DrawType;
-  /**
-   * NEO's MASKTYPE, 0-4: none, mask, reverse mask, add, subtract. Chosen with
-   * the mask tip and applied to every stroke.
-   */
   maskType?: number;
-  /** The colour maskType tests against, "#rrggbb". */
   maskColor?: string;
   layerType: LayerType;
   zoomLevel: number;
@@ -62,21 +53,4 @@ export interface DrawingState {
   isFlippedHorizontal: boolean;
   pendingPanDeltaX?: number;
   pendingPanDeltaY?: number;
-}
-
-export interface CollaborationMeta {
-  title: string;
-  width: number;
-  height: number;
-  ownerId: string;
-  savedPostId?: string;
-  ownerLoginName: string;
-  maxUsers: number;
-  currentUserCount: number;
-}
-
-export interface Participant {
-  userId: string;
-  username: string;
-  joinedAt: number;
 }

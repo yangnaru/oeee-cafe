@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { act, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { useOfflineDrawing } from "./useOfflineDrawing";
-import type { DrawingState } from "../types/collaboration";
+import type { DrawingState } from "../types/drawing";
 import {
   LAYER,
   createCanonicalPainter,

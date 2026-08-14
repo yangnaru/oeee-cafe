@@ -8,5 +8,9 @@ export default defineConfig({
       path: "<rootDir>/src/locales/{locale}/messages",
       include: ["src"],
     },
+    {
+      path: "<rootDir>/../frontend/collaborate/locales/{locale}/messages",
+      include: ["../frontend/collaborate"],
+    },
   ],
 });

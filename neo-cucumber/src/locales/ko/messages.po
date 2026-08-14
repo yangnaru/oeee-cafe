@@ -46,9 +46,9 @@ msgstr "{minutes}분"
 #~ msgid "🔄 Saving..."
 #~ msgstr "🔄 저장 중..."
 
-#: src/components/modals/AuthErrorModal.tsx:16
-msgid "Authentication Failed"
-msgstr "인증 실패"
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:16
+#~ msgid "Authentication Failed"
+#~ msgstr "인증 실패"
 
 #: src/components/SimplifiedToolbox.tsx:63
 #: src/components/SimplifiedToolbox.tsx:97
@@ -56,9 +56,9 @@ msgstr "인증 실패"
 msgid "Background pen"
 msgstr "배경색 펜"
 
-#: src/components/SessionHeader.tsx:56
-msgid "by"
-msgstr "작성자:"
+#: ../frontend/collaborate/components/SessionHeader.tsx:56
+#~ msgid "by"
+#~ msgstr "작성자:"
 
 #: src/App.tsx:899
 #~ msgid "Chat"
@@ -72,21 +72,21 @@ msgstr "색상"
 #~ msgid "Community: {0}"
 #~ msgstr "커뮤니티: {0}"
 
-#: src/components/SessionHeader.tsx:71
-msgid "Connected"
-msgstr "연결됨"
+#: ../frontend/collaborate/components/SessionHeader.tsx:71
+#~ msgid "Connected"
+#~ msgstr "연결됨"
 
-#: src/components/SessionHeader.tsx:77
-msgid "Connecting"
-msgstr "연결 중"
+#: ../frontend/collaborate/components/SessionHeader.tsx:77
+#~ msgid "Connecting"
+#~ msgstr "연결 중"
 
-#: src/components/modals/ConnectionStatusModal.tsx:58
-msgid "Connecting..."
-msgstr "연결 중..."
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:58
+#~ msgid "Connecting..."
+#~ msgstr "연결 중..."
 
-#: src/components/modals/ConnectionStatusModal.tsx:36
-msgid "Connection lost. Your work is saved locally."
-msgstr "연결이 끊어졌습니다. 작업이 로컬에 저장되었습니다."
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:36
+#~ msgid "Connection lost. Your work is saved locally."
+#~ msgstr "연결이 끊어졌습니다. 작업이 로컬에 저장되었습니다."
 
 #: src/components/ColorPalette.tsx:59
 #~ msgid "Custom color picker"
@@ -101,14 +101,14 @@ msgstr "연결이 끊어졌습니다. 작업이 로컬에 저장되었습니다.
 msgid "Dark"
 msgstr "다크"
 
-#: src/components/SessionHeader.tsx:83
-msgid "Disconnected"
-msgstr "연결 끊어짐"
+#: ../frontend/collaborate/components/SessionHeader.tsx:83
+#~ msgid "Disconnected"
+#~ msgstr "연결 끊어짐"
 
-#: src/components/modals/ConnectionStatusModal.tsx:49
-#: src/components/SessionExpiredModal.tsx:142
-msgid "Download PNG"
-msgstr "PNG 다운로드"
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:49
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:142
+#~ msgid "Download PNG"
+#~ msgstr "PNG 다운로드"
 
 #: src/OfflineApp.tsx:708
 #~ msgid "Download Replay"
@@ -130,9 +130,9 @@ msgstr "PNG 다운로드"
 #~ msgid "Failed to save drawing. Please try again."
 #~ msgstr "그림 저장에 실패했습니다. 다시 시도해 주세요."
 
-#: src/components/SessionExpiredModal.tsx:49
-msgid "Failed to save session. Please try downloading as PNG instead."
-msgstr "세션 저장에 실패했습니다. 대신 PNG로 다운로드해 보세요."
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:49
+#~ msgid "Failed to save session. Please try downloading as PNG instead."
+#~ msgstr "세션 저장에 실패했습니다. 대신 PNG로 다운로드해 보세요."
 
 #: src/App.tsx:1917
 #~ msgid "Fill"
@@ -153,10 +153,10 @@ msgstr ""
 msgid "Foreground pen"
 msgstr "전경색 펜"
 
-#: src/components/modals/AuthErrorModal.tsx:28
-#: src/components/modals/RoomFullModal.tsx:35
-msgid "Go to Lobby"
-msgstr "로비로 가기"
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:28
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:35
+#~ msgid "Go to Lobby"
+#~ msgstr "로비로 가기"
 
 #: src/App.tsx:1913
 #~ msgid "Halftone"
@@ -167,13 +167,13 @@ msgstr "로비로 가기"
 #~ msgid "Hide chat"
 #~ msgstr "채팅 숨기기"
 
-#: src/components/modals/InitializationErrorModal.tsx:18
-msgid "Initialization Failed"
-msgstr "초기화 실패"
+#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:18
+#~ msgid "Initialization Failed"
+#~ msgstr "초기화 실패"
 
-#: src/components/modals/LoadingModal.tsx:13
-msgid "Initializing collaboration session..."
-msgstr "협업 세션 초기화 중..."
+#: ../frontend/collaborate/components/modals/LoadingModal.tsx:13
+#~ msgid "Initializing collaboration session..."
+#~ msgstr "협업 세션 초기화 중..."
 
 #: src/components/ToolboxPanel.tsx:340
 #~ msgid "Left click to select layer, right click to toggle visibility"
@@ -184,21 +184,21 @@ msgstr "협업 세션 초기화 중..."
 msgid "Light"
 msgstr "라이트"
 
-#: src/components/SessionHeader.tsx:89
-msgid "Loading"
-msgstr "로딩 중"
+#: ../frontend/collaborate/components/SessionHeader.tsx:89
+#~ msgid "Loading"
+#~ msgstr "로딩 중"
 
 #: src/viewer/ViewerApp.tsx:133
 #~ msgid "Loading replay..."
 #~ msgstr "리플레이 불러오는 중..."
 
-#: src/components/modals/LoadingModal.tsx:12
-msgid "Loading..."
-msgstr "로딩 중..."
+#: ../frontend/collaborate/components/modals/LoadingModal.tsx:12
+#~ msgid "Loading..."
+#~ msgstr "로딩 중..."
 
-#: src/components/modals/ConnectionStatusModal.tsx:25
-msgid "LOADING..."
-msgstr "로딩 중..."
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
+#~ msgid "LOADING..."
+#~ msgstr "로딩 중..."
 
 #: src/viewer/ViewerApp.tsx:45
 #~ msgid "No replay to show."
@@ -240,11 +240,10 @@ msgstr "끄기"
 #~ msgid "Participants"
 #~ msgstr "참여자"
 
-#. placeholder {0}: participants.size
-#: src/components/Chat.tsx:163
-#: src/components/Chat.tsx:164
-msgid "Participants ({0})"
-msgstr ""
+#: ../frontend/collaborate/components/Chat.tsx:163
+#: ../frontend/collaborate/components/Chat.tsx:164
+#~ msgid "Participants ({0})"
+#~ msgstr ""
 
 #: src/viewer/ViewerApp.tsx:153
 #~ msgid "Pause"
@@ -263,9 +262,9 @@ msgstr "색 선택"
 #~ msgid "Play"
 #~ msgstr "재생"
 
-#: src/components/modals/ConnectionStatusModal.tsx:43
-msgid "Reconnect"
-msgstr "재연결"
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:43
+#~ msgid "Reconnect"
+#~ msgstr "재연결"
 
 #: src/components/SimplifiedToolbox.tsx:66
 #: src/components/SimplifiedToolbox.tsx:176
@@ -285,14 +284,14 @@ msgstr "남은 시간: {remaining}"
 msgid "Reset zoom"
 msgstr "확대 초기화"
 
-#: src/components/modals/InitializationErrorModal.tsx:25
-#: src/components/modals/RoomFullModal.tsx:41
-msgid "Retry"
-msgstr "다시 시도"
+#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:25
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:41
+#~ msgid "Retry"
+#~ msgstr "다시 시도"
 
-#: src/components/SessionExpiredModal.tsx:163
-msgid "Return to Lobby"
-msgstr "로비로 돌아가기"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:163
+#~ msgid "Return to Lobby"
+#~ msgstr "로비로 돌아가기"
 
 #: src/viewer/ViewerApp.tsx:160
 #~ msgid "Rewind"
@@ -302,9 +301,9 @@ msgstr "로비로 돌아가기"
 msgid "Save"
 msgstr "저장"
 
-#: src/components/SessionExpiredModal.tsx:154
-msgid "Save as PNG"
-msgstr "PNG로 저장"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:154
+#~ msgid "Save as PNG"
+#~ msgstr "PNG로 저장"
 
 #: src/components/SimplifiedToolbox.tsx:180
 #: src/OfflineApp.tsx:692
@@ -315,37 +314,37 @@ msgstr "PNG로 저장"
 msgid "Save drawing to gallery"
 msgstr "그림을 갤러리에 저장"
 
-#: src/components/SessionExpiredModal.tsx:122
-msgid "Save to Gallery"
-msgstr "갤러리에 저장"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:122
+#~ msgid "Save to Gallery"
+#~ msgstr "갤러리에 저장"
 
-#: src/components/SessionExpiredModal.tsx:113
-msgid "Saving..."
-msgstr "저장 중..."
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:113
+#~ msgid "Saving..."
+#~ msgstr "저장 중..."
 
 #: src/viewer/ViewerApp.tsx:143
 #~ msgid "Seek"
 #~ msgstr "탐색"
 
-#: src/components/Chat.tsx:241
-msgid "Send"
-msgstr "전송"
+#: ../frontend/collaborate/components/Chat.tsx:241
+#~ msgid "Send"
+#~ msgstr "전송"
 
-#: src/components/SessionExpiredModal.tsx:82
-msgid "Session Expired"
-msgstr "세션 만료"
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:82
+#~ msgid "Session Expired"
+#~ msgstr "세션 만료"
 
-#: src/components/modals/RoomFullModal.tsx:22
-msgid "Session Full"
-msgstr "세션 만석"
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:22
+#~ msgid "Session Full"
+#~ msgstr "세션 만석"
 
-#: src/components/modals/SessionEndingModal.tsx:15
-msgid "Session is ending. The drawing is being saved to the gallery..."
-msgstr "세션이 종료됩니다. 그림을 갤러리에 저장 중..."
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:15
+#~ msgid "Session is ending. The drawing is being saved to the gallery..."
+#~ msgstr "세션이 종료됩니다. 그림을 갤러리에 저장 중..."
 
-#: src/components/SessionHeader.tsx:66
-msgid "Share"
-msgstr "공유"
+#: ../frontend/collaborate/components/SessionHeader.tsx:66
+#~ msgid "Share"
+#~ msgstr "공유"
 
 #: src/components/SimplifiedToolbox.tsx:201
 msgid "Shortcuts"
@@ -394,35 +393,35 @@ msgstr "다크 모드로 전환"
 msgid "Switch to light"
 msgstr "라이트 모드로 전환"
 
-#: src/components/SessionExpiredModal.tsx:88
-msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
-msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 소유자로서 갤러리에 저장하거나 PNG로 다운로드할 수 있습니다."
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
+#~ msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
+#~ msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 소유자로서 갤러리에 저장하거나 PNG로 다운로드할 수 있습니다."
 
-#: src/components/SessionExpiredModal.tsx:87
-msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
-msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 세션이 이미 갤러리에 저장되었지만 PNG로 다운로드할 수 있습니다."
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:87
+#~ msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
+#~ msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 세션이 이미 갤러리에 저장되었지만 PNG로 다운로드할 수 있습니다."
 
-#: src/components/SessionExpiredModal.tsx:89
-msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
-msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 떠나기 전에 작업을 PNG로 로컬에 저장할 수 있습니다."
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:89
+#~ msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
+#~ msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 떠나기 전에 작업을 PNG로 로컬에 저장할 수 있습니다."
 
 #: src/viewer/ViewerApp.tsx:81
 #~ msgid "This drawing's replay could not be loaded."
 #~ msgstr "이 그림의 리플레이를 불러올 수 없습니다."
 
-#: src/components/SessionExpiredModal.tsx:45
-msgid "This session has already been saved. You can only download it as a PNG."
-msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 수 있습니다."
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:45
+#~ msgid "This session has already been saved. You can only download it as a PNG."
+#~ msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 수 있습니다."
 
 #: src/App.tsx:1750
 #~ msgid "This session is full ({0}/{1} users). Only the first {2} users can join a session."
 #~ msgstr "이 세션이 가득참 ({0}/{1} 사용자). 처음 {2}명의 사용자만 세션에 참여할 수 있습니다."
 
-#: src/components/modals/RoomFullModal.tsx:25
-msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
-msgstr "이 세션이 가득 찼습니다 ({currentUserCount}/{maxUsers}명). 처음 {maxUsers}명의 사용자만 세션에 참여할 수 있습니다."
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:25
+#~ msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
+#~ msgstr "이 세션이 가득 찼습니다 ({currentUserCount}/{maxUsers}명). 처음 {maxUsers}명의 사용자만 세션에 참여할 수 있습니다."
 
-#: src/Painter.tsx:466
+#: src/Painter.tsx:589
 msgid "Time's up."
 msgstr "설정한 시간이 지났습니다."
 
@@ -438,13 +437,13 @@ msgstr "타이머 꺼짐"
 msgid "Toggle horizontal flip"
 msgstr "좌우 반전 전환"
 
-#: src/components/Chat.tsx:232
-msgid "Type a message..."
-msgstr "메시지 입력..."
+#: ../frontend/collaborate/components/Chat.tsx:232
+#~ msgid "Type a message..."
+#~ msgstr "메시지 입력..."
 
-#: src/components/modals/AuthErrorModal.tsx:19
-msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
-msgstr "세션을 인증할 수 없습니다. 세션이 존재하지 않거나 만료되었습니다. 로비로 돌아가 주세요."
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:19
+#~ msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
+#~ msgstr "세션을 인증할 수 없습니다. 세션이 존재하지 않거나 만료되었습니다. 로비로 돌아가 주세요."
 
 #: src/components/SimplifiedToolbox.tsx:65
 #: src/components/SimplifiedToolbox.tsx:168
@@ -452,9 +451,9 @@ msgstr "세션을 인증할 수 없습니다. 세션이 존재하지 않거나 �
 msgid "Undo"
 msgstr "실행 취소"
 
-#: src/components/modals/SessionEndingModal.tsx:20
-msgid "You'll be redirected to the post page shortly."
-msgstr "곧 게시물 페이지로 리디렉션됩니다."
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:20
+#~ msgid "You'll be redirected to the post page shortly."
+#~ msgstr "곧 게시물 페이지로 리디렉션됩니다."
 
 #: src/components/ToolboxPanel.tsx:179
 msgid "Zoom in"

@@ -1,6 +1,6 @@
 import { Trans } from "@lingui/react/macro";
 
-interface SessionEndingModalProps {
+export interface SessionEndingModalProps {
   isOpen: boolean;
 }
 

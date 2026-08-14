@@ -2,7 +2,8 @@ import { useRef, useCallback } from "react";
 import { useBaseDrawing, type DrawingState } from "./useBaseDrawing";
 import { ActionRecorder } from "../utils/ActionRecorder";
 import { maskFrom, NO_MASK, type Mask } from "../neo/mask";
-import type { BrushType } from "../types/collaboration";
+import type { BrushType } from "../types/drawing";
+import type { PainterBrush, PainterOperation } from "../operations";
 import { frameShapeFor, type RegionTool } from "../neo/tools";
 import type { RegionRect } from "../neo/regionDrag";
 import type { BezierPreviewStyle } from "../neo/regionPreview";
@@ -64,7 +65,9 @@ export const useOfflineDrawing = (
     style: BezierPreviewStyle
   ) => void,
   /** Called as the pointer moves over the canvas, or leaves it. */
-  onHoverMove?: (at: { x: number; y: number } | null) => void
+  onHoverMove?: (at: { x: number; y: number } | null) => void,
+  isDrawingDisabled: boolean = false,
+  onOperation?: (operation: PainterOperation) => void,
 ) => {
   // Initialize replay recording
   const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
@@ -80,6 +83,17 @@ export const useOfflineDrawing = (
    * frame is written could record a mask the canvas was never drawn through.
    */
   const strokeMaskRef = useRef<Mask>(NO_MASK);
+  const pendingStrokeRef = useRef<
+    Extract<PainterOperation, { kind: "stroke" }> | null
+  >(null);
+
+  const emitOperation = useCallback((operation: PainterOperation) => {
+    if (!onOperation) return;
+    if (operation.kind !== "undo" && operation.kind !== "undo-boundary") {
+      onOperation({ kind: "undo-boundary" });
+    }
+    onOperation(operation);
+  }, [onOperation]);
 
   // Callbacks for recording drawing operations
   const callbacks = {
@@ -91,6 +105,7 @@ export const useOfflineDrawing = (
       strokeLayerRef.current =
         drawingState.layerType === "foreground" ? 1 : 0;
       strokeMaskRef.current = maskFrom(drawingState);
+      pendingStrokeRef.current = null;
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawingState.layerType, drawingState.maskType, drawingState.maskColor]),
 
@@ -124,6 +139,21 @@ export const useOfflineDrawing = (
             !Number.isFinite(toX) || !Number.isFinite(toY)) {
           console.warn("Invalid coordinates in onDrawLine:", { fromX, fromY, toX, toY });
           return;
+        }
+
+        const to = { x: Math.round(toX), y: Math.round(toY) };
+        if (!pendingStrokeRef.current) {
+          pendingStrokeRef.current = {
+            kind: "stroke",
+            layer: layer === 1 ? "foreground" : "background",
+            brushSize,
+            brush: brushType as PainterBrush,
+            color: { r: safeR, g: safeG, b: safeB, a: alpha },
+            points: [{ x: Math.round(fromX), y: Math.round(fromY) }, to],
+            mask: strokeMaskRef.current,
+          };
+        } else {
+          pendingStrokeRef.current.points.push(to);
         }
 
         // Only create action frame and push header once per stroke
@@ -191,6 +221,16 @@ export const useOfflineDrawing = (
           return;
         }
 
+        pendingStrokeRef.current = {
+          kind: "stroke",
+          layer: layer === 1 ? "foreground" : "background",
+          brushSize,
+          brush: brushType as PainterBrush,
+          color: { r: safeR, g: safeG, b: safeB, a: alpha },
+          points: [{ x: Math.round(x), y: Math.round(y) }],
+          mask: strokeMaskRef.current,
+        };
+
         // Single point stroke - create new action frame
         if (!hasCreatedStepRef.current) {
           actionRecorderRef.current.step();
@@ -245,8 +285,15 @@ export const useOfflineDrawing = (
           hasCreatedStepRef.current = true;
         }
         actionRecorderRef.current.push("floodFill", layer, Math.round(x), Math.round(y), color);
+        emitOperation({
+          kind: "fill",
+          layer: layer === 1 ? "foreground" : "background",
+          at: { x: Math.round(x), y: Math.round(y) },
+          color: { r: safeR, g: safeG, b: safeB, a: alpha },
+          mask: strokeMaskRef.current,
+        });
       },
-      [drawingState.layerType]
+      [drawingState.layerType, emitOperation]
     ),
 
     onRegionPreview,
@@ -271,8 +318,14 @@ export const useOfflineDrawing = (
           brushSize,
           strokeMaskRef.current
         );
+        emitOperation({
+          kind: "bezier", layer, brushSize,
+          brush: brushType as PainterBrush, color,
+          points: points as [number, number, number, number, number, number, number, number],
+          mask: strokeMaskRef.current,
+        });
       },
-      []
+      [emitOperation]
     ),
 
     onLine: useCallback(
@@ -293,8 +346,13 @@ export const useOfflineDrawing = (
           brushSize,
           strokeMaskRef.current
         );
+        emitOperation({
+          kind: "line", layer, brushSize,
+          brush: brushType as PainterBrush, color, from, to,
+          mask: strokeMaskRef.current,
+        });
       },
-      []
+      [emitOperation]
     ),
 
     /** NEO records a cleared layer as ["eraseAll", layer]. */
@@ -304,7 +362,8 @@ export const useOfflineDrawing = (
         "eraseAll",
         layer === "foreground" ? 1 : 0
       );
-    }, []),
+      emitOperation({ kind: "clear-layer", layer });
+    }, [emitOperation]),
 
     /**
      * A region tool was applied; record it as its own frame. The verb and
@@ -333,15 +392,23 @@ export const useOfflineDrawing = (
           tool === "paste" ? [0, 0] : [],
           strokeMaskRef.current
         );
+        emitOperation({
+          kind: "region", layer, tool, rect, color, brushSize,
+          mask: strokeMaskRef.current,
+        });
       },
-      []
+      [emitOperation]
     ),
 
     onPointerUp: useCallback(() => {
+      if (pendingStrokeRef.current) {
+        emitOperation(pendingStrokeRef.current);
+        pendingStrokeRef.current = null;
+      }
       isFirstPointRef.current = false;
       hasCreatedStepRef.current = false;
       strokeLayerRef.current = null;
-    }, []),
+    }, [emitOperation]),
   };
 
   // Get base drawing functionality
@@ -355,7 +422,7 @@ export const useOfflineDrawing = (
     canvasHeight,
     onDrawingChange,
     containerRef,
-    false, // isDrawingDisabled - always enabled in offline mode
+    isDrawingDisabled,
     callbacks
   );
 
@@ -363,13 +430,15 @@ export const useOfflineDrawing = (
   const wrappedUndo = useCallback(() => {
     baseDrawing.undo();
     actionRecorderRef.current.back();
-  }, [baseDrawing]);
+    onOperation?.({ kind: "undo", redo: false });
+  }, [baseDrawing, onOperation]);
 
   // Wrap redo to sync with ActionRecorder
   const wrappedRedo = useCallback(() => {
     baseDrawing.redo();
     actionRecorderRef.current.forward();
-  }, [baseDrawing]);
+    onOperation?.({ kind: "undo", redo: true });
+  }, [baseDrawing, onOperation]);
 
   // Add restore action with final layer states
   const addRestoreAction = useCallback(() => {
@@ -521,6 +590,7 @@ export const useOfflineDrawing = (
         x, y, packedColor, alpha, text, fontSize, fontFamily
       );
     },
+    emitOperation,
     addRestoreAction,
     initializeFromImage,
     initializeTwoToneCanvas,

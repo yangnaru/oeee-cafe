@@ -51,6 +51,16 @@ export function mountOfflinePainter(
     return controller;
   };
 
+  const synchronousController = (): PainterHandle => {
+    if (!mounted) throw unmountedError();
+    if (!controller) {
+      const error = new Error("Painter is not ready") as PainterError;
+      error.code = "internal";
+      throw error;
+    }
+    return controller;
+  };
+
   const root = createRoot(element);
   root.render(
     <StrictMode>
@@ -81,6 +91,27 @@ export function mountOfflinePainter(
     },
     async loadImage(source: ImageSource) {
       return (await liveController()).loadImage(source);
+    },
+    undo() {
+      synchronousController().undo();
+    },
+    redo() {
+      synchronousController().redo();
+    },
+    setInteractionEnabled(enabled: boolean) {
+      synchronousController().setInteractionEnabled(enabled);
+    },
+    async applyCanonicalOperation(operation) {
+      return (await liveController()).applyCanonicalOperation(operation);
+    },
+    async exportCheckpoint(sequence) {
+      return (await liveController()).exportCheckpoint(sequence);
+    },
+    async applyCheckpoint(checkpoint) {
+      return (await liveController()).applyCheckpoint(checkpoint);
+    },
+    async exportSessionArchive() {
+      return (await liveController()).exportSessionArchive();
     },
     unmount() {
       if (!mounted) return;

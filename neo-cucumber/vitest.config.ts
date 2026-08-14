@@ -10,6 +10,13 @@ import { lingui } from "@lingui/vite-plugin";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "neo-cucumber/internal": path.resolve(import.meta.dirname, "src"),
+      react: path.resolve(import.meta.dirname, "node_modules/react"),
+      "react-dom": path.resolve(import.meta.dirname, "node_modules/react-dom"),
+    },
+  },
   // Tailwind too: component tests render the real components, and without it
   // they render unstyled -- which quietly turns any assertion about layout or
   // colour into an assertion about the browser's defaults.
@@ -31,8 +38,8 @@ export default defineConfig({
         test: {
           name: "node",
           environment: "node",
-          include: ["src/**/*.test.ts"],
-          exclude: ["src/**/*.browser.test.{ts,tsx}"],
+          include: ["src/**/*.test.ts", "../frontend/**/*.test.ts"],
+          exclude: ["src/**/*.browser.test.{ts,tsx}", "../frontend/**/*.browser.test.{ts,tsx}"],
         },
       },
       {

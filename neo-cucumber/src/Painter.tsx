@@ -39,11 +39,16 @@ import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 import { previewBackdrop as backdropFromCanvasStack } from "./neo/previewBackdrop";
 import { PainterWorkspace } from "./components/PainterWorkspace";
 import type {
+  CanonicalPainterOperation,
   ImageSource,
+  PainterCheckpoint,
   PainterExport,
   PainterHandle,
   PainterOptions,
+  PainterSessionArchive,
 } from "./public";
+import { CanvasHistory } from "./utils/canvasHistory";
+import { layerToPngBlob, pngDataToLayer } from "./utils/canvasSnapshot";
 
 interface PainterProps {
   config: PainterOptions;
@@ -123,6 +128,26 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     canUndo: false,
     canRedo: false,
   });
+  const [interactionEnabled, setInteractionEnabled] = useState(true);
+  const operationCounterRef = useRef(0);
+  const synchronizationHistoryRef = useRef<CanvasHistory | null>(null);
+  const appliedCheckpointRef = useRef<PainterCheckpoint | undefined>(undefined);
+  const synchronization = config.synchronization;
+  const emitLocalOperation = useCallback(
+    (operation: import("./operations").PainterOperation) => {
+      if (!synchronization) return;
+      operationCounterRef.current += 1;
+      const entry = {
+        id: `${synchronization.actorId}:${operationCounterRef.current}`,
+        actorId: synchronization.actorId,
+        operation,
+        timestamp: Date.now(),
+      };
+      synchronizationHistoryRef.current?.registerOptimisticOperation(entry);
+      synchronization.onOperation(entry);
+    },
+    [synchronization],
+  );
 
   const appRef = useRef<HTMLDivElement>(null);
   /**
@@ -218,6 +243,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     initializeFromImage,
     initializeTwoToneCanvas,
     recordText,
+    emitOperation,
   } = useOfflineDrawing(
     tempLocalUserCanvasRef,
     appRef,
@@ -232,9 +258,26 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     handleLinePreview,
     handleTextPlace,
     handleBezierPreview,
-    handleHoverMove
+    handleHoverMove,
+    !interactionEnabled,
+    emitLocalOperation,
   );
   previewEngineRef.current = drawingEngine ?? null;
+
+  useEffect(() => {
+    if (!drawingEngine || !synchronization) {
+      synchronizationHistoryRef.current = null;
+      return;
+    }
+    const history = new CanvasHistory(drawingEngine, handleHistoryChange);
+    history.setLocalUserId(synchronization.actorId);
+    synchronizationHistoryRef.current = history;
+    return () => {
+      if (synchronizationHistoryRef.current === history) {
+        synchronizationHistoryRef.current = null;
+      }
+    };
+  }, [drawingEngine, synchronization, handleHistoryChange]);
 
   const readinessRef = useRef<{
     promise: Promise<void>;
@@ -313,10 +356,24 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
         size,
         TEXT_FONT_FAMILY
       );
+      emitOperation({
+        kind: "text",
+        layer: drawingState.layerType,
+        at: textAt,
+        text: value,
+        color: { r, g, b, a: drawingState.opacity },
+        brushSize: drawingState.brushSize,
+        mask: {
+          type: drawingState.maskType ?? 0,
+          r: parseInt((drawingState.maskColor ?? "#000000").slice(1, 3), 16),
+          g: parseInt((drawingState.maskColor ?? "#000000").slice(3, 5), 16),
+          b: parseInt((drawingState.maskColor ?? "#000000").slice(5, 7), 16),
+        },
+      });
       domCanvasUpdateRef.current();
       setTextAt(null);
     },
-    [textAt, drawingEngine, drawingState, recordText]
+    [textAt, drawingEngine, drawingState, recordText, emitOperation]
   );
 
   // Zoom controls
@@ -406,6 +463,65 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     [initializeFromImage],
   );
 
+  const applyCanonicalOperation = useCallback(
+    async (operation: CanonicalPainterOperation): Promise<void> => {
+      const history = synchronizationHistoryRef.current;
+      if (!history) throw new Error("Painter is not in controlled mode");
+      await history.handleCanonicalOperation(operation);
+      domCanvasUpdateRef.current();
+    },
+    [],
+  );
+
+  const exportCheckpoint = useCallback(
+    async (sequence: number): Promise<PainterCheckpoint> => {
+      if (!drawingEngine) throw new Error("Painter is not ready");
+      if (!Number.isSafeInteger(sequence) || sequence < 0) {
+        throw new Error("Checkpoint sequence must be a non-negative safe integer");
+      }
+      const [background, foreground] = await Promise.all([
+        layerToPngBlob(drawingEngine.layers.background, canvasWidth, canvasHeight),
+        layerToPngBlob(drawingEngine.layers.foreground, canvasWidth, canvasHeight),
+      ]);
+      return { sequence, width: canvasWidth, height: canvasHeight, background, foreground };
+    },
+    [drawingEngine, canvasWidth, canvasHeight],
+  );
+
+  const applyCheckpoint = useCallback(
+    async (checkpoint: PainterCheckpoint): Promise<void> => {
+      if (!drawingEngine) throw new Error("Painter is not ready");
+      if (checkpoint.width !== canvasWidth || checkpoint.height !== canvasHeight) {
+        throw new Error(
+          `Checkpoint is ${checkpoint.width}x${checkpoint.height}; painter is ${canvasWidth}x${canvasHeight}`,
+        );
+      }
+      const [background, foreground] = await Promise.all([
+        pngDataToLayer(new Uint8Array(await checkpoint.background.arrayBuffer()), canvasWidth, canvasHeight),
+        pngDataToLayer(new Uint8Array(await checkpoint.foreground.arrayBuffer()), canvasWidth, canvasHeight),
+      ]);
+      drawingEngine.layers.background.set(background);
+      drawingEngine.layers.foreground.set(foreground);
+      synchronizationHistoryRef.current?.reset();
+      appliedCheckpointRef.current = checkpoint;
+      domCanvasUpdateRef.current();
+    },
+    [drawingEngine, canvasWidth, canvasHeight],
+  );
+
+  const exportSessionArchive = useCallback(async (): Promise<PainterSessionArchive> => {
+    if (!drawingEngine) throw new Error("Painter is not ready");
+    const history = synchronizationHistoryRef.current;
+    if (!history) throw new Error("Painter is not in controlled mode");
+    return {
+      format: "neo-cucumber-session",
+      version: 1,
+      canvas: { width: canvasWidth, height: canvasHeight, mode: config.mode },
+      checkpoint: appliedCheckpointRef.current,
+      operations: history.getCanonicalOperations(),
+    };
+  }, [drawingEngine, canvasWidth, canvasHeight, config.mode]);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -414,10 +530,17 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       exportPng,
       exportReplay,
       loadImage,
+      undo,
+      redo,
+      setInteractionEnabled,
+      applyCanonicalOperation,
+      exportCheckpoint,
+      applyCheckpoint,
+      exportSessionArchive,
       // The owning mount adapter replaces this with its React-root teardown.
       unmount: () => {},
     }),
-    [save, exportPng, exportReplay, loadImage],
+    [save, exportPng, exportReplay, loadImage, undo, redo, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive],
   );
 
   // Keep drawingEngine ref in sync

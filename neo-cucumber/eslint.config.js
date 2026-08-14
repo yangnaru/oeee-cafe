@@ -6,10 +6,9 @@ import tseslint from 'typescript-eslint'
 import { globalIgnores } from 'eslint/config'
 
 export default tseslint.config([
-  globalIgnores(['dist']),
+  globalIgnores(['**/dist', '**/dist-*', '**/locales/**']),
   {
     files: ['**/*.{ts,tsx}'],
-    ignores: ['src/locales/**'],
     extends: [
       js.configs.recommended,
       tseslint.configs.recommended,
@@ -19,6 +18,17 @@ export default tseslint.config([
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+    },
+  },
+  {
+    files: ['frontend/collaborate/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['neo-cucumber/internal', 'neo-cucumber/internal/*'],
+          message: 'Collaborative consumers must use the neo-cucumber public package API.',
+        }],
+      }],
     },
   },
 ])

@@ -12,7 +12,7 @@ interface CollaborationMeta {
   currentUserCount: number;
 }
 
-interface SessionHeaderProps {
+export interface SessionHeaderProps {
   canvasMeta: CollaborationMeta;
   connectionState: "connecting" | "connected" | "disconnected";
   isCatchingUp: boolean;

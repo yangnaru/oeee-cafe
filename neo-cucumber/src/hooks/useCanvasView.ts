@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import type { DrawingEngine } from "../DrawingEngine";
 import { drawBrushCursor } from "../neo/brushCursor";
-import type { DrawingState } from "../types/collaboration";
+import type { DrawingState } from "../types/drawing";
 
 interface CanvasViewOptions {
   drawingEngine: DrawingEngine | null | undefined;

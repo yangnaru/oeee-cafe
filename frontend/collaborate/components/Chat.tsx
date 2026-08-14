@@ -1,8 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { encodeChat } from "../utils/binaryProtocol";
+import { encodeChat } from "../binaryProtocol";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { getUserColors } from "../utils/userColors";
-import { NEO_BUTTON } from "./neo/neoClasses";
+
+const getUserColors = (username: string) => {
+  let hash = 5381;
+  for (const character of username) hash = ((hash << 5) + hash) + character.charCodeAt(0);
+  const hue = Math.abs(hash % 360);
+  return {
+    textColor: `hsl(${hue}, 75%, 95%)`,
+    backgroundColor: `hsl(${hue}, 75%, 35%)`,
+  };
+};
+
+const CHAT_BUTTON = "border border-main bg-main px-[6px] py-[2px] text-main active:translate-y-px";
 
 interface ChatMessage {
   id: string;
@@ -236,7 +246,7 @@ export const Chat = ({
             <button
               onClick={sendMessage}
               disabled={!inputValue.trim()}
-              className={`${NEO_BUTTON} shrink-0 px-[5px] py-[2px] text-[11px] font-sans disabled:cursor-not-allowed`}
+              className={`${CHAT_BUTTON} shrink-0 px-[5px] py-[2px] text-[11px] font-sans disabled:cursor-not-allowed`}
             >
               <Trans>Send</Trans>
             </button>

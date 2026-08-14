@@ -12,7 +12,7 @@
  * unchanged; what is new is that the type can now also say "this is not a
  * brush at all".
  */
-import type { BrushType } from "../types/collaboration";
+import type { BrushType } from "../types/drawing";
 import { TOOLTYPE } from "./NeoPainter";
 import {
   blurRectExtent,

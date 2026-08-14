@@ -1,7 +1,7 @@
 import { Trans } from "@lingui/react/macro";
 import { ModalWrapper } from "./ModalWrapper";
 
-interface LoadingModalProps {
+export interface LoadingModalProps {
   isOpen: boolean;
   title?: React.ReactNode;
   message?: React.ReactNode;

@@ -1,7 +1,7 @@
 import { Trans } from "@lingui/react/macro";
 import { ModalWrapper } from "./ModalWrapper";
 
-interface InitializationErrorModalProps {
+export interface InitializationErrorModalProps {
   isOpen: boolean;
   errorMessage: string;
   onRetry: () => void;

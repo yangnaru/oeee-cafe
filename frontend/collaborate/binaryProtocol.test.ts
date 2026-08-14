@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   decodeMessage,
+  decodePainterOperation,
   encodeFill,
+  encodePainterOperation,
   encodeStroke,
   MASK_BYTES,
   NO_WIRE_MASK,
@@ -13,10 +15,28 @@ import {
   MSG_TYPE,
   REGION_TOOL,
 } from "./binaryProtocol";
-import type { RegionTool } from "../neo/tools";
+import type { PainterRegionTool as RegionTool } from "neo-cucumber";
+import type { PainterOperation } from "neo-cucumber";
 
 const ID = 3;
 const COLOR = { r: 12, g: 200, b: 255, a: 128 };
+
+describe("the public painter operation adapter", () => {
+  it("keeps the oeee wire protocol on the consumer side", () => {
+    const operation: PainterOperation = {
+      kind: "line",
+      layer: "foreground",
+      brushSize: 7,
+      brush: "halftone",
+      color: COLOR,
+      from: { x: 2, y: 3 },
+      to: { x: 18, y: 19 },
+      mask: { type: 2, r: 4, g: 5, b: 6 },
+    };
+    expect(decodePainterOperation(decodeMessage(encodePainterOperation(ID, operation))!))
+      .toEqual(operation);
+  });
+});
 
 /**
  * Every field has to survive the trip. A message whose buffer is a byte short

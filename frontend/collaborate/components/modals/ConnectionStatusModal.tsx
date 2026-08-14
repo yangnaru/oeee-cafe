@@ -1,6 +1,6 @@
 import { Trans } from "@lingui/react/macro";
 
-interface ConnectionStatusModalProps {
+export interface ConnectionStatusModalProps {
   isCatchingUp: boolean;
   connectionState: "connecting" | "connected" | "disconnected";
   onReconnect: () => void;

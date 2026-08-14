@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect, startTransition } from "react";
-import { type DrawingState } from "../types/collaboration";
+import { type DrawingState } from "../types/drawing";
 
 // Zoom constants
 const zoomMin = 0.5;

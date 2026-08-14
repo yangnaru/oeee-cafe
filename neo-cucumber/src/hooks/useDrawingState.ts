@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { type DrawingState } from "../types/collaboration";
+import { type DrawingState } from "../types/drawing";
 import type { ToolId } from "../neo/tools";
 import {
   DEFAULT_PALETTE_COLORS,

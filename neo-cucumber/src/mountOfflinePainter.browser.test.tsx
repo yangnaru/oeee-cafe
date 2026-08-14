@@ -35,6 +35,13 @@ describe("public painter lifecycle", () => {
     expect(element.querySelector("canvas")).not.toBeNull();
     expect(element.textContent).not.toContain("Save Drawing");
 
+    act(() => {
+      painter.setInteractionEnabled(false);
+      painter.undo();
+      painter.redo();
+      painter.setInteractionEnabled(true);
+    });
+
     let png!: Blob;
     let replay!: Blob;
     let saved!: Awaited<ReturnType<typeof painter.save>>;
@@ -55,6 +62,7 @@ describe("public painter lifecycle", () => {
       painter.unmount();
       painter.unmount();
     });
+    expect(() => painter.undo()).toThrow(expect.objectContaining({ code: "unmounted" }));
     await expect(painter.exportPng()).rejects.toMatchObject({ code: "unmounted" });
   });
 
@@ -87,6 +95,121 @@ describe("public painter lifecycle", () => {
       replay = await painter.exportReplay();
     });
     expect(replay.size).toBeGreaterThan(12);
+    act(() => painter.unmount());
+  });
+
+  it("emits framework-neutral operations for controlled hosts", async () => {
+    const operations: import("./operations").LocalPainterOperation[] = [];
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    let painter!: ReturnType<typeof mount>;
+    act(() => {
+      painter = mount(element, {
+        width: 100,
+        height: 100,
+        mode: { kind: "standard" },
+        controls: { kind: "none" },
+        synchronization: {
+          actorId: "alice",
+          onOperation: (operation) => operations.push(operation),
+        },
+      });
+    });
+    await act(async () => painter.ready);
+
+    const canvas = element.querySelector("#canvas") as HTMLCanvasElement;
+    const send = async (type: string, x: number, y: number) => {
+      await act(async () => {
+        canvas.dispatchEvent(new PointerEvent(type, {
+          pointerId: 1,
+          pointerType: "mouse",
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          clientX: x,
+          clientY: y,
+          bubbles: true,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    };
+    await send("pointerdown", 10, 12);
+    await send("pointermove", 30, 32);
+    await send("pointerup", 30, 32);
+
+    expect(operations.map((entry) => entry.operation.kind)).toEqual([
+      "undo-boundary",
+      "stroke",
+    ]);
+    expect(operations[0].actorId).toBe("alice");
+    expect(operations[0].id).not.toBe(operations[1].id);
+    expect(operations[1].operation).toMatchObject({
+      kind: "stroke",
+      layer: "background",
+    });
+    act(() => painter.unmount());
+  });
+
+  it("applies canonical operations and round-trips public checkpoints", async () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    let painter!: ReturnType<typeof mount>;
+    act(() => {
+      painter = mount(element, {
+        width: 24,
+        height: 16,
+        mode: { kind: "standard" },
+        controls: { kind: "none" },
+        synchronization: { actorId: "alice", onOperation: () => {} },
+      });
+    });
+    await act(async () => painter.ready);
+
+    await act(async () => {
+      await painter.applyCanonicalOperation({
+        id: "bob:1",
+        actorId: "bob",
+        sequence: 1,
+        operation: {
+          kind: "fill",
+          layer: "background",
+          at: { x: 2, y: 2 },
+          color: { r: 49, g: 120, b: 66, a: 255 },
+          mask: { type: 0, r: 0, g: 0, b: 0 },
+        },
+      });
+    });
+    const checkpoint = await painter.exportCheckpoint(1);
+    expect(checkpoint).toMatchObject({ sequence: 1, width: 24, height: 16 });
+    expect(checkpoint.background.type).toBe("image/png");
+    const archiveBeforeReset = await painter.exportSessionArchive();
+    expect(archiveBeforeReset.operations.map((entry) => entry.id)).toEqual(["bob:1"]);
+
+    await act(async () => {
+      await painter.applyCanonicalOperation({
+        id: "bob:2",
+        actorId: "bob",
+        sequence: 2,
+        operation: { kind: "clear-layer", layer: "background" },
+      });
+      await painter.applyCheckpoint(checkpoint);
+    });
+    const archive = await painter.exportSessionArchive();
+    expect(archive).toMatchObject({
+      format: "neo-cucumber-session",
+      version: 1,
+      checkpoint: { sequence: 1 },
+      operations: [],
+    });
+
+    const png = await painter.exportPng();
+    const bitmap = await createImageBitmap(png);
+    const sample = document.createElement("canvas");
+    sample.width = bitmap.width;
+    sample.height = bitmap.height;
+    const context = sample.getContext("2d")!;
+    context.drawImage(bitmap, 0, 0);
+    expect([...context.getImageData(2, 2, 1, 1).data]).toEqual([49, 120, 66, 255]);
+    bitmap.close();
     act(() => painter.unmount());
   });
 });
