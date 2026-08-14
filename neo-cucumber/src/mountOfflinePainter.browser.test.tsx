@@ -17,6 +17,21 @@ describe("public painter lifecycle", () => {
     ).toThrow(expect.objectContaining({ code: "invalid-options" }));
   });
 
+  it("accepts a 1024×768 canvas", async () => {
+    const element = document.createElement("div");
+    let painter!: ReturnType<typeof mount>;
+    act(() => {
+      painter = mount(element, {
+        width: 1024,
+        height: 768,
+        mode: { kind: "standard" },
+        controls: { kind: "none" },
+      });
+    });
+    await act(async () => painter.ready);
+    act(() => painter.unmount());
+  });
+
   it("exports artifacts through a framework-neutral handle", async () => {
     const element = document.createElement("div");
     document.body.appendChild(element);

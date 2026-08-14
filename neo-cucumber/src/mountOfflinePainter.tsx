@@ -16,12 +16,12 @@ export function mountOfflinePainter(
     !Number.isInteger(config.width) ||
     !Number.isInteger(config.height) ||
     config.width < 1 ||
-    config.width > 1000 ||
+    config.width > 1024 ||
     config.height < 1 ||
     config.height > 800
   ) {
     const error = new Error(
-      "Painter dimensions must be integers between 1×1 and 1000×800",
+      "Painter dimensions must be integers between 1×1 and 1024×800",
     ) as PainterError;
     error.code = "invalid-options";
     throw error;
