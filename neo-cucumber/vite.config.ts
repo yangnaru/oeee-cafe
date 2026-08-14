@@ -9,7 +9,7 @@ import { lingui } from "@lingui/vite-plugin";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  base: "/collaborate/",
+  base: "/",
   resolve: {
     alias: [
       { find: /^neo-cucumber$/, replacement: resolve(__dirname, "src/public.ts") },
@@ -33,10 +33,11 @@ export default defineConfig({
     lingui(),
   ],
   build: {
+    outDir: "dist-example",
+    emptyOutDir: true,
     rollupOptions: {
       input: {
-        // The app itself and a standalone public-API usage example.
-        index: resolve(__dirname, "index.html"),
+        // Standalone example of the package's public API.
         example: resolve(__dirname, "example.html"),
       },
     },

@@ -59,14 +59,17 @@ that do not request it receive the canvas alone.
 pnpm run build
 ```
 
-In this monorepo, this builds the example collaborative application, replay
-viewer, a host-owned offline auto-mounting adapter, and the package in
-`dist-lib/`. The host-specific adapter lives outside the library source at
+In this monorepo, this builds the host collaborative application into `dist/`,
+the standalone example into `dist-example/`, the replay viewer, a host-owned
+offline auto-mounting adapter, and the package in `dist-lib/`. The host-specific
+adapter lives outside the library source at
 [`../frontend/painter/entry.ts`](../frontend/painter/entry.ts).
 
 [`example.html`](example.html) is the library usage example. It mounts the
 painter through `src/public.ts`, opts into the built-in toolbox, exports PNG and
 replay data, and opens the replay viewer without relying on private components.
+Run `pnpm dev` and open `/example.html`. The host application has a separate
+`pnpm dev:collaborate` server and retains its `/collaborate/` base path.
 
 The package exposes only `neo-cucumber` and `neo-cucumber/style.css`. React and
 React DOM are peer dependencies; private canvas and toolbox modules are not
