@@ -76,6 +76,8 @@ export default function App() {
 
   const painterElementRef = useRef<HTMLDivElement>(null);
   const painterRef = useRef<PainterHandle | null>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+  const saveProxyRef = useRef<HTMLButtonElement | null>(null);
   const userIdRef = useRef("");
   const userLoginNameRef = useRef("");
   const localUserJoinTimeRef = useRef(0);
@@ -414,6 +416,72 @@ export default function App() {
 
   const isOwner = canvasMeta?.ownerId === userIdRef.current;
 
+  useEffect(() => {
+    const painter = painterRef.current;
+    const saveButton = saveButtonRef.current;
+    const painterElement = painterElementRef.current;
+    if (!painter || !painterElement) return;
+    let proxy: HTMLButtonElement | null = null;
+    let helpProxy: HTMLButtonElement | null = null;
+    let helpButton: HTMLButtonElement | null = null;
+    let cancelled = false;
+
+    void painter.ready.then(() => {
+      if (cancelled) return;
+      const colorInput = painterElement.querySelector<HTMLInputElement>(
+        'input[type="color"]',
+      );
+      const extraTools = colorInput?.parentElement;
+      const toolboxButton =
+        extraTools?.querySelector<HTMLButtonElement>("button.w-full");
+      helpButton = painterElement.querySelector<HTMLButtonElement>(
+        'button[aria-label="Keyboard shortcuts"]',
+      );
+      if (!extraTools || !toolboxButton || !helpButton) return;
+
+      helpProxy = document.createElement("button");
+      helpProxy.type = "button";
+      helpProxy.className = toolboxButton.className;
+      helpProxy.textContent = "Help";
+      helpProxy.title = helpButton.title;
+      helpProxy.setAttribute(
+        "aria-label",
+        helpButton.getAttribute("aria-label") ?? "Help",
+      );
+      helpProxy.addEventListener("click", () => helpButton?.click());
+
+      extraTools.append(helpProxy);
+      helpButton.hidden = true;
+      if (isOwner && saveButton) {
+        proxy = document.createElement("button");
+        proxy.type = "button";
+        proxy.className = toolboxButton.className;
+        proxy.textContent = saveButton.textContent;
+        proxy.disabled = saveButton.disabled;
+        proxy.addEventListener("click", () => saveButton.click());
+        extraTools.append(proxy);
+        saveButton.hidden = true;
+        saveProxyRef.current = proxy;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      helpProxy?.remove();
+      proxy?.remove();
+      if (helpButton) helpButton.hidden = false;
+      if (saveButton) saveButton.hidden = false;
+      if (saveProxyRef.current === proxy) saveProxyRef.current = null;
+    };
+  }, [isOwner]);
+
+  useEffect(() => {
+    const proxy = saveProxyRef.current;
+    if (!proxy) return;
+    proxy.disabled = isSaving;
+    proxy.textContent = isSaving ? "Saving…" : "Save to gallery";
+  }, [isSaving]);
+
   return <>
     <div className="w-full app-container flex flex-col">
       <InitializationErrorModal isOpen={!!initializationError} errorMessage={initializationError ?? ""} onRetry={() => location.reload()} />
@@ -427,7 +495,7 @@ export default function App() {
         </div>
         <div ref={painterElementRef} className="h-full w-full" />
         <ConnectionStatusModal isCatchingUp={isCatchingUp} connectionState={connectionState} syncProgress={syncProgress} synchronizationError={synchronizationError} onReconnect={() => location.reload()} onDownloadPNG={downloadPng} />
-        {isOwner && <button type="button" disabled={isSaving} onClick={() => void saveCollaborativeDrawing()} className="absolute bottom-4 right-12 z-50 rounded bg-green-700 px-4 py-2 text-white disabled:opacity-50">{isSaving ? "Saving…" : "Save to gallery"}</button>}
+        {isOwner && <button ref={saveButtonRef} type="button" disabled={isSaving} onClick={() => void saveCollaborativeDrawing()} className="absolute bottom-4 right-12 z-50 rounded bg-green-700 px-4 py-2 text-white disabled:opacity-50">{isSaving ? "Saving…" : "Save to gallery"}</button>}
         <SessionEndingModal isOpen={sessionEnding} />
       </div>
     </div>
