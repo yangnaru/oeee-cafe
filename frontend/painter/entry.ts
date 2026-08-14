@@ -146,13 +146,19 @@ function movePageActionsIntoExtraToolbox(): void {
   }
 
   // Reuse neo-cucumber's own full-width toolbox styling without changing its
-  // public API or implementation. Moving the existing Help node preserves its
-  // React-owned click handler.
-  helpButton.className = toolboxButton.className;
+  // public API or moving React-owned DOM. The proxy activates the original
+  // hidden Help button, which keeps React's tree intact when the dialog opens.
+  const helpProxy = document.createElement("button");
+  helpProxy.type = "button";
+  helpProxy.className = toolboxButton.className;
+  helpProxy.textContent = "Help";
+  helpProxy.title = helpButton.title;
+  helpProxy.setAttribute("aria-label", helpButton.getAttribute("aria-label") ?? "Help");
+  helpProxy.addEventListener("click", () => helpButton.click());
+  helpButton.hidden = true;
   pageSaveButton.className = toolboxButton.className;
   pageSaveButton.removeAttribute("style");
-  helpButton.textContent = "Help";
-  extraTools.append(helpButton, pageSaveButton);
+  extraTools.append(helpProxy, pageSaveButton);
 }
 
 void painter.ready
