@@ -118,6 +118,8 @@ const saveButton = document.getElementById("oeee-painter-save") as HTMLButtonEle
 if (!root || !configElement?.textContent || !saveButton) {
   throw new Error("Oeee painter host is missing its root, configuration, or Save button");
 }
+const painterRoot = root;
+const pageSaveButton = saveButton;
 
 const config = JSON.parse(configElement.textContent) as OeeePainterConfig;
 const startedAt = Date.now();
@@ -129,9 +131,34 @@ const painter = mount(root, {
   controls: { kind: "toolbox" },
 });
 
+function movePageActionsIntoExtraToolbox(): void {
+  const colorInput = painterRoot.querySelector<HTMLInputElement>(
+    'input[type="color"]',
+  );
+  const extraTools = colorInput?.parentElement;
+  const helpButton = painterRoot.querySelector<HTMLButtonElement>(
+    'button[aria-label="Keyboard shortcuts"]',
+  );
+  const toolboxButton =
+    extraTools?.querySelector<HTMLButtonElement>("button.w-full");
+  if (!extraTools || !helpButton || !toolboxButton) {
+    throw new Error("Oeee painter could not find the extra toolbox actions");
+  }
+
+  // Reuse neo-cucumber's own full-width toolbox styling without changing its
+  // public API or implementation. Moving the existing Help node preserves its
+  // React-owned click handler.
+  helpButton.className = toolboxButton.className;
+  pageSaveButton.className = toolboxButton.className;
+  pageSaveButton.removeAttribute("style");
+  helpButton.textContent = "Help";
+  extraTools.append(helpButton, pageSaveButton);
+}
+
 void painter.ready
   .then(async () => {
     if (config.initialImageUrl) await painter.loadImage(config.initialImageUrl);
+    if (config.mode.kind === "standard") movePageActionsIntoExtraToolbox();
     saveButton.disabled = false;
   })
   .catch((error) => {
