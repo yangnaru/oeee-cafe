@@ -174,6 +174,56 @@ describe("public painter lifecycle", () => {
     act(() => painter.unmount());
   });
 
+  it("stamps local operations with the identity the server assigned", async () => {
+    // The mount-time actorId is a placeholder: a collaborative host only
+    // learns which actor the canonical stream will call it once the server
+    // says so. If the fork kept the placeholder, one person would hold two
+    // identities -- and stroke continuation, which is keyed by actor, would
+    // join an unrelated stroke to the next one.
+    const operations: import("./operations").LocalPainterOperation[] = [];
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    let painter!: ReturnType<typeof mount>;
+    act(() => {
+      painter = mount(element, {
+        width: 100,
+        height: 100,
+        mode: { kind: "standard" },
+        controls: { kind: "none" },
+        synchronization: {
+          actorId: "placeholder-uuid",
+          onOperation: (operation) => operations.push(operation),
+        },
+      });
+    });
+    await act(async () => painter.ready);
+    act(() => painter.setLocalActorId("7"));
+
+    const canvas = element.querySelector("#canvas") as HTMLCanvasElement;
+    const gesture = [
+      ["pointerdown", 10, 12],
+      ["pointermove", 30, 32],
+      ["pointerup", 30, 32],
+    ] as const;
+    for (const [type, x, y] of gesture) {
+      await act(async () => {
+        canvas.dispatchEvent(new PointerEvent(type, {
+          pointerId: 1, pointerType: "mouse", button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          clientX: x, clientY: y, bubbles: true,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    }
+
+    expect(operations.length).toBeGreaterThan(0);
+    expect(operations.every((entry) => entry.actorId === "7")).toBe(true);
+    expect(operations.every((entry) => entry.id.startsWith("7:"))).toBe(true);
+
+    expect(() => painter.setLocalActorId("")).toThrow(/non-empty/);
+    act(() => painter.unmount());
+  });
+
   it("applies canonical operations and round-trips public checkpoints", async () => {
     const element = document.createElement("div");
     document.body.appendChild(element);

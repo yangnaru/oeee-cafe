@@ -32,6 +32,13 @@ export function mountOfflinePainter(
 
   let mounted = true;
   let controller: PainterHandle | null = null;
+  /**
+   * The identity the host last announced, if any. A server can name this
+   * connection before React has committed the painter -- and StrictMode
+   * remounts the component underneath us -- so the adapter remembers it and
+   * re-states it to whatever controller it ends up with.
+   */
+  let pendingActorId: string | null = null;
   let resolveReady = () => {};
   let rejectReady: (reason?: unknown) => void = () => {};
   const ready = new Promise<void>((resolve, reject) => {
@@ -69,6 +76,7 @@ export function mountOfflinePainter(
           ref={(value) => {
             controller = value;
             if (value) {
+              if (pendingActorId !== null) value.setLocalActorId(pendingActorId);
               void value.ready.then(resolveReady, rejectReady);
             }
           }}
@@ -100,6 +108,16 @@ export function mountOfflinePainter(
     },
     setInteractionEnabled(enabled: boolean) {
       synchronousController().setInteractionEnabled(enabled);
+    },
+    setLocalActorId(actorId: string) {
+      if (typeof actorId !== "string" || actorId === "") {
+        const error = new Error("Actor id must be a non-empty string") as PainterError;
+        error.code = "invalid-options";
+        throw error;
+      }
+      if (!mounted) throw unmountedError();
+      pendingActorId = actorId;
+      controller?.setLocalActorId(actorId);
     },
     async applyCanonicalOperation(operation) {
       return (await liveController()).applyCanonicalOperation(operation);

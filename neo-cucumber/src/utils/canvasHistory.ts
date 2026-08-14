@@ -41,8 +41,17 @@ import type { WireBrushType } from "../types/drawing";
 
 type LayerName = "foreground" | "background";
 type StrokeState = [[number, number], [number, number]] | null;
-// Keyed by 1-byte session user id
-type StrokeStates = Map<HistoryActorId, StrokeState>;
+/**
+ * Per-actor state, keyed by `actorKey`. An actor arrives as a 1-byte session
+ * id from the wire and as a string through the public envelope, and a Map
+ * tells `1` and `"1"` apart -- so one person would hold two entries and their
+ * next stroke would continue from the other one's endpoint, drawing a line
+ * across the canvas. Every lookup goes through `actorKey` to prevent that.
+ */
+type ActorKey = string;
+type StrokeStates = Map<ActorKey, StrokeState>;
+
+const actorKey = (id: HistoryActorId): ActorKey => String(id);
 
 type UndoState = "done" | "undone" | "gone";
 
@@ -199,7 +208,8 @@ function areasConcurrent(a: Area, b: Area): boolean {
 
 export class CanvasHistory {
   private engine: DrawingEngine;
-  // 1-byte session user id assigned by the server's WELCOME; -1 until known
+  // Whoever the host says we are on the canonical stream -- the 1-byte
+  // session id the server assigns, however it names it. -1 until told.
   private localUserId: HistoryActorId = -1;
   private onChange?: (canUndo: boolean, canRedo: boolean) => void;
 
@@ -211,7 +221,7 @@ export class CanvasHistory {
   // Per-user stroke continuation state of the currently rendered canvas
   private liveStrokes: StrokeStates = new Map();
   /** One clipboard per user, so a paste replays the sender's copy. */
-  private readonly clipboards = new Map<HistoryActorId, ImageData | null>();
+  private readonly clipboards = new Map<ActorKey, ImageData | null>();
   private snapshotCache = new WeakMap<HistorySnapshot, Uint8ClampedArray>();
 
   constructor(
@@ -286,7 +296,10 @@ export class CanvasHistory {
     let done = 0;
     let undone = 0;
     for (const e of this.entries) {
-      if (e.msg.type === "undoPoint" && e.msg.userId === this.localUserId) {
+      if (
+        e.msg.type === "undoPoint" &&
+        actorKey(e.msg.userId) === actorKey(this.localUserId)
+      ) {
         if (e.undo === "done") done++;
         else if (e.undo === "undone") undone++;
       }
@@ -338,7 +351,7 @@ export class CanvasHistory {
     if (msg.type === "undoPoint") {
       // Reset the local stroke continuation so a new stroke doesn't dedup
       // against the previous one's endpoint
-      this.liveStrokes.set(this.localUserId, null);
+      this.liveStrokes.set(actorKey(msg.userId), null);
     } else if (msg.type !== "undo") {
       this.applyDrawSync(msg, this.engine.layers, this.liveStrokes);
     }
@@ -355,7 +368,7 @@ export class CanvasHistory {
     const msg = toHistoryOperation(entry.actorId, entry.operation);
     this.fork.push({ id: entry.id, msg, area: affectedArea(msg) });
     if (msg.type === "undoPoint") {
-      this.liveStrokes.set(entry.actorId, null);
+      this.liveStrokes.set(actorKey(entry.actorId), null);
     }
     this.notify();
   }
@@ -499,7 +512,7 @@ export class CanvasHistory {
     if (
       this.hasPendingLocal &&
       "userId" in msg &&
-      msg.userId === this.localUserId
+      actorKey(msg.userId) === actorKey(this.localUserId)
     ) {
       console.warn(
         "Canvas history rollback: server order diverged from local fork"
@@ -597,7 +610,7 @@ export class CanvasHistory {
       await this.processUndo(msg.userId, msg.redo);
     } else if (msg.type === "undoPoint") {
       this.appendUndoPoint(msg, seq);
-      this.liveStrokes.set(msg.userId, null);
+      this.liveStrokes.set(actorKey(msg.userId), null);
       if (replay) {
         await this.replayFrom(this.latestSavepoint());
       }
@@ -622,7 +635,7 @@ export class CanvasHistory {
     for (const entry of this.entries) {
       if (
         "userId" in entry.msg &&
-        entry.msg.userId === msg.userId &&
+        actorKey(entry.msg.userId) === actorKey(msg.userId) &&
         entry.undo === "undone"
       ) {
         entry.undo = "gone";
@@ -652,21 +665,28 @@ export class CanvasHistory {
       first = this.entries.findIndex(
         (e) =>
           e.msg.type === "undoPoint" &&
-          e.msg.userId === userId &&
+          actorKey(e.msg.userId) === actorKey(userId) &&
           e.undo === "undone"
       );
       if (first < 0) return -1;
       let next = this.entries.length;
       for (let i = first + 1; i < this.entries.length; i++) {
         const e = this.entries[i];
-        if (e.msg.type === "undoPoint" && e.msg.userId === userId) {
+        if (
+          e.msg.type === "undoPoint" &&
+          actorKey(e.msg.userId) === actorKey(userId)
+        ) {
           next = i;
           break;
         }
       }
       for (let i = first; i < next; i++) {
         const e = this.entries[i];
-        if ("userId" in e.msg && e.msg.userId === userId && e.undo === "undone") {
+        if (
+          "userId" in e.msg &&
+          actorKey(e.msg.userId) === actorKey(userId) &&
+          e.undo === "undone"
+        ) {
           e.undo = "done";
         }
       }
@@ -675,7 +695,7 @@ export class CanvasHistory {
         const e = this.entries[i];
         if (
           e.msg.type === "undoPoint" &&
-          e.msg.userId === userId &&
+          actorKey(e.msg.userId) === actorKey(userId) &&
           e.undo === "done"
         ) {
           first = i;
@@ -685,7 +705,11 @@ export class CanvasHistory {
       if (first < 0) return -1;
       for (let i = first; i < this.entries.length; i++) {
         const e = this.entries[i];
-        if ("userId" in e.msg && e.msg.userId === userId && e.undo === "done") {
+        if (
+          "userId" in e.msg &&
+          actorKey(e.msg.userId) === actorKey(userId) &&
+          e.undo === "done"
+        ) {
           e.undo = "undone";
         }
       }
@@ -712,7 +736,10 @@ export class CanvasHistory {
     }
     for (const f of this.fork) {
       if (f.msg.type === "undoPoint") {
-        strokes.set(this.localUserId, null);
+        // Keyed by the entry's own actor, exactly as the confirmed entries
+        // above are, so a boundary always clears the state the strokes
+        // beside it are drawn under.
+        strokes.set(actorKey(f.msg.userId), null);
       } else if (f.msg.type !== "undo") {
         this.applyDrawSync(f.msg, this.engine.layers, strokes);
       }
@@ -782,7 +809,7 @@ export class CanvasHistory {
       return;
     }
     if (msg.type === "undoPoint") {
-      strokes.set(msg.userId, null);
+      strokes.set(actorKey(msg.userId), null);
       return;
     }
     this.applyDrawSync(msg, layers, strokes);
@@ -825,12 +852,12 @@ export class CanvasHistory {
         // sender copied rather than whatever the receiver last copied -- which
         // is usually nothing.
         const targets = this.buffersFor(layers);
-        this.engine.setClipboard(this.clipboards.get(msg.userId) ?? null);
+        this.engine.setClipboard(this.clipboards.get(actorKey(msg.userId)) ?? null);
         this.engine.applyRegionTool(
           msg.tool, msg.layer, msg.rect, msg.color, msg.brushSize, targets
         );
         if (msg.tool === "copy") {
-          this.clipboards.set(msg.userId, this.engine.getClipboard());
+          this.clipboards.set(actorKey(msg.userId), this.engine.getClipboard());
         }
         break;
       }
@@ -891,7 +918,7 @@ export class CanvasHistory {
     // Reached directly by the local live path and by rebuilds, not only
     // through applyDrawSync, so it sets the mask itself.
     this.useMask(props.mask);
-    this.engine.setStrokeState(strokes.get(userId) ?? null);
+    this.engine.setStrokeState(strokes.get(actorKey(userId)) ?? null);
     for (const p of points) {
       const prev = this.engine.getStrokeState();
       // Segments run new -> previous, as NEO draws them. The engine records
@@ -912,7 +939,7 @@ export class CanvasHistory {
         props.color.a
       );
     }
-    strokes.set(userId, this.engine.getStrokeState());
+    strokes.set(actorKey(userId), this.engine.getStrokeState());
   }
 
   private queueUpdates(): void {

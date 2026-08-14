@@ -86,6 +86,11 @@ export interface PainterOptions {
   onError?: (error: PainterError) => void;
   /** Optional controlled-operation sink used by collaborative hosts. */
   synchronization?: {
+    /**
+     * Identity stamped on local operations until the server assigns one.
+     * Hosts whose canonical stream is keyed by a server-assigned id must
+     * adopt it with `setLocalActorId` before the first local operation.
+     */
     actorId: string;
     onOperation(operation: import("./operations").LocalPainterOperation): void;
     /** Ephemeral canvas-space hover position, or null after leaving. */
@@ -157,6 +162,18 @@ export interface PainterHandle {
 
   /** Enable or suspend pointer-driven editing without unmounting the painter. */
   setInteractionEnabled(enabled: boolean): void;
+
+  /**
+   * Adopt the identity the server assigned this connection.
+   *
+   * The optimistic fork and the canonical stream have to name the same actor:
+   * stroke continuation, undo attribution and fork reconciliation are all
+   * keyed by it, so a host that lets the two disagree splits one person in
+   * two. Call this as soon as the server announces the id and before any
+   * local operation -- the fork must be empty, since operations already
+   * stamped with the old identity are not re-keyed.
+   */
+  setLocalActorId(actorId: string): void;
 
   /** Apply a server-ordered echo or remote operation in controlled mode. */
   applyCanonicalOperation(

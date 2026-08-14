@@ -133,13 +133,23 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
   const synchronizationHistoryRef = useRef<CanvasHistory | null>(null);
   const appliedCheckpointRef = useRef<PainterCheckpoint | undefined>(undefined);
   const synchronization = config.synchronization;
+  /**
+   * Who this painter is on the canonical stream. Mounting has to name someone
+   * before the server has spoken, so hosts whose stream is keyed by a
+   * server-assigned id replace it through `setLocalActorId` once they know it.
+   */
+  const localActorIdRef = useRef(synchronization?.actorId ?? "");
+  const setLocalActorId = useCallback((actorId: string) => {
+    localActorIdRef.current = actorId;
+    synchronizationHistoryRef.current?.setLocalUserId(actorId);
+  }, []);
   const emitLocalOperation = useCallback(
     (operation: import("./operations").PainterOperation) => {
       if (!synchronization) return;
       operationCounterRef.current += 1;
       const entry = {
-        id: `${synchronization.actorId}:${operationCounterRef.current}`,
-        actorId: synchronization.actorId,
+        id: `${localActorIdRef.current}:${operationCounterRef.current}`,
+        actorId: localActorIdRef.current,
         operation,
         timestamp: Date.now(),
       };
@@ -279,7 +289,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       return;
     }
     const history = new CanvasHistory(drawingEngine, handleHistoryChange);
-    history.setLocalUserId(synchronization.actorId);
+    history.setLocalUserId(localActorIdRef.current);
     synchronizationHistoryRef.current = history;
     return () => {
       if (synchronizationHistoryRef.current === history) {
@@ -564,6 +574,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       undo,
       redo,
       setInteractionEnabled,
+      setLocalActorId,
       applyCanonicalOperation,
       exportCheckpoint,
       applyCheckpoint,
@@ -573,7 +584,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       // The owning mount adapter replaces this with its React-root teardown.
       unmount: () => {},
     }),
-    [save, exportPng, exportReplay, loadImage, undo, redo, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive, compactCanonicalHistory, isSynchronizationSettled],
+    [save, exportPng, exportReplay, loadImage, undo, redo, setLocalActorId, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive, compactCanonicalHistory, isSynchronizationSettled],
   );
 
   // Keep drawingEngine ref in sync

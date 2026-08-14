@@ -356,6 +356,71 @@ describe("local fork reconciliation", () => {
     expect(history.hasPendingLocal).toBe(false);
   });
 
+  it("does not join a new stroke to the last one when a replay rebuilds the fork", async () => {
+    const { engine, history } = setup();
+    // A finished gesture, confirmed by the server
+    local(history, encodeUndoPoint(LOCAL));
+    const first = localStroke(history, 10, 10, 100);
+    await remote(history, encodeUndoPoint(LOCAL), 1);
+    await remote(history, first, 2);
+
+    // A second gesture, far away, still unconfirmed
+    local(history, encodeUndoPoint(LOCAL));
+    localStroke(history, 50, 50, 100);
+
+    engine.ops.length = 0;
+    // A remote stroke over the new gesture forces the fork to be rebuilt
+    await remote(history, stroke(REMOTE, 50, 50, 200), 3);
+
+    // The rebuilt gesture opens on its own dot. Continuing from the previous
+    // gesture's endpoint instead would streak a line across the canvas -- the
+    // failure two people drawing over each other used to produce.
+    expect(engine.ops).toEqual([
+      "line:10,10-10,10:100", // confirmed gesture, replayed
+      "line:50,50-50,50:200", // the remote stroke that forced the replay
+      "line:50,50-50,50:100", // the pending gesture, opening on its own
+    ]);
+  });
+
+  it("treats an actor named as a number and as a string as one person", async () => {
+    // Ids reach this history both ways: the wire hands over a 1-byte session
+    // id, the public envelope a string. A stroke map that told the two apart
+    // would give one person two continuation states, and a gesture would
+    // resume from the one its undo point did not clear.
+    const { engine, history } = setup();
+    history.setLocalUserId(LOCAL); // the number 1
+    const draw = (id: string, x: number, y: number) =>
+      history.handleLocalOperation({
+        id,
+        actorId: String(LOCAL), // ...and the string "1"
+        operation: {
+          kind: "stroke", layer: "foreground", brushSize: 1, brush: "solid",
+          color: { r: 100, g: 0, b: 0, a: 255 }, points: [{ x, y }],
+          mask: { type: 0, r: 0, g: 0, b: 0 },
+        },
+      });
+    const boundary = (id: string) =>
+      history.handleLocalOperation({
+        id, actorId: String(LOCAL), operation: { kind: "undo-boundary" },
+      });
+
+    boundary("b1");
+    draw("s1", 10, 10);
+    boundary("b2");
+    draw("s2", 50, 50);
+
+    engine.ops.length = 0;
+    await remote(history, stroke(REMOTE, 50, 50, 200), 1);
+
+    // Nothing is confirmed yet, so the remote stroke replays first and the
+    // whole fork lands on top of it -- both gestures opening on their own.
+    expect(engine.ops).toEqual([
+      "line:50,50-50,50:200",
+      "line:10,10-10,10:100",
+      "line:50,50-50,50:100",
+    ]);
+  });
+
   it("drops the fork and converges when the same user draws from another connection", async () => {
     const { engine, history } = setup();
     local(history, encodeUndoPoint(LOCAL));

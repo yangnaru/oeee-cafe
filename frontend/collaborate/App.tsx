@@ -184,6 +184,8 @@ export default function App() {
       mode: { kind: "standard" },
       controls: { kind: "toolbox" },
       synchronization: {
+        // Stands in only until WELCOME assigns the session id every canonical
+        // message is keyed by; see `handleWelcome`.
         actorId: userIdRef.current,
         onOperation: onLocalOperation,
         onPointerMove: onLocalPointerMove,
@@ -334,6 +336,22 @@ export default function App() {
     painterRef.current?.isSynchronizationSettled() ?? false,
   []);
 
+  /**
+   * The server's 1-byte session id is the only name this canvas answers to:
+   * every canonical message carries it, so the optimistic fork has to be
+   * stamped with it too. Sending it on to the painter here is what keeps one
+   * person from becoming two -- one identity for the pixels drawn ahead of the
+   * server, another for the echo that confirms them.
+   *
+   * Safe to do at this point: WELCOME precedes the catch-up that gates
+   * drawing, and `onLocalOperation` refuses to emit while `localIdRef` is
+   * null, so no local operation carries the placeholder identity.
+   */
+  const handleWelcome = useCallback((sessionId: number) => {
+    localIdRef.current = sessionId;
+    painterRef.current?.setLocalActorId(String(sessionId));
+  }, []);
+
   const handleSynchronizationError = useCallback((error: Error | null) => {
     setSynchronizationError(error?.message ?? null);
   }, []);
@@ -389,7 +407,7 @@ export default function App() {
     addParticipant, clearParticipants,
     addChatMessage: (message) => chatAddMessageRef.current?.(message),
     handleResetRequest, onReconnectCanvas, onCanvasMessage,
-    onWelcome: (id) => { localIdRef.current = id; },
+    onWelcome: handleWelcome,
     onResetPoint: handleResetPoint,
     verifyCanonicalPosition,
     canResumeCanonicalPosition,
