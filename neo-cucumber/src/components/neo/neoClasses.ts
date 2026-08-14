@@ -284,10 +284,28 @@ export const NEO_BUTTON_ON =
   "bg-(--neo-icon-select) border-t-(--neo-panel-shadow) border-l-(--neo-panel-shadow) " +
   "border-r-(--neo-bevel-light) border-b-(--neo-bevel-light)";
 
-/** The drag handle, which reads as a title bar. */
+/** The strip across a window's top, which reads as a title bar. */
 export const NEO_TITLEBAR =
   "bg-[linear-gradient(to_right,var(--neo-titlebar-from),var(--neo-titlebar-to))] " +
   "text-(--neo-titlebar-text) p-[1px]";
+
+/**
+ * The same strip when it is what you grab to move the window.
+ *
+ * `touch-none` is load bearing: without it a drag on a touch screen scrolls
+ * the page instead of moving the window.
+ */
+export const NEO_TITLEBAR_HANDLE =
+  NEO_TITLEBAR +
+  " flex touch-none items-center gap-[3px] cursor-grab active:cursor-grabbing";
+
+/**
+ * One of the three dots that mark a handle as grabbable. NEO has no such
+ * thing to copy -- nothing of its own moves -- so this is the whole of the
+ * affordance, and it is the reason a window needs no title to be legible.
+ */
+export const NEO_TITLEBAR_DOT =
+  "h-[3px] w-[3px] shrink-0 rounded-full bg-white/70 first:ml-[3px]";
 
 /** A key cap in the shortcut list. */
 export const NEO_KBD =

@@ -8,7 +8,8 @@
     "dist-lib/types/public.d.ts",
     "dist-lib/types/operations.d.ts",
     "dist-lib/types/styles.d.ts",
-    "dist-lib/types/components/neo/neoClasses.d.ts"
+    "dist-lib/types/components/neo/neoClasses.d.ts",
+    "dist-lib/types/utils/windowDrag.d.ts"
   ],
   "main": "./dist-lib/neo-cucumber.js",
   "types": "./dist-lib/types/public.d.ts",

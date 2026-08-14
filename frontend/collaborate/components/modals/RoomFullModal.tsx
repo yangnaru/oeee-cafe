@@ -1,4 +1,5 @@
 import { Trans } from "@lingui/react/macro";
+import { NEO_BUTTON } from "neo-cucumber";
 import { ModalWrapper } from "./ModalWrapper";
 
 export interface RoomFullModalProps {
@@ -17,27 +18,22 @@ export const RoomFullModal = ({
   onRetry,
 }: RoomFullModalProps) => {
   return (
-    <ModalWrapper isOpen={isOpen} className="max-w-md">
-      <h2 className="text-highlight mt-0 mb-4 text-xl font-bold">
-        <Trans>Session Full</Trans>
-      </h2>
-      <p className="mb-6 leading-relaxed">
+    <ModalWrapper
+      isOpen={isOpen}
+      title={<Trans>Session Full</Trans>}
+      className="max-w-md"
+    >
+      <p className="mb-[12px]">
         <Trans>
           This session is full ({currentUserCount}/{maxUsers} users). Only the first{" "}
           {maxUsers} users can join a session.
         </Trans>
       </p>
-      <div className="flex gap-3 justify-center">
-        <button
-          onClick={onGoToLobby}
-          className="bg-highlight text-white border-0 px-6 py-3 rounded cursor-pointer text-base font-sans transition-colors hover:bg-orange-600"
-        >
+      <div className="flex justify-center gap-[6px]">
+        <button onClick={onGoToLobby} className={NEO_BUTTON}>
           <Trans>Go to Lobby</Trans>
         </button>
-        <button
-          onClick={onRetry}
-          className="bg-gray-500 text-white border-0 px-6 py-3 rounded cursor-pointer text-base font-sans transition-colors hover:bg-gray-600"
-        >
+        <button onClick={onRetry} className={NEO_BUTTON}>
           <Trans>Retry</Trans>
         </button>
       </div>

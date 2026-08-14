@@ -1,25 +1,27 @@
 import { Trans } from "@lingui/react/macro";
+import { ModalWrapper } from "./ModalWrapper";
 
 export interface SessionEndingModalProps {
   isOpen: boolean;
 }
 
 export const SessionEndingModal = ({ isOpen }: SessionEndingModalProps) => {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 w-screen h-screen bg-black bg-opacity-80 flex items-center justify-center z-[99999] pointer-events-auto">
-      <div className="bg-main text-main p-8 rounded-xl border-2 border-main text-center max-w-md shadow-2xl">
-        <div className="text-5xl mb-2 animate-spin">🥒</div>
-        <div className="text-lg mb-4 leading-relaxed">
-          <Trans>
-            Session is ending. The drawing is being saved to the gallery...
-          </Trans>
-        </div>
-        <div className="text-sm opacity-80 mt-2">
-          <Trans>You'll be redirected to the post page shortly.</Trans>
-        </div>
+    <ModalWrapper
+      isOpen={isOpen}
+      title={<Trans>Saving...</Trans>}
+      className="max-w-md"
+      zIndex="z-[99999]"
+    >
+      <div className="mb-[8px] animate-spin text-[32px]">🥒</div>
+      <div className="mb-[8px]">
+        <Trans>
+          Session is ending. The drawing is being saved to the gallery...
+        </Trans>
       </div>
-    </div>
+      <div className="text-[11px] opacity-80">
+        <Trans>You'll be redirected to the post page shortly.</Trans>
+      </div>
+    </ModalWrapper>
   );
 };

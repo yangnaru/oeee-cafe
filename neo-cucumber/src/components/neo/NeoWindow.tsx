@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { NEO_PANEL, NEO_TITLEBAR } from "./neoClasses";
+import {
+  NEO_PANEL,
+  NEO_TITLEBAR_DOT,
+  NEO_TITLEBAR_HANDLE,
+} from "./neoClasses";
+import { attachWindowDrag, clampWindowPosition } from "../../utils/windowDrag";
 
 interface NeoWindowProps {
   /** Where it opens. It is draggable afterwards, so this is a starting point. */
@@ -47,48 +52,20 @@ export function NeoWindow({
       : null
   );
   const frameRef = useRef<HTMLDivElement>(null);
-  const dragOffset = useRef<{ x: number; y: number } | null>(null);
+  const handleRef = useRef<HTMLDivElement>(null);
   const resizeOrigin = useRef<{
     left: number;
     top: number;
   } | null>(null);
 
-  /**
-   * One pointer gesture rather than a mouse pair and a touch pair. Pointer
-   * capture keeps the window following even when the cursor outruns it, which
-   * is what a document-level mousemove listener would otherwise work around.
-   */
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    const rect = frameRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  }, []);
-
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      const offset = dragOffset.current;
-      const rect = frameRef.current?.getBoundingClientRect();
-      if (!offset || !rect) return;
-      const next = {
-        x: Math.max(
-          0,
-          Math.min(e.clientX - offset.x, window.innerWidth - rect.width)
-        ),
-        y: Math.max(
-          minimumY,
-          Math.min(e.clientY - offset.y, window.innerHeight - rect.height)
-        ),
-      };
-      setPosition(next);
-    },
-    [minimumY]
-  );
-
-  const endDrag = useCallback(() => {
-    dragOffset.current = null;
-  }, []);
+  // The gesture itself is the package's, so the host's panels move exactly
+  // the way the painter's own windows do.
+  useEffect(() => {
+    const frame = frameRef.current;
+    const handle = handleRef.current;
+    if (!frame || !handle) return;
+    return attachWindowDrag(frame, handle, { minimumY, onPosition: setPosition });
+  }, [minimumY]);
 
   const handleResizeStart = useCallback((e: React.PointerEvent) => {
     const rect = frameRef.current?.getBoundingClientRect();
@@ -132,15 +109,9 @@ export function NeoWindow({
   // Keep the whole frame reachable when the viewport shrinks under it.
   useEffect(() => {
     const onResize = () => {
-      const rect = frameRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setPosition((prev) => ({
-        x: Math.max(0, Math.min(prev.x, window.innerWidth - rect.width)),
-        y: Math.max(
-          minimumY,
-          Math.min(prev.y, window.innerHeight - rect.height)
-        ),
-      }));
+      const frame = frameRef.current;
+      if (!frame) return;
+      setPosition((prev) => clampWindowPosition(prev, frame, minimumY));
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -163,16 +134,10 @@ export function NeoWindow({
         }),
       }}
     >
-      <div
-        className={`${NEO_TITLEBAR} flex touch-none items-center gap-[3px] cursor-grab active:cursor-grabbing`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-      >
-        <span className="ml-[3px] h-[3px] w-[3px] rounded-full bg-white/70" />
-        <span className="h-[3px] w-[3px] rounded-full bg-white/70" />
-        <span className="h-[3px] w-[3px] rounded-full bg-white/70" />
+      <div ref={handleRef} className={NEO_TITLEBAR_HANDLE}>
+        <span className={NEO_TITLEBAR_DOT} />
+        <span className={NEO_TITLEBAR_DOT} />
+        <span className={NEO_TITLEBAR_DOT} />
         {title && (
           <span className="ml-[4px] truncate text-[11px] leading-none">
             {title}

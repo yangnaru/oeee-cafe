@@ -13,8 +13,8 @@ export const LoadingModal = ({
   message = <Trans>Initializing collaboration session...</Trans>,
 }: LoadingModalProps) => {
   return (
-    <ModalWrapper isOpen={isOpen}>
-      <h2 className="text-xl font-bold mb-4">{title}</h2>
+    <ModalWrapper isOpen={isOpen} title={title}>
+      <div className="mb-[8px] animate-spin-slow text-[32px]">🥒</div>
       <p>{message}</p>
     </ModalWrapper>
   );

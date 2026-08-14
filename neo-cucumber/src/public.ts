@@ -28,8 +28,22 @@ export {
   NEO_PANEL,
   NEO_PANEL_BUTTON,
   NEO_TITLEBAR,
+  NEO_TITLEBAR_DOT,
+  NEO_TITLEBAR_HANDLE,
   NEO_WELL,
 } from "./styles";
+
+/**
+ * Dragging a floating panel by its title bar, the way the painter's own
+ * windows move. Framework-neutral: it reports positions and leaves applying
+ * them to the caller.
+ */
+export {
+  attachWindowDrag,
+  clampWindowPosition,
+  type WindowDragOptions,
+  type WindowPosition,
+} from "./utils/windowDrag";
 
 /**
  * Public API for neo-cucumber.

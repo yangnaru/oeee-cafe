@@ -28,6 +28,10 @@ export {
   NEO_PANEL,
   /** The strip across a panel's top, which reads as a title bar. */
   NEO_TITLEBAR,
+  /** The same strip when it is the window's drag handle. */
+  NEO_TITLEBAR_HANDLE,
+  /** One of the three dots that mark a handle as grabbable. */
+  NEO_TITLEBAR_DOT,
   /** A pushable control carrying a label. */
   NEO_BUTTON,
   /** The same control carrying nothing but an icon. */

@@ -59,9 +59,29 @@ import "neo-cucumber/style.css";
 </div>
 ```
 
-`NEO_PANEL`, `NEO_TITLEBAR`, `NEO_BUTTON`, `NEO_ICON_BUTTON`,
-`NEO_PANEL_BUTTON`, `NEO_BUTTON_ON`, `NEO_FIELD`, `NEO_WELL`, and `NEO_KBD`
-are defined in [`src/styles.ts`](src/styles.ts). They name rules carried by
+A host panel that should behave like one of the painter's windows -- a title
+bar with three dots and no title, grabbed to move it -- uses
+`NEO_TITLEBAR_HANDLE`, three `NEO_TITLEBAR_DOT` spans, and `attachWindowDrag`,
+which is the gesture the painter's own windows use:
+
+```ts
+useEffect(
+  () => attachWindowDrag(frameRef.current!, handleRef.current!, {
+    minimumY: 70,
+    onPosition: setPosition,
+  }),
+  [],
+);
+```
+
+It reports positions rather than applying them, so a React host can keep them
+in state and a plain DOM host can write them to `style`. It returns the
+function that detaches it.
+
+`NEO_PANEL`, `NEO_TITLEBAR`, `NEO_TITLEBAR_HANDLE`, `NEO_TITLEBAR_DOT`,
+`NEO_BUTTON`, `NEO_ICON_BUTTON`, `NEO_PANEL_BUTTON`, `NEO_BUTTON_ON`,
+`NEO_FIELD`, `NEO_WELL`, and `NEO_KBD` are defined in
+[`src/styles.ts`](src/styles.ts). They name rules carried by
 `neo-cucumber/style.css`, so importing that stylesheet is the whole
 requirement -- a host that does not use Tailwind gets the same chrome, because
 the utilities are already compiled into it. Colours beyond what these names

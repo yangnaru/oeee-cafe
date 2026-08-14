@@ -237,7 +237,7 @@ export const Chat = ({
                   {msg.type === "system" ||
                   msg.type === "join" ||
                   msg.type === "leave" ? (
-                    <div className="text-[11px] leading-[14px] italic text-main opacity-80">
+                    <div className="text-[11px] leading-[14px] italic opacity-80">
                       {msg.type === "join"
                         ? `${msg.username} joined`
                         : msg.type === "leave"
@@ -249,10 +249,10 @@ export const Chat = ({
                       <span className="shrink-0" style={getUserStyle(msg.username)}>
                         {msg.username}
                       </span>
-                      <span className="shrink-0 text-[10px] leading-[12px] text-main opacity-70">
+                      <span className="shrink-0 text-[10px] leading-[12px] opacity-70">
                         {formatTime(msg.timestamp)}
                       </span>
-                      <span className="min-w-0 break-words text-main">
+                      <span className="min-w-0 break-words">
                         {msg.message}
                       </span>
                     </div>
@@ -283,7 +283,7 @@ export const Chat = ({
             <button
               onClick={sendMessage}
               disabled={connectionState !== "connected" || !inputValue.trim()}
-              className={`${NEO_BUTTON} shrink-0 px-[5px] py-[2px] text-[11px] font-sans disabled:cursor-not-allowed`}
+              className={`${NEO_BUTTON} shrink-0 text-[11px] font-sans disabled:cursor-not-allowed`}
             >
               <Trans>Send</Trans>
             </button>

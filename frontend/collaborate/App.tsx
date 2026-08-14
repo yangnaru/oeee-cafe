@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Trans } from "@lingui/react/macro";
 import {
+  attachWindowDrag,
   mount,
+  NEO_BUTTON,
   NEO_PANEL,
   NEO_PANEL_BUTTON,
-  NEO_TITLEBAR,
+  NEO_TITLEBAR_DOT,
+  NEO_TITLEBAR_HANDLE,
   type CanonicalPainterOperation,
   type LocalPainterOperation,
   type PainterCheckpoint,
@@ -78,6 +80,12 @@ export default function App() {
     phase: "joining", receivedSequence: 0, appliedSequence: 0, targetSequence: null,
   });
   const [synchronizationError, setSynchronizationError] = useState<string | null>(null);
+
+  // The chat window opens where the toolbox's own windows do, and stays below
+  // the session header for the same reason they do.
+  const [chatPosition, setChatPosition] = useState({ x: 16, y: 70 });
+  const chatFrameRef = useRef<HTMLDivElement>(null);
+  const chatHandleRef = useRef<HTMLDivElement>(null);
 
   const painterElementRef = useRef<HTMLDivElement>(null);
   const painterRef = useRef<PainterHandle | null>(null);
@@ -188,6 +196,16 @@ export default function App() {
 
   useEffect(() => () => {
     if (pointerFrameRef.current !== null) cancelAnimationFrame(pointerFrameRef.current);
+  }, []);
+
+  useEffect(() => {
+    const frame = chatFrameRef.current;
+    const handle = chatHandleRef.current;
+    if (!frame || !handle) return;
+    return attachWindowDrag(frame, handle, {
+      minimumY: 70,
+      onPosition: setChatPosition,
+    });
   }, []);
 
   useEffect(() => {
@@ -538,19 +556,26 @@ export default function App() {
       <div className="relative flex-1 overflow-hidden">
         {/*
           The chat is the toolbox's neighbour, so it is one of the painter's
-          own panels: the same face, the same bevel, the same title strip.
-          Those come from neo-cucumber rather than from a copy of its values
-          kept here, which is the only version of this that stays true.
+          own windows: the same face, the same bevel, the same handle, and it
+          moves the same way. All of that comes from neo-cucumber rather than
+          from a copy of its values kept here, which is the only version of
+          this that stays true.
         */}
-        <div className={`${NEO_PANEL} absolute left-4 top-4 z-40 flex h-[469px] w-56 resize flex-col overflow-hidden`}>
-          <div className={`${NEO_TITLEBAR} shrink-0 px-[4px] text-[11px] leading-[14px]`}>
-            <Trans>Chat</Trans>
+        <div
+          ref={chatFrameRef}
+          className={`${NEO_PANEL} fixed z-40 flex h-[469px] w-56 resize flex-col overflow-hidden shadow-lg`}
+          style={{ left: `${chatPosition.x}px`, top: `${chatPosition.y}px` }}
+        >
+          <div ref={chatHandleRef} className={NEO_TITLEBAR_HANDLE}>
+            <span className={NEO_TITLEBAR_DOT} />
+            <span className={NEO_TITLEBAR_DOT} />
+            <span className={NEO_TITLEBAR_DOT} />
           </div>
           <Chat wsRef={wsRef} userId={userIdRef.current} participants={participants} connectionState={connectionState} onChatMessage={() => {}} onAddMessage={(add) => { chatAddMessageRef.current = add; }} />
         </div>
         <div ref={painterElementRef} className="h-full w-full" />
         <ConnectionStatusModal isCatchingUp={isCatchingUp} connectionState={connectionState} syncProgress={syncProgress} synchronizationError={synchronizationError} onReconnect={() => location.reload()} onDownloadPNG={downloadPng} />
-        {isOwner && <button ref={saveButtonRef} type="button" disabled={isSaving} onClick={() => void saveCollaborativeDrawing()} className="absolute bottom-4 right-12 z-50 rounded bg-green-700 px-4 py-2 text-white disabled:opacity-50">{isSaving ? "Saving…" : "Save to gallery"}</button>}
+        {isOwner && <button ref={saveButtonRef} type="button" disabled={isSaving} onClick={() => void saveCollaborativeDrawing()} className={`${NEO_BUTTON} absolute bottom-4 right-12 z-50`}>{isSaving ? "Saving…" : "Save to gallery"}</button>}
         <SessionEndingModal isOpen={sessionEnding} />
       </div>
     </div>

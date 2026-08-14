@@ -1,5 +1,6 @@
 import { Trans } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
+import { NEO_BUTTON, NEO_PANEL } from "neo-cucumber";
 
 interface CollaborationMeta {
   title: string;
@@ -43,49 +44,47 @@ export const SessionHeader = ({
   };
 
   return (
-    <div className="bg-main border-b border-main px-4 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <a
-          href="/collaborate"
-          className="text-2xl hover:opacity-70 transition-opacity"
-        >
+    // The bar the painter's windows float over, in the painter's own chrome.
+    <div className={`${NEO_PANEL} flex shrink-0 items-center justify-between gap-[8px] px-[6px] py-[4px]`}>
+      <div className="flex min-w-0 items-center gap-[8px]">
+        <a href="/collaborate" className="text-[18px] hover:opacity-70">
           🥒
         </a>
-        <h1 className="text-xl font-bold text-main m-0">{canvasMeta.title}</h1>
-        <div className="text-sm text-main opacity-70">
+        <h1 className="m-0 truncate text-[14px] font-bold">{canvasMeta.title}</h1>
+        <div className="shrink-0 text-[11px] opacity-70">
           <Trans>by</Trans> @{canvasMeta.ownerLoginName}
         </div>
       </div>
-      <div className="flex items-center gap-2 text-sm text-main opacity-70">
+      <div className="flex shrink-0 items-center gap-[6px] text-[11px]">
         <button
           onClick={handleShare}
-          className="flex items-center gap-1 px-2 py-1 rounded hover:bg-main hover:bg-opacity-20 transition-colors text-main opacity-70 hover:opacity-100"
+          className={`${NEO_BUTTON} flex items-center gap-[3px]`}
           title="Share this session"
         >
-          <Icon icon="material-symbols:upload" width={16} height={16} />
+          <Icon icon="material-symbols:upload" width={14} height={14} />
           <Trans>Share</Trans>
         </button>
         {connectionState === "connected" && !isCatchingUp && (
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+          <div className="flex items-center gap-[3px] opacity-80">
+            <div className="h-[6px] w-[6px] bg-green-500 rounded-full"></div>
             <Trans>Connected</Trans>
           </div>
         )}
         {connectionState === "connecting" && (
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+          <div className="flex items-center gap-[3px] opacity-80">
+            <div className="h-[6px] w-[6px] bg-yellow-500 rounded-full animate-pulse"></div>
             <Trans>Connecting</Trans>
           </div>
         )}
         {connectionState === "disconnected" && !isCatchingUp && (
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+          <div className="flex items-center gap-[3px] opacity-80">
+            <div className="h-[6px] w-[6px] bg-red-500 rounded-full"></div>
             <Trans>Disconnected</Trans>
           </div>
         )}
         {isCatchingUp && (
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+          <div className="flex items-center gap-[3px] opacity-80">
+            <div className="h-[6px] w-[6px] bg-blue-500 rounded-full animate-pulse"></div>
             <Trans>Loading</Trans>
           </div>
         )}

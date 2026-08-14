@@ -1,4 +1,5 @@
 import { Trans } from "@lingui/react/macro";
+import { NEO_BUTTON } from "neo-cucumber";
 import { ModalWrapper } from "./ModalWrapper";
 
 export interface InitializationErrorModalProps {
@@ -13,15 +14,9 @@ export const InitializationErrorModal = ({
   onRetry,
 }: InitializationErrorModalProps) => {
   return (
-    <ModalWrapper isOpen={isOpen}>
-      <h2 className="text-highlight mt-0 mb-4 text-xl font-bold">
-        <Trans>Initialization Failed</Trans>
-      </h2>
-      <p className="mb-6 leading-relaxed">{errorMessage}</p>
-      <button
-        onClick={onRetry}
-        className="bg-highlight text-white border-0 px-6 py-3 rounded cursor-pointer text-base font-sans transition-colors hover:bg-orange-600"
-      >
+    <ModalWrapper isOpen={isOpen} title={<Trans>Initialization Failed</Trans>}>
+      <p className="mb-[12px] break-words">{errorMessage}</p>
+      <button onClick={onRetry} className={NEO_BUTTON}>
         <Trans>Retry</Trans>
       </button>
     </ModalWrapper>

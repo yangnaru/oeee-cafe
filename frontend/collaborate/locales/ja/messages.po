@@ -13,41 +13,42 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Plural-Forms: \n"
 
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:16
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:15
 msgid "Authentication Failed"
 msgstr "認証に失敗しました"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:56
+#: ../frontend/collaborate/components/SessionHeader.tsx:55
 msgid "by"
 msgstr "作成者:"
 
 #: ../frontend/collaborate/App.tsx:547
-msgid "Chat"
-msgstr "チャット"
+#~ msgid "Chat"
+#~ msgstr "チャット"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:71
+#: ../frontend/collaborate/components/SessionHeader.tsx:70
 msgid "Connected"
 msgstr "接続済み"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:77
+#: ../frontend/collaborate/components/SessionHeader.tsx:76
 msgid "Connecting"
 msgstr "接続中"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:34
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:75
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:41
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:63
 msgid "Connecting..."
 msgstr "接続中..."
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:53
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:72
 msgid "Connection lost. Your work is saved locally."
 msgstr "接続が失われました。作業はローカルに保存されました。"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:83
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:64
+#: ../frontend/collaborate/components/SessionHeader.tsx:82
 msgid "Disconnected"
 msgstr "切断済み"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:66
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:142
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:79
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:122
 msgid "Download PNG"
 msgstr "PNG をダウンロード"
 
@@ -55,12 +56,12 @@ msgstr "PNG をダウンロード"
 msgid "Failed to save session. Please try downloading as PNG instead."
 msgstr "セッションの保存に失敗しました。代わりに PNG としてダウンロードしてください。"
 
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:28
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:35
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:23
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:34
 msgid "Go to Lobby"
 msgstr "ロビーに戻る"
 
-#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:18
+#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:17
 msgid "Initialization Failed"
 msgstr "初期化に失敗しました"
 
@@ -68,11 +69,11 @@ msgstr "初期化に失敗しました"
 msgid "Initializing collaboration session..."
 msgstr "コラボレーションセッションを初期化中..."
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:89
+#: ../frontend/collaborate/components/SessionHeader.tsx:88
 msgid "Loading"
 msgstr "読み込み中"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:34
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:41
 #: ../frontend/collaborate/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
 msgstr "読み込み中..."
@@ -82,69 +83,70 @@ msgstr "読み込み中..."
 #~ msgstr "読み込み中..."
 
 #. placeholder {0}: participants.size
-#: ../frontend/collaborate/components/Chat.tsx:195
-#: ../frontend/collaborate/components/Chat.tsx:196
+#: ../frontend/collaborate/components/Chat.tsx:206
+#: ../frontend/collaborate/components/Chat.tsx:207
 msgid "Participants ({0})"
 msgstr ""
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:60
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:76
 msgid "Reconnect"
 msgstr "再接続"
 
-#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:25
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:41
+#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:20
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:37
 msgid "Retry"
 msgstr "再試行"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:163
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:140
 msgid "Return to Lobby"
 msgstr "ロビーに戻る"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:154
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:132
 msgid "Save as PNG"
 msgstr "PNG として保存"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:122
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:111
 msgid "Save to Gallery"
 msgstr "ギャラリーに保存"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:113
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:12
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:106
 msgid "Saving..."
 msgstr "保存中..."
 
-#: ../frontend/collaborate/components/Chat.tsx:278
+#: ../frontend/collaborate/components/Chat.tsx:288
 msgid "Send"
 msgstr "送信"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:82
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:70
 msgid "Session Expired"
 msgstr "セッションが期限切れです"
 
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:22
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:23
 msgid "Session Full"
 msgstr "セッション満員"
 
-#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:15
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:18
 msgid "Session is ending. The drawing is being saved to the gallery..."
 msgstr "セッションが終了します。描画をギャラリーに保存中..."
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:66
+#: ../frontend/collaborate/components/SessionHeader.tsx:65
 msgid "Share"
 msgstr "共有"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:52
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:71
 msgid "The shared drawing could not be synchronized safely. Your current canvas is still available to download."
 msgstr ""
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:85
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
 msgstr "非アクティブのためコラボレーションセッションが終了しました。オーナーとして、ギャラリーに保存するか PNG としてダウンロードできます。"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:87
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:84
 msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
 msgstr "非アクティブのためコラボレーションセッションが終了しました。セッションはすでにギャラリーに保存されていますが、PNG としてダウンロードできます。"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:89
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:86
 msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 msgstr "非アクティブのためコラボレーションセッションが終了しました。退出前にローカルに PNG として保存できます。"
 
@@ -152,18 +154,18 @@ msgstr "非アクティブのためコラボレーションセッションが終
 msgid "This session has already been saved. You can only download it as a PNG."
 msgstr "このセッションはすでに保存されています。PNG としてのみダウンロードできます。"
 
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:25
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:27
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "このセッションは満員です（{currentUserCount}/{maxUsers}ユーザー）。最初の{maxUsers}ユーザーのみがセッションに参加できます。"
 
-#: ../frontend/collaborate/components/Chat.tsx:269
+#: ../frontend/collaborate/components/Chat.tsx:279
 msgid "Type a message..."
 msgstr "メッセージを入力..."
 
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:19
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:17
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "セッションを認証できません。セッションが存在しないか、期限切れです。ロビーに戻ってください。"
 
-#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:20
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:23
 msgid "You'll be redirected to the post page shortly."
 msgstr "まもなく投稿ページにリダイレクトされます。"

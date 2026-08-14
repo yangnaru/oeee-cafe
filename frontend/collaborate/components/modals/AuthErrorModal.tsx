@@ -1,4 +1,5 @@
 import { Trans } from "@lingui/react/macro";
+import { NEO_BUTTON } from "neo-cucumber";
 import { ModalWrapper } from "./ModalWrapper";
 
 export interface AuthErrorModalProps {
@@ -11,20 +12,14 @@ export const AuthErrorModal = ({
   onGoToLobby,
 }: AuthErrorModalProps) => {
   return (
-    <ModalWrapper isOpen={isOpen}>
-      <h2 className="text-highlight mt-0 mb-4 text-xl font-bold">
-        <Trans>Authentication Failed</Trans>
-      </h2>
-      <p className="mb-6 leading-relaxed">
+    <ModalWrapper isOpen={isOpen} title={<Trans>Authentication Failed</Trans>}>
+      <p className="mb-[12px]">
         <Trans>
           Unable to authenticate your session. Either the session
           doesn't exist, or it has expired. Please return to the lobby.
         </Trans>
       </p>
-      <button
-        onClick={onGoToLobby}
-        className="bg-highlight text-white border-0 px-6 py-3 rounded cursor-pointer text-base font-sans transition-colors hover:bg-orange-600"
-      >
+      <button onClick={onGoToLobby} className={NEO_BUTTON}>
         <Trans>Go to Lobby</Trans>
       </button>
     </ModalWrapper>

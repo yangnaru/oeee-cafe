@@ -13,41 +13,42 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Plural-Forms: \n"
 
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:16
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:15
 msgid "Authentication Failed"
 msgstr "인증 실패"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:56
+#: ../frontend/collaborate/components/SessionHeader.tsx:55
 msgid "by"
 msgstr "작성자:"
 
 #: ../frontend/collaborate/App.tsx:547
-msgid "Chat"
-msgstr "채팅"
+#~ msgid "Chat"
+#~ msgstr "채팅"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:71
+#: ../frontend/collaborate/components/SessionHeader.tsx:70
 msgid "Connected"
 msgstr "연결됨"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:77
+#: ../frontend/collaborate/components/SessionHeader.tsx:76
 msgid "Connecting"
 msgstr "연결 중"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:34
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:75
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:41
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:63
 msgid "Connecting..."
 msgstr "연결 중..."
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:53
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:72
 msgid "Connection lost. Your work is saved locally."
 msgstr "연결이 끊어졌습니다. 작업이 로컬에 저장되었습니다."
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:83
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:64
+#: ../frontend/collaborate/components/SessionHeader.tsx:82
 msgid "Disconnected"
 msgstr "연결 끊어짐"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:66
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:142
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:79
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:122
 msgid "Download PNG"
 msgstr "PNG 다운로드"
 
@@ -55,12 +56,12 @@ msgstr "PNG 다운로드"
 msgid "Failed to save session. Please try downloading as PNG instead."
 msgstr "세션 저장에 실패했습니다. 대신 PNG로 다운로드해 보세요."
 
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:28
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:35
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:23
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:34
 msgid "Go to Lobby"
 msgstr "로비로 가기"
 
-#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:18
+#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:17
 msgid "Initialization Failed"
 msgstr "초기화 실패"
 
@@ -68,11 +69,11 @@ msgstr "초기화 실패"
 msgid "Initializing collaboration session..."
 msgstr "협업 세션 초기화 중..."
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:89
+#: ../frontend/collaborate/components/SessionHeader.tsx:88
 msgid "Loading"
 msgstr "로딩 중"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:34
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:41
 #: ../frontend/collaborate/components/modals/LoadingModal.tsx:12
 msgid "Loading..."
 msgstr "로딩 중..."
@@ -82,69 +83,70 @@ msgstr "로딩 중..."
 #~ msgstr "로딩 중..."
 
 #. placeholder {0}: participants.size
-#: ../frontend/collaborate/components/Chat.tsx:195
-#: ../frontend/collaborate/components/Chat.tsx:196
+#: ../frontend/collaborate/components/Chat.tsx:206
+#: ../frontend/collaborate/components/Chat.tsx:207
 msgid "Participants ({0})"
 msgstr ""
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:60
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:76
 msgid "Reconnect"
 msgstr "재연결"
 
-#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:25
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:41
+#: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:20
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:37
 msgid "Retry"
 msgstr "다시 시도"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:163
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:140
 msgid "Return to Lobby"
 msgstr "로비로 돌아가기"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:154
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:132
 msgid "Save as PNG"
 msgstr "PNG로 저장"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:122
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:111
 msgid "Save to Gallery"
 msgstr "갤러리에 저장"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:113
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:12
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:106
 msgid "Saving..."
 msgstr "저장 중..."
 
-#: ../frontend/collaborate/components/Chat.tsx:278
+#: ../frontend/collaborate/components/Chat.tsx:288
 msgid "Send"
 msgstr "전송"
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:82
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:70
 msgid "Session Expired"
 msgstr "세션 만료"
 
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:22
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:23
 msgid "Session Full"
 msgstr "세션 만석"
 
-#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:15
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:18
 msgid "Session is ending. The drawing is being saved to the gallery..."
 msgstr "세션이 종료됩니다. 그림을 갤러리에 저장 중..."
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:66
+#: ../frontend/collaborate/components/SessionHeader.tsx:65
 msgid "Share"
 msgstr "공유"
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:52
+#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:71
 msgid "The shared drawing could not be synchronized safely. Your current canvas is still available to download."
 msgstr ""
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:88
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:85
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."
 msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 소유자로서 갤러리에 저장하거나 PNG로 다운로드할 수 있습니다."
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:87
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:84
 msgid "This collaborative session has ended due to inactivity. The session has already been saved to the gallery, but you can download it as a PNG."
 msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 세션이 이미 갤러리에 저장되었지만 PNG로 다운로드할 수 있습니다."
 
-#: ../frontend/collaborate/components/SessionExpiredModal.tsx:89
+#: ../frontend/collaborate/components/SessionExpiredModal.tsx:86
 msgid "This collaborative session has ended due to inactivity. You can save your work locally as a PNG before leaving."
 msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 떠나기 전에 작업을 PNG로 로컬에 저장할 수 있습니다."
 
@@ -152,18 +154,18 @@ msgstr "비활성으로 인해 이 협업 세션이 종료되었습니다. 떠�
 msgid "This session has already been saved. You can only download it as a PNG."
 msgstr "이 세션은 이미 저장되었습니다. PNG로만 다운로드할 수 있습니다."
 
-#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:25
+#: ../frontend/collaborate/components/modals/RoomFullModal.tsx:27
 msgid "This session is full ({currentUserCount}/{maxUsers} users). Only the first {maxUsers} users can join a session."
 msgstr "이 세션이 가득 찼습니다 ({currentUserCount}/{maxUsers}명). 처음 {maxUsers}명의 사용자만 세션에 참여할 수 있습니다."
 
-#: ../frontend/collaborate/components/Chat.tsx:269
+#: ../frontend/collaborate/components/Chat.tsx:279
 msgid "Type a message..."
 msgstr "메시지 입력..."
 
-#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:19
+#: ../frontend/collaborate/components/modals/AuthErrorModal.tsx:17
 msgid "Unable to authenticate your session. Either the session doesn't exist, or it has expired. Please return to the lobby."
 msgstr "세션을 인증할 수 없습니다. 세션이 존재하지 않거나 만료되었습니다. 로비로 돌아가 주세요."
 
-#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:20
+#: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:23
 msgid "You'll be redirected to the post page shortly."
 msgstr "곧 게시물 페이지로 리디렉션됩니다."
