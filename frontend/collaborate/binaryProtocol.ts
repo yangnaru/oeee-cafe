@@ -66,6 +66,8 @@ export const MSG_TYPE = {
   JOIN: 0x01,
   SNAPSHOT: 0x02,
   CHAT: 0x03,
+  // Announces the accepted replay start and target before history arrives.
+  REPLAY_START: 0x05,
   LAYERS: 0x06,
   END_SESSION: 0x07,
   SESSION_EXPIRED: 0x08,
@@ -783,6 +785,13 @@ export interface CaughtUpMessage {
   lastSeq: number;
 }
 
+export interface ReplayStartMessage {
+  type: "replayStart";
+  historyId: string;
+  afterSeq: number;
+  lastSeq: number;
+}
+
 export interface UndoPointMessage {
   type: "undoPoint";
   userId: number;
@@ -831,6 +840,7 @@ export type DecodedMessage =
   | ResetRequestMessage
   | ResetPointMessage
   | CaughtUpMessage
+  | ReplayStartMessage
   | UndoPointMessage
   | UndoMessage
   | StrokeMessage
@@ -1034,6 +1044,15 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       return {
         type: "resetRequest",
         timestamp: readUint64LE(buffer, 1),
+      };
+
+    case MSG_TYPE.REPLAY_START:
+      if (buffer.length < 33) return null;
+      return {
+        type: "replayStart",
+        historyId: bytesToUuid(buffer.slice(1, 17)),
+        afterSeq: readUint64LE(buffer, 17),
+        lastSeq: readUint64LE(buffer, 25),
       };
 
     case MSG_TYPE.RESET_POINT:

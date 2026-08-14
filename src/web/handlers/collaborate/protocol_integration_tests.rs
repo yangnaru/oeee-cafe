@@ -389,6 +389,30 @@ async fn reconnect_replays_missed_operations_once_and_reports_exact_position() {
 }
 
 #[tokio::test]
+async fn recent_chat_is_bounded_and_removed_with_the_room() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let harness = start_harness().await;
+        let store = RedisMessageStore::new(harness.pool.clone());
+        for index in 0..105u8 {
+            store
+                .append_chat_message(harness.room, &[0x03, index])
+                .await
+                .expect("append recent chat");
+        }
+
+        let chat = store.get_recent_chat(harness.room).await.expect("recent chat");
+        assert_eq!(chat.len(), 100);
+        assert_eq!(chat.first(), Some(&vec![0x03, 5]));
+        assert_eq!(chat.last(), Some(&vec![0x03, 104]));
+
+        store.cleanup_room(harness.room).await.expect("cleanup room");
+        assert!(store.get_recent_chat(harness.room).await.unwrap().is_empty());
+    })
+    .await
+    .expect("recent chat scenario timed out");
+}
+
+#[tokio::test]
 async fn checkpoint_compaction_keeps_operations_that_race_after_its_base() {
     tokio::time::timeout(Duration::from_secs(10), async {
         let harness = start_harness().await;

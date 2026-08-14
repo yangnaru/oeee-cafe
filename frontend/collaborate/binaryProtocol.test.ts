@@ -52,6 +52,20 @@ describe("canonical history positions", () => {
       lastSeq: 99,
     });
   });
+
+  it("decodes the replay range before catch-up begins", () => {
+    const wire = new Uint8Array(33);
+    wire[0] = MSG_TYPE.REPLAY_START;
+    wire.set(historyBytes, 1);
+    new DataView(wire.buffer).setBigUint64(17, 40n, true);
+    new DataView(wire.buffer).setBigUint64(25, 99n, true);
+    expect(decodeMessage(wire.buffer)).toEqual({
+      type: "replayStart",
+      historyId: "12345678-1234-5678-9abc-def012345678",
+      afterSeq: 40,
+      lastSeq: 99,
+    });
+  });
 });
 
 describe("the public painter operation adapter", () => {

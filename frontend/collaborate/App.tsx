@@ -25,7 +25,8 @@ import {
   encodeSnapshot,
   type DecodedMessage,
 } from "./binaryProtocol";
-import { useWebSocket, type ConnectionState } from "./hooks/useWebSocket";
+import { useWebSocket, type ConnectionState, type SyncProgress } from "./hooks/useWebSocket";
+import { useRemoteCursors } from "./hooks/useRemoteCursors";
 import type { CollaborationMeta, Participant } from "./types";
 
 const getSessionId = (): string => {
@@ -67,6 +68,11 @@ export default function App() {
   const [roomFullError, setRoomFullError] = useState<{ currentUserCount: number; maxUsers: number } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [sessionEnding, setSessionEnding] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress>({
+    phase: "joining", receivedSequence: 0, appliedSequence: 0, targetSequence: null,
+  });
+  const [synchronizationError, setSynchronizationError] = useState<string | null>(null);
 
   const painterElementRef = useRef<HTMLDivElement>(null);
   const painterRef = useRef<PainterHandle | null>(null);
@@ -86,6 +92,9 @@ export default function App() {
   const canonicalOperationsRef = useRef(new Map<number, CanonicalPainterOperation>());
   const snapshotPairsRef = useRef(new Map<number, Partial<Pick<PainterCheckpoint, "background" | "foreground">>>());
   const canonicalDrainRef = useRef<Promise<void>>(Promise.resolve());
+  const { createOrUpdateCursor, hideCursor, clearCursors } = useRemoteCursors(
+    painterElementRef, localIdRef,
+  );
   const chatAddMessageRef = useRef<((message: {
     id: string; type: "join" | "leave" | "user"; userId: string;
     username: string; message: string; timestamp: number;
@@ -133,9 +142,9 @@ export default function App() {
 
   useEffect(() => {
     painterRef.current?.setInteractionEnabled(
-      connectionState === "connected" && !isCatchingUp,
+      connectionState === "connected" && !isCatchingUp && !sessionEnding && !sessionExpired,
     );
-  }, [connectionState, isCatchingUp]);
+  }, [connectionState, isCatchingUp, sessionEnding, sessionExpired]);
 
   const drainCanonical = useCallback(async () => {
     canonicalDrainRef.current = canonicalDrainRef.current.then(async () => {
@@ -210,10 +219,18 @@ export default function App() {
     await drainCanonical();
   }, [drainCanonical]);
 
-  const onReconnectCanvas = useCallback(async (reconnecting: boolean) => {
+  const onReconnectCanvas = useCallback(async (
+    reconnecting: boolean, resumeSequence: number | null,
+  ) => {
+    clearCursors();
     pendingIdsRef.current.clear();
     canonicalOperationsRef.current.clear();
     snapshotPairsRef.current.clear();
+    if (reconnecting && resumeSequence !== null) {
+      expectedSequenceRef.current = resumeSequence + 1;
+      appliedSequenceRef.current = resumeSequence;
+      return;
+    }
     expectedSequenceRef.current = 1;
     appliedSequenceRef.current = 0;
     if (!reconnecting || !canvasMeta || !painterRef.current) return;
@@ -223,7 +240,7 @@ export default function App() {
       background: layer, foreground: layer,
     };
     await painterRef.current.applyCheckpoint(checkpoint);
-  }, [canvasMeta]);
+  }, [canvasMeta, clearCursors]);
 
   const handleResetPoint = useCallback(async (baseSequence: number, sequence?: number) => {
     const painter = painterRef.current;
@@ -240,6 +257,24 @@ export default function App() {
     await drainCanonical();
     return appliedSequenceRef.current >= lastSeqRef.current;
   }, [drainCanonical]);
+
+  const canResumeCanonicalPosition = useCallback((): boolean =>
+    painterRef.current?.isSynchronizationSettled() ?? false,
+  []);
+
+  const handleSynchronizationError = useCallback((error: Error | null) => {
+    setSynchronizationError(error?.message ?? null);
+  }, []);
+
+  const handleSessionEnded = useCallback((postUrl: string) => {
+    setSessionEnding(true);
+    window.location.assign(postUrl);
+  }, []);
+
+  const handleSessionExpired = useCallback(() => {
+    setSessionExpired(true);
+    painterRef.current?.setInteractionEnabled(false);
+  }, []);
 
   const handleResetRequest = useCallback(async () => {
     const painter = painterRef.current;
@@ -276,13 +311,18 @@ export default function App() {
     participantsRef, localIdRef, lastSeqRef, shouldConnectRef,
     catchupTimeoutRef, processingMessageRef, isCatchingUpRef,
     setConnectionState, setIsCatchingUp,
-    createOrUpdateCursor: () => {}, hideCursor: () => {},
+    setSyncProgress,
+    onSynchronizationError: handleSynchronizationError,
+    createOrUpdateCursor, hideCursor,
     addParticipant, clearParticipants,
     addChatMessage: (message) => chatAddMessageRef.current?.(message),
     handleResetRequest, onReconnectCanvas, onCanvasMessage,
     onWelcome: (id) => { localIdRef.current = id; },
     onResetPoint: handleResetPoint,
     verifyCanonicalPosition,
+    canResumeCanonicalPosition,
+    onSessionEnded: handleSessionEnded,
+    onSessionExpired: handleSessionExpired,
   });
 
   const initializeApp = useCallback(async () => {
@@ -332,20 +372,45 @@ export default function App() {
   const saveCollaborativeDrawing = useCallback(async () => {
     if (isSaving || !painterRef.current) return;
     setIsSaving(true);
+    setSessionEnding(true);
+    painterRef.current.setInteractionEnabled(false);
     try {
+      const socket = wsRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        throw new Error("Reconnect before saving the collaborative session");
+      }
+      for (let attempt = 0; attempt < 40; attempt++) {
+        await drainCanonical();
+        if (
+          painterRef.current.isSynchronizationSettled() &&
+          appliedSequenceRef.current >= lastSeqRef.current
+        ) break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      if (
+        !painterRef.current.isSynchronizationSettled() ||
+        appliedSequenceRef.current < lastSeqRef.current
+      ) {
+        throw new Error("The shared drawing is still synchronizing; please try again");
+      }
       const png = await painterRef.current.exportPng();
       const response = await fetch(`/collaborate/${getSessionId()}`, {
         method: "POST", body: png, headers: { "Content-Type": "image/png" }, credentials: "include",
       });
       if (!response.ok) throw new Error(`Failed to save drawing: ${response.status}`);
       const result = await response.json();
-      wsRef.current?.send(encodeEndSession(userIdRef.current, result.post_url));
-      window.location.href = result.post_url;
+      if (socket.readyState !== WebSocket.OPEN) {
+        throw new Error("The session was saved, but the connection closed before finalization; reload to continue");
+      }
+      // The server echoes END_SESSION only after accepting the authoritative
+      // lifecycle transition. Navigation happens in handleSessionEnded.
+      socket.send(encodeEndSession(userIdRef.current, result.post_url));
     } catch (error) {
       alert(error instanceof Error ? error.message : String(error));
       setIsSaving(false);
+      setSessionEnding(false);
     }
-  }, [isSaving, wsRef]);
+  }, [drainCanonical, isSaving, wsRef]);
 
   const isOwner = canvasMeta?.ownerId === userIdRef.current;
 
@@ -358,14 +423,14 @@ export default function App() {
       {canvasMeta && <SessionHeader canvasMeta={canvasMeta} connectionState={connectionState} isCatchingUp={isCatchingUp} />}
       <div className="relative flex-1 overflow-hidden">
         <div className="absolute left-4 top-4 z-40 h-[469px] w-56 resize overflow-auto border border-main bg-main">
-          <Chat wsRef={wsRef} userId={userIdRef.current} participants={participants} onChatMessage={() => {}} onAddMessage={(add) => { chatAddMessageRef.current = add; }} />
+          <Chat wsRef={wsRef} userId={userIdRef.current} participants={participants} connectionState={connectionState} onChatMessage={() => {}} onAddMessage={(add) => { chatAddMessageRef.current = add; }} />
         </div>
         <div ref={painterElementRef} className="h-full w-full" />
-        <ConnectionStatusModal isCatchingUp={isCatchingUp} connectionState={connectionState} onReconnect={() => location.reload()} onDownloadPNG={downloadPng} />
+        <ConnectionStatusModal isCatchingUp={isCatchingUp} connectionState={connectionState} syncProgress={syncProgress} synchronizationError={synchronizationError} onReconnect={() => location.reload()} onDownloadPNG={downloadPng} />
         {isOwner && <button type="button" disabled={isSaving} onClick={() => void saveCollaborativeDrawing()} className="absolute bottom-4 right-12 z-50 rounded bg-green-700 px-4 py-2 text-white disabled:opacity-50">{isSaving ? "Saving…" : "Save to gallery"}</button>}
-        <SessionEndingModal isOpen={false} />
+        <SessionEndingModal isOpen={sessionEnding} />
       </div>
     </div>
-    <SessionExpiredModal isOpen={sessionExpired} isOwner={!!isOwner} canvasMeta={canvasMeta} isSaving={isSaving} onClose={() => setSessionExpired(false)} onSaveToGallery={saveCollaborativeDrawing} onDownloadPNG={downloadPng} onReturnToLobby={() => { location.href = "/collaborate"; }} />
+    <SessionExpiredModal isOpen={sessionExpired} isOwner={!!isOwner} canvasMeta={canvasMeta} isSaving={isSaving} onClose={() => {}} onSaveToGallery={saveCollaborativeDrawing} onDownloadPNG={downloadPng} onReturnToLobby={() => { location.href = "/collaborate"; }} />
   </>;
 }

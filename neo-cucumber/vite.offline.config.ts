@@ -5,6 +5,12 @@ import { lingui } from "@lingui/vite-plugin";
 import { resolve } from "node:path";
 
 export default defineConfig({
+  // Library mode does not replace CommonJS environment guards automatically.
+  // The offline bundle runs directly in browsers, where `process` does not
+  // exist, so select production React/Lingui branches at build time.
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
   resolve: {
     alias: {
       "neo-cucumber": resolve(import.meta.dirname, "src/public.ts"),

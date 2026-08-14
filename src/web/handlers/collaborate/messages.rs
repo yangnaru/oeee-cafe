@@ -34,6 +34,7 @@ pub enum MessageType {
     Join = 0x01,
     Snapshot = 0x02,
     Chat = 0x03,
+    ReplayStart = 0x05,
     Layers = 0x06,
     EndSession = 0x07,
     SessionExpired = 0x08,
@@ -197,6 +198,7 @@ pub fn parse_message_type(data: &[u8]) -> Option<MessageType> {
         0x01 => Some(MessageType::Join),
         0x02 => Some(MessageType::Snapshot),
         0x03 => Some(MessageType::Chat),
+        0x05 => Some(MessageType::ReplayStart),
         0x06 => Some(MessageType::Layers),
         0x07 => Some(MessageType::EndSession),
         0x08 => Some(MessageType::SessionExpired),
@@ -426,7 +428,12 @@ pub async fn handle_end_session_message(data: &[u8], ctx: EndSessionContext<'_>)
 
                         // Set collaborative_sessions.ended_at
                         if let Err(e) = db::end_session(ctx.db, ctx.room_uuid).await {
+                            // END_SESSION is the client's acknowledgement. Do
+                            // not publish it unless the authoritative database
+                            // transition succeeded, or every participant would
+                            // leave a session that is still open server-side.
                             error!("Failed to update session ended_at: {}", e);
+                            return;
                         }
 
                         // Clean up Redis message history when session is explicitly ended

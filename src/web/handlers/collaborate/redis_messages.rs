@@ -13,7 +13,9 @@ const MESSAGE_HISTORY_TTL: u64 = 3600;
 const MESSAGE_HISTORY_PREFIX: &str = "oeee:msg_history:v4:";
 const MESSAGE_SEQ_PREFIX: &str = "oeee:msg_seq:v4:";
 const MESSAGE_HISTORY_ID_PREFIX: &str = "oeee:msg_history_id:v4:";
+const CHAT_HISTORY_PREFIX: &str = "oeee:chat_history:v1:";
 const MAX_REDIS_MESSAGES: usize = 50000;
+const MAX_CHAT_MESSAGES: usize = 100;
 
 /// Atomically assigns the next per-room sequence number, appends the message to
 /// the history list, and publishes the envelope (with the sequence number
@@ -60,6 +62,10 @@ fn history_id_key(room_uuid: Uuid) -> String {
     format!("{}{}", MESSAGE_HISTORY_ID_PREFIX, room_uuid)
 }
 
+fn chat_history_key(room_uuid: Uuid) -> String {
+    format!("{}{}", CHAT_HISTORY_PREFIX, room_uuid)
+}
+
 /// Splits a stored "{seq}:{payload}" entry. Returns None for malformed entries.
 fn decode_entry(entry: &[u8]) -> Option<(u64, &[u8])> {
     let sep = entry.iter().position(|&b| b == b':')?;
@@ -70,6 +76,30 @@ fn decode_entry(entry: &[u8]) -> Option<(u64, &[u8])> {
 impl RedisMessageStore {
     pub fn new(pool: RedisPool) -> Self {
         Self { pool }
+    }
+
+    pub async fn append_chat_message(
+        &self,
+        room_uuid: Uuid,
+        payload: &[u8],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn = self.pool.get().await?;
+        let key = chat_history_key(room_uuid);
+        redis::pipe()
+            .rpush(&key, payload)
+            .ltrim(&key, -(MAX_CHAT_MESSAGES as isize), -1)
+            .expire(&key, MESSAGE_HISTORY_TTL as i64)
+            .query_async::<()>(&mut *conn)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_recent_chat(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<Vec<Vec<u8>>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn = self.pool.get().await?;
+        Ok(conn.lrange(chat_history_key(room_uuid), 0, -1).await?)
     }
 
     pub async fn sequence_and_publish(
@@ -297,6 +327,7 @@ return #kept
                 history_key(room_uuid),
                 seq_key(room_uuid),
                 history_id_key(room_uuid),
+                chat_history_key(room_uuid),
                 format!("{}{}", super::redis_state::USER_ID_PREFIX, room_uuid),
             ])
             .await?;

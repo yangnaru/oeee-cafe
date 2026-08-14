@@ -1,23 +1,25 @@
-{% extends "base.jinja" %}
-{% block title %}
-  {{ super() }} |
-  {% if parent_post %}Re: {{ parent_post.title }}{% else %}{{ ftl_get_message("community-drawing-new") }}{% endif %}
-  {% if community_name %} @ {{ community_name }}{% endif %}
-{% endblock title %}
-{% block content %}
-  <div class="center">
-    <h2>
+<!DOCTYPE html>
+<html lang="{{ ftl_lang }}">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
       {% if parent_post %}Re: {{ parent_post.title }}{% else %}{{ ftl_get_message("community-drawing-new") }}{% endif %}
       {% if community_name %} @ {{ community_name }}{% endif %}
-    </h2>
-  </div>
-  <link rel="stylesheet"
-        href="{{ '/static/neo-cucumber/offline.css' | cachebuster | safe }}" />
-  <div id="neo-cucumber-root"></div>
-  <div class="center">
-    <button id="oeee-painter-save" type="button" disabled>{{ ftl_get_message("save") }}</button>
-  </div>
-  <script id="neo-cucumber-config" type="application/json">{{ painter_config | safe }}</script>
-  <script type="module"
-          src="{{ '/static/neo-cucumber/offline.js' | cachebuster | safe }}"></script>
-{% endblock content %}
+    </title>
+    <link rel="stylesheet"
+          href="{{ '/static/neo-cucumber/offline.css' | cachebuster | safe }}" />
+    <style>
+      html, body, #neo-cucumber-root { width: 100%; height: 100%; margin: 0; }
+      body { overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <div id="neo-cucumber-root"></div>
+    <button id="oeee-painter-save" type="button" disabled
+            style="position:fixed;top:8px;right:8px;z-index:80">{{ ftl_get_message("save") }}</button>
+    <script id="neo-cucumber-config" type="application/json">{{ painter_config | safe }}</script>
+    <script type="module"
+            src="{{ '/static/neo-cucumber/offline.js' | cachebuster | safe }}"></script>
+  </body>
+</html>

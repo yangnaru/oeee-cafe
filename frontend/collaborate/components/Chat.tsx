@@ -33,6 +33,7 @@ interface ChatProps {
   wsRef: React.RefObject<WebSocket | null>;
   userId: string;
   participants: Map<string, Participant>;
+  connectionState: "connecting" | "connected" | "disconnected";
   onChatMessage: (message: ChatMessage) => void;
   onAddMessage?: (
     addMessageFn: (message: {
@@ -50,6 +51,7 @@ export const Chat = ({
   wsRef,
   userId,
   participants,
+  connectionState,
   onChatMessage,
   onAddMessage,
 }: ChatProps) => {
@@ -58,7 +60,10 @@ export const Chat = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isComposing, setIsComposing] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -66,18 +71,23 @@ export const Chat = ({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
-
   // Handle incoming chat messages
   const addMessage = useCallback(
     (message: ChatMessage) => {
-      // Add message to chat history (including join/leave for display)
-      setMessages((prev) => [...prev, message]);
+      setMessages((previous) => {
+        // Recent chat replay overlaps the live PubSub stream by design. The
+        // protocol message id makes that overlap harmless on reconnect.
+        if (previous.some((entry) => entry.id === message.id)) return previous;
+        return [...previous, message].slice(-200);
+      });
+      if (isNearBottomRef.current) {
+        window.requestAnimationFrame(scrollToBottom);
+      } else {
+        setUnreadCount((count) => count + 1);
+      }
       onChatMessage(message);
     },
-    [onChatMessage]
+    [onChatMessage, scrollToBottom]
   );
 
   // Expose addMessage to parent component via callback
@@ -90,7 +100,7 @@ export const Chat = ({
   // Send chat message
   const sendMessage = useCallback(() => {
     const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN || !inputValue.trim()) {
+    if (connectionState !== "connected" || !ws || ws.readyState !== WebSocket.OPEN || !inputValue.trim()) {
       return;
     }
 
@@ -109,7 +119,20 @@ export const Chat = ({
     } catch (error) {
       console.error("Failed to send chat message:", error);
     }
-  }, [wsRef, userId, inputValue]);
+  }, [connectionState, wsRef, userId, inputValue]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const element = messagesRef.current;
+    if (!element) return;
+    isNearBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+    if (isNearBottomRef.current) setUnreadCount(0);
+  }, []);
+
+  const showNewestMessages = useCallback(() => {
+    isNearBottomRef.current = true;
+    setUnreadCount(0);
+    scrollToBottom();
+  }, [scrollToBottom]);
 
   // Handle IME composition events
   const handleCompositionStart = useCallback(() => {
@@ -188,7 +211,7 @@ export const Chat = ({
                 </div>
               ))}
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto border border-main bg-main p-[3px] text-[11px] leading-[15px]">
+          <div ref={messagesRef} onScroll={handleMessagesScroll} className="relative min-h-0 flex-1 overflow-y-auto border border-main bg-main p-[3px] text-[11px] leading-[15px]">
             <div>
               {messages.map((msg) => (
                 <div
@@ -228,6 +251,11 @@ export const Chat = ({
               ))}
               <div ref={messagesEndRef} />
             </div>
+            {unreadCount > 0 && (
+              <button type="button" onClick={showNewestMessages} className="sticky bottom-1 left-1/2 -translate-x-1/2 border border-main bg-main px-2 py-1 text-[11px] shadow">
+                {unreadCount} new {unreadCount === 1 ? "message" : "messages"}
+              </button>
+            )}
           </div>
           <div className="flex gap-[3px] pr-[20px]">
             <input
@@ -245,7 +273,7 @@ export const Chat = ({
             />
             <button
               onClick={sendMessage}
-              disabled={!inputValue.trim()}
+              disabled={connectionState !== "connected" || !inputValue.trim()}
               className={`${CHAT_BUTTON} shrink-0 px-[5px] py-[2px] text-[11px] font-sans disabled:cursor-not-allowed`}
             >
               <Trans>Send</Trans>

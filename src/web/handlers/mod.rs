@@ -1010,6 +1010,8 @@ mod template_tests {
             assert!(rendered.contains("/static/neo-cucumber/offline.css"));
             assert!(rendered.contains("\"kind\":\"two-tone\""));
             assert!(!rendered.contains("neo.js"));
+            assert!(rendered.contains("html, body, #neo-cucumber-root { width: 100%; height: 100%; margin: 0; }"));
+            assert!(rendered.contains("body { overflow: hidden; }"));
         }
     }
 

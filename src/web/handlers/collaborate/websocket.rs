@@ -2,11 +2,13 @@ use crate::app_error::AppError;
 use crate::models::user::AuthSession;
 use crate::web::state::AppState;
 use axum::extract::{
-    ws::close_code, ws::CloseFrame, ws::Message, ws::WebSocket, Path, State, WebSocketUpgrade,
+    ws::close_code, ws::CloseFrame, ws::Message, ws::WebSocket, Path, Query, State,
+    WebSocketUpgrade,
 };
 use axum::response::Response;
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
+use serde::Deserialize;
 use std::borrow::Cow;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
@@ -23,6 +25,18 @@ struct SessionContext<'a> {
     owner_id: Uuid,
     db: &'a sqlx::Pool<sqlx::Postgres>,
     state: &'a AppState,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct ResumeQuery {
+    history_id: Option<Uuid>,
+    after_seq: Option<u64>,
+}
+
+impl ResumeQuery {
+    fn position(self) -> Option<(Uuid, u64)> {
+        self.history_id.zip(self.after_seq)
+    }
 }
 
 // Auto-reset threshold, in history messages: past this the server asks one
@@ -47,13 +61,14 @@ pub async fn websocket_collaborate_handler(
     Path(room_uuid): Path<Uuid>,
     auth_session: AuthSession,
     ws: WebSocketUpgrade,
+    Query(resume): Query<ResumeQuery>,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
     let user = auth_session
         .user
         .ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
     Ok(ws.on_upgrade(move |socket| {
-        handle_socket(socket, room_uuid, state, user.id, user.login_name)
+        handle_socket(socket, room_uuid, state, user.id, user.login_name, resume.position())
     }))
 }
 
@@ -63,6 +78,7 @@ pub async fn handle_socket(
     state: AppState,
     user_id: Uuid,
     user_login_name: String,
+    resume_position: Option<(Uuid, u64)>,
 ) {
     let (mut sender, mut receiver) = socket.split();
 
@@ -184,7 +200,10 @@ pub async fn handle_socket(
     // Send history to new connection, remembering the highest sequence number
     // it contained so the live stream can skip messages history already covered
     let (history_identity, max_history_seq) =
-        send_history_to_new_connection(&state, room_uuid, &mut sender, &connection_id).await;
+        send_history_to_new_connection(
+            &state, room_uuid, &mut sender, &connection_id, resume_position,
+        ).await;
+    send_recent_chat_to_new_connection(&state, room_uuid, &mut sender, &connection_id).await;
 
     info!(
         "User {} joined session {} as {}",
@@ -468,9 +487,21 @@ fn should_forward_to_connection(
     }
 }
 
+fn accepted_resume_sequence(
+    history_id: Uuid,
+    current_max_seq: u64,
+    resume_position: Option<(Uuid, u64)>,
+) -> u64 {
+    match resume_position {
+        Some((resume_history_id, resume_seq))
+            if resume_history_id == history_id && resume_seq <= current_max_seq => resume_seq,
+        _ => 0,
+    }
+}
+
 #[cfg(test)]
 mod forwarding_tests {
-    use super::should_forward_to_connection;
+    use super::{accepted_resume_sequence, should_forward_to_connection};
     use crate::web::handlers::collaborate::redis_state::RoomMessage;
     use uuid::Uuid;
 
@@ -524,6 +555,18 @@ mod forwarding_tests {
             "same"
         ));
     }
+
+    #[test]
+    fn resumes_only_a_position_on_the_current_history() {
+        let history_id = Uuid::new_v4();
+        assert_eq!(accepted_resume_sequence(history_id, 12, Some((history_id, 7))), 7);
+        assert_eq!(
+            accepted_resume_sequence(history_id, 12, Some((Uuid::new_v4(), 7))),
+            0
+        );
+        assert_eq!(accepted_resume_sequence(history_id, 12, Some((history_id, 13))), 0);
+        assert_eq!(accepted_resume_sequence(history_id, 12, None), 0);
+    }
 }
 
 // Returns the highest sequence number contained in the replayed history,
@@ -533,13 +576,44 @@ async fn send_history_to_new_connection(
     room_uuid: Uuid,
     sender: &mut SplitSink<WebSocket, Message>,
     connection_id: &str,
+    resume_position: Option<(Uuid, u64)>,
 ) -> (Uuid, u64) {
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
 
     let mut max_seq = 0;
     match redis_store.get_history_snapshot(room_uuid).await {
         Ok((history_id, history)) => {
+            let current_max_seq = history.iter().map(|(seq, _)| *seq).max().unwrap_or(0);
+            let after_seq = accepted_resume_sequence(
+                history_id, current_max_seq, resume_position,
+            );
+            match resume_position {
+                Some((resume_history_id, resume_seq)) if after_seq == resume_seq
+                    && resume_history_id == history_id => {
+                    debug!(
+                        "Resuming connection {} in history {} after seq {}",
+                        connection_id, history_id, resume_seq
+                    );
+                }
+                Some(_) => {
+                    debug!("Resume position rejected for {}; sending full history", connection_id);
+                }
+                None => {}
+            }
+            let mut replay_start = Vec::with_capacity(33);
+            replay_start.push(messages::MessageType::ReplayStart as u8);
+            replay_start.extend_from_slice(history_id.as_bytes());
+            replay_start.extend_from_slice(&after_seq.to_le_bytes());
+            replay_start.extend_from_slice(&current_max_seq.to_le_bytes());
+            if sender.send(Message::Binary(replay_start)).await.is_err() {
+                warn!("Failed to send replay boundary to {}", connection_id);
+                return (history_id, after_seq);
+            }
             for (seq, stored_msg) in history.iter() {
+                if *seq <= after_seq {
+                    max_seq = max_seq.max(*seq);
+                    continue;
+                }
                 let payload = match stored_msg {
                     Message::Binary(data) => data.as_slice(),
                     _ => continue,
@@ -674,6 +748,15 @@ async fn handle_incoming_messages(
             maybe_request_reset(&ctx).await;
         } else {
             // Ephemeral messages (chat, join, leave) bypass the sequencer
+            if let Message::Binary(data) = &msg {
+                if data.first() == Some(&(messages::MessageType::Chat as u8)) {
+                    let store =
+                        redis_messages::RedisMessageStore::new(ctx.state.redis_pool.clone());
+                    if let Err(e) = store.append_chat_message(ctx.room_uuid, data).await {
+                        error!("Failed to preserve recent chat in room {}: {}", ctx.room_uuid, e);
+                    }
+                }
+            }
             messages::broadcast_message(&msg, ctx.room_uuid, ctx.connection_id, ctx.state).await;
         }
     }
@@ -687,6 +770,27 @@ async fn handle_incoming_messages(
                 ctx.room_uuid, e
             );
         }
+    }
+}
+
+async fn send_recent_chat_to_new_connection(
+    state: &AppState,
+    room_uuid: Uuid,
+    sender: &mut SplitSink<WebSocket, Message>,
+    connection_id: &str,
+) {
+    let store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
+    match store.get_recent_chat(room_uuid).await {
+        Ok(messages) => {
+            for payload in &messages {
+                if sender.send(Message::Binary(payload.clone())).await.is_err() {
+                    warn!("Failed to replay recent chat to {}", connection_id);
+                    break;
+                }
+            }
+            debug!("Sent {} recent chat messages to {}", messages.len(), connection_id);
+        }
+        Err(e) => error!("Failed to load recent chat for room {}: {}", room_uuid, e),
     }
 }
 

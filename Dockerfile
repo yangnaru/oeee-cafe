@@ -37,6 +37,7 @@ RUN --mount=type=cache,target=/sccache \
 FROM node:24-slim AS node-builder-neo-cucumber
 WORKDIR /app/neo-cucumber
 COPY neo-cucumber/package.json neo-cucumber/pnpm-lock.yaml neo-cucumber/ ./
+COPY frontend/ /app/frontend/
 RUN npm install --global corepack@latest
 RUN corepack enable pnpm
 RUN corepack use pnpm@latest-10
