@@ -6,7 +6,6 @@ import {
   type PainterCheckpoint,
   type PainterHandle,
 } from "neo-cucumber";
-import "neo-cucumber/style.css";
 import "./app.css";
 import { Chat } from "./components/Chat";
 import { SessionExpiredModal } from "./components/SessionExpiredModal";
