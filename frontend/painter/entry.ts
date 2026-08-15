@@ -1,12 +1,15 @@
 import {
   mount,
+  NEO_PANEL,
   NEO_PANEL_BUTTON,
   type PainterMode,
   type PainterHandle,
 } from "neo-cucumber";
 // The chrome this adapter borrows below lives in the package's stylesheet,
-// which a library build keeps out of the JavaScript bundle.
-import "neo-cucumber/style.css";
+// which a library build keeps out of the JavaScript bundle. It is imported
+// through this adapter's own file so that the utilities named here are compiled
+// as well as the ones the package names.
+import "./painter.css";
 
 interface OeeePainterConfig {
   width: number;
@@ -64,6 +67,7 @@ async function submit(
   painter: PainterHandle,
   config: OeeePainterConfig,
   startedAt: number,
+  onSaved: () => void,
 ): Promise<void> {
   const snapshot = await painter.save();
   const form = new FormData();
@@ -92,6 +96,9 @@ async function submit(
   if (!response.ok || result?.error) {
     throw new Error(result?.error ?? `Upload failed: ${response.status}`);
   }
+
+  // Saved: the drawing is on the server, so leaving is no longer a loss.
+  onSaved();
 
   if (submission.kind === "banner") {
     if (nativeAvailable()) {
@@ -126,6 +133,81 @@ const painterRoot = root;
 const pageSaveButton = saveButton;
 
 const config = JSON.parse(configElement.textContent) as OeeePainterConfig;
+
+/**
+ * Fill the bar above the painter.
+ *
+ * The page says what goes in it and this says what it looks like, using the
+ * class names neo-cucumber publishes rather than a copy of their values kept
+ * here -- the bar sits inches from the toolbox, so anything merely close to
+ * NEO's chrome reads as broken rather than as different.
+ *
+ * It is built before the painter mounts. The panels and the opening zoom are
+ * both measured from the painter's area, and a bar that appears afterwards
+ * would move that area out from under them.
+ */
+function buildHeader(): void {
+  const bar = document.getElementById("oeee-painter-header");
+  if (!bar) return;
+
+  bar.className = `${NEO_PANEL} flex shrink-0 items-center justify-between gap-[8px] px-[6px] py-[4px]`;
+
+  const left = document.createElement("div");
+  left.className = "flex min-w-0 items-center gap-[8px]";
+
+  // The only way off this page that is not the back button.
+  const home = document.createElement("a");
+  home.href = bar.dataset.home || "/";
+  home.className = "text-[18px] hover:opacity-70";
+  home.textContent = "🥒";
+  left.append(home);
+
+  const title = document.createElement("h1");
+  title.className = "m-0 truncate text-[14px] font-bold";
+  title.textContent = bar.dataset.title ?? "";
+  left.append(title);
+
+  if (bar.dataset.subtitle) {
+    const where = document.createElement("div");
+    where.className = "shrink-0 text-[11px] opacity-70";
+    where.textContent = bar.dataset.subtitle;
+    left.append(where);
+  }
+
+  const right = document.createElement("div");
+  right.className = "flex shrink-0 items-center gap-[6px] text-[11px]";
+  if (bar.dataset.size) {
+    const size = document.createElement("div");
+    size.className = "tabular-nums opacity-70";
+    size.textContent = bar.dataset.size;
+    right.append(size);
+  }
+
+  bar.append(left, right);
+}
+
+buildHeader();
+
+/**
+ * Losing a drawing to a stray tap.
+ *
+ * Until now this page had no way off it but the back button, so nothing here
+ * guarded against leaving. The header adds a link, which makes an accidental
+ * exit a click away, so the browser now asks first -- but only once something
+ * has actually been drawn. The count the painter reports at rest is the
+ * baseline: it is not zero, because setting the canvas up is itself recorded.
+ */
+let baselineStrokes: number | null = null;
+let hasUnsavedWork = false;
+let leaving = false;
+
+window.addEventListener("beforeunload", (event) => {
+  if (leaving || !hasUnsavedWork) return;
+  event.preventDefault();
+  // Chrome shows its own wording, but only when returnValue is set.
+  event.returnValue = "";
+});
+
 const startedAt = Date.now();
 const painter = mount(root, {
   width: config.width,
@@ -133,6 +215,10 @@ const painter = mount(root, {
   locale: config.locale,
   mode: config.mode,
   controls: { kind: "toolbox" },
+  onChange: ({ strokeCount }) => {
+    if (baselineStrokes === null) baselineStrokes = strokeCount;
+    hasUnsavedWork = strokeCount > baselineStrokes;
+  },
 });
 
 function movePageActionsIntoExtraToolbox(): void {
@@ -177,7 +263,9 @@ void painter.ready
 
 saveButton.addEventListener("click", () => {
   saveButton.disabled = true;
-  void submit(painter, config, startedAt).catch((error) => {
+  void submit(painter, config, startedAt, () => {
+    leaving = true;
+  }).catch((error) => {
     console.error(error);
     alert("Failed to save drawing. Please try again.");
     saveButton.disabled = false;

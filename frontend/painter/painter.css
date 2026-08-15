@@ -1,0 +1,17 @@
+/*
+ * The painter's stylesheet is this adapter's stylesheet, the same arrangement
+ * the collaborative app uses: it pulls in Tailwind, NEO's palette and the
+ * utilities the toolbox and its chrome are built from, and then declares its
+ * own sources so the classes written next door are compiled too.
+ *
+ * Without that declaration the package's stylesheet is built from the package's
+ * own source alone, and any utility this adapter names that the package does
+ * not happen to use itself is simply absent -- the header's `gap-[8px]` was, so
+ * its title sat flush against the emoji beside it.
+ *
+ * Imported by package specifier rather than by relative path so this file says
+ * the same thing whether neo-cucumber resolves to the source next door or to an
+ * installed package.
+ */
+@import "neo-cucumber/style.css";
+@source ".";
