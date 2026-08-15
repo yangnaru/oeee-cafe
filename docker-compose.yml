@@ -3,34 +3,70 @@
 #   export COMPOSE_DOCKER_CLI_BUILD=1
 # Or run with: DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose build
 
+# Blue/green: two identical app services, one serving at a time, with `proxy`
+# holding the published port across the switch. Compose has no rolling update
+# outside Swarm, so deploy.sh drives the sequence -- see the header there.
+#
+# Room state, sequencing and presence all live in Redis, and sessions live in
+# Postgres, so it does not matter to a client which colour it lands on: a
+# drawing session survives the swap by reconnecting and resuming from its last
+# canonical sequence number.
+x-oeee-cafe: &oeee-cafe
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      # deploy.sh exports this from the checked-out commit.
+      GIT_COMMIT: ${GIT_COMMIT:-}
+  # Both colours run the same image; deploy.sh rebuilds this tag and then
+  # starts whichever colour is idle from it.
+  image: oeee-cafe:current
+  volumes:
+    - ./config:/app/config:ro
+  networks:
+    - oeee-cafe-network
+  # Not `always`: a colour that deploy.sh stopped must stay stopped, and
+  # `always` starts manually stopped containers again when the daemon restarts,
+  # which after a reboot would leave both colours running.
+  restart: unless-stopped
+  # On SIGTERM the server waits up to 10s for open drawing sessions to close
+  # cleanly. Docker's default 10s grace period would SIGKILL it right as that
+  # wait expires, so give it room to finish and exit on its own.
+  stop_grace_period: 20s
+  # `restart: unless-stopped` only notices a process that exited. This catches
+  # the other failure: still running, but unable to reach the database.
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 30s
+
 services:
-  oeee-cafe:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # deploy.sh exports this from the checked-out commit.
-        GIT_COMMIT: ${GIT_COMMIT:-}
-    container_name: oeee-cafe
+  # The only service publishing a port, so a deploy never leaves cloudflared's
+  # origin unanswered. Deliberately without depends_on: it must come up whether
+  # or not the colour it points at is the one currently running.
+  proxy:
+    image: caddy:2-alpine
+    container_name: oeee-cafe-proxy
     ports:
-      - "30000:3000"
+      - "30000:80"
+    # The whole directory, not just the file: deploy.sh replaces
+    # proxy/upstream.caddy, and a single-file bind mount would keep showing the
+    # container the replaced inode.
     volumes:
-      - ./config:/app/config:ro
+      - ./proxy:/etc/caddy:ro
     networks:
       - oeee-cafe-network
     restart: always
-    # On SIGTERM the server waits up to 10s for open drawing sessions to close
-    # cleanly. Docker's default 10s grace period would SIGKILL it right as that
-    # wait expires, so give it room to finish and exit on its own.
-    stop_grace_period: 20s
-    # `restart: always` only notices a process that exited. This catches the
-    # other failure: still running, but unable to reach the database.
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+
+  oeee-cafe-blue:
+    <<: *oeee-cafe
+    container_name: oeee-cafe-blue
+
+  oeee-cafe-green:
+    <<: *oeee-cafe
+    container_name: oeee-cafe-green
 
 networks:
   oeee-cafe-network:

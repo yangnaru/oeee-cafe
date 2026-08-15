@@ -54,8 +54,9 @@ COPY locales/ ./locales/
 COPY static/ ./static/
 COPY templates/ ./templates/
 COPY --from=rust-builder /app/oeee-cafe ./
-# Admin/ops commands, e.g.
-#   docker exec oeee-cafe ./cli -c config/config.toml set-role <login_name> admin
+# Admin/ops commands. ./cli.sh finds whichever blue/green colour is serving and
+# runs this inside it, e.g.
+#   ./cli.sh set-role <login_name> admin
 COPY --from=rust-builder /app/cli ./
 COPY --from=node-builder-neo-cucumber /app/neo-cucumber/dist/ ./neo-cucumber/dist/
 COPY --from=node-builder-neo-cucumber /app/neo-cucumber/dist-viewer/ ./neo-cucumber/dist-viewer/

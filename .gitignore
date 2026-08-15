@@ -4,3 +4,5 @@
 .env
 .sqlx/
 *.cer
+/proxy/upstream.caddy
+/.deploy.lock/

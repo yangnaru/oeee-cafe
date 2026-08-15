@@ -12,6 +12,28 @@ When running psql commands, specify the database name like `psql oeee_cafe`.
 
 When creating SQLx migrations, use the command `sqlx migrate add`.
 
+### Deploys
+
+`deploy.sh` is blue/green: `oeee-cafe-blue` and `oeee-cafe-green` take turns,
+and the `proxy` container (Caddy) owns the published port so it is never
+rebound. Which colour is live is written in `proxy/upstream.caddy` — that file
+is generated and gitignored, and reading it is how anything else (`cli.sh`, a
+rollback) finds the serving container.
+
+Two consequences for anything that touches the database:
+
+- The new colour runs `sqlx::migrate!()` on boot while the old one is still
+  serving, so a migration has to leave the *previous* release able to run for
+  the length of a deploy. Split anything destructive across two deploys.
+- Both colours are briefly up at once, each with its own pool, against a
+  Postgres shared with other apps on that host. Watch `db_max_connections`.
+
+Rolling back before the next deploy: point `proxy/upstream.caddy` at the other
+colour, `docker compose start` it, and
+`docker compose exec proxy caddy reload --config /etc/caddy/Caddyfile`. The
+previous colour's container and image are kept until the next deploy
+recreates it.
+
 ### Templates
 
 Templates are loaded and evaluated at runtime, so `cargo check` says nothing
