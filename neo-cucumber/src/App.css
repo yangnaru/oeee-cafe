@@ -274,11 +274,33 @@ body {
   background-color: var(--main-highlight-color);
 }
 
-/* iOS Safari viewport height fix */
+/*
+ * The painter fills the element it was mounted into, and nothing more.
+ *
+ * It used to be `position: fixed` with every inset at zero, which pinned it to
+ * the viewport wherever on the page it had actually been placed -- so its own
+ * ground painted straight over anything the host drew above it. On the
+ * collaborative page that was the entire session header: the title, the owner,
+ * the share button, the connection indicator and the way back to the lobby,
+ * all behind an opaque checkerboard.
+ *
+ * A page that wants a full-screen painter says so itself, by giving the mount
+ * element the viewport; that is a decision for whoever owns the page, and it is
+ * the one thing the painter cannot know.
+ */
+.painter-root {
+  height: 100%;
+  overflow: hidden;
+}
+
+/*
+ * A page root, for a host whose whole document is the app: full viewport, and
+ * pinned so mobile Safari cannot rubber-band it. `dvh` because `vh` counts the
+ * strip behind the URL bar.
+ */
 .app-container {
   height: 100vh; /* Fallback */
   height: 100dvh; /* Dynamic viewport height for modern browsers */
-  /* Prevent iOS Safari from bouncing/scrolling */
   position: fixed;
   top: 0;
   left: 0;

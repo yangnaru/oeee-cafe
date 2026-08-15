@@ -7,8 +7,17 @@
     <link rel="stylesheet"
           href="{{ '/static/neo-cucumber/offline.css' | cachebuster | safe }}" />
     <style>
-      html, body, #neo-cucumber-root { width: 100%; height: 100%; margin: 0; }
+      html, body { width: 100%; height: 100%; margin: 0; }
       body { overflow: hidden; }
+      /* This page is nothing but the painter, so the painter gets the screen.
+         The painter itself only fills what it is given -- it no longer pins
+         itself to the viewport, which is what used to hide a host's chrome.
+         `dvh` because `vh` counts the strip behind mobile Safari's URL bar. */
+      #neo-cucumber-root {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        height: 100dvh;
+      }
     </style>
   </head>
   <body>

@@ -783,7 +783,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
   }, [undo, redo, historyState.canUndo, historyState.canRedo]);
 
   return (
-    <div className="w-full app-container flex flex-col">
+    <div className="w-full painter-root flex flex-col">
       <div className="flex-1 flex overflow-hidden">
         <PainterWorkspace
           workspaceRef={appRef}

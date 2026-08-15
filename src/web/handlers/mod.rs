@@ -1010,8 +1010,15 @@ mod template_tests {
             assert!(rendered.contains("/static/neo-cucumber/offline.css"));
             assert!(rendered.contains("\"kind\":\"two-tone\""));
             assert!(!rendered.contains("neo.js"));
-            assert!(rendered.contains("html, body, #neo-cucumber-root { width: 100%; height: 100%; margin: 0; }"));
+            assert!(rendered.contains("html, body { width: 100%; height: 100%; margin: 0; }"));
             assert!(rendered.contains("body { overflow: hidden; }"));
+            // The painter fills the element it is mounted into and nothing
+            // more -- it used to pin itself to the viewport, which painted its
+            // ground over anything a host drew above it. A page that is
+            // nothing but the painter has to hand it the screen itself, and
+            // without this the painter has no height at all.
+            assert!(rendered.contains("#neo-cucumber-root {"));
+            assert!(rendered.contains("height: 100dvh;"));
         }
     }
 
