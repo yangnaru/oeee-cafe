@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { I18nProvider } from "@lingui/react";
+import { i18n } from "@lingui/core";
 // Our own stylesheet, so the column renders with the utilities it ships with
 // rather than with the browser's defaults
 import "../App.css";
@@ -298,8 +300,14 @@ async function renderOurs(): Promise<HTMLElement> {
     isFlippedHorizontal: false,
   };
 
+  // The column reads its labels from NEO's dictionary through Lingui now, so
+  // it needs a provider the way the painter gives it one. English, because
+  // that is the locale this test compares against NEO's own English toolbox.
+  i18n.load("en", {});
+  i18n.activate("en");
   await act(async () => {
     createRoot(host).render(
+      <I18nProvider i18n={i18n}>
       <NeoToolColumn
         drawingState={state}
         paletteColors={[...DEFAULT_PALETTE_COLORS]}
@@ -311,6 +319,7 @@ async function renderOurs(): Promise<HTMLElement> {
         onSetSelectedPaletteIndex={() => {}}
         onSetPaletteColor={() => {}}
       />
+      </I18nProvider>
     );
   });
 
