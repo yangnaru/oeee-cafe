@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Trans, useLingui } from "@lingui/react/macro";
 import {
   anchorBesideCanvas,
   attachWindowDrag,
@@ -76,6 +77,7 @@ const blankLayer = (width: number, height: number): Promise<Blob> => {
 };
 
 export default function App() {
+  const { t } = useLingui();
   const [canvasMeta, setCanvasMeta] = useState<CollaborationMeta | null>(null);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [participants, setParticipants] = useState<Map<string, Participant>>(new Map());
@@ -508,14 +510,14 @@ export default function App() {
         setRoomFullError({ currentUserCount: meta.currentUserCount, maxUsers: meta.maxUsers });
         return;
       }
-      document.title = `Oeee Cafe - ${meta.title?.trim() || "No Title"}`;
+      document.title = `Oeee Cafe - ${meta.title?.trim() || t`No Title`}`;
       setCanvasMeta(meta);
       shouldConnectRef.current = true;
     } catch (error) {
       setInitializationError(error instanceof Error ? error.message : String(error));
       setAuthError(true);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { void initializeApp(); }, [initializeApp]);
   useEffect(() => {
@@ -600,11 +602,11 @@ export default function App() {
       helpProxy = document.createElement("button");
       helpProxy.type = "button";
       helpProxy.className = NEO_PANEL_BUTTON;
-      helpProxy.textContent = "Help";
+      helpProxy.textContent = t`Help`;
       helpProxy.title = helpButton.title;
       helpProxy.setAttribute(
         "aria-label",
-        helpButton.getAttribute("aria-label") ?? "Help",
+        helpButton.getAttribute("aria-label") ?? t`Help`,
       );
       helpProxy.addEventListener("click", () => helpButton?.click());
 
@@ -631,14 +633,14 @@ export default function App() {
       if (saveButton) saveButton.hidden = false;
       if (saveProxyRef.current === proxy) saveProxyRef.current = null;
     };
-  }, [isOwner]);
+  }, [isOwner, t]);
 
   useEffect(() => {
     const proxy = saveProxyRef.current;
     if (!proxy) return;
     proxy.disabled = isSaving;
-    proxy.textContent = isSaving ? "Saving…" : "Save to gallery";
-  }, [isSaving]);
+    proxy.textContent = isSaving ? t`Saving...` : t`Save to Gallery`;
+  }, [isSaving, t]);
 
   return <>
     <div className="w-full app-container flex flex-col">
@@ -681,7 +683,7 @@ export default function App() {
         </div>
         <div ref={painterElementRef} className="h-full w-full" />
         <ConnectionStatusModal isCatchingUp={isCatchingUp} connectionState={connectionState} syncProgress={syncProgress} synchronizationError={synchronizationError} onReconnect={() => location.reload()} onDownloadPNG={downloadPng} />
-        {isOwner && <button ref={saveButtonRef} type="button" disabled={isSaving} onClick={() => void saveCollaborativeDrawing()} className={`${NEO_BUTTON} absolute bottom-4 right-12 z-50`}>{isSaving ? "Saving…" : "Save to gallery"}</button>}
+        {isOwner && <button ref={saveButtonRef} type="button" disabled={isSaving} onClick={() => void saveCollaborativeDrawing()} className={`${NEO_BUTTON} absolute bottom-4 right-12 z-50`}>{isSaving ? <Trans>Saving...</Trans> : <Trans>Save to Gallery</Trans>}</button>}
         <SessionEndingModal isOpen={sessionEnding} />
       </div>
     </div>

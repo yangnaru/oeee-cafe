@@ -17,7 +17,7 @@ msgstr ""
 msgid "Authentication Failed"
 msgstr "Authentication Failed"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:55
+#: ../frontend/collaborate/components/SessionHeader.tsx:57
 msgid "by"
 msgstr "by"
 
@@ -25,11 +25,11 @@ msgstr "by"
 #~ msgid "Chat"
 #~ msgstr "Chat"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:70
+#: ../frontend/collaborate/components/SessionHeader.tsx:72
 msgid "Connected"
 msgstr "Connected"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:76
+#: ../frontend/collaborate/components/SessionHeader.tsx:78
 msgid "Connecting"
 msgstr "Connecting"
 
@@ -43,7 +43,7 @@ msgid "Connection lost. Your work is saved locally."
 msgstr "Connection lost. Your work is saved locally."
 
 #: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:64
-#: ../frontend/collaborate/components/SessionHeader.tsx:82
+#: ../frontend/collaborate/components/SessionHeader.tsx:84
 msgid "Disconnected"
 msgstr "Disconnected"
 
@@ -61,6 +61,11 @@ msgstr "Failed to save session. Please try downloading as PNG instead."
 msgid "Go to Lobby"
 msgstr "Go to Lobby"
 
+#: ../frontend/collaborate/App.tsx:655
+#: ../frontend/collaborate/App.tsx:659
+msgid "Help"
+msgstr "Help"
+
 #: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:17
 msgid "Initialization Failed"
 msgstr "Initialization Failed"
@@ -69,7 +74,7 @@ msgstr "Initialization Failed"
 msgid "Initializing collaboration session..."
 msgstr "Initializing collaboration session..."
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:88
+#: ../frontend/collaborate/components/SessionHeader.tsx:90
 msgid "Loading"
 msgstr "Loading"
 
@@ -81,6 +86,14 @@ msgstr "Loading..."
 #: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
 #~ msgid "LOADING..."
 #~ msgstr "LOADING..."
+
+#: ../frontend/collaborate/components/Chat.tsx:117
+msgid "Message too long (max 500 characters)"
+msgstr "Message too long (max 500 characters)"
+
+#: ../frontend/collaborate/App.tsx:563
+msgid "No Title"
+msgstr "No Title"
 
 #. placeholder {0}: participants.size
 #: ../frontend/collaborate/components/Chat.tsx:206
@@ -105,14 +118,28 @@ msgstr "Return to Lobby"
 msgid "Save as PNG"
 msgstr "Save as PNG"
 
+#: ../frontend/collaborate/App.tsx:692
+#: ../frontend/collaborate/App.tsx:736
+#~ msgid "Save to gallery"
+#~ msgstr "Save to gallery"
+
+#: ../frontend/collaborate/App.tsx:692
+#: ../frontend/collaborate/App.tsx:736
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:111
 msgid "Save to Gallery"
 msgstr "Save to Gallery"
 
+#: ../frontend/collaborate/App.tsx:692
+#: ../frontend/collaborate/App.tsx:736
 #: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:12
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:106
 msgid "Saving..."
 msgstr "Saving..."
+
+#: ../frontend/collaborate/App.tsx:692
+#: ../frontend/collaborate/App.tsx:736
+#~ msgid "Saving…"
+#~ msgstr "Saving…"
 
 #: ../frontend/collaborate/components/Chat.tsx:288
 msgid "Send"
@@ -130,9 +157,13 @@ msgstr "Session Full"
 msgid "Session is ending. The drawing is being saved to the gallery..."
 msgstr "Session is ending. The drawing is being saved to the gallery..."
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:65
+#: ../frontend/collaborate/components/SessionHeader.tsx:67
 msgid "Share"
 msgstr "Share"
+
+#: ../frontend/collaborate/components/SessionHeader.tsx:64
+msgid "Share this session"
+msgstr "Share this session"
 
 #: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:71
 msgid "The shared drawing could not be synchronized safely. Your current canvas is still available to download."

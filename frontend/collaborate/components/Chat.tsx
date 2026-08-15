@@ -114,7 +114,7 @@ export const Chat = ({
     try {
       const message = inputValue.trim();
       if (message.length > 500) {
-        alert("Message too long (max 500 characters)");
+        alert(t`Message too long (max 500 characters)`);
         return;
       }
 
@@ -129,7 +129,7 @@ export const Chat = ({
     } catch (error) {
       console.error("Failed to send chat message:", error);
     }
-  }, [connectionState, wsRef, userId, inputValue]);
+  }, [connectionState, wsRef, userId, inputValue, t]);
 
   const handleMessagesScroll = useCallback(() => {
     const element = messagesRef.current;

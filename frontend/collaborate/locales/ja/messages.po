@@ -17,7 +17,7 @@ msgstr ""
 msgid "Authentication Failed"
 msgstr "認証に失敗しました"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:55
+#: ../frontend/collaborate/components/SessionHeader.tsx:57
 msgid "by"
 msgstr "作成者:"
 
@@ -25,11 +25,11 @@ msgstr "作成者:"
 #~ msgid "Chat"
 #~ msgstr "チャット"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:70
+#: ../frontend/collaborate/components/SessionHeader.tsx:72
 msgid "Connected"
 msgstr "接続済み"
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:76
+#: ../frontend/collaborate/components/SessionHeader.tsx:78
 msgid "Connecting"
 msgstr "接続中"
 
@@ -43,7 +43,7 @@ msgid "Connection lost. Your work is saved locally."
 msgstr "接続が失われました。作業はローカルに保存されました。"
 
 #: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:64
-#: ../frontend/collaborate/components/SessionHeader.tsx:82
+#: ../frontend/collaborate/components/SessionHeader.tsx:84
 msgid "Disconnected"
 msgstr "切断済み"
 
@@ -61,6 +61,11 @@ msgstr "セッションの保存に失敗しました。代わりに PNG とし�
 msgid "Go to Lobby"
 msgstr "ロビーに戻る"
 
+#: ../frontend/collaborate/App.tsx:655
+#: ../frontend/collaborate/App.tsx:659
+msgid "Help"
+msgstr "ヘルプ"
+
 #: ../frontend/collaborate/components/modals/InitializationErrorModal.tsx:17
 msgid "Initialization Failed"
 msgstr "初期化に失敗しました"
@@ -69,7 +74,7 @@ msgstr "初期化に失敗しました"
 msgid "Initializing collaboration session..."
 msgstr "コラボレーションセッションを初期化中..."
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:88
+#: ../frontend/collaborate/components/SessionHeader.tsx:90
 msgid "Loading"
 msgstr "読み込み中"
 
@@ -82,11 +87,19 @@ msgstr "読み込み中..."
 #~ msgid "LOADING..."
 #~ msgstr "読み込み中..."
 
+#: ../frontend/collaborate/components/Chat.tsx:117
+msgid "Message too long (max 500 characters)"
+msgstr "メッセージが長すぎます（最大500文字）"
+
+#: ../frontend/collaborate/App.tsx:563
+msgid "No Title"
+msgstr "無題"
+
 #. placeholder {0}: participants.size
 #: ../frontend/collaborate/components/Chat.tsx:206
 #: ../frontend/collaborate/components/Chat.tsx:207
 msgid "Participants ({0})"
-msgstr ""
+msgstr "参加者（{0}）"
 
 #: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:76
 msgid "Reconnect"
@@ -105,14 +118,28 @@ msgstr "ロビーに戻る"
 msgid "Save as PNG"
 msgstr "PNG として保存"
 
+#: ../frontend/collaborate/App.tsx:692
+#: ../frontend/collaborate/App.tsx:736
+#~ msgid "Save to gallery"
+#~ msgstr "ギャラリーに保存"
+
+#: ../frontend/collaborate/App.tsx:692
+#: ../frontend/collaborate/App.tsx:736
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:111
 msgid "Save to Gallery"
 msgstr "ギャラリーに保存"
 
+#: ../frontend/collaborate/App.tsx:692
+#: ../frontend/collaborate/App.tsx:736
 #: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:12
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:106
 msgid "Saving..."
 msgstr "保存中..."
+
+#: ../frontend/collaborate/App.tsx:692
+#: ../frontend/collaborate/App.tsx:736
+#~ msgid "Saving…"
+#~ msgstr "保存中…"
 
 #: ../frontend/collaborate/components/Chat.tsx:288
 msgid "Send"
@@ -130,13 +157,17 @@ msgstr "セッション満員"
 msgid "Session is ending. The drawing is being saved to the gallery..."
 msgstr "セッションが終了します。描画をギャラリーに保存中..."
 
-#: ../frontend/collaborate/components/SessionHeader.tsx:65
+#: ../frontend/collaborate/components/SessionHeader.tsx:67
 msgid "Share"
 msgstr "共有"
 
+#: ../frontend/collaborate/components/SessionHeader.tsx:64
+msgid "Share this session"
+msgstr "このセッションを共有"
+
 #: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:71
 msgid "The shared drawing could not be synchronized safely. Your current canvas is still available to download."
-msgstr ""
+msgstr "共有中の絵を安全に同期できませんでした。現在のキャンバスはダウンロードできます。"
 
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:85
 msgid "This collaborative session has ended due to inactivity. As the owner, you can save it to the gallery or download it as a PNG."

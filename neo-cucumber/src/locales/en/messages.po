@@ -13,120 +13,120 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/components/SimplifiedToolbox.tsx:147
+#: src/components/SimplifiedToolbox.tsx:173
 msgid "{minutes} min"
 msgstr "{minutes} min"
 
-#: src/components/SimplifiedToolbox.tsx:63
-#: src/components/SimplifiedToolbox.tsx:97
-#: src/components/SimplifiedToolbox.tsx:98
+#: src/components/SimplifiedToolbox.tsx:89
+#: src/components/SimplifiedToolbox.tsx:123
+#: src/components/SimplifiedToolbox.tsx:124
 msgid "Background pen"
 msgstr "Background pen"
 
-#: src/components/SimplifiedToolbox.tsx:91
+#: src/components/SimplifiedToolbox.tsx:117
 msgid "Color"
 msgstr "Color"
 
-#: src/components/SimplifiedToolbox.tsx:195
-#: src/components/ToolboxPanel.tsx:290
+#: src/components/SimplifiedToolbox.tsx:221
+#: src/components/ToolboxPanel.tsx:332
 msgid "Dark"
 msgstr "Dark"
 
-#: src/components/ToolboxPanel.tsx:157
-#: src/components/ToolboxPanel.tsx:158
+#: src/components/ToolboxPanel.tsx:199
+#: src/components/ToolboxPanel.tsx:200
 msgid "Fit canvas"
 msgstr "Fit canvas"
 
-#: src/components/SimplifiedToolbox.tsx:62
-#: src/components/SimplifiedToolbox.tsx:116
-#: src/components/SimplifiedToolbox.tsx:117
+#: src/components/SimplifiedToolbox.tsx:88
+#: src/components/SimplifiedToolbox.tsx:142
+#: src/components/SimplifiedToolbox.tsx:143
 msgid "Foreground pen"
 msgstr "Foreground pen"
 
-#: src/components/SimplifiedToolbox.tsx:195
-#: src/components/ToolboxPanel.tsx:290
+#: src/components/SimplifiedToolbox.tsx:221
+#: src/components/ToolboxPanel.tsx:332
 msgid "Light"
 msgstr "Light"
 
-#: src/components/SimplifiedToolbox.tsx:147
+#: src/components/SimplifiedToolbox.tsx:173
 msgid "Off"
 msgstr "Off"
 
-#: src/components/SimplifiedToolbox.tsx:64
+#: src/components/SimplifiedToolbox.tsx:90
 msgid "Pen size"
 msgstr "Pen size"
 
-#: src/components/ToolboxPanel.tsx:219
-#: src/components/ToolboxPanel.tsx:220
+#: src/components/ToolboxPanel.tsx:261
+#: src/components/ToolboxPanel.tsx:262
 msgid "Pick a colour"
 msgstr "Pick a colour"
 
-#: src/components/SimplifiedToolbox.tsx:66
-#: src/components/SimplifiedToolbox.tsx:176
-#: src/components/ToolboxPanel.tsx:259
+#: src/components/SimplifiedToolbox.tsx:92
+#: src/components/SimplifiedToolbox.tsx:202
+#: src/components/ToolboxPanel.tsx:301
 msgid "Redo"
 msgstr "Redo"
 
-#: src/components/SimplifiedToolbox.tsx:153
+#: src/components/SimplifiedToolbox.tsx:179
 msgid "Remaining: {remaining}"
 msgstr "Remaining: {remaining}"
 
-#: src/components/ToolboxPanel.tsx:188
+#: src/components/ToolboxPanel.tsx:230
 msgid "Reset zoom"
 msgstr "Reset zoom"
 
-#: src/components/ToolboxPanel.tsx:311
+#: src/components/ToolboxPanel.tsx:353
 msgid "Save"
 msgstr "Save"
 
-#: src/components/ToolboxPanel.tsx:299
+#: src/components/ToolboxPanel.tsx:341
 msgid "Save drawing to gallery"
 msgstr "Save drawing to gallery"
 
-#: src/components/SimplifiedToolbox.tsx:201
+#: src/components/SimplifiedToolbox.tsx:227
 msgid "Shortcuts"
 msgstr "Shortcuts"
 
-#: src/components/SimplifiedToolbox.tsx:61
+#: src/components/SimplifiedToolbox.tsx:87
 msgid "Swap pens"
 msgstr "Swap pens"
 
-#: src/components/SimplifiedToolbox.tsx:183
-#: src/components/ToolboxPanel.tsx:275
+#: src/components/SimplifiedToolbox.tsx:209
+#: src/components/ToolboxPanel.tsx:317
 msgid "Switch to dark"
 msgstr "Switch to dark"
 
-#: src/components/SimplifiedToolbox.tsx:183
-#: src/components/ToolboxPanel.tsx:275
+#: src/components/SimplifiedToolbox.tsx:209
+#: src/components/ToolboxPanel.tsx:317
 msgid "Switch to light"
 msgstr "Switch to light"
 
-#: src/Painter.tsx:622
+#: src/Painter.tsx:824
 msgid "Time's up."
 msgstr "Time's up."
 
-#: src/components/SimplifiedToolbox.tsx:137
+#: src/components/SimplifiedToolbox.tsx:163
 msgid "Timer"
 msgstr "Timer"
 
-#: src/components/SimplifiedToolbox.tsx:155
+#: src/components/SimplifiedToolbox.tsx:181
 msgid "Timer off"
 msgstr "Timer off"
 
-#: src/components/ToolboxPanel.tsx:201
+#: src/components/ToolboxPanel.tsx:243
 msgid "Toggle horizontal flip"
 msgstr "Toggle horizontal flip"
 
-#: src/components/SimplifiedToolbox.tsx:65
-#: src/components/SimplifiedToolbox.tsx:168
-#: src/components/ToolboxPanel.tsx:250
+#: src/components/SimplifiedToolbox.tsx:91
+#: src/components/SimplifiedToolbox.tsx:194
+#: src/components/ToolboxPanel.tsx:292
 msgid "Undo"
 msgstr "Undo"
 
-#: src/components/ToolboxPanel.tsx:180
+#: src/components/ToolboxPanel.tsx:222
 msgid "Zoom in"
 msgstr "Zoom in"
 
-#: src/components/ToolboxPanel.tsx:172
+#: src/components/ToolboxPanel.tsx:214
 msgid "Zoom out"
 msgstr "Zoom out"

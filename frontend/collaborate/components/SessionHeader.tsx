@@ -1,4 +1,4 @@
-import { Trans } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
 import { NEO_BUTTON, NEO_PANEL } from "neo-cucumber";
 
@@ -24,6 +24,8 @@ export const SessionHeader = ({
   connectionState,
   isCatchingUp,
 }: SessionHeaderProps) => {
+  const { t } = useLingui();
+
   const handleShare = () => {
     if (navigator.share) {
       navigator
@@ -59,7 +61,7 @@ export const SessionHeader = ({
         <button
           onClick={handleShare}
           className={`${NEO_BUTTON} flex items-center gap-[3px]`}
-          title="Share this session"
+          title={t`Share this session`}
         >
           <Icon icon="material-symbols:upload" width={14} height={14} />
           <Trans>Share</Trans>
