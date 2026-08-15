@@ -52,14 +52,15 @@ export {
 } from "./utils/windowDrag";
 
 /**
- * How high a floating panel may go, given the painter's area: the top of that
- * area, rather than a fixed reservation guessed at the chrome above it.
+ * Where a floating panel sits: `minimumTop` is the top of the painter's area,
+ * measured rather than guessed at from the chrome above it, and `PANEL_MARGIN`
+ * is how far from an edge the painter's own panels stand.
  *
- * Exported so a host's own panels sit level with the painter's. The toolboxes
- * are positioned with it, and a host that hardcodes its own number instead is a
- * host whose windows drift out of line the moment its header changes height.
+ * Exported so a host's windows line up with the toolboxes. Pass the element the
+ * painter was mounted into -- a host that hardcodes its own numbers instead is
+ * a host whose windows drift out of line the moment its header changes height.
  */
-export { minimumTop } from "./components/toolboxAnchor";
+export { minimumTop, PANEL_MARGIN } from "./components/toolboxAnchor";
 
 /**
  * Public API for neo-cucumber.

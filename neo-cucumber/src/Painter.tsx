@@ -162,6 +162,22 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
 
   const appRef = useRef<HTMLDivElement>(null);
   /**
+   * The element the host mounted the painter into, and what the floating
+   * panels are anchored to.
+   *
+   * Not `appRef`: the painter's own root is `position: fixed` with all four
+   * insets at zero, so everything inside it measures the viewport no matter
+   * where on the page the host put it. Anchoring to that opened the toolboxes
+   * at the top of the screen, on top of the session header a collaborative
+   * host draws above the painter. The mount element is laid out normally and
+   * is where the painter really begins.
+   */
+  const rootRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    hostRef.current = rootRef.current?.parentElement ?? null;
+  }, []);
+  /**
    * The rubber band a region tool is being dragged out over. Its own canvas
    * above the layers: it is a cursor, not part of the drawing, so it must not
    * touch the pixels or be recorded.
@@ -783,7 +799,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
   }, [undo, redo, historyState.canUndo, historyState.canRedo]);
 
   return (
-    <div className="w-full app-container flex flex-col">
+    <div ref={rootRef} className="w-full app-container flex flex-col">
       <div className="flex-1 flex overflow-hidden">
         <PainterWorkspace
           workspaceRef={appRef}
@@ -823,7 +839,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
             )}
             {controls.kind === "none" ? null : twoToneConfig ? (
               <SimplifiedToolbox
-                anchorRef={appRef}
+                anchorRef={hostRef}
                 brushSize={drawingState.brushSize}
                 paletteColors={paletteColors}
                 selectedPaletteIndex={selectedPaletteIndex}
@@ -841,7 +857,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
               <ToolboxPanels
                 // Opens inside the painter area, below whatever the page
                 // puts above it
-                anchorRef={appRef}
+                anchorRef={hostRef}
                 // An offline drawing records lineType straight into the .pch,
                 // which already has codes for every one of these.
                 tools={ALL_TOOLS}

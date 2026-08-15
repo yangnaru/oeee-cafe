@@ -7,6 +7,7 @@ import {
   NEO_BUTTON,
   NEO_PANEL,
   NEO_PANEL_BUTTON,
+  PANEL_MARGIN,
   NEO_RESIZE_GRIP,
   NEO_RESIZE_HANDLE,
   NEO_TITLEBAR_DOT,
@@ -94,7 +95,7 @@ export default function App() {
   // measuring the painter's area rather than from a constant kept here: the
   // toolboxes are placed the same way, and a header that changes height would
   // otherwise leave this window sitting at an altitude of its own.
-  const [chatPosition, setChatPosition] = useState({ x: 16, y: 70 });
+  const [chatPosition, setChatPosition] = useState({ x: PANEL_MARGIN, y: 70 });
   const [chatCeiling, setChatCeiling] = useState(70);
   const [chatSize, setChatSize] = useState({ width: 224, height: 469 });
   const chatFrameRef = useRef<HTMLDivElement>(null);
@@ -222,7 +223,7 @@ export default function App() {
     const area = painterElementRef.current?.getBoundingClientRect() ?? null;
     const top = minimumTop(area);
     setChatCeiling(top);
-    setChatPosition((prev) => ({ ...prev, y: top + 12 }));
+    setChatPosition((prev) => ({ ...prev, y: top + PANEL_MARGIN }));
   }, [canvasMeta]);
 
   useEffect(() => {

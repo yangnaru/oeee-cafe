@@ -12,7 +12,16 @@
 
 export const PANEL_WIDTH = 56;
 export const PANEL_PITCH = 76;
-const MARGIN = 12;
+
+/**
+ * How far a floating panel sits from the edge it is anchored to.
+ *
+ * Exported because a host's own windows stand beside the painter's, and a
+ * window that is nearly flush with them reads as misaligned rather than as
+ * placed differently.
+ */
+export const PANEL_MARGIN = 12;
+
 
 /**
  * Below this the panels take an edge each instead of sharing the right one.
@@ -32,7 +41,7 @@ export const NARROW_WORKSPACE = 640;
  * Exported because the painter reserves this much on each side before fitting
  * the canvas, and the two numbers have to be the same number.
  */
-export const TOOLBOX_LANE = MARGIN + PANEL_WIDTH;
+export const TOOLBOX_LANE = PANEL_MARGIN + PANEL_WIDTH;
 
 export interface Point {
   x: number;
@@ -63,15 +72,15 @@ export function anchorTo(area: DOMRect | null): PanelPositions {
   const right = area ? area.right : window.innerWidth;
   const left = area ? area.left : 0;
   const width = area?.width ?? window.innerWidth;
-  const y = minimumTop(area) + MARGIN;
-  const rightEdge = Math.max(0, right - MARGIN - PANEL_WIDTH);
+  const y = minimumTop(area) + PANEL_MARGIN;
+  const rightEdge = Math.max(0, right - PANEL_MARGIN - PANEL_WIDTH);
 
   // NEO's own column keeps the side NEO puts it on; the extras it never had
   // take the other one.
   if (width < NARROW_WORKSPACE) {
     return {
       neo: { x: rightEdge, y },
-      extras: { x: Math.max(0, left + MARGIN), y },
+      extras: { x: Math.max(0, left + PANEL_MARGIN), y },
     };
   }
 
