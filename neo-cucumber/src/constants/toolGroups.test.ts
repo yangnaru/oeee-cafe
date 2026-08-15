@@ -5,7 +5,7 @@ import {
   NEO_DRAWING_TOOLS,
   NON_NEO_TOOLS,
 } from "./drawing";
-import { NEO_TIPS, NEO_TOOL_LABELS } from "../neo/toolboxSpec";
+import { NEO_TIPS, neoToolLabel } from "../neo/toolboxSpec";
 
 describe("NEO's tool tips", () => {
   it("has exactly NEO's image-editing toolset", () => {
@@ -127,16 +127,33 @@ describe("NEO's tool tips", () => {
   it("uses NEO's own labels, quirks included", () => {
     // These come from its `enx` dictionary. They read like mistakes and are
     // not: "Rect" is the filled rectangle, and NEO truncates the long ones.
-    expect(NEO_TOOL_LABELS.rectFill).toBe("Rect");
-    expect(NEO_TOOL_LABELS.rect).toBe("LineRect");
-    expect(NEO_TOOL_LABELS.eraser).toBe("White");
-    expect(NEO_TOOL_LABELS.freehand).toBe("Freehan");
-    expect(NEO_TOOL_LABELS.brush).toBe("WaterCo");
+    expect(neoToolLabel("rectFill", "en")).toBe("Rect");
+    expect(neoToolLabel("rect", "en")).toBe("LineRect");
+    expect(neoToolLabel("eraser", "en")).toBe("White");
+    expect(neoToolLabel("freehand", "en")).toBe("Freehan");
+    expect(neoToolLabel("brush", "en")).toBe("WaterCo");
   });
 
-  it("labels every tool it offers", () => {
+  it("shows a Japanese painter the words NEO is written in", () => {
+    // Japanese is NEO's source language, so its dictionary has no entry to
+    // look up -- the term itself is the label.
+    expect(neoToolLabel("rectFill", "ja")).toBe("四角");
+    expect(neoToolLabel("eraser", "ja")).toBe("消しペン");
+    expect(neoToolLabel("brush", "ja")).toBe("水彩");
+  });
+
+  it("falls back to English for languages NEO was never translated into", () => {
+    // NEO's own rule, and the right one here: this package is used in Korean
+    // and Chinese, which its dictionary has never had a table for.
+    expect(neoToolLabel("brush", "ko")).toBe("WaterCo");
+    expect(neoToolLabel("brush", "zh")).toBe("WaterCo");
+  });
+
+  it("labels every tool it offers, in every locale the site has", () => {
     for (const tool of NEO_TIPS.flatMap((tip) => tip.tools)) {
-      expect(NEO_TOOL_LABELS[tool]).toBeTruthy();
+      for (const locale of ["en", "ja", "ko", "zh"]) {
+        expect(neoToolLabel(tool, locale)).toBeTruthy();
+      }
     }
   });
 });

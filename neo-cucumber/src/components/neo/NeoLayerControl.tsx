@@ -4,7 +4,8 @@ import {
   NEO_LAYER_LABEL,
   NEO_LAYER_LINE,
 } from "./neoClasses";
-import { NEO_LAYER_LABELS } from "../../neo/toolboxSpec";
+import { useLingui } from "@lingui/react/macro";
+import { neoLayerLabel } from "../../neo/toolboxSpec";
 
 interface NeoLayerControlProps {
   /** Which layer is being drawn on. */
@@ -32,6 +33,9 @@ export function NeoLayerControl({
   onSwitch,
   onToggleVisible,
 }: NeoLayerControlProps) {
+  // NEO names its layers through the same dictionary as its tools.
+  const { i18n } = useLingui();
+
   return (
     <button
       type="button"
@@ -48,10 +52,10 @@ export function NeoLayerControl({
     >
       <div className={NEO_LAYER_BG} />
       <span className={NEO_LAYER_LABEL} style={{ top: -4 }}>
-        {current === "foreground" ? NEO_LAYER_LABELS[1] : ""}
+        {current === "foreground" ? neoLayerLabel(1, i18n.locale) : ""}
       </span>
       <span className={NEO_LAYER_LABEL} style={{ top: 6 }}>
-        {current === "background" ? NEO_LAYER_LABELS[0] : ""}
+        {current === "background" ? neoLayerLabel(0, i18n.locale) : ""}
       </span>
       {!fgVisible && <div className={NEO_LAYER_LINE} style={{ top: 0 }} />}
       {!bgVisible && <div className={NEO_LAYER_LINE} style={{ top: 10 }} />}

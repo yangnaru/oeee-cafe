@@ -1,11 +1,13 @@
 import { useRef } from "react";
+import { useLingui } from "@lingui/react/macro";
 import { NeoToolTip } from "./NeoToolTip";
 import { NEO_TOOL_ICONS } from "../../neo/toolIcons";
 import {
-  NEO_MASK_LABELS,
+  NEO_MASK_TERMS,
   NEO_TIPS,
-  NEO_TOOL_LABELS,
+  neoMaskLabel,
   neoTipArt,
+  neoToolLabel,
 } from "../../neo/toolboxSpec";
 import type { ToolId, DrawType } from "../../neo/tools";
 
@@ -55,6 +57,13 @@ export function NeoToolSet({
   /** Where each group was left, keyed by NEO's element id. */
   const modes = useRef<Record<string, number>>({});
 
+  // NEO translates its own toolbox at runtime and this reproduces that, so the
+  // labels follow the painter's locale rather than being fixed at English.
+  const { i18n } = useLingui();
+  const drawTypeNames = DRAW_TYPES.map((type) =>
+    neoToolLabel(type, i18n.locale)
+  ).join(", ");
+
   const tips = NEO_TIPS.map((tip) => ({
     ...tip,
     tools: tip.tools.filter((tool) => tools.includes(tool)),
@@ -91,13 +100,13 @@ export function NeoToolSet({
               key="mask"
               fixed
               art={{ kind: "maskBar" }}
-              label={NEO_MASK_LABELS[maskType] ?? NEO_MASK_LABELS[0]}
+              label={neoMaskLabel(maskType, i18n.locale)}
               title="Mask mode — click to cycle, right-click to take the current colour"
               color={color}
               alpha={alpha}
               maskColor={maskColor}
               onActivate={() =>
-                onSelectMaskType((maskType + 1) % NEO_MASK_LABELS.length)
+                onSelectMaskType((maskType + 1) % NEO_MASK_TERMS.length)
               }
               onAlternate={onAdoptMaskColor}
             />
@@ -111,8 +120,8 @@ export function NeoToolSet({
               key="draw"
               fixed
               art={neoTipArt(drawType)}
-              label={NEO_TOOL_LABELS[drawType] ?? drawType}
-              title={`How strokes are laid down: ${DRAW_TYPES.join(", ")}`}
+              label={neoToolLabel(drawType, i18n.locale)}
+              title={`How strokes are laid down: ${drawTypeNames}`}
               color={color}
               alpha={alpha}
               maskColor={maskColor}
@@ -139,15 +148,15 @@ export function NeoToolSet({
           <NeoToolTip
             key={tip.name}
             art={neoTipArt(shown)}
-            label={NEO_TOOL_LABELS[shown] ?? shown}
+            label={neoToolLabel(shown, i18n.locale)}
             selected={selected}
             underlay={tip.name === "effect2" ? NEO_TOOL_ICONS.copy2 : undefined}
             title={
               tip.tools.length > 1
-                ? `${NEO_TOOL_LABELS[shown] ?? shown} — click again to cycle (${tip.tools
-                    .map((t) => NEO_TOOL_LABELS[t] ?? t)
+                ? `${neoToolLabel(shown, i18n.locale)} — click again to cycle (${tip.tools
+                    .map((tool) => neoToolLabel(tool, i18n.locale))
                     .join(", ")})`
-                : (NEO_TOOL_LABELS[shown] ?? shown)
+                : neoToolLabel(shown, i18n.locale)
             }
             color={color}
             alpha={alpha}
