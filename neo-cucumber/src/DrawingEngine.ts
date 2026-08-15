@@ -234,9 +234,13 @@ export class DrawingEngine {
   /** Points interactive drawing at a participant's layers. */
   public setDrawTarget(owner: LayerOwner | null): void {
     this.targetOwner = owner;
+    // Aiming at somebody who has joined but not yet drawn brings their pair
+    // into being. Without this there is no slot to point at, and the region
+    // tools -- which reach their pixels through `neo.surfaces` rather than
+    // through an argument -- would keep drawing into whoever was selected
+    // before.
+    this.layersFor(owner ?? this.localOwner);
     const slot = this.owners.get(owner ?? this.localOwner);
-    // Region tools reach their pixels through `neo.surfaces` rather than
-    // through an argument, so redirecting them means moving that pair.
     if (slot) this.neo.surfaces = slot.surfaces;
   }
 

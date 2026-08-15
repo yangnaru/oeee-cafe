@@ -9,10 +9,7 @@ import {
   NEO_PANEL_BUTTON,
 } from "./neo/neoClasses";
 import { NeoWindow } from "./neo/NeoWindow";
-import {
-  NeoParticipantLayers,
-  type ParticipantLayer,
-} from "./neo/NeoParticipantLayers";
+import { type ParticipantLayer } from "./neo/NeoParticipantLayers";
 import { useTheme } from "../hooks/useTheme";
 import { usePressRepeat } from "../hooks/usePressRepeat";
 
@@ -110,12 +107,6 @@ export const ToolboxPanel = ({
   onZoomReset,
   onZoomFit,
   onSaveCollaborativeDrawing,
-  participantLayers,
-  hiddenOwners,
-  targetOwner,
-  localActorId,
-  onToggleOwnerVisible,
-  onSelectTargetOwner,
   section = "all",
   initialPosition,
   minimumY = 0,
@@ -134,7 +125,7 @@ export const ToolboxPanel = ({
       // NEO's own labels overflow their buttons -- its English toolbox reads
       // "Halftone" spilling past the edge -- and that spill has to stop at the
       // panel rather than land on the canvas.
-      className="w-max overflow-hidden select-text"
+      className={`w-max overflow-hidden select-text toolbox-${section}`}
       minimumY={minimumY}
     >
       <div className="flex flex-col gap-[2px] p-[2px]">
@@ -152,21 +143,6 @@ export const ToolboxPanel = ({
           />
         )}
 
-        {/*
-          The participants' layers, under NEO's column because it is a list of
-          the same thing NEO's layer button names -- just one row per person
-          rather than one button for the only person there used to be.
-        */}
-        {showNeo && participantLayers && participantLayers.length > 0 && (
-          <NeoParticipantLayers
-            participants={participantLayers}
-            hidden={hiddenOwners ?? new Set()}
-            target={targetOwner ?? ""}
-            localActorId={localActorId ?? ""}
-            onToggleVisible={onToggleOwnerVisible ?? (() => {})}
-            onSelectTarget={onSelectTargetOwner ?? (() => {})}
-          />
-        )}
 
         {showExtras && (
           <div className="flex w-[50px] flex-col gap-[2px]">
@@ -357,6 +333,7 @@ export const ToolboxPanel = ({
             )}
           </div>
         )}
+
       </div>
     </NeoWindow>
   );

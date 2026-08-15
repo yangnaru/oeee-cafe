@@ -230,11 +230,18 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
    */
   const participantLayers = useMemo(
     () =>
-      layerOwners.map((actorId) => ({
-        actorId,
-        name: participantNames.get(actorId)?.name ?? actorId,
-        color: participantNames.get(actorId)?.color,
-      })),
+      // Everyone in the room, not only everyone who has drawn. A pair comes
+      // into being the first time an operation names its owner, so listing
+      // just those would leave somebody who has joined and not yet made a
+      // mark out of the toolbox -- and they are exactly who you want to be
+      // able to see, hide, or draw for.
+      inJoinOrder([...new Set([...layerOwners, ...participantNames.keys()])]).map(
+        (actorId) => ({
+          actorId,
+          name: participantNames.get(actorId)?.name ?? actorId,
+          color: participantNames.get(actorId)?.color,
+        }),
+      ),
     [layerOwners, participantNames],
   );
 

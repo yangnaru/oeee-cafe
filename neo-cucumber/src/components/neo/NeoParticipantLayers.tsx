@@ -1,3 +1,4 @@
+import { Icon } from "@iconify/react";
 import { useLingui } from "@lingui/react/macro";
 import { NEO_BUTTON_ON, NEO_PANEL_BUTTON, NEO_WELL } from "./neoClasses";
 
@@ -55,6 +56,14 @@ export function NeoParticipantLayers({
         const isSelf = participant.actorId === localActorId;
         return (
           <div key={participant.actorId} className="flex items-center gap-[2px]">
+            {/*
+              A fixed-width holder rather than a width on the button: the panel
+              button class sets `w-full`, and two width utilities on one element
+              are settled by stylesheet order rather than by the order they are
+              written in -- which had the eye taking the whole row and the name
+              collapsing to nothing.
+            */}
+            <span className="block w-[20px] shrink-0">
             <button
               type="button"
               className={NEO_PANEL_BUTTON}
@@ -67,11 +76,23 @@ export function NeoParticipantLayers({
               title={isHidden ? t`Show these layers` : t`Hide these layers`}
               onClick={() => onToggleVisible(participant.actorId)}
             >
-              {isHidden ? "–" : "◉"}
+              <Icon
+                icon={
+                  isHidden
+                    ? "material-symbols:visibility-off"
+                    : "material-symbols:visibility"
+                }
+                width={14}
+                height={14}
+              />
             </button>
+            </span>
             <button
               type="button"
-              className={`${isTarget ? NEO_BUTTON_ON : NEO_PANEL_BUTTON} min-w-0 flex-1 truncate text-left`}
+              // NEO_BUTTON_ON is the pressed face and bevel only; it carries no
+              // text colour or padding of its own, so it goes on top of the
+              // button rather than in place of it.
+              className={`${NEO_PANEL_BUTTON} ${isTarget ? NEO_BUTTON_ON : ""} min-w-0 flex-1 justify-start truncate px-[4px] text-left`}
               aria-pressed={isTarget}
               aria-label={t`Draw on ${participant.name}'s layers`}
               title={t`Draw on these layers`}
@@ -82,8 +103,10 @@ export function NeoParticipantLayers({
                 className="mr-[4px] inline-block h-[8px] w-[8px] align-middle"
                 style={{ backgroundColor: participant.color ?? "transparent" }}
               />
-              {participant.name}
-              {isSelf ? t` (you)` : ""}
+              <span className="truncate text-[11px]">
+                {participant.name}
+                {isSelf ? t` (you)` : ""}
+              </span>
             </button>
           </div>
         );

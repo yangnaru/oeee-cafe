@@ -318,6 +318,47 @@ describe("public painter lifecycle", () => {
     act(() => painter.unmount());
   });
 
+  it("lists a participant who has joined but not drawn", async () => {
+    // Layers come into being when an operation first names their owner, so a
+    // toolbox built from those alone would leave out exactly the person you
+    // most want to see arrive. The host's roster is what fills that gap.
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    let painter!: ReturnType<typeof mount>;
+    act(() => {
+      painter = mount(element, {
+        width: 32, height: 24,
+        mode: { kind: "standard" },
+        controls: { kind: "toolbox" },
+        synchronization: { actorId: "1", onOperation: () => {} },
+      });
+    });
+    await act(async () => painter.ready);
+
+    const rows = () =>
+      Array.from(document.querySelectorAll("button"))
+        .map((button) => button.getAttribute("aria-label") ?? "")
+        .filter((label) => label.startsWith("Draw on "));
+
+    // Nobody else yet: one participant is not worth a panel.
+    expect(rows()).toEqual([]);
+
+    act(() => {
+      painter.setParticipants([
+        { actorId: "1", name: "alice" },
+        { actorId: "2", name: "bob" },
+      ]);
+    });
+
+    // Bob has drawn nothing, and is listed regardless.
+    expect(rows()).toEqual([
+      "Draw on alice's layers",
+      "Draw on bob's layers",
+    ]);
+
+    act(() => painter.unmount());
+  });
+
   it("applies canonical operations and round-trips public checkpoints", async () => {
     const element = document.createElement("div");
     document.body.appendChild(element);
