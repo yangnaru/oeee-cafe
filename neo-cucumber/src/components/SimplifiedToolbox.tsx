@@ -1,9 +1,7 @@
-import type React from "react";
-import { useEffect, useState } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
 import { CustomSlider } from "./CustomSlider";
-import { minimumTop } from "./toolboxAnchor";
+import { PANEL_MARGIN } from "./toolboxAnchor";
 import { TIMER_DURATIONS_MINUTES } from "../hooks/useDrawingTimer";
 import { useTheme } from "../hooks/useTheme";
 import { NeoWindow } from "./neo/NeoWindow";
@@ -32,8 +30,6 @@ interface SimplifiedToolboxProps {
   onTimerChange: (minutes: number) => void;
   onUndo: () => void;
   onRedo: () => void;
-  /** The painter's area, which is as high as the panel may be dragged. */
-  anchorRef?: React.RefObject<HTMLElement | null>;
 }
 
 const formatRemaining = (seconds: number): string => {
@@ -54,13 +50,8 @@ export const SimplifiedToolbox = ({
   onTimerChange,
   onUndo,
   onRedo,
-  anchorRef,
 }: SimplifiedToolboxProps) => {
   const { t } = useLingui();
-  const [ceiling, setCeiling] = useState(0);
-  useEffect(() => {
-    setCeiling(minimumTop(anchorRef?.current?.getBoundingClientRect() ?? null));
-  }, [anchorRef]);
   const { theme, toggle: toggleTheme } = useTheme();
   const backgroundColor = paletteColors[TWO_TONE_BACKGROUND_PEN_INDEX] || "#ffffff";
   const foregroundColor = paletteColors[TWO_TONE_FOREGROUND_PEN_INDEX] || "#000000";
@@ -78,9 +69,11 @@ export const SimplifiedToolbox = ({
 
   return (
     <NeoWindow
-      initialPosition={{ x: Math.max(0, window.innerWidth - 216), y: ceiling + 12 }}
+      initialPosition={{
+        x: Math.max(0, window.innerWidth - 200 - PANEL_MARGIN),
+        y: PANEL_MARGIN,
+      }}
       className="z-40 w-[200px] overflow-hidden select-text"
-      minimumY={ceiling}
       constrainToViewport
     >
       <div className="flex flex-col gap-[6px] p-[4px] font-[Arial] text-[12px] leading-[16px]">

@@ -18,7 +18,7 @@ interface Harness {
 
 let harness: Harness | null = null;
 
-function mount(minimumY?: number, height = 200): Harness {
+function mount(height = 200): Harness {
   const frame = document.createElement("div");
   frame.style.cssText = `position:fixed;left:0;top:0;width:200px;height:${height}px`;
   const handle = document.createElement("div");
@@ -29,7 +29,6 @@ function mount(minimumY?: number, height = 200): Harness {
 
   const positions: WindowPosition[] = [];
   const detachDrag = attachWindowDrag(frame, handle, {
-    minimumY,
     onPosition: (position) => positions.push(position),
   });
 
@@ -84,12 +83,14 @@ describe("dragging a floating window", () => {
     expect(positions.at(-1)).toEqual({ x: 0, y: 0 });
   });
 
-  it("keeps it below the chrome a host reserves", () => {
-    const { handle, positions } = mount(70);
+  it("reserves no band at the top for a host's chrome", () => {
+    // The only rule is staying in the window. A panel dragged to the very top
+    // gets there, over whatever the host has drawn.
+    const { handle, positions } = mount();
 
-    drag(handle, { x: 10, y: 100 }, { x: 10, y: 20 });
+    drag(handle, { x: 10, y: 100 }, { x: 10, y: -80 });
 
-    expect(positions.at(-1)?.y).toBe(70);
+    expect(positions.at(-1)?.y).toBe(0);
   });
 
   it("lets a window taller than the screen be dragged up past the top", () => {
@@ -97,7 +98,7 @@ describe("dragging a floating window", () => {
     // chrome would put its bottom out of reach for good, so the range inverts
     // and the only limit left is that its bottom edge stays on screen.
     const tall = window.innerHeight + 200;
-    const { handle, positions } = mount(70, tall);
+    const { handle, positions } = mount(tall);
 
     drag(handle, { x: 10, y: 100 }, { x: 10, y: -500 });
 

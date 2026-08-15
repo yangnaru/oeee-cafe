@@ -1,19 +1,21 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { act } from "react";
 import { mount } from "../public";
+import { PANEL_MARGIN } from "./toolboxAnchor";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
  * Where the toolboxes open relative to the page around them.
  *
- * The painter's own root is `position: fixed` with every inset at zero, so
- * anything measured inside it reports the viewport no matter where the host put
- * the painter. Anchoring the panels to that opened them at the top of the
- * screen -- over the session header a collaborative host draws above the
- * painter, and out of line with the host's own windows, which measure the
- * element they were mounted beside. So the panels anchor to the mount element,
- * and this is the test that says so.
+ * They do not clear it. A host may draw a session header above the painter,
+ * and the panels still open a margin from the top of the window, because they
+ * are fixed-position windows and the window is the space they are in -- and
+ * because a panel over a header can be dragged off it, while a band the panels
+ * refuse to enter is one you find out about by being stopped at it.
+ *
+ * Anchoring to the painter's own area instead made the gap at the top the
+ * height of the header plus the margin, against a margin at the sides.
  */
 
 const HEADER_HEIGHT = 64;
@@ -43,14 +45,14 @@ function mountBelowAHeader() {
   return area;
 }
 
-function panelTops(): number[] {
+function panels(): DOMRect[] {
   return [...document.querySelectorAll<HTMLElement>("body div")]
     .filter(
       (el) =>
         getComputedStyle(el).position === "fixed" &&
         el.className.includes("shadow-lg"),
     )
-    .map((el) => Math.round(el.getBoundingClientRect().top));
+    .map((el) => el.getBoundingClientRect());
 }
 
 afterEach(() => {
@@ -61,26 +63,24 @@ afterEach(() => {
 });
 
 describe("toolbox placement", () => {
-  it("opens the panels below the chrome the host draws above the painter", async () => {
-    const area = mountBelowAHeader();
-    await act(async () => painter?.ready);
-
-    const tops = panelTops();
-    expect(tops.length).toBe(2);
-    for (const top of tops) {
-      expect(top).toBeGreaterThanOrEqual(
-        Math.round(area.getBoundingClientRect().top),
-      );
-    }
-  });
-
-  it("measures the host's element rather than its own fixed root", async () => {
+  it("opens a margin from the top of the window, header or no header", async () => {
     mountBelowAHeader();
     await act(async () => painter?.ready);
 
-    // The painter's root covers the viewport, so a panel measured against it
-    // would open at the very top of the screen. The margin is the only gap
-    // there should be between the header and a panel.
-    expect(panelTops()).toEqual([HEADER_HEIGHT + 12, HEADER_HEIGHT + 12]);
+    const tops = panels().map((rect) => Math.round(rect.top));
+    expect(tops.length).toBe(2);
+    expect(tops).toEqual([PANEL_MARGIN, PANEL_MARGIN]);
+  });
+
+  it("leaves the same gap at the top as at the side", async () => {
+    mountBelowAHeader();
+    await act(async () => painter?.ready);
+
+    const rightmost = panels().sort((a, b) => b.right - a.right)[0];
+    const sideGap = Math.round(
+      document.documentElement.clientWidth - rightmost.right,
+    );
+
+    expect(Math.round(rightmost.top)).toBe(sideGap);
   });
 });

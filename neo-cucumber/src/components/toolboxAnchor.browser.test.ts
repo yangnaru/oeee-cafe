@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   anchorTo,
   NARROW_WORKSPACE,
+  PANEL_MARGIN,
   PANEL_WIDTH,
   TOOLBOX_LANE,
 } from "./toolboxAnchor";
@@ -9,64 +10,54 @@ import {
 /**
  * Where the two floating panels open.
  *
- * The painter fits the canvas into what they leave, using `TOOLBOX_LANE` to
- * say how much that is -- so the thing worth pinning is not the coordinates
- * but the agreement: every panel has to land inside the lane the canvas was
- * kept out of. Get that wrong and the drawing opens underneath a toolbox,
- * which is what this is here to stop happening again.
+ * Two things are worth pinning here. The first is an agreement: the painter
+ * fits the canvas into what the panels leave, using `TOOLBOX_LANE` to say how
+ * much that is, so every panel has to land inside the lane the canvas was kept
+ * out of. Get that wrong and the drawing opens underneath a toolbox.
+ *
+ * The second is that the gap at the top is the gap at the sides. These are
+ * fixed-position windows in a window, and nothing about the page they are over
+ * should push them further down than in.
  */
 
-/** An iPhone in portrait, which is where the panels used to open on top of the drawing. */
-const PHONE = new DOMRect(0, 0, 390, 664);
-const DESKTOP = new DOMRect(0, 0, 1440, 900);
+const width = () => document.documentElement.clientWidth;
 
 describe("anchoring the toolbox panels", () => {
+  it("holds off the top by exactly what it holds off the sides", () => {
+    const { neo, extras } = anchorTo();
+
+    const sideGap =
+      width() < NARROW_WORKSPACE
+        ? extras.x
+        : width() - (extras.x + PANEL_WIDTH);
+    expect(neo.y).toBe(PANEL_MARGIN);
+    expect(extras.y).toBe(PANEL_MARGIN);
+    expect(sideGap).toBe(PANEL_MARGIN);
+  });
+
+  it("keeps the far panel a margin from the right edge", () => {
+    const { neo, extras } = anchorTo();
+    const rightmost = Math.max(neo.x, extras.x);
+
+    expect(width() - (rightmost + PANEL_WIDTH)).toBe(PANEL_MARGIN);
+  });
+
   it("keeps both panels inside the lanes the canvas is fitted around", () => {
-    const { neo, extras } = anchorTo(PHONE);
+    const { neo, extras } = anchorTo();
 
-    expect(extras.x + PANEL_WIDTH).toBeLessThanOrEqual(TOOLBOX_LANE);
-    expect(neo.x).toBeGreaterThanOrEqual(PHONE.width - TOOLBOX_LANE);
+    if (width() < NARROW_WORKSPACE) {
+      expect(extras.x + PANEL_WIDTH).toBeLessThanOrEqual(TOOLBOX_LANE);
+      expect(neo.x).toBeGreaterThanOrEqual(width() - TOOLBOX_LANE);
+    } else {
+      // Wide: both cluster against the right, so only that lane is claimed.
+      expect(neo.x).toBeGreaterThan(width() / 2);
+    }
   });
 
-  it("leaves the middle of a phone to the canvas", () => {
-    const { neo, extras } = anchorTo(PHONE);
+  it("clusters them a panel pitch apart when there is room", () => {
+    if (width() < NARROW_WORKSPACE) return;
+    const { neo, extras } = anchorTo();
 
-    // What the painter reserves, and so the widest the canvas can open.
-    const canvasWidth = PHONE.width - TOOLBOX_LANE * 2;
-    const canvasLeft = (PHONE.width - canvasWidth) / 2;
-
-    expect(extras.x + PANEL_WIDTH).toBeLessThanOrEqual(canvasLeft);
-    expect(neo.x).toBeGreaterThanOrEqual(canvasLeft + canvasWidth);
-  });
-
-  it("still clusters them against one edge on a desktop", () => {
-    const { neo, extras } = anchorTo(DESKTOP);
-
-    expect(neo).toEqual({ x: 1296, y: 12 });
-    expect(extras).toEqual({ x: 1372, y: 12 });
-  });
-
-  it("opens at the top of a workspace that has nothing above it", () => {
-    // The offline page moves its Save button into the toolbox, so there is no
-    // chrome to clear and none is reserved.
-    expect(anchorTo(PHONE).neo.y).toBe(12);
-  });
-
-  it("switches layout at the narrow threshold and not before", () => {
-    const wide = anchorTo(new DOMRect(0, 0, NARROW_WORKSPACE, 800));
-    const narrow = anchorTo(new DOMRect(0, 0, NARROW_WORKSPACE - 1, 800));
-
-    // Clustered: the two sit a panel pitch apart.
-    expect(wide.extras.x - wide.neo.x).toBe(76);
-    // Split: one at each edge.
-    expect(narrow.extras.x).toBe(12);
-    expect(narrow.neo.x).toBeGreaterThan(narrow.extras.x);
-  });
-
-  it("opens below the chrome the host puts above the workspace", () => {
-    const { neo, extras } = anchorTo(new DOMRect(0, 120, 390, 544));
-
-    expect(neo.y).toBe(132);
-    expect(extras.y).toBe(132);
+    expect(extras.x - neo.x).toBe(76);
   });
 });

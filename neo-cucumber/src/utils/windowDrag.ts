@@ -21,8 +21,6 @@ export interface WindowPosition {
 export interface WindowDragOptions {
   /** Called with the frame's new viewport position during a drag. */
   onPosition(position: WindowPosition): void;
-  /** Keeps a window below persistent application chrome. */
-  minimumY?: number;
 }
 
 /**
@@ -74,8 +72,12 @@ function within(value: number, a: number, b: number): number {
  *
  * One pointer gesture rather than a mouse pair and a touch pair. Pointer
  * capture keeps the window following even when the cursor outruns it, which
- * is what a document-level listener would otherwise work around. Positions
- * are clamped so a window cannot be dragged out of reach.
+ * is what a document-level listener would otherwise work around.
+ *
+ * Staying inside the window is the only rule. There is deliberately no floor
+ * reserving room for a host's chrome: a band the windows refuse to enter is a
+ * band the person moving them has to discover by being stopped at it, and a
+ * window that covers a header can simply be moved off it again.
  */
 export function attachWindowDrag(
   frame: HTMLElement,
@@ -97,11 +99,7 @@ export function attachWindowDrag(
     const bounds = windowBounds();
     options.onPosition({
       x: within(event.clientX - offset.x, 0, bounds.width - rect.width),
-      y: within(
-        event.clientY - offset.y,
-        options.minimumY ?? 0,
-        bounds.height - rect.height,
-      ),
+      y: within(event.clientY - offset.y, 0, bounds.height - rect.height),
     });
   };
 
@@ -222,12 +220,11 @@ export function attachWindowResize(
 export function clampWindowPosition(
   position: WindowPosition,
   frame: HTMLElement,
-  minimumY = 0,
 ): WindowPosition {
   const rect = frame.getBoundingClientRect();
   const bounds = windowBounds();
   return {
     x: within(position.x, 0, bounds.width - rect.width),
-    y: within(position.y, minimumY, bounds.height - rect.height),
+    y: within(position.y, 0, bounds.height - rect.height),
   };
 }

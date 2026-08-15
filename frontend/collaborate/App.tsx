@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   attachWindowDrag,
   attachWindowResize,
-  minimumTop,
   mount,
   NEO_BUTTON,
   NEO_PANEL,
@@ -90,13 +89,13 @@ export default function App() {
   });
   const [synchronizationError, setSynchronizationError] = useState<string | null>(null);
 
-  // The chat window opens where the toolbox's own windows do, and stays below
-  // the session header for the same reason they do. Both numbers come from
-  // measuring the painter's area rather than from a constant kept here: the
-  // toolboxes are placed the same way, and a header that changes height would
-  // otherwise leave this window sitting at an altitude of its own.
-  const [chatPosition, setChatPosition] = useState({ x: PANEL_MARGIN, y: 70 });
-  const [chatCeiling, setChatCeiling] = useState(70);
+  // The chat window opens where the toolbox's own windows do: the same margin
+  // from the window's edge, top and side alike, taken from the package rather
+  // than written out again here.
+  const [chatPosition, setChatPosition] = useState({
+    x: PANEL_MARGIN,
+    y: PANEL_MARGIN,
+  });
   const [chatSize, setChatSize] = useState({ width: 224, height: 469 });
   const chatFrameRef = useRef<HTMLDivElement>(null);
   const chatHandleRef = useRef<HTMLDivElement>(null);
@@ -215,26 +214,12 @@ export default function App() {
     if (pointerFrameRef.current !== null) cancelAnimationFrame(pointerFrameRef.current);
   }, []);
 
-  // Once the canvas metadata arrives the session header is on the page, so the
-  // painter's area is where it will stay and both windows can be levelled with
-  // the toolboxes against it.
-  useEffect(() => {
-    if (!canvasMeta) return;
-    const area = painterElementRef.current?.getBoundingClientRect() ?? null;
-    const top = minimumTop(area);
-    setChatCeiling(top);
-    setChatPosition((prev) => ({ ...prev, y: top + PANEL_MARGIN }));
-  }, [canvasMeta]);
-
   useEffect(() => {
     const frame = chatFrameRef.current;
     const handle = chatHandleRef.current;
     if (!frame || !handle) return;
-    return attachWindowDrag(frame, handle, {
-      minimumY: chatCeiling,
-      onPosition: setChatPosition,
-    });
-  }, [chatCeiling]);
+    return attachWindowDrag(frame, handle, { onPosition: setChatPosition });
+  }, []);
 
   useEffect(() => {
     const frame = chatFrameRef.current;
