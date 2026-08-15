@@ -610,21 +610,45 @@ async fn reset_upload_authority_is_bound_to_one_selected_connection() {
 }
 
 #[test]
-fn reset_checkpoint_requires_exactly_one_snapshot_for_each_shared_layer() {
+fn reset_checkpoint_requires_one_snapshot_for_each_layer_of_each_participant() {
+    // [type][author][target owner][layer]. One connection uploads the whole
+    // canvas, so the author byte is the same throughout and the owner byte is
+    // what makes each pair a different participant's.
     assert!(valid_reset_payloads(&[
-        vec![0x02, 1, 1, 0xaa],
-        vec![0x02, 1, 0, 0xbb],
+        vec![0x02, 1, 1, 1, 0xaa],
+        vec![0x02, 1, 1, 0, 0xbb],
     ]));
-    assert!(!valid_reset_payloads(&[vec![0x02, 1, 1]]));
-    assert!(!valid_reset_payloads(
-        &[vec![0x02, 1, 1], vec![0x02, 1, 1],]
-    ));
-    assert!(!valid_reset_payloads(
-        &[vec![0x02, 1, 0], vec![0x12, 1, 1],]
-    ));
-    assert!(!valid_reset_payloads(
-        &[vec![0x02, 1, 0], vec![0x02, 1, 2],]
-    ));
+    // Two participants, both pairs complete
+    assert!(valid_reset_payloads(&[
+        vec![0x02, 1, 1, 1, 0xaa],
+        vec![0x02, 1, 1, 0, 0xbb],
+        vec![0x02, 1, 7, 1, 0xcc],
+        vec![0x02, 1, 7, 0, 0xdd],
+    ]));
+    // A participant with only one of their two layers
+    assert!(!valid_reset_payloads(&[
+        vec![0x02, 1, 1, 1, 0xaa],
+        vec![0x02, 1, 1, 0, 0xbb],
+        vec![0x02, 1, 7, 1, 0xcc],
+        vec![0x02, 1, 7, 1, 0xdd],
+    ]));
+    assert!(!valid_reset_payloads(&[]));
+    assert!(!valid_reset_payloads(&[vec![0x02, 1, 1, 1]]));
+    // The same layer twice for one participant
+    assert!(!valid_reset_payloads(&[
+        vec![0x02, 1, 1, 1],
+        vec![0x02, 1, 1, 1],
+    ]));
+    // Not a snapshot
+    assert!(!valid_reset_payloads(&[
+        vec![0x02, 1, 1, 0],
+        vec![0x12, 1, 1, 1],
+    ]));
+    // Not a layer
+    assert!(!valid_reset_payloads(&[
+        vec![0x02, 1, 1, 0],
+        vec![0x02, 1, 1, 2],
+    ]));
 }
 
 #[tokio::test]

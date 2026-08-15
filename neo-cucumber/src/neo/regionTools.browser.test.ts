@@ -212,8 +212,11 @@ describe("eraseRect end to end", () => {
 
     const history = new CanvasHistory(engine);
     history.setLocalUserId(7);
-    const bytes = encodeRegion(
-      7,
+    // The engine keys its pairs by actor, and this one belongs to user 7 --
+    // the same rename the painter does when the server names it. Without it
+    // the operation would land in a second pair and leave `layer` untouched.
+    engine.setLocalOwner("7");
+    const bytes = encodeRegion(7, 7,
       "background",
       "eraseRect",
       RECT,

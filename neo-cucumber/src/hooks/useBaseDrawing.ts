@@ -302,7 +302,7 @@ export const useBaseDrawing = (
 
     applyMask(drawingEngineRef.current, active);
 
-    const targetLayer = drawingEngineRef.current.layers[active.layerType];
+    const targetLayer = drawingEngineRef.current.drawTarget[active.layerType];
 
     // Callbacks run before the local apply; in remote-sync mode they fully
     // own applying the stroke (via the canvas history), so the direct engine
@@ -668,7 +668,7 @@ export const useBaseDrawing = (
             applyMask(drawingEngineRef.current, params);
             // Drawn new -> previous, as NEO draws every segment
             drawingEngineRef.current.drawLine(
-              drawingEngineRef.current.layers[params.layerType],
+              drawingEngineRef.current.drawTarget[params.layerType],
               to.x, to.y, from.x, from.y,
               params.brushSize, brush, color.r, color.g, color.b, color.a
             );

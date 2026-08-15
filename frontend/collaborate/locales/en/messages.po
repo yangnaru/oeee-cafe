@@ -61,8 +61,8 @@ msgstr "Failed to save session. Please try downloading as PNG instead."
 msgid "Go to Lobby"
 msgstr "Go to Lobby"
 
-#: ../frontend/collaborate/App.tsx:655
-#: ../frontend/collaborate/App.tsx:659
+#: ../frontend/collaborate/App.tsx:693
+#: ../frontend/collaborate/App.tsx:697
 msgid "Help"
 msgstr "Help"
 
@@ -91,7 +91,7 @@ msgstr "Loading..."
 msgid "Message too long (max 500 characters)"
 msgstr "Message too long (max 500 characters)"
 
-#: ../frontend/collaborate/App.tsx:563
+#: ../frontend/collaborate/App.tsx:593
 msgid "No Title"
 msgstr "No Title"
 
@@ -123,14 +123,14 @@ msgstr "Save as PNG"
 #~ msgid "Save to gallery"
 #~ msgstr "Save to gallery"
 
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
+#: ../frontend/collaborate/App.tsx:730
+#: ../frontend/collaborate/App.tsx:774
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:111
 msgid "Save to Gallery"
 msgstr "Save to Gallery"
 
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
+#: ../frontend/collaborate/App.tsx:730
+#: ../frontend/collaborate/App.tsx:774
 #: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:12
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:106
 msgid "Saving..."

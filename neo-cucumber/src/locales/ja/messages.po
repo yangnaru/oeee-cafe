@@ -13,6 +13,10 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#: src/components/neo/NeoParticipantLayers.tsx:86
+msgid " (you)"
+msgstr "（あなた）"
+
 #: src/components/SimplifiedToolbox.tsx:173
 msgid "{minutes} min"
 msgstr "{minutes}分"
@@ -32,6 +36,15 @@ msgstr "色"
 msgid "Dark"
 msgstr "ダーク"
 
+#. placeholder {0}: participant.name
+#: src/components/neo/NeoParticipantLayers.tsx:76
+msgid "Draw on {0}'s layers"
+msgstr "{0}のレイヤーに描く"
+
+#: src/components/neo/NeoParticipantLayers.tsx:77
+msgid "Draw on these layers"
+msgstr "このレイヤーに描く"
+
 #: src/components/ToolboxPanel.tsx:199
 #: src/components/ToolboxPanel.tsx:200
 msgid "Fit canvas"
@@ -42,6 +55,15 @@ msgstr "キャンバスに合わせる"
 #: src/components/SimplifiedToolbox.tsx:143
 msgid "Foreground pen"
 msgstr "描画色ペン"
+
+#. placeholder {0}: participant.name
+#: src/components/neo/NeoParticipantLayers.tsx:65
+msgid "Hide {0}'s layers"
+msgstr "{0}のレイヤーを隠す"
+
+#: src/components/neo/NeoParticipantLayers.tsx:67
+msgid "Hide these layers"
+msgstr "このレイヤーを隠す"
 
 #: src/components/SimplifiedToolbox.tsx:221
 #: src/components/ToolboxPanel.tsx:332
@@ -86,6 +108,15 @@ msgstr "描画をギャラリーに保存"
 #: src/components/SimplifiedToolbox.tsx:227
 msgid "Shortcuts"
 msgstr "ショートカット"
+
+#. placeholder {0}: participant.name
+#: src/components/neo/NeoParticipantLayers.tsx:64
+msgid "Show {0}'s layers"
+msgstr "{0}のレイヤーを表示"
+
+#: src/components/neo/NeoParticipantLayers.tsx:67
+msgid "Show these layers"
+msgstr "このレイヤーを表示"
 
 #: src/components/SimplifiedToolbox.tsx:87
 msgid "Swap pens"

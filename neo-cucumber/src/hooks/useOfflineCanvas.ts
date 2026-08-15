@@ -4,13 +4,20 @@ import {
   compositeLayersToCanvas,
   downloadCanvasAsPNG as downloadCanvas,
 } from "../utils/canvasExport";
-import { CANVAS_Z_INDEX } from "../neo/canvasStack";
+import { inJoinOrder, participantZIndex } from "../neo/canvasStack";
 
 interface UseOfflineCanvasParams {
   canvasWidth: number;
   canvasHeight: number;
   drawingEngine: DrawingEngine | null;
   currentZoom: number;
+  /**
+   * Participants whose layers are hidden from this viewer.
+   *
+   * A local view setting: hiding somebody is a way of seeing your own work,
+   * not an edit, so it never travels and never reaches the exported image.
+   */
+  hiddenOwners?: ReadonlySet<string>;
 }
 
 export const useOfflineCanvas = ({
@@ -18,56 +25,79 @@ export const useOfflineCanvas = ({
   canvasHeight,
   drawingEngine,
   currentZoom,
+  hiddenOwners,
 }: UseOfflineCanvasParams) => {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const backgroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const foregroundCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** One background/foreground canvas pair per participant. */
+  const ownerCanvasesRef = useRef(
+    new Map<string, { background: HTMLCanvasElement; foreground: HTMLCanvasElement }>(),
+  );
+  const hiddenRef = useRef<ReadonlySet<string>>(hiddenOwners ?? new Set());
 
-  // Initialize DOM canvases for layers
-  useEffect(() => {
-    if (!canvasContainerRef.current || !drawingEngine) return;
-
+  /**
+   * Gives every participant a canvas pair and puts the stack in join order.
+   *
+   * Called again whenever the engine gains or loses a participant, which
+   * happens the first time an operation names one -- a late joiner's first
+   * stroke brings their layers into being.
+   */
+  const syncOwnerCanvases = useCallback(() => {
     const container = canvasContainerRef.current;
+    if (!container || !drawingEngine) return;
     const canvasContent =
       container.querySelector<HTMLElement>(".canvas-content") ?? container;
 
-    // Create background canvas
-    if (!backgroundCanvasRef.current) {
-      const bgCanvas = document.createElement("canvas");
-      bgCanvas.width = canvasWidth;
-      bgCanvas.height = canvasHeight;
-      bgCanvas.className = "absolute top-0 left-0 pointer-events-none";
-      bgCanvas.style.width = `${canvasWidth}px`;
-      bgCanvas.style.height = `${canvasHeight}px`;
-      bgCanvas.style.zIndex = CANVAS_Z_INDEX.background.toString();
-      canvasContent.appendChild(bgCanvas);
-      backgroundCanvasRef.current = bgCanvas;
+    const owners = inJoinOrder(drawingEngine.ownerIds());
+    const live = new Set(owners);
+    for (const [owner, pair] of ownerCanvasesRef.current) {
+      if (live.has(owner)) continue;
+      pair.background.remove();
+      pair.foreground.remove();
+      ownerCanvasesRef.current.delete(owner);
     }
 
-    // Create foreground canvas
-    if (!foregroundCanvasRef.current) {
-      const fgCanvas = document.createElement("canvas");
-      fgCanvas.width = canvasWidth;
-      fgCanvas.height = canvasHeight;
-      fgCanvas.className = "absolute top-0 left-0 pointer-events-none";
-      fgCanvas.style.width = `${canvasWidth}px`;
-      fgCanvas.style.height = `${canvasHeight}px`;
-      fgCanvas.style.zIndex = CANVAS_Z_INDEX.foreground.toString();
-      canvasContent.appendChild(fgCanvas);
-      foregroundCanvasRef.current = fgCanvas;
-    }
+    owners.forEach((owner, rank) => {
+      let pair = ownerCanvasesRef.current.get(owner);
+      if (!pair) {
+        const make = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = canvasWidth;
+          canvas.height = canvasHeight;
+          canvas.className = "absolute top-0 left-0 pointer-events-none";
+          canvas.style.width = `${canvasWidth}px`;
+          canvas.style.height = `${canvasHeight}px`;
+          canvasContent.appendChild(canvas);
+          return canvas;
+        };
+        pair = { background: make(), foreground: make() };
+        ownerCanvasesRef.current.set(owner, pair);
+        drawingEngine.attachDOMCanvases(pair.background, pair.foreground, owner);
+      }
+      pair.background.style.zIndex = String(participantZIndex(rank, "background"));
+      pair.foreground.style.zIndex = String(participantZIndex(rank, "foreground"));
+      const hidden = hiddenRef.current.has(owner);
+      pair.background.style.display = hidden ? "none" : "";
+      pair.foreground.style.display = hidden ? "none" : "";
+    });
 
-    // Attach DOM canvases to drawing engine
-    if (backgroundCanvasRef.current && foregroundCanvasRef.current) {
-      drawingEngine.attachDOMCanvases(
-        backgroundCanvasRef.current,
-        foregroundCanvasRef.current
-      );
-
-      // Force initial render
-      drawingEngine.updateAllDOMCanvasesImmediate();
-    }
+    drawingEngine.updateAllDOMCanvasesImmediate();
   }, [canvasWidth, canvasHeight, drawingEngine]);
+
+  useEffect(() => {
+    if (!drawingEngine) return;
+    syncOwnerCanvases();
+    return drawingEngine.onOwnersChanged(syncOwnerCanvases);
+  }, [drawingEngine, syncOwnerCanvases]);
+
+  // Show and hide participants without disturbing the stack
+  useEffect(() => {
+    hiddenRef.current = hiddenOwners ?? new Set();
+    for (const [owner, pair] of ownerCanvasesRef.current) {
+      const hidden = hiddenRef.current.has(owner);
+      pair.background.style.display = hidden ? "none" : "";
+      pair.foreground.style.display = hidden ? "none" : "";
+    }
+  }, [hiddenOwners]);
 
   // Update canvas zoom
   useEffect(() => {
@@ -77,17 +107,26 @@ export const useOfflineCanvas = ({
     }
   }, [currentZoom]);
 
-  // Composite all canvases for export
+  /**
+   * Flattens the whole stack, everyone included.
+   *
+   * Hiding a participant is a way of looking at the drawing, so the exported
+   * image carries every participant's work whether or not this viewer had
+   * them showing.
+   */
   const compositeCanvasesForExport =
     useCallback((): HTMLCanvasElement | null => {
       if (!drawingEngine) return null;
 
-      const bgLayerCanvas = drawingEngine.getLayerCanvas("background");
-      const fgLayerCanvas = drawingEngine.getLayerCanvas("foreground");
-
-      const layers = [bgLayerCanvas, fgLayerCanvas].filter(
-        (canvas): canvas is HTMLCanvasElement => canvas !== null
-      );
+      const layers: HTMLCanvasElement[] = [];
+      // Bottom of the stack first, which is the reverse of join order: the
+      // earliest joiner composites on top.
+      for (const owner of inJoinOrder(drawingEngine.ownerIds()).reverse()) {
+        for (const layer of ["background", "foreground"] as const) {
+          const canvas = drawingEngine.getLayerCanvas(layer, owner);
+          if (canvas) layers.push(canvas);
+        }
+      }
 
       return compositeLayersToCanvas(canvasWidth, canvasHeight, layers);
     }, [drawingEngine, canvasWidth, canvasHeight]);

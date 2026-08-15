@@ -325,17 +325,19 @@ export function encodeJoin(userId: string, timestamp: number): ArrayBuffer {
  */
 export async function encodeSnapshot(
   userId: number,
+  targetOwner: number,
   layer: "foreground" | "background",
   pngBlob: Blob
 ): Promise<ArrayBuffer> {
   const pngBytes = new Uint8Array(await pngBlob.arrayBuffer());
-  const buffer = new Uint8Array(7 + pngBytes.length);
+  const buffer = new Uint8Array(8 + pngBytes.length);
 
   buffer[0] = MSG_TYPE.SNAPSHOT;
   buffer[1] = userId;
-  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
-  writeUint32LE(buffer, 3, pngBytes.length);
-  buffer.set(pngBytes, 7);
+  buffer[2] = targetOwner;
+  buffer[3] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  writeUint32LE(buffer, 4, pngBytes.length);
+  buffer.set(pngBytes, 8);
 
   return buffer.buffer;
 }
@@ -349,6 +351,7 @@ export async function encodeSnapshot(
  */
 export function encodeStroke(
   userId: number,
+  targetOwner: number,
   layer: "foreground" | "background",
   brushSize: number,
   brushType: WireBrushType,
@@ -359,21 +362,22 @@ export function encodeStroke(
   points: { x: number; y: number }[],
   mask?: WireMask
 ): ArrayBuffer {
-  const buffer = new Uint8Array(11 + points.length * 4 + MASK_BYTES);
+  const buffer = new Uint8Array(12 + points.length * 4 + MASK_BYTES);
 
   buffer[0] = MSG_TYPE.STROKE;
   buffer[1] = userId;
-  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
-  buffer[3] = brushSize;
-  buffer[4] = BRUSH_TYPE_TO_CODE[brushType] ?? BRUSH_TYPE.SOLID;
-  buffer[5] = r;
-  buffer[6] = g;
-  buffer[7] = b;
-  buffer[8] = a;
-  writeUint16LE(buffer, 9, points.length);
+  buffer[2] = targetOwner;
+  buffer[3] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[4] = brushSize;
+  buffer[5] = BRUSH_TYPE_TO_CODE[brushType] ?? BRUSH_TYPE.SOLID;
+  buffer[6] = r;
+  buffer[7] = g;
+  buffer[8] = b;
+  buffer[9] = a;
+  writeUint16LE(buffer, 10, points.length);
   for (let i = 0; i < points.length; i++) {
-    writeInt16LE(buffer, 11 + i * 4, Math.round(points[i].x));
-    writeInt16LE(buffer, 13 + i * 4, Math.round(points[i].y));
+    writeInt16LE(buffer, 12 + i * 4, Math.round(points[i].x));
+    writeInt16LE(buffer, 14 + i * 4, Math.round(points[i].y));
   }
 
   return withMask(buffer, mask);
@@ -385,6 +389,7 @@ export function encodeStroke(
  */
 export function encodeFill(
   userId: number,
+  targetOwner: number,
   layer: "foreground" | "background",
   x: number,
   y: number,
@@ -394,17 +399,18 @@ export function encodeFill(
   a: number,
   mask?: WireMask
 ): ArrayBuffer {
-  const buffer = new Uint8Array(11 + MASK_BYTES);
+  const buffer = new Uint8Array(12 + MASK_BYTES);
 
   buffer[0] = MSG_TYPE.FILL;
   buffer[1] = userId;
-  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
-  writeInt16LE(buffer, 3, Math.round(x));
-  writeInt16LE(buffer, 5, Math.round(y));
-  buffer[7] = r;
-  buffer[8] = g;
-  buffer[9] = b;
-  buffer[10] = a;
+  buffer[2] = targetOwner;
+  buffer[3] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  writeInt16LE(buffer, 4, Math.round(x));
+  writeInt16LE(buffer, 6, Math.round(y));
+  buffer[8] = r;
+  buffer[9] = g;
+  buffer[10] = b;
+  buffer[11] = a;
 
   return withMask(buffer, mask);
 }
@@ -538,6 +544,7 @@ export function encodeMovePointer(userId: number, x: number, y: number): ArrayBu
  */
 export function encodeRegion(
   userId: number,
+  targetOwner: number,
   layer: "foreground" | "background",
   tool: RegionTool,
   rect: { x: number; y: number; width: number; height: number },
@@ -545,20 +552,21 @@ export function encodeRegion(
   brushSize: number,
   mask?: WireMask
 ): ArrayBuffer {
-  const buffer = new Uint8Array(17 + MASK_BYTES);
+  const buffer = new Uint8Array(18 + MASK_BYTES);
   buffer[0] = MSG_TYPE.REGION;
   buffer[1] = userId;
-  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
-  buffer[3] = REGION_TOOL_TO_CODE[tool];
-  writeInt16LE(buffer, 4, Math.round(rect.x));
-  writeInt16LE(buffer, 6, Math.round(rect.y));
-  writeInt16LE(buffer, 8, Math.round(rect.width));
-  writeInt16LE(buffer, 10, Math.round(rect.height));
-  buffer[12] = color.r;
-  buffer[13] = color.g;
-  buffer[14] = color.b;
-  buffer[15] = color.a;
-  buffer[16] = brushSize;
+  buffer[2] = targetOwner;
+  buffer[3] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[4] = REGION_TOOL_TO_CODE[tool];
+  writeInt16LE(buffer, 5, Math.round(rect.x));
+  writeInt16LE(buffer, 7, Math.round(rect.y));
+  writeInt16LE(buffer, 9, Math.round(rect.width));
+  writeInt16LE(buffer, 11, Math.round(rect.height));
+  buffer[13] = color.r;
+  buffer[14] = color.g;
+  buffer[15] = color.b;
+  buffer[16] = color.a;
+  buffer[17] = brushSize;
   return withMask(buffer, mask);
 }
 
@@ -568,6 +576,7 @@ export function encodeRegion(
  */
 export function encodeLine(
   userId: number,
+  targetOwner: number,
   layer: "foreground" | "background",
   brushSize: number,
   brushType: WireBrushType,
@@ -576,20 +585,21 @@ export function encodeLine(
   to: { x: number; y: number },
   mask?: WireMask
 ): ArrayBuffer {
-  const buffer = new Uint8Array(17 + MASK_BYTES);
+  const buffer = new Uint8Array(18 + MASK_BYTES);
   buffer[0] = MSG_TYPE.LINE;
   buffer[1] = userId;
-  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
-  buffer[3] = BRUSH_TYPE_TO_CODE[brushType] ?? BRUSH_TYPE.SOLID;
-  buffer[4] = brushSize;
-  buffer[5] = color.r;
-  buffer[6] = color.g;
-  buffer[7] = color.b;
-  buffer[8] = color.a;
-  writeInt16LE(buffer, 9, Math.round(from.x));
-  writeInt16LE(buffer, 11, Math.round(from.y));
-  writeInt16LE(buffer, 13, Math.round(to.x));
-  writeInt16LE(buffer, 15, Math.round(to.y));
+  buffer[2] = targetOwner;
+  buffer[3] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[4] = BRUSH_TYPE_TO_CODE[brushType] ?? BRUSH_TYPE.SOLID;
+  buffer[5] = brushSize;
+  buffer[6] = color.r;
+  buffer[7] = color.g;
+  buffer[8] = color.b;
+  buffer[9] = color.a;
+  writeInt16LE(buffer, 10, Math.round(from.x));
+  writeInt16LE(buffer, 12, Math.round(from.y));
+  writeInt16LE(buffer, 14, Math.round(to.x));
+  writeInt16LE(buffer, 16, Math.round(to.y));
   return withMask(buffer, mask);
 }
 
@@ -600,6 +610,7 @@ export function encodeLine(
  */
 export function encodeBezier(
   userId: number,
+  targetOwner: number,
   layer: "foreground" | "background",
   brushSize: number,
   brushType: WireBrushType,
@@ -607,18 +618,19 @@ export function encodeBezier(
   points: number[],
   mask?: WireMask
 ): ArrayBuffer {
-  const buffer = new Uint8Array(25 + MASK_BYTES);
+  const buffer = new Uint8Array(26 + MASK_BYTES);
   buffer[0] = MSG_TYPE.BEZIER;
   buffer[1] = userId;
-  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
-  buffer[3] = BRUSH_TYPE_TO_CODE[brushType] ?? BRUSH_TYPE.SOLID;
-  buffer[4] = brushSize;
-  buffer[5] = color.r;
-  buffer[6] = color.g;
-  buffer[7] = color.b;
-  buffer[8] = color.a;
+  buffer[2] = targetOwner;
+  buffer[3] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[4] = BRUSH_TYPE_TO_CODE[brushType] ?? BRUSH_TYPE.SOLID;
+  buffer[5] = brushSize;
+  buffer[6] = color.r;
+  buffer[7] = color.g;
+  buffer[8] = color.b;
+  buffer[9] = color.a;
   for (let i = 0; i < 8; i++) {
-    writeInt16LE(buffer, 9 + i * 2, Math.round(points[i] ?? 0));
+    writeInt16LE(buffer, 10 + i * 2, Math.round(points[i] ?? 0));
   }
   return withMask(buffer, mask);
 }
@@ -629,12 +641,14 @@ export function encodeBezier(
  */
 export function encodeEraseAll(
   userId: number,
+  targetOwner: number,
   layer: "foreground" | "background"
 ): ArrayBuffer {
-  const buffer = new Uint8Array(3);
+  const buffer = new Uint8Array(4);
   buffer[0] = MSG_TYPE.ERASE_ALL;
   buffer[1] = userId;
-  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[2] = targetOwner;
+  buffer[3] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
   return buffer.buffer;
 }
 
@@ -647,6 +661,7 @@ export function encodeEraseAll(
  */
 export function encodeText(
   userId: number,
+  targetOwner: number,
   layer: "foreground" | "background",
   x: number,
   y: number,
@@ -656,19 +671,20 @@ export function encodeText(
   mask?: WireMask
 ): ArrayBuffer {
   const encoded = new TextEncoder().encode(text);
-  const buffer = new Uint8Array(14 + encoded.length + MASK_BYTES);
+  const buffer = new Uint8Array(15 + encoded.length + MASK_BYTES);
   buffer[0] = MSG_TYPE.TEXT;
   buffer[1] = userId;
-  buffer[2] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
-  buffer[3] = brushSize;
-  buffer[4] = color.r;
-  buffer[5] = color.g;
-  buffer[6] = color.b;
-  buffer[7] = color.a;
-  writeInt16LE(buffer, 8, Math.round(x));
-  writeInt16LE(buffer, 10, Math.round(y));
-  writeUint16LE(buffer, 12, encoded.length);
-  buffer.set(encoded, 14);
+  buffer[2] = targetOwner;
+  buffer[3] = layer === "foreground" ? LAYER.FOREGROUND : LAYER.BACKGROUND;
+  buffer[4] = brushSize;
+  buffer[5] = color.r;
+  buffer[6] = color.g;
+  buffer[7] = color.b;
+  buffer[8] = color.a;
+  writeInt16LE(buffer, 9, Math.round(x));
+  writeInt16LE(buffer, 11, Math.round(y));
+  writeUint16LE(buffer, 13, encoded.length);
+  buffer.set(encoded, 15);
   return withMask(buffer, mask);
 }
 
@@ -697,6 +713,8 @@ export interface WelcomeMessage {
 export interface SnapshotMessage {
   type: "snapshot";
   userId: number;
+  /** Whose layer pair the pixels land in; the author is `userId`. */
+  targetOwner: number;
   layer: "foreground" | "background";
   pngData: Uint8Array;
 }
@@ -704,6 +722,8 @@ export interface SnapshotMessage {
 export interface StrokeMessage {
   type: "stroke";
   userId: number;
+  /** Whose layer pair the pixels land in; the author is `userId`. */
+  targetOwner: number;
   layer: "foreground" | "background";
   brushSize: number;
   brushType: WireBrushType;
@@ -716,6 +736,8 @@ export interface StrokeMessage {
 export interface FillMessage {
   type: "fill";
   userId: number;
+  /** Whose layer pair the pixels land in; the author is `userId`. */
+  targetOwner: number;
   layer: "foreground" | "background";
   x: number;
   y: number;
@@ -726,6 +748,8 @@ export interface FillMessage {
 export interface RegionMessage {
   type: "region";
   userId: number;
+  /** Whose layer pair the pixels land in; the author is `userId`. */
+  targetOwner: number;
   layer: "foreground" | "background";
   tool: RegionTool;
   rect: { x: number; y: number; width: number; height: number };
@@ -737,6 +761,8 @@ export interface RegionMessage {
 export interface LineMessage {
   type: "line";
   userId: number;
+  /** Whose layer pair the pixels land in; the author is `userId`. */
+  targetOwner: number;
   layer: "foreground" | "background";
   brushSize: number;
   brushType: WireBrushType;
@@ -749,6 +775,8 @@ export interface LineMessage {
 export interface BezierMessage {
   type: "bezier";
   userId: number;
+  /** Whose layer pair the pixels land in; the author is `userId`. */
+  targetOwner: number;
   layer: "foreground" | "background";
   brushSize: number;
   brushType: WireBrushType;
@@ -760,12 +788,16 @@ export interface BezierMessage {
 export interface EraseAllMessage {
   type: "eraseAll";
   userId: number;
+  /** Whose layer pair the pixels land in; the author is `userId`. */
+  targetOwner: number;
   layer: "foreground" | "background";
 }
 
 export interface TextMessage {
   type: "text";
   userId: number;
+  /** Whose layer pair the pixels land in; the author is `userId`. */
+  targetOwner: number;
   layer: "foreground" | "background";
   x: number;
   y: number;
@@ -791,6 +823,14 @@ export interface ResetRequestMessage {
 export interface ResetPointMessage {
   type: "resetPoint";
   baseSeq: number;
+  /**
+   * How many snapshots the checkpoint at `baseSeq` is made of.
+   *
+   * Every snapshot of a reset is stored at the same sequence, so without this
+   * a client cannot tell a half-arrived checkpoint from a whole one -- and
+   * with one layer pair per participant there is no fixed number to assume.
+   */
+  snapshotCount: number;
 }
 
 export interface CaughtUpMessage {
@@ -895,82 +935,87 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
 
   switch (msgType) {
     case MSG_TYPE.REGION: {
-      if (buffer.length < 17 + MASK_BYTES) return null;
-      const tool = CODE_TO_REGION_TOOL[buffer[3]];
+      if (buffer.length < 18 + MASK_BYTES) return null;
+      const tool = CODE_TO_REGION_TOOL[buffer[4]];
       // A tool code this client predates: drop it rather than guess, since
       // applying the wrong region op is worse than applying none.
       if (!tool) return null;
       return {
         type: "region",
         userId: buffer[1],
-        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
+        targetOwner: buffer[2],
+        layer: buffer[3] === LAYER.FOREGROUND ? "foreground" : "background",
         tool,
         rect: {
-          x: readInt16LE(buffer, 4),
-          y: readInt16LE(buffer, 6),
-          width: readInt16LE(buffer, 8),
-          height: readInt16LE(buffer, 10),
+          x: readInt16LE(buffer, 5),
+          y: readInt16LE(buffer, 7),
+          width: readInt16LE(buffer, 9),
+          height: readInt16LE(buffer, 11),
         },
-        color: { r: buffer[12], g: buffer[13], b: buffer[14], a: buffer[15] },
-        brushSize: buffer[16],
-        mask: readMask(buffer, 17),
+        color: { r: buffer[13], g: buffer[14], b: buffer[15], a: buffer[16] },
+        brushSize: buffer[17],
+        mask: readMask(buffer, 18),
       };
     }
 
     case MSG_TYPE.LINE: {
-      if (buffer.length < 17 + MASK_BYTES) return null;
+      if (buffer.length < 18 + MASK_BYTES) return null;
       return {
         type: "line",
         userId: buffer[1],
-        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
-        brushType: CODE_TO_BRUSH_TYPE[buffer[3]] ?? "solid",
-        brushSize: buffer[4],
-        color: { r: buffer[5], g: buffer[6], b: buffer[7], a: buffer[8] },
-        from: { x: readInt16LE(buffer, 9), y: readInt16LE(buffer, 11) },
-        to: { x: readInt16LE(buffer, 13), y: readInt16LE(buffer, 15) },
-        mask: readMask(buffer, 17),
+        targetOwner: buffer[2],
+        layer: buffer[3] === LAYER.FOREGROUND ? "foreground" : "background",
+        brushType: CODE_TO_BRUSH_TYPE[buffer[4]] ?? "solid",
+        brushSize: buffer[5],
+        color: { r: buffer[6], g: buffer[7], b: buffer[8], a: buffer[9] },
+        from: { x: readInt16LE(buffer, 10), y: readInt16LE(buffer, 12) },
+        to: { x: readInt16LE(buffer, 14), y: readInt16LE(buffer, 16) },
+        mask: readMask(buffer, 18),
       };
     }
 
     case MSG_TYPE.BEZIER: {
-      if (buffer.length < 25 + MASK_BYTES) return null;
+      if (buffer.length < 26 + MASK_BYTES) return null;
       const points: number[] = [];
-      for (let i = 0; i < 8; i++) points.push(readInt16LE(buffer, 9 + i * 2));
+      for (let i = 0; i < 8; i++) points.push(readInt16LE(buffer, 10 + i * 2));
       return {
         type: "bezier",
         userId: buffer[1],
-        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
-        brushType: CODE_TO_BRUSH_TYPE[buffer[3]] ?? "solid",
-        brushSize: buffer[4],
-        color: { r: buffer[5], g: buffer[6], b: buffer[7], a: buffer[8] },
+        targetOwner: buffer[2],
+        layer: buffer[3] === LAYER.FOREGROUND ? "foreground" : "background",
+        brushType: CODE_TO_BRUSH_TYPE[buffer[4]] ?? "solid",
+        brushSize: buffer[5],
+        color: { r: buffer[6], g: buffer[7], b: buffer[8], a: buffer[9] },
         points,
-        mask: readMask(buffer, 25),
+        mask: readMask(buffer, 26),
       };
     }
 
     case MSG_TYPE.ERASE_ALL: {
-      if (buffer.length < 3) return null;
+      if (buffer.length < 4) return null;
       return {
         type: "eraseAll",
         userId: buffer[1],
-        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
+        targetOwner: buffer[2],
+        layer: buffer[3] === LAYER.FOREGROUND ? "foreground" : "background",
       };
     }
 
     case MSG_TYPE.TEXT: {
-      if (buffer.length < 14) return null;
-      const textLength = readUint16LE(buffer, 12);
-      if (buffer.length < 14 + textLength + MASK_BYTES) return null;
+      if (buffer.length < 15) return null;
+      const textLength = readUint16LE(buffer, 13);
+      if (buffer.length < 15 + textLength + MASK_BYTES) return null;
       return {
         type: "text",
         userId: buffer[1],
-        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
-        brushSize: buffer[3],
-        color: { r: buffer[4], g: buffer[5], b: buffer[6], a: buffer[7] },
-        x: readInt16LE(buffer, 8),
-        y: readInt16LE(buffer, 10),
-        text: new TextDecoder().decode(buffer.slice(14, 14 + textLength)),
-        mask: readMask(buffer, 14 + textLength),
+        targetOwner: buffer[2],
+        layer: buffer[3] === LAYER.FOREGROUND ? "foreground" : "background",
+        brushSize: buffer[4],
+        color: { r: buffer[5], g: buffer[6], b: buffer[7], a: buffer[8] },
+        x: readInt16LE(buffer, 9),
+        y: readInt16LE(buffer, 11),
+        text: new TextDecoder().decode(buffer.slice(15, 15 + textLength)),
+        mask: readMask(buffer, 15 + textLength),
       };
     }
 
@@ -1078,10 +1123,11 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       };
 
     case MSG_TYPE.RESET_POINT:
-      if (buffer.length < 9) return null;
+      if (buffer.length < 11) return null;
       return {
         type: "resetPoint",
         baseSeq: readUint64LE(buffer, 1),
+        snapshotCount: readUint16LE(buffer, 9),
       };
 
     case MSG_TYPE.CAUGHT_UP:
@@ -1108,53 +1154,56 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       };
 
     case MSG_TYPE.SNAPSHOT: {
-      if (buffer.length < 7) return null;
-      const pngLength = readUint32LE(buffer, 3);
-      if (buffer.length < 7 + pngLength) return null;
+      if (buffer.length < 8) return null;
+      const pngLength = readUint32LE(buffer, 4);
+      if (buffer.length < 8 + pngLength) return null;
       return {
         type: "snapshot",
         userId: buffer[1],
-        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
-        pngData: buffer.slice(7, 7 + pngLength),
+        targetOwner: buffer[2],
+        layer: buffer[3] === LAYER.FOREGROUND ? "foreground" : "background",
+        pngData: buffer.slice(8, 8 + pngLength),
       };
     }
 
     case MSG_TYPE.STROKE: {
-      if (buffer.length < 11) return null;
-      const count = readUint16LE(buffer, 9);
-      if (buffer.length < 11 + count * 4 + MASK_BYTES) return null;
+      if (buffer.length < 12) return null;
+      const count = readUint16LE(buffer, 10);
+      if (buffer.length < 12 + count * 4 + MASK_BYTES) return null;
       const points: { x: number; y: number }[] = [];
       for (let i = 0; i < count; i++) {
         points.push({
-          x: readInt16LE(buffer, 11 + i * 4),
-          y: readInt16LE(buffer, 13 + i * 4),
+          x: readInt16LE(buffer, 12 + i * 4),
+          y: readInt16LE(buffer, 14 + i * 4),
         });
       }
       return {
         type: "stroke",
         userId: buffer[1],
-        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
-        brushSize: buffer[3],
+        targetOwner: buffer[2],
+        layer: buffer[3] === LAYER.FOREGROUND ? "foreground" : "background",
+        brushSize: buffer[4],
         // An unrecognised code falls back to solid, not eraser: a client
         // meeting a tool newer than itself should draw something harmless
         // rather than delete the pixels underneath.
-        brushType: CODE_TO_BRUSH_TYPE[buffer[4]] ?? "solid",
-        color: { r: buffer[5], g: buffer[6], b: buffer[7], a: buffer[8] },
+        brushType: CODE_TO_BRUSH_TYPE[buffer[5]] ?? "solid",
+        color: { r: buffer[6], g: buffer[7], b: buffer[8], a: buffer[9] },
         points,
-        mask: readMask(buffer, 11 + count * 4),
+        mask: readMask(buffer, 12 + count * 4),
       };
     }
 
     case MSG_TYPE.FILL:
-      if (buffer.length < 11 + MASK_BYTES) return null;
+      if (buffer.length < 12 + MASK_BYTES) return null;
       return {
         type: "fill",
         userId: buffer[1],
-        layer: buffer[2] === LAYER.FOREGROUND ? "foreground" : "background",
-        x: readInt16LE(buffer, 3),
-        y: readInt16LE(buffer, 5),
-        color: { r: buffer[7], g: buffer[8], b: buffer[9], a: buffer[10] },
-        mask: readMask(buffer, 11),
+        targetOwner: buffer[2],
+        layer: buffer[3] === LAYER.FOREGROUND ? "foreground" : "background",
+        x: readInt16LE(buffer, 4),
+        y: readInt16LE(buffer, 6),
+        color: { r: buffer[8], g: buffer[9], b: buffer[10], a: buffer[11] },
+        mask: readMask(buffer, 12),
       };
 
     case MSG_TYPE.POINTER_UP:
@@ -1219,16 +1268,22 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
 
 /** Encode the library's transport-neutral operation into oeee's room wire format. */
 export function encodePainterOperation(userId: number, operation: PainterOperation): ArrayBuffer {
+  // Unsaid means "my own layers": the author and the target are the same
+  // person for every mark except one aimed at somebody else's pair.
+  const target =
+    "targetActorId" in operation && operation.targetActorId !== undefined
+      ? Number(operation.targetActorId)
+      : userId;
   switch (operation.kind) {
     case "undo-boundary": return encodeUndoPoint(userId);
     case "undo": return encodeUndo(userId, operation.redo);
-    case "stroke": return encodeStroke(userId, operation.layer, operation.brushSize, operation.brush, operation.color.r, operation.color.g, operation.color.b, operation.color.a, operation.points, operation.mask);
-    case "fill": return encodeFill(userId, operation.layer, operation.at.x, operation.at.y, operation.color.r, operation.color.g, operation.color.b, operation.color.a, operation.mask);
-    case "line": return encodeLine(userId, operation.layer, operation.brushSize, operation.brush, operation.color, operation.from, operation.to, operation.mask);
-    case "bezier": return encodeBezier(userId, operation.layer, operation.brushSize, operation.brush, operation.color, operation.points, operation.mask);
-    case "region": return encodeRegion(userId, operation.layer, operation.tool, operation.rect, operation.color, operation.brushSize, operation.mask);
-    case "text": return encodeText(userId, operation.layer, operation.at.x, operation.at.y, operation.text, operation.color, operation.brushSize, operation.mask);
-    case "clear-layer": return encodeEraseAll(userId, operation.layer);
+    case "stroke": return encodeStroke(userId, target, operation.layer, operation.brushSize, operation.brush, operation.color.r, operation.color.g, operation.color.b, operation.color.a, operation.points, operation.mask);
+    case "fill": return encodeFill(userId, target, operation.layer, operation.at.x, operation.at.y, operation.color.r, operation.color.g, operation.color.b, operation.color.a, operation.mask);
+    case "line": return encodeLine(userId, target, operation.layer, operation.brushSize, operation.brush, operation.color, operation.from, operation.to, operation.mask);
+    case "bezier": return encodeBezier(userId, target, operation.layer, operation.brushSize, operation.brush, operation.color, operation.points, operation.mask);
+    case "region": return encodeRegion(userId, target, operation.layer, operation.tool, operation.rect, operation.color, operation.brushSize, operation.mask);
+    case "text": return encodeText(userId, target, operation.layer, operation.at.x, operation.at.y, operation.text, operation.color, operation.brushSize, operation.mask);
+    case "clear-layer": return encodeEraseAll(userId, target, operation.layer);
   }
 }
 
@@ -1237,13 +1292,13 @@ export function decodePainterOperation(message: DecodedMessage): PainterOperatio
   switch (message.type) {
     case "undoPoint": return { kind: "undo-boundary" };
     case "undo": return { kind: "undo", redo: message.redo };
-    case "stroke": return { kind: "stroke", layer: message.layer, brushSize: message.brushSize, brush: message.brushType, color: message.color, points: message.points, mask: message.mask };
-    case "fill": return { kind: "fill", layer: message.layer, at: { x: message.x, y: message.y }, color: message.color, mask: message.mask };
-    case "line": return { kind: "line", layer: message.layer, brushSize: message.brushSize, brush: message.brushType, color: message.color, from: message.from, to: message.to, mask: message.mask };
-    case "bezier": return { kind: "bezier", layer: message.layer, brushSize: message.brushSize, brush: message.brushType, color: message.color, points: message.points as [number, number, number, number, number, number, number, number], mask: message.mask };
-    case "region": return { kind: "region", layer: message.layer, tool: message.tool, rect: message.rect, color: message.color, brushSize: message.brushSize, mask: message.mask };
-    case "text": return { kind: "text", layer: message.layer, at: { x: message.x, y: message.y }, text: message.text, color: message.color, brushSize: message.brushSize, mask: message.mask };
-    case "eraseAll": return { kind: "clear-layer", layer: message.layer };
+    case "stroke": return { kind: "stroke", targetActorId: String(message.targetOwner), layer: message.layer, brushSize: message.brushSize, brush: message.brushType, color: message.color, points: message.points, mask: message.mask };
+    case "fill": return { kind: "fill", targetActorId: String(message.targetOwner), layer: message.layer, at: { x: message.x, y: message.y }, color: message.color, mask: message.mask };
+    case "line": return { kind: "line", targetActorId: String(message.targetOwner), layer: message.layer, brushSize: message.brushSize, brush: message.brushType, color: message.color, from: message.from, to: message.to, mask: message.mask };
+    case "bezier": return { kind: "bezier", targetActorId: String(message.targetOwner), layer: message.layer, brushSize: message.brushSize, brush: message.brushType, color: message.color, points: message.points as [number, number, number, number, number, number, number, number], mask: message.mask };
+    case "region": return { kind: "region", targetActorId: String(message.targetOwner), layer: message.layer, tool: message.tool, rect: message.rect, color: message.color, brushSize: message.brushSize, mask: message.mask };
+    case "text": return { kind: "text", targetActorId: String(message.targetOwner), layer: message.layer, at: { x: message.x, y: message.y }, text: message.text, color: message.color, brushSize: message.brushSize, mask: message.mask };
+    case "eraseAll": return { kind: "clear-layer", targetActorId: String(message.targetOwner), layer: message.layer };
     default: return null;
   }
 }

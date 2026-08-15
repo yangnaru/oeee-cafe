@@ -92,8 +92,10 @@ describe("the public painter operation adapter", () => {
       to: { x: 18, y: 19 },
       mask: { type: 2, r: 4, g: 5, b: 6 },
     };
+    // Nothing named a target, so the mark lands in the author's own layers
+    // and comes back saying so.
     expect(decodePainterOperation(decodeMessage(encodePainterOperation(ID, operation))!))
-      .toEqual(operation);
+      .toEqual({ ...operation, targetActorId: String(ID) });
   });
 });
 
@@ -104,14 +106,14 @@ describe("the public painter operation adapter", () => {
  */
 describe("the tool messages", () => {
   it("round-trips a region tool with its rectangle", () => {
-    const bytes = encodeRegion(
-      ID, "foreground", "blurRect",
+    const bytes = encodeRegion(ID, ID, "foreground", "blurRect",
       { x: 5, y: 7, width: 40, height: 22 }, COLOR, 9
     );
     const msg = decodeMessage(bytes);
     expect(msg).toEqual({
       type: "region",
       userId: ID,
+      targetOwner: ID,
       layer: "foreground",
       tool: "blurRect",
       rect: { x: 5, y: 7, width: 40, height: 22 },
@@ -127,8 +129,7 @@ describe("the tool messages", () => {
       "rect", "rectFill", "ellipse", "ellipseFill", "copy", "paste",
     ];
     for (const tool of tools) {
-      const bytes = encodeRegion(
-        ID, "background", tool, { x: 1, y: 2, width: 3, height: 4 }, COLOR, 1
+      const bytes = encodeRegion(ID, ID, "background", tool, { x: 1, y: 2, width: 3, height: 4 }, COLOR, 1
       );
       const msg = decodeMessage(bytes);
       expect(msg && "tool" in msg && msg.tool).toBe(tool);
@@ -138,21 +139,20 @@ describe("the tool messages", () => {
   });
 
   it("drops a region tool code it does not know rather than guessing", () => {
-    const bytes = encodeRegion(
-      ID, "background", "rect", { x: 0, y: 0, width: 1, height: 1 }, COLOR, 1
+    const bytes = encodeRegion(ID, ID, "background", "rect", { x: 0, y: 0, width: 1, height: 1 }, COLOR, 1
     );
     // A code from some future client
-    new Uint8Array(bytes)[3] = 200;
+    new Uint8Array(bytes)[4] = 200;
     expect(decodeMessage(bytes)).toBeNull();
   });
 
   it("round-trips a line, including negative coordinates", () => {
-    const bytes = encodeLine(
-      ID, "background", 4, "eraser", COLOR, { x: -30, y: 8 }, { x: 200, y: -5 }
+    const bytes = encodeLine(ID, ID, "background", 4, "eraser", COLOR, { x: -30, y: 8 }, { x: 200, y: -5 }
     );
     expect(decodeMessage(bytes)).toEqual({
       type: "line",
       userId: ID,
+      targetOwner: ID,
       layer: "background",
       brushSize: 4,
       brushType: "eraser",
@@ -165,11 +165,12 @@ describe("the tool messages", () => {
 
   it("round-trips a bezier's four points in NEO's order", () => {
     const points = [10, 20, 30, 40, 50, 60, 70, 80];
-    const bytes = encodeBezier(ID, "foreground", 6, "brush", COLOR, points);
+    const bytes = encodeBezier(ID, ID, "foreground", 6, "brush", COLOR, points);
     const msg = decodeMessage(bytes);
     expect(msg).toEqual({
       type: "bezier",
       userId: ID,
+      targetOwner: ID,
       layer: "foreground",
       brushSize: 6,
       brushType: "brush",
@@ -180,19 +181,21 @@ describe("the tool messages", () => {
   });
 
   it("round-trips eraseAll", () => {
-    expect(decodeMessage(encodeEraseAll(ID, "foreground"))).toEqual({
+    expect(decodeMessage(encodeEraseAll(ID, ID, "foreground"))).toEqual({
       type: "eraseAll",
       userId: ID,
+      targetOwner: ID,
       layer: "foreground",
     });
   });
 
   it("round-trips text, including multi-byte characters", () => {
     const text = "손글씨 🎨 tegaki";
-    const bytes = encodeText(ID, "background", 40, 12, text, COLOR, 14);
+    const bytes = encodeText(ID, ID, "background", 40, 12, text, COLOR, 14);
     expect(decodeMessage(bytes)).toEqual({
       type: "text",
       userId: ID,
+      targetOwner: ID,
       layer: "background",
       x: 40,
       y: 12,
@@ -203,12 +206,12 @@ describe("the tool messages", () => {
     });
     // The length prefix counts UTF-8 bytes, not characters
     expect(new Uint8Array(bytes).length).toBe(
-      14 + new TextEncoder().encode(text).length + MASK_BYTES
+      15 + new TextEncoder().encode(text).length + MASK_BYTES
     );
   });
 
   it("rejects a truncated message instead of reading past the end", () => {
-    const full = encodeText(ID, "background", 1, 2, "hello", COLOR, 3);
+    const full = encodeText(ID, ID, "background", 1, 2, "hello", COLOR, 3);
     for (const len of [0, 1, 5, 13, full.byteLength - 1]) {
       expect(decodeMessage(full.slice(0, len))).toBeNull();
     }
@@ -230,12 +233,12 @@ describe("the tool messages", () => {
 
     it("travels on every message that carries drawing state", () => {
       const cases = [
-        encodeStroke(ID, "foreground", 4, "solid", 1, 2, 3, 255, [{ x: 1, y: 2 }], MASK),
-        encodeFill(ID, "foreground", 1, 2, 3, 4, 5, 255, MASK),
-        encodeRegion(ID, "foreground", "blurRect", { x: 1, y: 2, width: 3, height: 4 }, COLOR, 5, MASK),
-        encodeLine(ID, "foreground", 4, "solid", COLOR, { x: 1, y: 2 }, { x: 3, y: 4 }, MASK),
-        encodeBezier(ID, "foreground", 4, "solid", COLOR, [1, 2, 3, 4, 5, 6, 7, 8], MASK),
-        encodeText(ID, "foreground", 1, 2, "hi", COLOR, 3, MASK),
+        encodeStroke(ID, ID, "foreground", 4, "solid", 1, 2, 3, 255, [{ x: 1, y: 2 }], MASK),
+        encodeFill(ID, ID, "foreground", 1, 2, 3, 4, 5, 255, MASK),
+        encodeRegion(ID, ID, "foreground", "blurRect", { x: 1, y: 2, width: 3, height: 4 }, COLOR, 5, MASK),
+        encodeLine(ID, ID, "foreground", 4, "solid", COLOR, { x: 1, y: 2 }, { x: 3, y: 4 }, MASK),
+        encodeBezier(ID, ID, "foreground", 4, "solid", COLOR, [1, 2, 3, 4, 5, 6, 7, 8], MASK),
+        encodeText(ID, ID, "foreground", 1, 2, "hi", COLOR, 3, MASK),
       ];
       for (const bytes of cases) {
         expect(decodeMessage(bytes)).toMatchObject({ mask: MASK });
@@ -243,23 +246,23 @@ describe("the tool messages", () => {
     });
 
     it("reads as none when the sender was not masking", () => {
-      const bytes = encodeStroke(ID, "foreground", 4, "solid", 1, 2, 3, 255, [
+      const bytes = encodeStroke(ID, ID, "foreground", 4, "solid", 1, 2, 3, 255, [
         { x: 1, y: 2 },
       ]);
       expect(decodeMessage(bytes)).toMatchObject({ mask: NO_WIRE_MASK });
     });
 
     it("is found past a variable-length payload, not at a guessed offset", () => {
-      const text = encodeText(ID, "foreground", 1, 2, "x".repeat(300), COLOR, 3, MASK);
+      const text = encodeText(ID, ID, "foreground", 1, 2, "x".repeat(300), COLOR, 3, MASK);
       expect(decodeMessage(text)).toMatchObject({ mask: MASK });
 
       const points = Array.from({ length: 200 }, (_, i) => ({ x: i, y: i }));
-      const stroke = encodeStroke(ID, "foreground", 4, "solid", 1, 2, 3, 255, points, MASK);
+      const stroke = encodeStroke(ID, ID, "foreground", 4, "solid", 1, 2, 3, 255, points, MASK);
       expect(decodeMessage(stroke)).toMatchObject({ mask: MASK, points });
     });
 
     it("rejects a message whose mask was cut off", () => {
-      const full = encodeStroke(ID, "foreground", 4, "solid", 1, 2, 3, 255, [
+      const full = encodeStroke(ID, ID, "foreground", 4, "solid", 1, 2, 3, 255, [
         { x: 1, y: 2 },
       ]);
       // One byte short of a complete mask is not a maskless message

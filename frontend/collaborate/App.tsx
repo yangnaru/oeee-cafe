@@ -17,6 +17,7 @@ import {
   type CanonicalPainterOperation,
   type LocalPainterOperation,
   type PainterCheckpoint,
+  type PainterCheckpointLayers,
   type PainterHandle,
 } from "neo-cucumber";
 import "./app.css";
@@ -149,7 +150,19 @@ export default function App() {
   const expectedSequenceRef = useRef(1);
   const appliedSequenceRef = useRef(0);
   const canonicalOperationsRef = useRef(new Map<number, CanonicalPainterOperation>());
-  const snapshotPairsRef = useRef(new Map<number, Partial<Pick<PainterCheckpoint, "background" | "foreground">>>());
+  /**
+   * Snapshots of a pending checkpoint, by sequence then by participant.
+   *
+   * Every snapshot of one reset carries the same sequence, and a checkpoint
+   * now covers a layer pair per participant, so the group is only whole once
+   * RESET_POINT has said how many snapshots to expect and that many have
+   * arrived. Applying a partial group would blank whoever was still in
+   * flight.
+   */
+  const snapshotPairsRef = useRef(
+    new Map<number, Map<string, Partial<Pick<PainterCheckpointLayers, "background" | "foreground">>>>(),
+  );
+  const snapshotCountsRef = useRef(new Map<number, number>());
   const canonicalDrainRef = useRef<Promise<void>>(Promise.resolve());
   const { createOrUpdateCursor, hideCursor, clearCursors } = useRemoteCursors(
     painterElementRef, localIdRef,
@@ -160,11 +173,31 @@ export default function App() {
   }) => void) | null>(null);
 
   useEffect(() => { participantsRef.current = participants; }, [participants]);
+  /**
+   * Name the layers for the painter's participant toolbox.
+   *
+   * The painter knows which actors have drawn -- their layers exist -- but the
+   * roster is ours. The session ids the canonical stream uses are what its
+   * layers are keyed by, so those are what it is told.
+   */
+  useEffect(() => {
+    painterRef.current?.setParticipants(
+      [...participants.values()]
+        .filter((participant) => participant.sessionId !== undefined)
+        .map((participant) => ({
+          actorId: String(participant.sessionId),
+          name: participant.username,
+        })),
+    );
+  }, [participants]);
   useEffect(() => { isCatchingUpRef.current = isCatchingUp; }, [isCatchingUp]);
 
   const clearParticipants = useCallback(() => setParticipants(new Map()), []);
-  const addParticipant = useCallback((userId: string, username: string, joinedAt: number) => {
-    setParticipants((current) => new Map(current).set(userId, { userId, username, joinedAt }));
+  const addParticipant = useCallback((
+    userId: string, username: string, joinedAt: number, sessionId?: number,
+  ) => {
+    setParticipants((current) =>
+      new Map(current).set(userId, { userId, username, joinedAt, sessionId }));
   }, []);
 
   const onLocalOperation = useCallback((entry: LocalPainterOperation) => {
@@ -219,7 +252,7 @@ export default function App() {
     const painter = mount(element, {
       width: canvasMeta.width,
       height: canvasMeta.height,
-      // Read from /api/auth below, which resolves the user's own preference
+      // Read from /api/auth above, which resolves the user's own preference
       // before falling back to what the browser asked for.
       locale: localeRef.current,
       mode: { kind: "standard" },
@@ -315,24 +348,40 @@ export default function App() {
           continue;
         }
 
-        // A checkpoint is a legal jump over compacted history. Both layers
-        // must arrive before it replaces the canvas and advances the sequence.
+        // A checkpoint is a legal jump over compacted history. Every
+        // participant's pair must arrive before it replaces the canvas and
+        // advances the sequence, which is what the announced count settles.
+        const isWhole = (sequence: number, owners: Map<string, Partial<PainterCheckpointLayers>>) => {
+          const expectedCount = snapshotCountsRef.current.get(sequence);
+          if (expectedCount === undefined) return false;
+          let held = 0;
+          for (const pair of owners.values()) {
+            held += (pair.background ? 1 : 0) + (pair.foreground ? 1 : 0);
+          }
+          return held >= expectedCount;
+        };
         const checkpointSequence = [...snapshotPairsRef.current.entries()]
-          .filter(([sequence, pair]) =>
-            sequence >= expected && pair.background && pair.foreground,
-          )
+          .filter(([sequence, owners]) => sequence >= expected && isWhole(sequence, owners))
           .map(([sequence]) => sequence)
           .sort((a, b) => a - b)[0];
         if (checkpointSequence === undefined) break;
-        const pair = snapshotPairsRef.current.get(checkpointSequence)!;
+        const owners = snapshotPairsRef.current.get(checkpointSequence)!;
         await painter.applyCheckpoint({
           sequence: checkpointSequence,
           width: canvasMeta.width,
           height: canvasMeta.height,
-          background: pair.background!,
-          foreground: pair.foreground!,
+          layers: [...owners]
+            // Ascending session id is join order, and it never changes, so
+            // every client composites the same stack.
+            .sort(([a], [b]) => Number(a) - Number(b))
+            .map(([actorId, pair]) => ({
+              actorId,
+              background: pair.background!,
+              foreground: pair.foreground!,
+            })),
         });
         snapshotPairsRef.current.delete(checkpointSequence);
+        snapshotCountsRef.current.delete(checkpointSequence);
         for (const sequence of canonicalOperationsRef.current.keys()) {
           if (sequence <= checkpointSequence) canonicalOperationsRef.current.delete(sequence);
         }
@@ -351,9 +400,12 @@ export default function App() {
     }
     if (message.type === "snapshot") {
       const pngBytes = new Uint8Array(message.pngData).slice();
-      const pair = snapshotPairsRef.current.get(sequence) ?? {};
+      const owners = snapshotPairsRef.current.get(sequence) ?? new Map();
+      const actorId = String(message.userId);
+      const pair = owners.get(actorId) ?? {};
       pair[message.layer] = new Blob([pngBytes.buffer as ArrayBuffer], { type: "image/png" });
-      snapshotPairsRef.current.set(sequence, pair);
+      owners.set(actorId, pair);
+      snapshotPairsRef.current.set(sequence, owners);
       await drainCanonical();
       return;
     }
@@ -380,6 +432,7 @@ export default function App() {
     pendingIdsRef.current.clear();
     canonicalOperationsRef.current.clear();
     snapshotPairsRef.current.clear();
+    snapshotCountsRef.current.clear();
     if (reconnecting && resumeSequence !== null) {
       expectedSequenceRef.current = resumeSequence + 1;
       appliedSequenceRef.current = resumeSequence;
@@ -389,16 +442,27 @@ export default function App() {
     appliedSequenceRef.current = 0;
     if (!reconnecting || !canvasMeta || !painterRef.current) return;
     const layer = await blankLayer(canvasMeta.width, canvasMeta.height);
+    // No participant's layers survive a full replay, so the checkpoint names
+    // only ourselves; applyCheckpoint blanks everyone it does not mention.
     const checkpoint: PainterCheckpoint = {
       sequence: 0, width: canvasMeta.width, height: canvasMeta.height,
-      background: layer, foreground: layer,
+      layers: [{
+        actorId: String(localIdRef.current ?? 0),
+        background: layer,
+        foreground: layer,
+      }],
     };
     await painterRef.current.applyCheckpoint(checkpoint);
   }, [canvasMeta, clearCursors]);
 
-  const handleResetPoint = useCallback(async (baseSequence: number, sequence?: number) => {
+  const handleResetPoint = useCallback(async (
+    baseSequence: number, sequence: number | undefined, snapshotCount: number,
+  ) => {
     const painter = painterRef.current;
     if (!painter) return;
+    // The snapshots of this checkpoint all carry `baseSequence`, and knowing
+    // how many there are is what lets the drain tell whole from half-arrived.
+    snapshotCountsRef.current.set(baseSequence, snapshotCount);
     await drainCanonical();
     await painter.compactCanonicalHistory(baseSequence);
     if (sequence !== undefined) {
@@ -466,10 +530,16 @@ export default function App() {
       appliedSequenceRef.current < lastSeqRef.current
     ) return;
     const checkpoint = await painter.exportCheckpoint(appliedSequenceRef.current);
-    const snapshots = await Promise.all([
-      encodeSnapshot(localId, "background", checkpoint.background),
-      encodeSnapshot(localId, "foreground", checkpoint.foreground),
-    ]);
+    // Each snapshot is stamped with the participant whose layer it is, not
+    // with the uploader: one client uploads the whole canvas on everyone's
+    // behalf, and the owner byte is what puts each pair back where it came
+    // from.
+    const snapshots = await Promise.all(
+      checkpoint.layers.flatMap((entry) => [
+        encodeSnapshot(localId, Number(entry.actorId), "background", entry.background),
+        encodeSnapshot(localId, Number(entry.actorId), "foreground", entry.foreground),
+      ]),
+    );
     ws.send(encodeResetBegin(checkpoint.sequence, snapshots.length));
     snapshots.forEach((snapshot) => ws.send(snapshot));
   // wsRef is created by the WebSocket hook below and is stable for its lifetime.

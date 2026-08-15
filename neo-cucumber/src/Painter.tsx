@@ -38,6 +38,7 @@ import type { DrawingEngine } from "./DrawingEngine";
 import type { RegionRect } from "./neo/regionDrag";
 import { TEXT_FONT_FAMILY, fontSizeForBrush } from "./neo/tools";
 import { previewBackdrop as backdropFromCanvasStack } from "./neo/previewBackdrop";
+import { inJoinOrder } from "./neo/canvasStack";
 import { PainterWorkspace } from "./components/PainterWorkspace";
 import type {
   CanonicalPainterOperation,
@@ -131,6 +132,48 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
   });
   const [interactionEnabled, setInteractionEnabled] = useState(true);
   /**
+   * Which participants this viewer has hidden, and whose layers new marks go
+   * into. Both are this screen's business: hiding is a way of looking at the
+   * drawing rather than an edit, so neither is broadcast and neither reaches
+   * the saved image.
+   */
+  const [hiddenOwners, setHiddenOwners] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [targetOwner, setTargetOwner] = useState<string | null>(null);
+  const selectTargetOwner = useCallback((actorId: string) => {
+    setTargetOwner(actorId);
+  }, []);
+  /**
+   * Tells the painter what to call the participants.
+   *
+   * It knows every actor that has drawn, because their layers exist, but not
+   * who any of them are -- names and colours belong to the host's roster.
+   */
+  const setParticipants = useCallback(
+    (participants: { actorId: string; name: string; color?: string }[]) => {
+      setParticipantNames(
+        new Map(
+          participants.map(({ actorId, name, color }) => [actorId, { name, color }]),
+        ),
+      );
+    },
+    [],
+  );
+  const toggleOwnerVisible = useCallback((actorId: string) => {
+    setHiddenOwners((current) => {
+      const next = new Set(current);
+      if (!next.delete(actorId)) next.add(actorId);
+      return next;
+    });
+  }, []);
+  /** Everyone with layers, in the order they composite. */
+  const [layerOwners, setLayerOwners] = useState<string[]>([]);
+  /** Display names the host knows and the painter does not. */
+  const [participantNames, setParticipantNames] = useState<
+    ReadonlyMap<string, { name: string; color?: string }>
+  >(() => new Map());
+  /**
    * Whether the opening zoom has been applied.
    *
    * The toolboxes wait for it. They open beside the drawing, and until this is
@@ -152,21 +195,47 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
   const setLocalActorId = useCallback((actorId: string) => {
     localActorIdRef.current = actorId;
     synchronizationHistoryRef.current?.setLocalUserId(actorId);
+    // The engine keys layer pairs by actor too. Leaving its pair under the
+    // old name would give one person two of them: the one they have been
+    // drawing into, and a second one the canonical stream addresses.
+    drawingEngineRef.current?.setLocalOwner(actorId);
   }, []);
   const emitLocalOperation = useCallback(
     (operation: import("./operations").PainterOperation) => {
       if (!synchronization) return;
       operationCounterRef.current += 1;
+      // A mark aimed at somebody else's pair has to say so, or every other
+      // client will put it in ours -- where it did not happen.
+      const target = targetOwnerRef.current;
+      const aimed =
+        target && target !== localActorIdRef.current && "layer" in operation
+          ? { ...operation, targetActorId: target }
+          : operation;
       const entry = {
         id: `${localActorIdRef.current}:${operationCounterRef.current}`,
         actorId: localActorIdRef.current,
-        operation,
+        operation: aimed,
         timestamp: Date.now(),
       };
       synchronizationHistoryRef.current?.registerOptimisticOperation(entry);
       synchronization.onOperation(entry);
     },
     [synchronization],
+  );
+  const targetOwnerRef = useRef<string | null>(null);
+
+  /**
+   * The participants the layer toolbox lists, top of the stack first, so the
+   * rows read down the screen the way the layers stack on it.
+   */
+  const participantLayers = useMemo(
+    () =>
+      layerOwners.map((actorId) => ({
+        actorId,
+        name: participantNames.get(actorId)?.name ?? actorId,
+        color: participantNames.get(actorId)?.color,
+      })),
+    [layerOwners, participantNames],
   );
 
   const appRef = useRef<HTMLDivElement>(null);
@@ -436,6 +505,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     canvasHeight,
     drawingEngine,
     currentZoom,
+    hiddenOwners,
   });
 
   const { cursorCanvasRef, paintCursor } = useCanvasView({
@@ -451,10 +521,15 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
 
   const exportPng = useCallback(async (): Promise<Blob> => {
     if (!drawingEngine) throw new Error("Painter is not ready");
-    const layers = [
-      drawingEngine.getLayerCanvas("background"),
-      drawingEngine.getLayerCanvas("foreground"),
-    ].filter((canvas): canvas is HTMLCanvasElement => canvas !== null);
+    // Every participant's pair, bottom of the stack first, and everyone is in
+    // it: hiding somebody is a way of looking at the drawing, not an edit.
+    const layers: HTMLCanvasElement[] = [];
+    for (const owner of inJoinOrder(drawingEngine.ownerIds()).reverse()) {
+      for (const layer of ["background", "foreground"] as const) {
+        const canvas = drawingEngine.getLayerCanvas(layer, owner);
+        if (canvas) layers.push(canvas);
+      }
+    }
     const composited = compositeLayersToCanvas(canvasWidth, canvasHeight, layers);
     if (!composited) throw new Error("Failed to composite canvas layers");
     return canvasToPng(composited);
@@ -528,11 +603,17 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       if (!Number.isSafeInteger(sequence) || sequence < 0) {
         throw new Error("Checkpoint sequence must be a non-negative safe integer");
       }
-      const [background, foreground] = await Promise.all([
-        layerToPngBlob(drawingEngine.layers.background, canvasWidth, canvasHeight),
-        layerToPngBlob(drawingEngine.layers.foreground, canvasWidth, canvasHeight),
-      ]);
-      return { sequence, width: canvasWidth, height: canvasHeight, background, foreground };
+      const layers = await Promise.all(
+        drawingEngine.ownerIds().map(async (actorId) => {
+          const pair = drawingEngine.layersFor(actorId);
+          const [background, foreground] = await Promise.all([
+            layerToPngBlob(pair.background, canvasWidth, canvasHeight),
+            layerToPngBlob(pair.foreground, canvasWidth, canvasHeight),
+          ]);
+          return { actorId, background, foreground };
+        }),
+      );
+      return { sequence, width: canvasWidth, height: canvasHeight, layers };
     },
     [drawingEngine, canvasWidth, canvasHeight],
   );
@@ -545,12 +626,29 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
           `Checkpoint is ${checkpoint.width}x${checkpoint.height}; painter is ${canvasWidth}x${canvasHeight}`,
         );
       }
-      const [background, foreground] = await Promise.all([
-        pngDataToLayer(new Uint8Array(await checkpoint.background.arrayBuffer()), canvasWidth, canvasHeight),
-        pngDataToLayer(new Uint8Array(await checkpoint.foreground.arrayBuffer()), canvasWidth, canvasHeight),
-      ]);
-      drawingEngine.layers.background.set(background);
-      drawingEngine.layers.foreground.set(foreground);
+      const decoded = await Promise.all(
+        checkpoint.layers.map(async (entry) => ({
+          actorId: entry.actorId,
+          background: await pngDataToLayer(
+            new Uint8Array(await entry.background.arrayBuffer()), canvasWidth, canvasHeight),
+          foreground: await pngDataToLayer(
+            new Uint8Array(await entry.foreground.arrayBuffer()), canvasWidth, canvasHeight),
+        })),
+      );
+      // A checkpoint is the whole canvas, so anyone it does not mention has no
+      // work in it and must be blanked rather than left holding stale pixels.
+      const named = new Set(decoded.map((entry) => entry.actorId));
+      for (const actorId of drawingEngine.ownerIds()) {
+        if (named.has(actorId)) continue;
+        const pair = drawingEngine.layersFor(actorId);
+        pair.background.fill(0);
+        pair.foreground.fill(0);
+      }
+      for (const entry of decoded) {
+        const pair = drawingEngine.layersFor(entry.actorId);
+        pair.background.set(entry.background);
+        pair.foreground.set(entry.foreground);
+      }
       synchronizationHistoryRef.current?.reset();
       appliedCheckpointRef.current = checkpoint;
       domCanvasUpdateRef.current();
@@ -576,16 +674,20 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     if (!history) throw new Error("Painter is not in controlled mode");
     const base = await history.handleResetPoint(sequence);
     if (!base) return;
-    const [background, foreground] = await Promise.all([
-      layerToPngBlob(base.background, canvasWidth, canvasHeight),
-      layerToPngBlob(base.foreground, canvasWidth, canvasHeight),
-    ]);
+    const layers = await Promise.all(
+      [...base].map(async ([actorId, pair]) => {
+        const [background, foreground] = await Promise.all([
+          layerToPngBlob(pair.background, canvasWidth, canvasHeight),
+          layerToPngBlob(pair.foreground, canvasWidth, canvasHeight),
+        ]);
+        return { actorId, background, foreground };
+      }),
+    );
     appliedCheckpointRef.current = {
       sequence,
       width: canvasWidth,
       height: canvasHeight,
-      background,
-      foreground,
+      layers,
     };
   }, [canvasWidth, canvasHeight]);
 
@@ -605,6 +707,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       redo,
       setInteractionEnabled,
       setLocalActorId,
+      setParticipants,
       applyCanonicalOperation,
       exportCheckpoint,
       applyCheckpoint,
@@ -614,13 +717,37 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       // The owning mount adapter replaces this with its React-root teardown.
       unmount: () => {},
     }),
-    [save, exportPng, exportReplay, loadImage, undo, redo, setLocalActorId, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive, compactCanonicalHistory, isSynchronizationSettled],
+    [save, exportPng, exportReplay, loadImage, undo, redo, setLocalActorId, setParticipants, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive, compactCanonicalHistory, isSynchronizationSettled],
   );
+
+  // Point the engine, the history and the emitter at the selected participant
+  useEffect(() => {
+    targetOwnerRef.current = targetOwner;
+    drawingEngine?.setDrawTarget(targetOwner);
+    if (targetOwner) {
+      synchronizationHistoryRef.current?.setLocalTargetOwner(targetOwner);
+    }
+  }, [drawingEngine, targetOwner]);
+
+  // Follow the participants the engine knows about
+  useEffect(() => {
+    if (!drawingEngine) return;
+    const refresh = () => setLayerOwners(inJoinOrder(drawingEngine.ownerIds()));
+    refresh();
+    return drawingEngine.onOwnersChanged(refresh);
+  }, [drawingEngine]);
 
   // Keep drawingEngine ref in sync
   const drawingEngineRef = useRef(drawingEngine);
   useEffect(() => {
     drawingEngineRef.current = drawingEngine;
+    // The engine is built before anyone has named this painter, so its pair
+    // starts under a placeholder. Give it the actor's name as soon as both
+    // exist, or the local participant ends up with two pairs: the placeholder
+    // they draw into and the one the canonical stream addresses.
+    if (drawingEngine && localActorIdRef.current) {
+      drawingEngine.setLocalOwner(localActorIdRef.current);
+    }
   }, [drawingEngine]);
 
   // Synchronize temp container ref with real container ref
@@ -888,6 +1015,15 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
                 onZoomReset={handleZoomReset}
                 onZoomFit={handleZoomFit}
                 onSaveCollaborativeDrawing={() => {}}
+                // Only worth a panel once there is more than one participant;
+                // a solitary painter has nobody to hide and nowhere else to
+                // draw, and NEO's own layer button already covers their pair.
+                participantLayers={participantLayers.length > 1 ? participantLayers : undefined}
+                hiddenOwners={hiddenOwners}
+                targetOwner={targetOwner ?? localActorIdRef.current}
+                localActorId={localActorIdRef.current}
+                onToggleOwnerVisible={toggleOwnerVisible}
+                onSelectTargetOwner={selectTargetOwner}
               />
             )}
         </PainterWorkspace>

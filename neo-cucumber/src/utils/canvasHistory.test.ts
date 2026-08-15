@@ -36,10 +36,34 @@ type StrokeState = [[number, number], [number, number]] | null;
 class FakeEngine {
   imageWidth = SIZE;
   imageHeight = SIZE;
-  layers: Record<string, Uint8ClampedArray> = {
-    foreground: new Uint8ClampedArray(SIZE * SIZE * 4),
-    background: new Uint8ClampedArray(SIZE * SIZE * 4),
-  };
+  /**
+   * A layer pair per participant, exactly as the real engine keeps them.
+   * `layers` stays the local participant's pair so the reads below still mean
+   * "what the local user drew".
+   */
+  owners = new Map<string, Record<string, Uint8ClampedArray>>();
+  layers: Record<string, Uint8ClampedArray>;
+
+  constructor() {
+    this.layers = this.layersFor(String(LOCAL));
+  }
+
+  layersFor(owner: string): Record<string, Uint8ClampedArray> {
+    let pair = this.owners.get(owner);
+    if (!pair) {
+      pair = {
+        foreground: new Uint8ClampedArray(SIZE * SIZE * 4),
+        background: new Uint8ClampedArray(SIZE * SIZE * 4),
+      };
+      this.owners.set(owner, pair);
+    }
+    return pair;
+  }
+
+  ownerIds(): string[] {
+    return [...this.owners.keys()];
+  }
+
   ops: string[] = [];
   // The mask the engine is currently pointed at. Logged with each op so a
   // test can tell whether the sender's mask survived the trip.
@@ -171,8 +195,24 @@ function red(engine: FakeEngine, x: number, y: number): number {
   return engine.layers.foreground[(y * SIZE + x) * 4];
 }
 
+/**
+ * The red value in a named participant's foreground.
+ *
+ * Every participant paints into their own pair now, so a test that wants to
+ * see what somebody else drew has to look in their layers rather than in the
+ * local ones `red` reads.
+ */
+function redFor(
+  engine: FakeEngine,
+  owner: number | string,
+  x: number,
+  y: number
+): number {
+  return engine.layersFor(String(owner)).foreground[(y * SIZE + x) * 4];
+}
+
 function stroke(userId: number, x: number, y: number, r: number): ArrayBuffer {
-  return encodeStroke(userId, "foreground", 1, "solid", r, 0, 0, 255, [
+  return encodeStroke(userId, userId, "foreground", 1, "solid", r, 0, 0, 255, [
     { x, y },
   ]);
 }
@@ -187,7 +227,7 @@ function historyOperation(bytes: ArrayBuffer) {
 
 function encodeHistoryStroke(stroke: HistoryStroke): ArrayBuffer {
   return encodeStroke(
-    Number(stroke.userId), stroke.layer, stroke.brushSize, stroke.brushType,
+    Number(stroke.userId), Number(stroke.targetOwner), stroke.layer, stroke.brushSize, stroke.brushType,
     stroke.color.r, stroke.color.g, stroke.color.b, stroke.color.a,
     stroke.points, stroke.mask,
   );
@@ -244,7 +284,7 @@ describe("canonical application", () => {
     };
 
     history.handleLocalOperation({ id: "op-1", actorId: "local", operation });
-    expect(red(engine, 3, 4)).toBe(75);
+    expect(redFor(engine, "local", 3, 4)).toBe(75);
     expect(history.hasPendingLocal).toBe(true);
 
     await history.handleCanonicalOperation({
@@ -253,7 +293,7 @@ describe("canonical application", () => {
       operation,
       sequence: 1,
     });
-    expect(red(engine, 3, 4)).toBe(75);
+    expect(redFor(engine, "local", 3, 4)).toBe(75);
     expect(history.hasPendingLocal).toBe(false);
   });
 
@@ -261,7 +301,7 @@ describe("canonical application", () => {
     const { engine, history } = setup();
     await remote(history, stroke(REMOTE, 1, 1, 50), 1);
     await remote(history, stroke(REMOTE, 1, 1, 60), 2);
-    expect(red(engine, 1, 1)).toBe(60);
+    expect(redFor(engine, REMOTE, 1, 1)).toBe(60);
     expect(engine.ops).toHaveLength(2);
   });
 
@@ -270,7 +310,7 @@ describe("canonical application", () => {
     await remote(history, encodeUndoPoint(REMOTE), 1);
     await remote(
       history,
-      encodeStroke(REMOTE, "foreground", 1, "solid", 50, 0, 0, 255, [
+      encodeStroke(REMOTE, REMOTE, "foreground", 1, "solid", 50, 0, 0, 255, [
         { x: 1, y: 1 },
         { x: 3, y: 3 },
       ]),
@@ -291,11 +331,12 @@ describe("canonical application", () => {
     const msg = {
       type: "snapshot" as const,
       userId: REMOTE,
+      targetOwner: REMOTE,
       layer: "foreground" as const,
       pngData: new Uint8Array(0),
     };
     await history.handleRemote(new Uint8Array([0x02, 9, 9]), msg, 1);
-    expect(red(engine, 0, 0)).toBe(7);
+    expect(redFor(engine, REMOTE, 0, 0)).toBe(7);
   });
 });
 
@@ -319,18 +360,47 @@ describe("local fork reconciliation", () => {
 
     await remote(history, stroke(REMOTE, 10, 10, 200), 1);
     expect(red(engine, 1, 1)).toBe(100);
-    expect(red(engine, 10, 10)).toBe(200);
+    expect(redFor(engine, REMOTE, 10, 10)).toBe(200);
     expect(engine.ops).toHaveLength(2); // no replay of the fork entry
   });
 
-  it("replays the fork on top of an overlapping remote stroke", async () => {
+  it("keeps two participants' strokes on the same pixel apart, without replaying", async () => {
     const { engine, history } = setup();
     local(history, encodeUndoPoint(LOCAL));
     const mine = localStroke(history, 5, 5, 100);
 
-    // Same pixel: canonical order is remote first, so the unconfirmed local
-    // stroke must end up on top
+    // The same pixel, but not the same layers: each participant paints into
+    // their own pair, so there is nothing to reorder and the unconfirmed
+    // local stroke never has to be rolled back and replayed.
     await remote(history, stroke(REMOTE, 5, 5, 200), 1);
+    expect(red(engine, 5, 5)).toBe(100);
+    expect(redFor(engine, REMOTE, 5, 5)).toBe(200);
+    expect(engine.ops).toHaveLength(2); // local, remote -- no replay
+
+    // Echoes arrive; the canvas must not change
+    await remote(history, encodeUndoPoint(LOCAL), 2);
+    await remote(history, mine, 3);
+    expect(red(engine, 5, 5)).toBe(100);
+    expect(redFor(engine, REMOTE, 5, 5)).toBe(200);
+    expect(history.hasPendingLocal).toBe(false);
+  });
+
+  it("replays the fork when someone else draws on the layers we are drawing on", async () => {
+    const { engine, history } = setup();
+    local(history, encodeUndoPoint(LOCAL));
+    const mine = localStroke(history, 5, 5, 100);
+
+    // REMOTE aims at LOCAL's pair rather than their own. Now there really is
+    // one set of pixels two people are writing, so canonical order decides
+    // it: the remote stroke goes down first and the unconfirmed local one is
+    // replayed on top.
+    await remote(
+      history,
+      encodeStroke(REMOTE, LOCAL, "foreground", 1, "solid", 200, 0, 0, 255, [
+        { x: 5, y: 5 },
+      ]),
+      1
+    );
     expect(red(engine, 5, 5)).toBe(100);
     expect(engine.ops).toHaveLength(3); // local, remote (replay), local again
 
@@ -383,9 +453,12 @@ describe("local fork reconciliation", () => {
     localStroke(history, 5, 5, 100);
     engine.repaints.length = 0;
 
-    // An overlapping remote stroke restores a savepoint under the fork, which
-    // puts pixels back the engine never saw written.
-    await remote(history, stroke(REMOTE, 5, 5, 200), 1);
+    // Only the same participant can force a rebuild now: their own message
+    // arriving from another connection means server order diverged from the
+    // fork, which restores a savepoint and puts pixels back the engine never
+    // saw written. Another participant's stroke cannot, because it lands in
+    // layers this fork does not touch.
+    await remote(history, stroke(LOCAL, 5, 5, 200), 1);
     expect(engine.repaints).toContain("all:foreground");
     expect(engine.repaints).toContain("all:background");
   });
@@ -403,17 +476,24 @@ describe("local fork reconciliation", () => {
     localStroke(history, 50, 50, 100);
 
     engine.ops.length = 0;
-    // A remote stroke over the new gesture forces the fork to be rebuilt
-    await remote(history, stroke(REMOTE, 50, 50, 200), 3);
-
-    // The rebuilt gesture opens on its own dot. Continuing from the previous
-    // gesture's endpoint instead would streak a line across the canvas -- the
-    // failure two people drawing over each other used to produce.
+    // Our own stroke from another connection: server order diverged, so the
+    // pending gesture is dropped and history is rebuilt without it.
+    await remote(history, stroke(LOCAL, 50, 50, 200), 3);
     expect(engine.ops).toEqual([
       "line:10,10-10,10:100", // confirmed gesture, replayed
-      "line:50,50-50,50:200", // the remote stroke that forced the replay
-      "line:50,50-50,50:100", // the pending gesture, opening on its own
+      // The same participant, with no undo point since, so this continues
+      // their own line rather than opening a new one.
+      "line:50,50-10,10:200",
     ]);
+    expect(history.hasPendingLocal).toBe(false);
+
+    // The dropped gesture comes back as an ordinary echo, and it opens on its
+    // own dot. Continuing from the first gesture's endpoint instead would
+    // streak a line from (10,10) across the canvas.
+    engine.ops.length = 0;
+    await remote(history, encodeUndoPoint(LOCAL), 4);
+    await remote(history, stroke(LOCAL, 50, 50, 100), 5);
+    expect(engine.ops).toEqual(["line:50,50-50,50:100"]);
   });
 
   it("treats an actor named as a number and as a string as one person", async () => {
@@ -444,15 +524,13 @@ describe("local fork reconciliation", () => {
     draw("s2", 50, 50);
 
     engine.ops.length = 0;
-    await remote(history, stroke(REMOTE, 50, 50, 200), 1);
+    await remote(history, stroke(LOCAL, 50, 50, 200), 1);
 
-    // Nothing is confirmed yet, so the remote stroke replays first and the
-    // whole fork lands on top of it -- both gestures opening on their own.
-    expect(engine.ops).toEqual([
-      "line:50,50-50,50:200",
-      "line:10,10-10,10:100",
-      "line:50,50-50,50:100",
-    ]);
+    // The message names user 1; the fork was built from actorId "1". Only if
+    // those are one person does this count as our own order diverging, drop
+    // the fork and rebuild. Told apart, the fork would survive untouched.
+    expect(engine.ops).toEqual(["line:50,50-50,50:200"]);
+    expect(history.hasPendingLocal).toBe(false);
   });
 
   it("drops the fork and converges when the same user draws from another connection", async () => {
@@ -498,7 +576,7 @@ describe("collaborative undo", () => {
     local(history, undo);
     await remote(history, undo);
     expect(red(engine, 1, 1)).toBe(0); // local stroke reverted
-    expect(red(engine, 2, 2)).toBe(200); // remote stroke preserved
+    expect(redFor(engine, REMOTE, 2, 2)).toBe(200); // remote stroke preserved
     expect(history.canUndo()).toBe(false);
     expect(history.canRedo()).toBe(true);
 
@@ -556,7 +634,7 @@ describe("collaborative undo", () => {
     await remote(history, encodeUndoPoint(LOCAL), 1);
     await remote(
       history,
-      encodeFill(LOCAL, "foreground", 0, 0, 100, 0, 0, 255),
+      encodeFill(LOCAL, LOCAL, "foreground", 0, 0, 100, 0, 0, 255),
       2
     );
     expect(red(engine, 8, 8)).toBe(100);
@@ -595,23 +673,23 @@ describe("reconnect", () => {
     const { engine, history } = setup();
     await remote(history, encodeUndoPoint(REMOTE), 1);
     await remote(history, stroke(REMOTE, 1, 1, 50), 2);
-    await remote(history, encodeFill(REMOTE, "foreground", 4, 4, 30, 0, 0, 255), 3);
-    expect(red(engine, 1, 1)).toBe(30);
+    await remote(history, encodeFill(REMOTE, REMOTE, "foreground", 4, 4, 30, 0, 0, 255), 3);
+    expect(redFor(engine, REMOTE, 1, 1)).toBe(30);
     const opsBeforeDrop = [...engine.ops];
 
     // The connection drops and comes back: the canvas still shows everything
     // above, and the server is about to replay all of it from seq 1
     history.resetToBlankCanvas();
-    expect(red(engine, 1, 1)).toBe(0);
-    expect(red(engine, 4, 4)).toBe(0);
+    expect(redFor(engine, REMOTE, 1, 1)).toBe(0);
+    expect(redFor(engine, REMOTE, 4, 4)).toBe(0);
 
     engine.ops.length = 0;
     await remote(history, encodeUndoPoint(REMOTE), 1);
     await remote(history, stroke(REMOTE, 1, 1, 50), 2);
-    await remote(history, encodeFill(REMOTE, "foreground", 4, 4, 30, 0, 0, 255), 3);
+    await remote(history, encodeFill(REMOTE, REMOTE, "foreground", 4, 4, 30, 0, 0, 255), 3);
 
     // The replay reproduces the drawing exactly, doing the same work once
-    expect(red(engine, 1, 1)).toBe(30);
+    expect(redFor(engine, REMOTE, 1, 1)).toBe(30);
     expect(engine.ops).toEqual(opsBeforeDrop);
   });
 
@@ -638,7 +716,7 @@ describe("reconnect", () => {
 describe("brush type wire codes", () => {
   it("round trips every drawing tool", () => {
     for (const brushType of WIRE_BRUSH_TYPES) {
-      const bytes = encodeStroke(REMOTE, "foreground", 4, brushType, 1, 2, 3, 255, [
+      const bytes = encodeStroke(REMOTE, REMOTE, "foreground", 4, brushType, 1, 2, 3, 255, [
         { x: 5, y: 6 },
       ]);
       const msg = decodeMessage(bytes);
@@ -664,7 +742,7 @@ describe("brush type wire codes", () => {
   it("falls back to solid, not eraser, on a code it does not know", () => {
     // Forward compatibility: meeting a tool from a newer client should draw
     // something harmless rather than delete what is underneath.
-    const bytes = encodeStroke(REMOTE, "foreground", 4, "solid", 1, 2, 3, 255, [
+    const bytes = encodeStroke(REMOTE, REMOTE, "foreground", 4, "solid", 1, 2, 3, 255, [
       { x: 5, y: 6 },
     ]);
     new Uint8Array(bytes)[4] = 99;
@@ -678,24 +756,24 @@ describe("the tool messages through history", () => {
   it("pastes what the sender copied, not what the receiver did", async () => {
     const { engine, history } = setup();
 
-    // Two users copy different pixels. Seed each source first.
-    engine.layers.foreground[(1 * SIZE + 1) * 4] = 111;
-    engine.layers.foreground[(2 * SIZE + 2) * 4] = 222;
+    // Two users copy different pixels, each out of their own layers.
+    engine.layersFor(String(LOCAL)).foreground[(1 * SIZE + 1) * 4] = 111;
+    engine.layersFor(String(REMOTE)).foreground[(2 * SIZE + 2) * 4] = 222;
 
     const copy = (user: number, x: number, y: number) =>
-      encodeRegion(user, "foreground", "copy",
+      encodeRegion(user, user, "foreground", "copy",
         { x, y, width: 1, height: 1 }, { r: 0, g: 0, b: 0, a: 255 }, 1);
 
     await remote(history, copy(LOCAL, 1, 1), 1);
     await remote(history, copy(REMOTE, 2, 2), 2);
 
     // LOCAL copied last on this client, but it is REMOTE that pastes
-    await remote(history, encodeRegion(REMOTE, "foreground", "paste",
+    await remote(history, encodeRegion(REMOTE, REMOTE, "foreground", "paste",
       { x: 8, y: 8, width: 1, height: 1 }, { r: 0, g: 0, b: 0, a: 255 }, 1), 3);
-    expect(red(engine, 8, 8)).toBe(222);
+    expect(redFor(engine, REMOTE, 8, 8)).toBe(222);
 
     // and LOCAL's own paste still gets LOCAL's clipboard
-    await remote(history, encodeRegion(LOCAL, "foreground", "paste",
+    await remote(history, encodeRegion(LOCAL, LOCAL, "foreground", "paste",
       { x: 9, y: 9, width: 1, height: 1 }, { r: 0, g: 0, b: 0, a: 255 }, 1), 4);
     expect(red(engine, 9, 9)).toBe(111);
   });
@@ -705,7 +783,7 @@ describe("the tool messages through history", () => {
     const color = { r: 42, g: 0, b: 0, a: 255 };
 
     await remote(history, encodeUndoPoint(LOCAL), 1);
-    await remote(history, encodeRegion(LOCAL, "foreground", "rectFill",
+    await remote(history, encodeRegion(LOCAL, LOCAL, "foreground", "rectFill",
       { x: 3, y: 3, width: 2, height: 2 }, color, 1), 2);
     expect(red(engine, 3, 3)).toBe(42);
     expect(history.canUndo()).toBe(true);
@@ -721,18 +799,18 @@ describe("the tool messages through history", () => {
     const { engine, history } = setup();
     const color = { r: 77, g: 0, b: 0, a: 255 };
 
-    await remote(history, encodeBezier(REMOTE, "foreground", 2, "solid", color,
+    await remote(history, encodeBezier(REMOTE, REMOTE, "foreground", 2, "solid", color,
       [4, 5, 0, 0, 0, 0, 9, 9]), 1);
-    expect(red(engine, 4, 5)).toBe(77);
+    expect(redFor(engine, REMOTE, 4, 5)).toBe(77);
 
-    await remote(history, encodeText(REMOTE, "foreground", 6, 6, "hi", color, 4), 2);
-    expect(red(engine, 6, 6)).toBe(77);
+    await remote(history, encodeText(REMOTE, REMOTE, "foreground", 6, 6, "hi", color, 4), 2);
+    expect(redFor(engine, REMOTE, 6, 6)).toBe(77);
 
-    await remote(history, encodeLine(REMOTE, "foreground", 1, "solid", color,
+    await remote(history, encodeLine(REMOTE, REMOTE, "foreground", 1, "solid", color,
       { x: 1, y: 1 }, { x: 2, y: 2 }), 3);
 
-    await remote(history, encodeEraseAll(REMOTE, "foreground"), 4);
-    expect(red(engine, 4, 5)).toBe(0);
+    await remote(history, encodeEraseAll(REMOTE, REMOTE, "foreground"), 4);
+    expect(redFor(engine, REMOTE, 4, 5)).toBe(0);
     expect(engine.ops).toContain("eraseAll:foreground");
   });
 });

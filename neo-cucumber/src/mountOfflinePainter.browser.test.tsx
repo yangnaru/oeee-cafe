@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { act } from "react";
 import { mount } from "./public";
+import { participantZIndex } from "./neo/canvasStack";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -243,9 +244,12 @@ describe("public painter lifecycle", () => {
     });
     await act(async () => painter.ready);
 
-    const layerCanvas = (zIndex: number) =>
+    // Every participant has their own pair, so a canvas is found by whose it
+    // is and which layer -- not by a z-index this test would have to keep in
+    // step with the stacking rule.
+    const layerCanvas = (rank: number, layer: "background" | "foreground") =>
       Array.from(element.querySelectorAll("canvas")).find(
-        (canvas) => canvas.style.zIndex === String(zIndex),
+        (canvas) => canvas.style.zIndex === String(participantZIndex(rank, layer)),
       )!;
     const frame = () =>
       act(async () => {
@@ -272,7 +276,7 @@ describe("public painter lifecycle", () => {
     });
     await frame();
 
-    const foreground = layerCanvas(2);
+    const foreground = layerCanvas(1, "foreground");
     expect(pixel(foreground, 8, 8)).toEqual([255, 0, 0, 255]);
     expect(pixel(foreground, 50, 40)).toEqual([0, 0, 0, 0]);
 
@@ -307,7 +311,7 @@ describe("public painter lifecycle", () => {
     });
     await frame();
 
-    const background = layerCanvas(1);
+    const background = layerCanvas(1, "background");
     expect(pixel(background, 1, 1)).toEqual([0, 255, 0, 255]);
     expect(pixel(background, 63, 47)).toEqual([0, 255, 0, 255]);
 
@@ -345,7 +349,16 @@ describe("public painter lifecycle", () => {
     });
     const checkpoint = await painter.exportCheckpoint(1);
     expect(checkpoint).toMatchObject({ sequence: 1, width: 24, height: 16 });
-    expect(checkpoint.background.type).toBe("image/png");
+    // The local participant and the one whose operation was applied, each
+    // with their own pair.
+    expect(checkpoint.layers.map((entry) => entry.actorId).sort()).toEqual([
+      "alice",
+      "bob",
+    ]);
+    for (const entry of checkpoint.layers) {
+      expect(entry.background.type).toBe("image/png");
+      expect(entry.foreground.type).toBe("image/png");
+    }
     const archiveBeforeReset = await painter.exportSessionArchive();
     expect(archiveBeforeReset.operations.map((entry) => entry.id)).toEqual(["bob:1"]);
     await painter.compactCanonicalHistory(1);

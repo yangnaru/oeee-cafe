@@ -61,15 +61,41 @@ interface Entry {
   undo: UndoState;
 }
 
-interface Savepoint {
-  index: number; // number of history entries applied in this state
+/** One participant's two buffers, as stored in a savepoint. */
+interface OwnerLayers {
   foreground: Uint8ClampedArray;
   background: Uint8ClampedArray;
+}
+
+interface Savepoint {
+  index: number; // number of history entries applied in this state
+  /**
+   * Every participant's pair at this point in history.
+   *
+   * A participant whose layers have not changed since the previous savepoint
+   * shares that savepoint's arrays rather than a copy of them: with eight
+   * participants and eight savepoints, copying all of them every time would
+   * cost a few hundred megabytes at the largest canvas size, and a savepoint
+   * is only ever read, never drawn into, so sharing is safe.
+   */
+  layers: Map<ActorKey, OwnerLayers>;
   strokes: StrokeStates;
 }
 
+/** Where an operation's pixels live: one participant's pair, by author. */
+type LayerSource = (owner: ActorKey) => OwnerLayers;
+
 type Area =
-  | { kind: "pixels"; layer: LayerName; x0: number; y0: number; x1: number; y1: number }
+  | {
+      kind: "pixels";
+      /** Whose layer pair the rectangle is in. */
+      owner: ActorKey;
+      layer: LayerName;
+      x0: number;
+      y0: number;
+      x1: number;
+      y1: number;
+    }
   | { kind: "user" }
   | { kind: "everything" };
 
@@ -82,13 +108,23 @@ interface ForkEntry {
 // A stroke being drawn locally: its segments are painted optimistically as
 // they happen, then flushed into one STROKE message (a fork entry) at a time
 interface OpenBatch {
+  /** Whose pair the segments land in; the local participant's by default. */
+  targetOwner: ActorKey;
   layer: LayerName;
   brushSize: number;
   brushType: WireBrushType;
   color: { r: number; g: number; b: number; a: number };
   mask: Mask;
   points: { x: number; y: number }[];
-  area: { kind: "pixels"; layer: LayerName; x0: number; y0: number; x1: number; y1: number };
+  area: {
+    kind: "pixels";
+    owner: ActorKey;
+    layer: LayerName;
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  };
 }
 
 const SAVEPOINT_INTERVAL = 64;
@@ -117,6 +153,11 @@ function cloneStrokes(strokes: StrokeStates): StrokeStates {
 }
 
 function affectedArea(msg: HistoryOperation): Area {
+  // The rectangle is in the layers the operation *writes*, which is usually
+  // its author's own pair but need not be: a participant may paint into
+  // somebody else's. Naming the author here instead would call two people
+  // drawing on one layer concurrent and let them diverge.
+  const owner = "targetOwner" in msg ? actorKey(msg.targetOwner) : "";
   switch (msg.type) {
     case "stroke": {
       const pad = msg.brushSize;
@@ -131,7 +172,7 @@ function affectedArea(msg: HistoryOperation): Area {
         y1 = Math.max(y1, p.y);
       }
       return {
-        kind: "pixels",
+        kind: "pixels", owner,
         layer: msg.layer,
         x0: x0 - pad,
         y0: y0 - pad,
@@ -149,7 +190,7 @@ function affectedArea(msg: HistoryOperation): Area {
         return { kind: "everything" };
       }
       return {
-        kind: "pixels",
+        kind: "pixels", owner,
         // copy writes nothing, but it *reads* the rectangle, so it still has
         // to stay ordered against writes to it
         layer: msg.layer,
@@ -161,7 +202,7 @@ function affectedArea(msg: HistoryOperation): Area {
     }
     case "line":
       return {
-        kind: "pixels",
+        kind: "pixels", owner,
         layer: msg.layer,
         x0: Math.min(msg.from.x, msg.to.x) - msg.brushSize,
         y0: Math.min(msg.from.y, msg.to.y) - msg.brushSize,
@@ -174,7 +215,7 @@ function affectedArea(msg: HistoryOperation): Area {
       const xs = msg.points.filter((_, i) => i % 2 === 0);
       const ys = msg.points.filter((_, i) => i % 2 === 1);
       return {
-        kind: "pixels",
+        kind: "pixels", owner,
         layer: msg.layer,
         x0: Math.min(...xs) - msg.brushSize,
         y0: Math.min(...ys) - msg.brushSize,
@@ -186,12 +227,12 @@ function affectedArea(msg: HistoryOperation): Area {
       // Glyph metrics are the font's business, not ours, and guessing a box
       // too small would let a concurrent op reorder through it. Take the
       // layer.
-      return { kind: "pixels", layer: msg.layer, x0: -Infinity, y0: -Infinity, x1: Infinity, y1: Infinity };
+      return { kind: "pixels", owner, layer: msg.layer, x0: -Infinity, y0: -Infinity, x1: Infinity, y1: Infinity };
     case "eraseAll":
     case "fill":
     case "snapshot":
       // Fills depend on (and snapshots replace) the whole layer
-      return { kind: "pixels", layer: msg.layer, x0: -Infinity, y0: -Infinity, x1: Infinity, y1: Infinity };
+      return { kind: "pixels", owner, layer: msg.layer, x0: -Infinity, y0: -Infinity, x1: Infinity, y1: Infinity };
     case "undoPoint":
       return { kind: "user" };
     default:
@@ -202,6 +243,12 @@ function affectedArea(msg: HistoryOperation): Area {
 function areasConcurrent(a: Area, b: Area): boolean {
   if (a.kind === "user" || b.kind === "user") return true;
   if (a.kind === "everything" || b.kind === "everything") return false;
+  // Different layer pairs cannot contend, however many people are drawing:
+  // the usual case, where each participant paints into their own. Two
+  // operations aimed at the *same* pair still fall through to the rectangle
+  // test below, so drawing on somebody else's layer is reconciled exactly as
+  // drawing on your own always was.
+  if (a.owner !== b.owner) return true;
   if (a.layer !== b.layer) return true;
   return a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0;
 }
@@ -211,10 +258,14 @@ export class CanvasHistory {
   // Whoever the host says we are on the canonical stream -- the 1-byte
   // session id the server assigns, however it names it. -1 until told.
   private localUserId: HistoryActorId = -1;
+  /** Whose pair local marks land in; our own unless the host redirects it. */
+  private localTargetOwner: ActorKey = actorKey(-1);
   private onChange?: (canUndo: boolean, canRedo: boolean) => void;
 
   private entries: Entry[] = [];
   private savepoints: Savepoint[] = [];
+  /** Who has drawn since the last savepoint, so the rest can share its arrays. */
+  private readonly dirtyOwners = new Set<ActorKey>();
   private fork: ForkEntry[] = [];
   private canonicalLog: CanonicalPainterOperation[] = [];
   private openBatch: OpenBatch | null = null;
@@ -234,7 +285,27 @@ export class CanvasHistory {
   }
 
   setLocalUserId(id: HistoryActorId): void {
+    const wasOwn = this.localTargetOwner === actorKey(this.localUserId);
     this.localUserId = id;
+    // Aiming at our own layers is the default, and stays true through the
+    // rename a collaborative client does when the server names it.
+    if (wasOwn) this.localTargetOwner = actorKey(id);
+  }
+
+  /**
+   * Point new local marks at a participant's layers.
+   *
+   * Anyone may draw into anyone's pair, so this is what the toolbox sets when
+   * a participant picks whose layers to work on. It only affects marks made
+   * from here on; a stroke already open keeps the pair it was started in.
+   */
+  setLocalTargetOwner(owner: HistoryActorId): void {
+    this.localTargetOwner = actorKey(owner);
+  }
+
+  /** Whose layers new local marks land in. */
+  getLocalTargetOwner(): ActorKey {
+    return this.localTargetOwner;
   }
 
   /**
@@ -246,8 +317,11 @@ export class CanvasHistory {
    * second time — invisible for opaque brushes, not for translucent ones.
    */
   resetToBlankCanvas(): void {
-    this.engine.layers.foreground.fill(0);
-    this.engine.layers.background.fill(0);
+    for (const owner of this.engine.ownerIds()) {
+      const layers = this.engine.layersFor(owner);
+      layers.foreground.fill(0);
+      layers.background.fill(0);
+    }
     this.reset();
     this.queueUpdates();
   }
@@ -259,15 +333,64 @@ export class CanvasHistory {
     this.canonicalLog = [];
     this.openBatch = null;
     this.liveStrokes = new Map();
+    this.dirtyOwners.clear();
     this.savepoints = [
-      {
-        index: 0,
-        foreground: new Uint8ClampedArray(this.engine.layers.foreground),
-        background: new Uint8ClampedArray(this.engine.layers.background),
-        strokes: new Map(),
-      },
+      { index: 0, layers: this.captureLayers(), strokes: new Map() },
     ];
     this.notify();
+  }
+
+  /** Where a live operation's pixels go: its author's own pair. */
+  private readonly liveSource: LayerSource = (owner) => {
+    this.dirtyOwners.add(owner);
+    return this.engine.layersFor(owner);
+  };
+
+  /**
+   * Copies every participant's current layers for a savepoint, sharing the
+   * previous savepoint's arrays for anyone who has not drawn since it.
+   */
+  private captureLayers(): Map<ActorKey, OwnerLayers> {
+    const previous = this.savepoints[this.savepoints.length - 1]?.layers;
+    const captured = new Map<ActorKey, OwnerLayers>();
+    for (const owner of this.engine.ownerIds()) {
+      const shared = this.dirtyOwners.has(owner) ? undefined : previous?.get(owner);
+      if (shared) {
+        captured.set(owner, shared);
+        continue;
+      }
+      const live = this.engine.layersFor(owner);
+      captured.set(owner, {
+        foreground: new Uint8ClampedArray(live.foreground),
+        background: new Uint8ClampedArray(live.background),
+      });
+    }
+    this.dirtyOwners.clear();
+    return captured;
+  }
+
+  /**
+   * Puts every participant's layers back to a savepoint.
+   *
+   * Anyone who has no entry in it joined after it was taken, so their pair is
+   * blanked rather than left showing work the replay is about to redraw.
+   */
+  private restoreLayers(sp: Savepoint): void {
+    // Anyone the savepoint knows about must exist before the sweep below, or
+    // a participant who left and whose pair was released never comes back.
+    for (const owner of sp.layers.keys()) this.engine.layersFor(owner);
+    for (const owner of this.engine.ownerIds()) {
+      const live = this.engine.layersFor(owner);
+      const saved = sp.layers.get(owner);
+      if (saved) {
+        live.foreground.set(saved.foreground);
+        live.background.set(saved.background);
+      } else {
+        live.foreground.fill(0);
+        live.background.fill(0);
+      }
+    }
+    this.dirtyOwners.clear();
   }
 
   /** True while any locally drawn state is not yet server-confirmed. */
@@ -353,7 +476,7 @@ export class CanvasHistory {
       // against the previous one's endpoint
       this.liveStrokes.set(actorKey(msg.userId), null);
     } else if (msg.type !== "undo") {
-      this.applyDrawSync(msg, this.engine.layers, this.liveStrokes);
+      this.applyDrawSync(msg, this.liveSource, this.liveStrokes);
     }
     // Update undo/redo button state immediately (projected over the fork)
     this.notify();
@@ -391,6 +514,7 @@ export class CanvasHistory {
     if (this.localUserId === -1) return 0;
     if (!this.openBatch) {
       this.openBatch = {
+        targetOwner: this.localTargetOwner,
         layer,
         brushSize,
         brushType,
@@ -399,6 +523,7 @@ export class CanvasHistory {
         points: [],
         area: {
           kind: "pixels",
+          owner: this.localTargetOwner,
           layer,
           x0: x - brushSize,
           y0: y - brushSize,
@@ -418,7 +543,7 @@ export class CanvasHistory {
       this.localUserId,
       batch,
       [{ x, y }],
-      this.engine.layers,
+      this.liveSource(this.localTargetOwner),
       this.liveStrokes
     );
     return batch.points.length;
@@ -435,6 +560,7 @@ export class CanvasHistory {
     return {
       type: "stroke",
       userId: this.localUserId,
+      targetOwner: batch.targetOwner,
       layer: batch.layer,
       brushSize: batch.brushSize,
       brushType: batch.brushType,
@@ -556,10 +682,9 @@ export class CanvasHistory {
    * Squashes all entries at or below the session reset's base sequence into a
    * new base savepoint. Their undo state is frozen; memory is reclaimed.
    */
-  async handleResetPoint(baseSeq: number): Promise<{
-    foreground: Uint8ClampedArray;
-    background: Uint8ClampedArray;
-  } | null> {
+  async handleResetPoint(
+    baseSeq: number
+  ): Promise<Map<ActorKey, OwnerLayers> | null> {
     let cut = 0;
     while (
       cut < this.entries.length &&
@@ -570,17 +695,32 @@ export class CanvasHistory {
     }
     if (cut === 0) return null;
 
-    // Compute the state at the cut into temporary buffers
+    // Compute the state at the cut into temporary buffers, one pair per
+    // participant, allocated as the replay first mentions each of them.
     const sp = this.savepointFor(cut);
-    const layers = {
-      foreground: new Uint8ClampedArray(sp.foreground),
-      background: new Uint8ClampedArray(sp.background),
+    const layers = new Map<ActorKey, OwnerLayers>();
+    for (const [owner, saved] of sp.layers) {
+      layers.set(owner, {
+        foreground: new Uint8ClampedArray(saved.foreground),
+        background: new Uint8ClampedArray(saved.background),
+      });
+    }
+    const forkSource: LayerSource = (owner) => {
+      let pair = layers.get(owner);
+      if (!pair) {
+        pair = {
+          foreground: new Uint8ClampedArray(this.engine.imageWidth * this.engine.imageHeight * 4),
+          background: new Uint8ClampedArray(this.engine.imageWidth * this.engine.imageHeight * 4),
+        };
+        layers.set(owner, pair);
+      }
+      return pair;
     };
     const strokes = cloneStrokes(sp.strokes);
     for (let i = sp.index; i < cut; i++) {
       const entry = this.entries[i];
       if (entry.undo === "done") {
-        await this.applyMessage(entry.msg, layers, strokes);
+        await this.applyMessage(entry.msg, forkSource, strokes);
       }
     }
 
@@ -589,16 +729,21 @@ export class CanvasHistory {
       (entry) => entry.sequence > baseSeq,
     );
     this.savepoints = [
-      { index: 0, foreground: layers.foreground, background: layers.background, strokes },
+      { index: 0, layers, strokes },
       ...this.savepoints
         .filter((s) => s.index >= cut)
         .map((s) => ({ ...s, index: s.index - cut })),
     ];
     this.notify();
-    return {
-      foreground: new Uint8ClampedArray(layers.foreground),
-      background: new Uint8ClampedArray(layers.background),
-    };
+    return new Map(
+      [...layers].map(([owner, pair]) => [
+        owner,
+        {
+          foreground: new Uint8ClampedArray(pair.foreground),
+          background: new Uint8ClampedArray(pair.background),
+        },
+      ])
+    );
   }
 
   private async applyCanonical(
@@ -619,7 +764,7 @@ export class CanvasHistory {
       if (replay) {
         await this.replayFrom(this.latestSavepoint());
       } else {
-        await this.applyMessage(msg, this.engine.layers, this.liveStrokes);
+        await this.applyMessage(msg, this.liveSource, this.liveStrokes);
         // A snapshot is assigned straight into the buffer, so the engine has
         // no region for it; everything else drew through the engine.
         if (msg.type === "snapshot") this.queueUpdates();
@@ -728,13 +873,12 @@ export class CanvasHistory {
    * the unconfirmed fork on top.
    */
   private async replayFrom(sp: Savepoint): Promise<void> {
-    this.engine.layers.foreground.set(sp.foreground);
-    this.engine.layers.background.set(sp.background);
+    this.restoreLayers(sp);
     const strokes = cloneStrokes(sp.strokes);
     for (let i = sp.index; i < this.entries.length; i++) {
       const entry = this.entries[i];
       if (entry.undo === "done") {
-        await this.applyMessage(entry.msg, this.engine.layers, strokes);
+        await this.applyMessage(entry.msg, this.liveSource, strokes);
       }
     }
     for (const f of this.fork) {
@@ -744,7 +888,7 @@ export class CanvasHistory {
         // beside it are drawn under.
         strokes.set(actorKey(f.msg.userId), null);
       } else if (f.msg.type !== "undo") {
-        this.applyDrawSync(f.msg, this.engine.layers, strokes);
+        this.applyDrawSync(f.msg, this.liveSource, strokes);
       }
     }
     if (this.openBatch && this.openBatch.points.length > 0) {
@@ -752,7 +896,7 @@ export class CanvasHistory {
         this.localUserId,
         this.openBatch,
         this.openBatch.points,
-        this.engine.layers,
+        this.liveSource(this.openBatch.targetOwner),
         strokes
       );
     }
@@ -781,8 +925,7 @@ export class CanvasHistory {
     if (this.entries.length - last.index < SAVEPOINT_INTERVAL) return;
     this.savepoints.push({
       index: this.entries.length,
-      foreground: new Uint8ClampedArray(this.engine.layers.foreground),
-      background: new Uint8ClampedArray(this.engine.layers.background),
+      layers: this.captureLayers(),
       strokes: cloneStrokes(this.liveStrokes),
     });
     if (this.savepoints.length > MAX_SAVEPOINTS) {
@@ -792,10 +935,10 @@ export class CanvasHistory {
     }
   }
 
-  /** Applies a message to the given layer buffers (snapshot decode is async). */
+  /** Applies a message to its author's layers (snapshot decode is async). */
   private async applyMessage(
     msg: HistoryOperation,
-    layers: Record<string, Uint8ClampedArray>,
+    source: LayerSource,
     strokes: StrokeStates
   ): Promise<void> {
     if (msg.type === "snapshot") {
@@ -808,14 +951,14 @@ export class CanvasHistory {
         );
         this.snapshotCache.set(msg, data);
       }
-      layers[msg.layer].set(data);
+      source(actorKey(msg.targetOwner))[msg.layer].set(data);
       return;
     }
     if (msg.type === "undoPoint") {
       strokes.set(actorKey(msg.userId), null);
       return;
     }
-    this.applyDrawSync(msg, layers, strokes);
+    this.applyDrawSync(msg, source, strokes);
   }
 
   /** Points the engine at a mask, or at none. */
@@ -828,12 +971,19 @@ export class CanvasHistory {
 
   private applyDrawSync(
     msg: HistoryOperation,
-    layers: Record<string, Uint8ClampedArray>,
+    source: LayerSource,
     strokes: StrokeStates
   ): void {
     // Every drawing message carries the mask it was drawn through, so replay
     // uses the sender's mask rather than whatever this client last set.
     this.useMask("mask" in msg ? msg.mask : undefined);
+    // The layers written are the target's. Everything else about the message
+    // still follows its author: the pen's continuation state, the clipboard a
+    // paste reads, and the undo stack it lands on. The two undo messages write
+    // nothing and never reach here.
+    const layers = source(
+      actorKey("targetOwner" in msg ? msg.targetOwner : msg.userId)
+    );
     switch (msg.type) {
       case "stroke":
         this.applyStrokePoints(msg.userId, msg, msg.points, layers, strokes);
@@ -854,7 +1004,7 @@ export class CanvasHistory {
         // user and swaps it in around the op, so a paste reproduces what the
         // sender copied rather than whatever the receiver last copied -- which
         // is usually nothing.
-        const targets = this.buffersFor(layers);
+        const targets = layers;
         this.engine.setClipboard(this.clipboards.get(actorKey(msg.userId)) ?? null);
         this.engine.applyRegionTool(
           msg.tool, msg.layer, msg.rect, msg.color, msg.brushSize, targets
@@ -883,7 +1033,7 @@ export class CanvasHistory {
         );
         break;
       case "eraseAll":
-        this.engine.eraseAll(msg.layer, this.buffersFor(layers));
+        this.engine.eraseAll(msg.layer, layers);
         break;
       case "text":
         this.engine.drawText(
@@ -897,16 +1047,6 @@ export class CanvasHistory {
   }
 
   /**
-   * Names a layer record as a buffer pair, so ops that reach through
-   * `neo.surfaces` (merge needs both at once) can be pointed at a fork.
-   */
-  private buffersFor(
-    layers: Record<string, Uint8ClampedArray>
-  ): { foreground: Uint8ClampedArray; background: Uint8ClampedArray } {
-    return { foreground: layers.foreground, background: layers.background };
-  }
-
-  /**
    * Applies polyline points for one user. Each point continues from the
    * user's previous point (tracked in `strokes`); a null continuation state
    * (set by their UNDO_POINT) starts a new stroke with a dot.
@@ -915,7 +1055,7 @@ export class CanvasHistory {
     userId: HistoryActorId,
     props: Pick<HistoryStroke, "layer" | "brushSize" | "brushType" | "color" | "mask">,
     points: { x: number; y: number }[],
-    layers: Record<string, Uint8ClampedArray>,
+    layers: OwnerLayers,
     strokes: StrokeStates
   ): void {
     // Reached directly by the local live path and by rebuilds, not only

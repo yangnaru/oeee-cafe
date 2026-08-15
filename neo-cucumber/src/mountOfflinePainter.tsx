@@ -119,6 +119,10 @@ export function mountOfflinePainter(
       pendingActorId = actorId;
       controller?.setLocalActorId(actorId);
     },
+    setParticipants(participants) {
+      if (!mounted) throw unmountedError();
+      controller?.setParticipants(participants);
+    },
     async applyCanonicalOperation(operation) {
       return (await liveController()).applyCanonicalOperation(operation);
     },

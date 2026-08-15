@@ -13,6 +13,10 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#: src/components/neo/NeoParticipantLayers.tsx:86
+msgid " (you)"
+msgstr "（你）"
+
 #: src/components/SimplifiedToolbox.tsx:173
 msgid "{minutes} min"
 msgstr "{minutes} 分钟"
@@ -32,6 +36,15 @@ msgstr "颜色"
 msgid "Dark"
 msgstr "深色"
 
+#. placeholder {0}: participant.name
+#: src/components/neo/NeoParticipantLayers.tsx:76
+msgid "Draw on {0}'s layers"
+msgstr "在{0}的图层上绘制"
+
+#: src/components/neo/NeoParticipantLayers.tsx:77
+msgid "Draw on these layers"
+msgstr "在此图层上绘制"
+
 #: src/components/ToolboxPanel.tsx:199
 #: src/components/ToolboxPanel.tsx:200
 msgid "Fit canvas"
@@ -42,6 +55,15 @@ msgstr "适应画布"
 #: src/components/SimplifiedToolbox.tsx:143
 msgid "Foreground pen"
 msgstr "前景色画笔"
+
+#. placeholder {0}: participant.name
+#: src/components/neo/NeoParticipantLayers.tsx:65
+msgid "Hide {0}'s layers"
+msgstr "隐藏{0}的图层"
+
+#: src/components/neo/NeoParticipantLayers.tsx:67
+msgid "Hide these layers"
+msgstr "隐藏此图层"
 
 #: src/components/SimplifiedToolbox.tsx:221
 #: src/components/ToolboxPanel.tsx:332
@@ -86,6 +108,15 @@ msgstr "保存绘画到画廊"
 #: src/components/SimplifiedToolbox.tsx:227
 msgid "Shortcuts"
 msgstr "快捷键"
+
+#. placeholder {0}: participant.name
+#: src/components/neo/NeoParticipantLayers.tsx:64
+msgid "Show {0}'s layers"
+msgstr "显示{0}的图层"
+
+#: src/components/neo/NeoParticipantLayers.tsx:67
+msgid "Show these layers"
+msgstr "显示此图层"
 
 #: src/components/SimplifiedToolbox.tsx:87
 msgid "Swap pens"

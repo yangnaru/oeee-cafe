@@ -13,6 +13,10 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#: src/components/neo/NeoParticipantLayers.tsx:86
+msgid " (you)"
+msgstr " (나)"
+
 #: src/components/SimplifiedToolbox.tsx:173
 msgid "{minutes} min"
 msgstr "{minutes}분"
@@ -32,6 +36,15 @@ msgstr "색상"
 msgid "Dark"
 msgstr "다크"
 
+#. placeholder {0}: participant.name
+#: src/components/neo/NeoParticipantLayers.tsx:76
+msgid "Draw on {0}'s layers"
+msgstr "{0}의 레이어에 그리기"
+
+#: src/components/neo/NeoParticipantLayers.tsx:77
+msgid "Draw on these layers"
+msgstr "이 레이어에 그리기"
+
 #: src/components/ToolboxPanel.tsx:199
 #: src/components/ToolboxPanel.tsx:200
 msgid "Fit canvas"
@@ -42,6 +55,15 @@ msgstr "캔버스 맞추기"
 #: src/components/SimplifiedToolbox.tsx:143
 msgid "Foreground pen"
 msgstr "전경색 펜"
+
+#. placeholder {0}: participant.name
+#: src/components/neo/NeoParticipantLayers.tsx:65
+msgid "Hide {0}'s layers"
+msgstr "{0}의 레이어 숨기기"
+
+#: src/components/neo/NeoParticipantLayers.tsx:67
+msgid "Hide these layers"
+msgstr "이 레이어 숨기기"
 
 #: src/components/SimplifiedToolbox.tsx:221
 #: src/components/ToolboxPanel.tsx:332
@@ -86,6 +108,15 @@ msgstr "그림을 갤러리에 저장"
 #: src/components/SimplifiedToolbox.tsx:227
 msgid "Shortcuts"
 msgstr "단축키"
+
+#. placeholder {0}: participant.name
+#: src/components/neo/NeoParticipantLayers.tsx:64
+msgid "Show {0}'s layers"
+msgstr "{0}의 레이어 표시"
+
+#: src/components/neo/NeoParticipantLayers.tsx:67
+msgid "Show these layers"
+msgstr "이 레이어 표시"
 
 #: src/components/SimplifiedToolbox.tsx:87
 msgid "Swap pens"

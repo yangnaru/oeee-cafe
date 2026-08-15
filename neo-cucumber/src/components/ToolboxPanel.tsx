@@ -9,6 +9,10 @@ import {
   NEO_PANEL_BUTTON,
 } from "./neo/neoClasses";
 import { NeoWindow } from "./neo/NeoWindow";
+import {
+  NeoParticipantLayers,
+  type ParticipantLayer,
+} from "./neo/NeoParticipantLayers";
 import { useTheme } from "../hooks/useTheme";
 import { usePressRepeat } from "../hooks/usePressRepeat";
 
@@ -62,6 +66,16 @@ export interface ToolboxPanelProps {
   onZoomReset: () => void;
   onZoomFit: () => void;
   onSaveCollaborativeDrawing: () => void;
+  /**
+   * Everyone with a layer pair, top of the stack first. Absent outside a
+   * collaborative session, where there is only ever one participant.
+   */
+  participantLayers?: ParticipantLayer[];
+  hiddenOwners?: ReadonlySet<string>;
+  targetOwner?: string;
+  localActorId?: string;
+  onToggleOwnerVisible?: (actorId: string) => void;
+  onSelectTargetOwner?: (actorId: string) => void;
   initialPosition?: { x: number; y: number };
   /** How high the panel may be dragged. See `minimumTop`. */
   minimumY?: number;
@@ -96,6 +110,12 @@ export const ToolboxPanel = ({
   onZoomReset,
   onZoomFit,
   onSaveCollaborativeDrawing,
+  participantLayers,
+  hiddenOwners,
+  targetOwner,
+  localActorId,
+  onToggleOwnerVisible,
+  onSelectTargetOwner,
   section = "all",
   initialPosition,
   minimumY = 0,
@@ -129,6 +149,22 @@ export const ToolboxPanel = ({
             onUpdateColor={onUpdateColor}
             onSetSelectedPaletteIndex={onSetSelectedPaletteIndex}
             onSetPaletteColor={onSetPaletteColor}
+          />
+        )}
+
+        {/*
+          The participants' layers, under NEO's column because it is a list of
+          the same thing NEO's layer button names -- just one row per person
+          rather than one button for the only person there used to be.
+        */}
+        {showNeo && participantLayers && participantLayers.length > 0 && (
+          <NeoParticipantLayers
+            participants={participantLayers}
+            hidden={hiddenOwners ?? new Set()}
+            target={targetOwner ?? ""}
+            localActorId={localActorId ?? ""}
+            onToggleVisible={onToggleOwnerVisible ?? (() => {})}
+            onSelectTarget={onSelectTargetOwner ?? (() => {})}
           />
         )}
 

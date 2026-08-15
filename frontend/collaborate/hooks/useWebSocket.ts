@@ -60,7 +60,12 @@ interface WebSocketHookParams {
     username: string
   ) => void;
   hideCursor: (userId: string) => void;
-  addParticipant: (userId: string, username: string, joinedAt: number) => void;
+  addParticipant: (
+    userId: string,
+    username: string,
+    joinedAt: number,
+    sessionId?: number,
+  ) => void;
   clearParticipants: () => void;
   addChatMessage: (message: {
     id: string;
@@ -74,7 +79,11 @@ interface WebSocketHookParams {
   onReconnectCanvas: (reconnecting: boolean, resumeSequence: number | null) => Promise<void> | void;
   onCanvasMessage: (message: DecodedMessage, raw: Uint8Array, sequence?: number) => Promise<void>;
   onWelcome: (sessionId: number) => void;
-  onResetPoint: (baseSequence: number, sequence?: number) => Promise<void> | void;
+  onResetPoint: (
+    baseSequence: number,
+    sequence: number | undefined,
+    snapshotCount: number,
+  ) => Promise<void> | void;
   verifyCanonicalPosition: () => Promise<boolean>;
   canResumeCanonicalPosition: () => boolean;
   onSessionEnded: (postUrl: string) => void;
@@ -562,7 +571,7 @@ export const useWebSocket = ({
           }
 
           case "resetPoint": {
-            await onResetPoint(message.baseSeq, seq);
+            await onResetPoint(message.baseSeq, seq, message.snapshotCount);
             break;
           }
 
@@ -708,7 +717,8 @@ export const useWebSocket = ({
               addParticipant(
                 participant.userId,
                 participant.username,
-                participant.joinTimestamp
+                participant.joinTimestamp,
+                participant.sessionId > 0 ? participant.sessionId : undefined
               );
               if (participant.sessionId > 0) {
                 idNamesRef.current.set(

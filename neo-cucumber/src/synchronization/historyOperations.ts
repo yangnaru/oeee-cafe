@@ -7,17 +7,28 @@ export type HistoryLayer = "foreground" | "background";
 export type HistoryActorId = string | number;
 
 interface ActorOperation {
+  /** Who made the mark: the pen, the undo stack and the clipboard follow this. */
   userId: HistoryActorId;
 }
 
-interface MaskedOperation extends ActorOperation {
+/**
+ * An operation that puts pixels somewhere.
+ *
+ * The author and the layers written are two different people's names now: a
+ * participant may draw into somebody else's pair, so `targetOwner` says whose
+ * pixels change while `userId` still says whose gesture it was.
+ */
+interface TargetedOperation extends ActorOperation {
+  targetOwner: HistoryActorId;
   layer: HistoryLayer;
+}
+
+interface MaskedOperation extends TargetedOperation {
   mask: Mask;
 }
 
-export interface HistorySnapshot extends ActorOperation {
+export interface HistorySnapshot extends TargetedOperation {
   type: "snapshot";
-  layer: HistoryLayer;
   pngData: Uint8Array;
 }
 
@@ -61,9 +72,8 @@ export interface HistoryBezier extends MaskedOperation {
   points: number[];
 }
 
-export interface HistoryEraseAll extends ActorOperation {
+export interface HistoryEraseAll extends TargetedOperation {
   type: "eraseAll";
-  layer: HistoryLayer;
 }
 
 export interface HistoryText extends MaskedOperation {
@@ -116,23 +126,29 @@ export function toHistoryOperation(
   userId: HistoryActorId,
   operation: PainterOperation,
 ): Exclude<HistoryOperation, HistorySnapshot> {
+  // Unsaid means "my own layers", which is every offline mark and most
+  // collaborative ones.
+  const targetOwner =
+    "targetActorId" in operation && operation.targetActorId !== undefined
+      ? operation.targetActorId
+      : userId;
   switch (operation.kind) {
     case "stroke":
       return {
-        type: "stroke", userId, layer: operation.layer,
+        type: "stroke", userId, targetOwner, layer: operation.layer,
         brushSize: operation.brushSize,
         brushType: operation.brush as WireBrushType,
         color: operation.color, points: operation.points, mask: operation.mask,
       };
     case "fill":
       return {
-        type: "fill", userId, layer: operation.layer,
+        type: "fill", userId, targetOwner, layer: operation.layer,
         x: operation.at.x, y: operation.at.y,
         color: operation.color, mask: operation.mask,
       };
     case "line":
       return {
-        type: "line", userId, layer: operation.layer,
+        type: "line", userId, targetOwner, layer: operation.layer,
         brushSize: operation.brushSize,
         brushType: operation.brush as WireBrushType,
         color: operation.color, from: operation.from, to: operation.to,
@@ -140,26 +156,26 @@ export function toHistoryOperation(
       };
     case "bezier":
       return {
-        type: "bezier", userId, layer: operation.layer,
+        type: "bezier", userId, targetOwner, layer: operation.layer,
         brushSize: operation.brushSize,
         brushType: operation.brush as WireBrushType,
         color: operation.color, points: operation.points, mask: operation.mask,
       };
     case "region":
       return {
-        type: "region", userId, layer: operation.layer, tool: operation.tool,
+        type: "region", userId, targetOwner, layer: operation.layer, tool: operation.tool,
         rect: operation.rect, color: operation.color,
         brushSize: operation.brushSize, mask: operation.mask,
       };
     case "text":
       return {
-        type: "text", userId, layer: operation.layer,
+        type: "text", userId, targetOwner, layer: operation.layer,
         x: operation.at.x, y: operation.at.y, text: operation.text,
         color: operation.color, brushSize: operation.brushSize,
         mask: operation.mask,
       };
     case "clear-layer":
-      return { type: "eraseAll", userId, layer: operation.layer };
+      return { type: "eraseAll", userId, targetOwner, layer: operation.layer };
     case "undo-boundary":
       return { type: "undoPoint", userId };
     case "undo":
@@ -174,44 +190,48 @@ export function fromHistoryOperation(
   switch (operation.type) {
     case "stroke":
       return {
-        kind: "stroke", layer: operation.layer, brushSize: operation.brushSize,
+        kind: "stroke", targetActorId: String(operation.targetOwner), layer: operation.layer, brushSize: operation.brushSize,
         brush: operation.brushType as PainterBrush, color: operation.color,
         points: operation.points, mask: operation.mask,
       };
     case "fill":
       return {
-        kind: "fill", layer: operation.layer,
+        kind: "fill", targetActorId: String(operation.targetOwner), layer: operation.layer,
         at: { x: operation.x, y: operation.y }, color: operation.color,
         mask: operation.mask,
       };
     case "line":
       return {
-        kind: "line", layer: operation.layer, brushSize: operation.brushSize,
+        kind: "line", targetActorId: String(operation.targetOwner), layer: operation.layer, brushSize: operation.brushSize,
         brush: operation.brushType as PainterBrush, color: operation.color,
         from: operation.from, to: operation.to, mask: operation.mask,
       };
     case "bezier":
       return {
-        kind: "bezier", layer: operation.layer, brushSize: operation.brushSize,
+        kind: "bezier", targetActorId: String(operation.targetOwner), layer: operation.layer, brushSize: operation.brushSize,
         brush: operation.brushType as PainterBrush, color: operation.color,
         points: operation.points as [number, number, number, number, number, number, number, number],
         mask: operation.mask,
       };
     case "region":
       return {
-        kind: "region", layer: operation.layer, tool: operation.tool,
+        kind: "region", targetActorId: String(operation.targetOwner), layer: operation.layer, tool: operation.tool,
         rect: operation.rect, color: operation.color,
         brushSize: operation.brushSize, mask: operation.mask,
       };
     case "text":
       return {
-        kind: "text", layer: operation.layer,
+        kind: "text", targetActorId: String(operation.targetOwner), layer: operation.layer,
         at: { x: operation.x, y: operation.y }, text: operation.text,
         color: operation.color, brushSize: operation.brushSize,
         mask: operation.mask,
       };
     case "eraseAll":
-      return { kind: "clear-layer", layer: operation.layer };
+      return {
+        kind: "clear-layer",
+        targetActorId: String(operation.targetOwner),
+        layer: operation.layer,
+      };
     case "undoPoint":
       return { kind: "undo-boundary" };
     case "undo":

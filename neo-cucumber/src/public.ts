@@ -5,6 +5,7 @@ export type {
   LocalPainterOperation,
   PainterBrush,
   PainterCheckpoint,
+  PainterCheckpointLayers,
   PainterColor,
   PainterLayer,
   PainterMask,
@@ -196,6 +197,17 @@ export interface PainterHandle {
    * stamped with the old identity are not re-keyed.
    */
   setLocalActorId(actorId: string): void;
+
+  /**
+   * Name the participants for the layer toolbox.
+   *
+   * The painter knows every actor that has drawn, because their layers exist,
+   * but not who they are: names and colours belong to the host's roster. Any
+   * actor left unnamed is listed by its id.
+   */
+  setParticipants(
+    participants: { actorId: string; name: string; color?: string }[],
+  ): void;
 
   /** Apply a server-ordered echo or remote operation in controlled mode. */
   applyCanonicalOperation(

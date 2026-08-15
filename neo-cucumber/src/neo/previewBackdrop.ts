@@ -17,7 +17,7 @@ export function previewBackdrop(
   fgVisible: boolean
 ): Backdrop {
   const pixels = (layer: "background" | "foreground") => {
-    const context = engine.domContexts[layer];
+    const context = engine.domContextFor(layer);
     if (context) {
       return new Uint8ClampedArray(
         context.getImageData(0, 0, width, height).data

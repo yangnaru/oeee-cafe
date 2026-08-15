@@ -820,8 +820,10 @@ async fn parse_reset_begin(data: &[u8], ctx: &SessionContext<'_>) -> Option<Pend
     }
     let base_seq = utils::read_u64_le(data, 1);
     let count = u16::from_le_bytes([data[9], data[10]]);
-    // The shared canvas has exactly one background and one foreground layer.
-    if count != 2 {
+    // One background and one foreground per participant who has drawn. The
+    // ceiling is the session user id space, and the pairing itself is checked
+    // against the payloads in `valid_reset_payloads`.
+    if count == 0 || count % 2 != 0 || count > 2 * u16::from(u8::MAX) {
         warn!(
             "Rejecting RESET_BEGIN with snapshot count {} from connection {} in room {}",
             count, ctx.connection_id, ctx.room_uuid
@@ -886,8 +888,14 @@ async fn finish_reset(ctx: &SessionContext<'_>, reset: PendingReset) {
             // Tell all clients (and future late joiners, via history) that
             // everything at or below base_seq is squashed into the reset
             // snapshots, so they can freeze undo state and reclaim memory
+            // The count travels with the point because every snapshot of a
+            // reset is stored at the same sequence: without it a client has no
+            // way to tell a half-arrived checkpoint from a whole one, and with
+            // a pair per participant there is no longer a fixed number to
+            // assume.
             let mut reset_point = vec![messages::MessageType::ResetPoint as u8];
             reset_point.extend_from_slice(&reset.base_seq.to_le_bytes());
+            reset_point.extend_from_slice(&(reset.payloads.len() as u16).to_le_bytes());
             if let Err(e) = messages::sequence_and_broadcast(
                 &Message::Binary(reset_point),
                 ctx.room_uuid,
@@ -918,14 +926,35 @@ async fn finish_reset(ctx: &SessionContext<'_>, reset: PendingReset) {
     }
 }
 
+/// A reset checkpoint describes every participant's layer pair, so it carries
+/// one background and one foreground per participant who has drawn -- not the
+/// two of a shared canvas. Each snapshot names its owner in the user byte.
 pub(super) fn valid_reset_payloads(payloads: &[Vec<u8>]) -> bool {
-    payloads.len() == 2
-        && payloads.iter().all(|payload| {
-            payload.len() >= 3
-                && payload[0] == messages::MessageType::Snapshot as u8
-                && (payload[2] == 0 || payload[2] == 1)
-        })
-        && payloads[0][2] != payloads[1][2]
+    if payloads.is_empty() || payloads.len() % 2 != 0 {
+        return false;
+    }
+    let mut seen: std::collections::HashMap<u8, u8> = std::collections::HashMap::new();
+    for payload in payloads {
+        if payload.len() < 4 || payload[0] != messages::MessageType::Snapshot as u8 {
+            return false;
+        }
+        // [type][author][target owner][layer]...: one client uploads the whole
+        // canvas, so the author is the same throughout and the owner byte is
+        // what says whose pair each snapshot is.
+        let (owner, layer) = (payload[2], payload[3]);
+        if layer > 1 {
+            return false;
+        }
+        let bit = 1u8 << layer;
+        let held = seen.entry(owner).or_insert(0);
+        // The same layer twice for one participant would leave the checkpoint
+        // ambiguous about which copy is current.
+        if *held & bit != 0 {
+            return false;
+        }
+        *held |= bit;
+    }
+    seen.values().all(|held| *held == 0b11)
 }
 
 async fn maybe_request_reset(ctx: &SessionContext<'_>) {

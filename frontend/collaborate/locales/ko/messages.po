@@ -61,8 +61,8 @@ msgstr "세션 저장에 실패했습니다. 대신 PNG로 다운로드해 보�
 msgid "Go to Lobby"
 msgstr "로비로 가기"
 
-#: ../frontend/collaborate/App.tsx:655
-#: ../frontend/collaborate/App.tsx:659
+#: ../frontend/collaborate/App.tsx:693
+#: ../frontend/collaborate/App.tsx:697
 msgid "Help"
 msgstr "도움말"
 
@@ -91,7 +91,7 @@ msgstr "로딩 중..."
 msgid "Message too long (max 500 characters)"
 msgstr "메시지가 너무 깁니다 (최대 500자)"
 
-#: ../frontend/collaborate/App.tsx:563
+#: ../frontend/collaborate/App.tsx:593
 msgid "No Title"
 msgstr "제목 없음"
 
@@ -123,14 +123,14 @@ msgstr "PNG로 저장"
 #~ msgid "Save to gallery"
 #~ msgstr "갤러리에 저장"
 
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
+#: ../frontend/collaborate/App.tsx:730
+#: ../frontend/collaborate/App.tsx:774
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:111
 msgid "Save to Gallery"
 msgstr "갤러리에 저장"
 
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
+#: ../frontend/collaborate/App.tsx:730
+#: ../frontend/collaborate/App.tsx:774
 #: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:12
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:106
 msgid "Saving..."

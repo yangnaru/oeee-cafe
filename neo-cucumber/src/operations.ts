@@ -46,6 +46,14 @@ export interface PainterMask {
 interface PainterMark {
   layer: PainterLayer;
   mask: PainterMask;
+  /**
+   * Whose layer pair the mark lands in, when that is not the author's own.
+   *
+   * A collaborative session gives every participant their own background and
+   * foreground, and a participant may paint into somebody else's. Leave it
+   * unset to mean "my own layers", which is every offline mark.
+   */
+  targetActorId?: string;
 }
 
 export type PainterOperation =
@@ -90,7 +98,7 @@ export type PainterOperation =
       color: PainterColor;
       brushSize: number;
     })
-  | { kind: "clear-layer"; layer: PainterLayer }
+  | { kind: "clear-layer"; layer: PainterLayer; targetActorId?: string }
   | { kind: "undo-boundary" }
   | { kind: "undo"; redo: boolean };
 
@@ -108,12 +116,26 @@ export interface CanonicalPainterOperation extends LocalPainterOperation {
 }
 
 /** A compaction boundary from which canonical operations can continue. */
+/** One participant's two layers, as a checkpoint carries them. */
+export interface PainterCheckpointLayers {
+  /** The participant these layers belong to, as `actorId` names them. */
+  actorId: string;
+  background: Blob;
+  foreground: Blob;
+}
+
 export interface PainterCheckpoint {
   sequence: number;
   width: number;
   height: number;
-  background: Blob;
-  foreground: Blob;
+  /**
+   * Every participant's pair, bottom of the stack first.
+   *
+   * A collaborative session composites one pair per participant, so a
+   * checkpoint that carried a single pair could not describe it. Offline and
+   * replay mounts have exactly one entry here and never notice.
+   */
+  layers: PainterCheckpointLayers[];
 }
 
 /** Rich archival form; `.pch` is a flattened export derived from this log. */

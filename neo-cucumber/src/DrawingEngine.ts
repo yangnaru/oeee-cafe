@@ -10,6 +10,37 @@ export interface LayerBuffers {
 
 type LayerName = "foreground" | "background";
 
+/**
+ * Who a layer pair belongs to.
+ *
+ * A collaborative session gives every participant their own NEO: their own
+ * background and foreground, drawn on only by them, composited as a unit
+ * against everyone else's. Offline there is one participant and this is a
+ * detail nobody sees, which is why every owner-taking method defaults to the
+ * local one and the offline painter never names an owner at all.
+ */
+export type LayerOwner = string;
+
+export const DEFAULT_LAYER_OWNER: LayerOwner = "local";
+
+/** The buffers and their standing surfaces for one participant. */
+interface OwnerSlot {
+  layers: LayerBuffers;
+  /** NEO addresses layers by index, background first. */
+  surfaces: [BufferSurface, BufferSurface];
+}
+
+/** Which participant's which layer a live buffer is. */
+interface BufferIdentity {
+  owner: LayerOwner;
+  layer: LayerName;
+}
+
+/** Repaint bookkeeping is per owner per layer, so one key names one canvas. */
+function slotKey(owner: LayerOwner, layer: LayerName): string {
+  return `${owner} ${layer}`;
+}
+
 /** Inclusive pixel bounds of a change, in layer coordinates. */
 interface DirtyRegion {
   x0: number;
@@ -48,15 +79,9 @@ export class DrawingEngine {
   // `null` is nothing to do, `"all"` is the whole layer, and a rectangle is
   // the union of what has been drawn since the last one. Uploading the whole
   // canvas for a stroke costs far more than drawing the stroke did.
-  private pendingUpdates: Record<LayerName, DirtyRegion | "all" | null> = {
-    foreground: null,
-    background: null,
-  };
+  private pendingUpdates = new Map<string, DirtyRegion | "all">();
   /** What the owned surfaces have written since the last repaint was queued. */
-  private writtenRegions: Record<LayerName, DirtyRegion | null> = {
-    foreground: null,
-    background: null,
-  };
+  private writtenRegions = new Map<string, DirtyRegion>();
   /** Reused staging buffer for partial uploads, grown to the largest region. */
   private uploadScratch = new Uint8ClampedArray(0);
   private updateScheduled = false;
@@ -66,8 +91,40 @@ export class DrawingEngine {
   private readonly neo: NeoPainter;
   /** Surfaces over buffers we do not own, kept so replay does not reallocate. */
   private readonly foreignSurfaces = new WeakMap<Uint8ClampedArray, BufferSurface>();
-  private readonly backgroundSurface: BufferSurface;
-  private readonly foregroundSurface: BufferSurface;
+  /** Every participant's layer pair, in the order they were created. */
+  private readonly owners = new Map<LayerOwner, OwnerSlot>();
+  /**
+   * Reverse index from a live buffer to the participant and layer it is.
+   *
+   * The drawing methods take a buffer, not an owner, so this is what lets an
+   * operation replayed into someone else's layer still repaint their canvas
+   * and no one else's -- without a single call site having to name an owner.
+   */
+  private readonly bufferOwners = new Map<Uint8ClampedArray, BufferIdentity>();
+  /** Whose pair `layers` refers to, and whose NEO `neo.surfaces` addresses. */
+  private localOwner: LayerOwner = DEFAULT_LAYER_OWNER;
+  /** Whose layers interactive drawing paints into; null means our own. */
+  private targetOwner: LayerOwner | null = null;
+  /**
+   * Told when the set of participants changes.
+   *
+   * A pair is allocated the moment an operation first mentions its owner,
+   * which is deep inside applying a message. Whoever mounts canvases needs to
+   * hear about it to give the new participant one.
+   */
+  private readonly ownersChangedListeners = new Set<() => void>();
+
+  /** Registers a listener; returns a function that removes it. */
+  public onOwnersChanged(listener: () => void): () => void {
+    this.ownersChangedListeners.add(listener);
+    return () => {
+      this.ownersChangedListeners.delete(listener);
+    };
+  }
+
+  private announceOwners(): void {
+    for (const listener of this.ownersChangedListeners) listener();
+  }
 
   /** Mask settings, applied to every stroke. NEO's MASKTYPE_NONE by default. */
   public maskType = 0;
@@ -101,51 +158,144 @@ export class DrawingEngine {
     this.imageWidth = width;
     this.imageHeight = height;
 
-    this.layers = {
-      background: new Uint8ClampedArray(width * height * 4),
-      foreground: new Uint8ClampedArray(width * height * 4),
-    };
-
     this.compositeBuffer = new Uint8ClampedArray(width * height * 4);
 
-    // Initialize offscreen canvases for hardware acceleration
-    this.initializeOffscreenCanvases();
-
     this.neo = new NeoPainter(width, height);
-    // Only the two owned surfaces report their writes: they are the ones on
-    // screen, so a fork's writes must not mark the display dirty.
-    this.backgroundSurface = new BufferSurface(
-      this.layers.background, width, height,
-      (x0, y0, x1, y1) => {
-        this.writtenRegions.background = unionRegion(this.writtenRegions.background, x0, y0, x1, y1);
-      },
-    );
-    this.foregroundSurface = new BufferSurface(
-      this.layers.foreground, width, height,
-      (x0, y0, x1, y1) => {
-        this.writtenRegions.foreground = unionRegion(this.writtenRegions.foreground, x0, y0, x1, y1);
-      },
-    );
+
+    const slot = this.createOwnerSlot(DEFAULT_LAYER_OWNER);
+    this.layers = slot.layers as unknown as { [key: string]: Uint8ClampedArray };
     // Layer-addressed operations (the region tools) resolve through this, so
     // it has to point at the engine's buffers rather than the painter's own
     // canvases, which nothing here draws to.
-    this.neo.surfaces = [this.backgroundSurface, this.foregroundSurface];
+    this.neo.surfaces = slot.surfaces;
   }
 
-  private initializeOffscreenCanvases() {
-    // Create offscreen canvases for each layer
-    ["background", "foreground"].forEach((layerName) => {
+  /**
+   * Allocates a participant's layer pair, its surfaces and its offscreen
+   * canvases.
+   *
+   * Only owned surfaces report their writes: they are the ones on screen, so
+   * a fork's writes must not mark any display dirty. Each pair reports into
+   * its own slot, which is what keeps one participant's stroke from
+   * repainting another's canvas.
+   */
+  private createOwnerSlot(owner: LayerOwner): OwnerSlot {
+    const { imageWidth: width, imageHeight: height } = this;
+    const layers: LayerBuffers = {
+      background: new Uint8ClampedArray(width * height * 4),
+      foreground: new Uint8ClampedArray(width * height * 4),
+    };
+    const surfaceFor = (layer: LayerName) =>
+      new BufferSurface(layers[layer], width, height, (x0, y0, x1, y1) => {
+        const key = slotKey(owner, layer);
+        this.writtenRegions.set(
+          key,
+          unionRegion(this.writtenRegions.get(key) ?? null, x0, y0, x1, y1),
+        );
+      });
+    const slot: OwnerSlot = {
+      layers,
+      surfaces: [surfaceFor("background"), surfaceFor("foreground")],
+    };
+
+    for (const layer of ["background", "foreground"] as const) {
+      this.bufferOwners.set(layers[layer], { owner, layer });
+      const key = slotKey(owner, layer);
       const canvas = document.createElement("canvas");
-      canvas.width = this.imageWidth;
-      canvas.height = this.imageHeight;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.imageSmoothingEnabled = false;
-        this.layerCanvases[layerName] = canvas;
-        this.layerContexts[layerName] = ctx;
+        this.layerCanvases[key] = canvas;
+        this.layerContexts[key] = ctx;
       }
-    });
+    }
 
+    this.owners.set(owner, slot);
+    // The constructor allocates the local pair before any listener exists, so
+    // this is a no-op there and a real notification for everyone after.
+    this.announceOwners();
+    return slot;
+  }
+
+  /**
+   * The pair interactive drawing paints into.
+   *
+   * Usually the local participant's own, but anyone may work on somebody
+   * else's layers, and the optimistic paint has to land where the canonical
+   * echo will put it -- otherwise the mark shows up twice: once in the wrong
+   * pair, once in the right one.
+   */
+  public get drawTarget(): LayerBuffers {
+    return this.layersFor(this.targetOwner ?? this.localOwner);
+  }
+
+  /** Points interactive drawing at a participant's layers. */
+  public setDrawTarget(owner: LayerOwner | null): void {
+    this.targetOwner = owner;
+    const slot = this.owners.get(owner ?? this.localOwner);
+    // Region tools reach their pixels through `neo.surfaces` rather than
+    // through an argument, so redirecting them means moving that pair.
+    if (slot) this.neo.surfaces = slot.surfaces;
+  }
+
+  /** The participant's layer pair, allocated on first mention. */
+  public layersFor(owner: LayerOwner): LayerBuffers {
+    return (this.owners.get(owner) ?? this.createOwnerSlot(owner)).layers;
+  }
+
+  /** True if this participant already has a pair; does not allocate one. */
+  public hasOwner(owner: LayerOwner): boolean {
+    return this.owners.has(owner);
+  }
+
+  /** Every participant with a layer pair, in creation order. */
+  public ownerIds(): LayerOwner[] {
+    return [...this.owners.keys()];
+  }
+
+  /**
+   * Renames the local participant's pair.
+   *
+   * A collaborative client does not learn its session id until the server's
+   * WELCOME, by which point the engine already exists. Rather than allocate a
+   * second pair and leave the first stranded, the pair the painter has been
+   * drawing into is re-keyed to the id everyone else will address it by.
+   */
+  public setLocalOwner(owner: LayerOwner): void {
+    if (owner === this.localOwner) return;
+    if (this.owners.has(owner)) {
+      throw new Error(`Layer owner ${owner} is already taken`);
+    }
+    const slot = this.owners.get(this.localOwner);
+    if (!slot) return;
+    const previous = this.localOwner;
+    this.owners.delete(previous);
+    this.owners.set(owner, slot);
+    if (this.targetOwner === previous) this.targetOwner = owner;
+    this.localOwner = owner;
+
+    for (const layer of ["background", "foreground"] as const) {
+      this.bufferOwners.set(slot.layers[layer], { owner, layer });
+      const from = slotKey(previous, layer);
+      const to = slotKey(owner, layer);
+      for (const record of [this.layerCanvases, this.layerContexts, this.domCanvases, this.domContexts]) {
+        const held = (record as Record<string, unknown>)[from];
+        if (held !== undefined) {
+          (record as Record<string, unknown>)[to] = held;
+          delete (record as Record<string, unknown>)[from];
+        }
+      }
+      for (const map of [this.pendingUpdates, this.writtenRegions]) {
+        const held = map.get(from);
+        if (held !== undefined) {
+          (map as Map<string, unknown>).set(to, held);
+          map.delete(from);
+        }
+      }
+    }
+    this.announceOwners();
   }
 
 
@@ -190,12 +340,14 @@ export class DrawingEngine {
 
   // Get individual layer canvas for hardware compositing
   public getLayerCanvas(
-    layerName: "foreground" | "background"
+    layerName: "foreground" | "background",
+    owner: LayerOwner = this.localOwner
   ): HTMLCanvasElement | null {
     // Update the offscreen canvas with current layer data
-    const layerData = this.layers[layerName];
-    const context = this.layerContexts[layerName];
-    const canvas = this.layerCanvases[layerName];
+    const key = slotKey(owner, layerName);
+    const layerData = this.owners.get(owner)?.layers[layerName];
+    const context = this.layerContexts[key];
+    const canvas = this.layerCanvases[key];
 
     if (!context || !canvas || !layerData) {
       return null;
@@ -213,30 +365,65 @@ export class DrawingEngine {
   }
 
   // Get individual layer canvas for direct rendering
-  public getLayerCanvasForRendering(layerName: "foreground" | "background"): HTMLCanvasElement | null {
-    return this.layerCanvases[layerName] || null;
+  public getLayerCanvasForRendering(
+    layerName: "foreground" | "background",
+    owner: LayerOwner = this.localOwner
+  ): HTMLCanvasElement | null {
+    return this.layerCanvases[slotKey(owner, layerName)] || null;
+  }
+
+  /**
+   * The mounted canvas context for a participant's layer, if it has one.
+   *
+   * Callers want the pixels currently on screen rather than the buffer behind
+   * them; how the record holding them is keyed is this class's business.
+   */
+  public domContextFor(
+    layerName: LayerName,
+    owner: LayerOwner = this.localOwner
+  ): CanvasRenderingContext2D | undefined {
+    return this.domContexts[slotKey(owner, layerName)];
   }
 
   // Attach DOM canvases for direct updating
   public attachDOMCanvases(
     backgroundCanvas: HTMLCanvasElement,
-    foregroundCanvas: HTMLCanvasElement
+    foregroundCanvas: HTMLCanvasElement,
+    owner: LayerOwner = this.localOwner
   ) {
-    this.domCanvases.background = backgroundCanvas;
-    this.domCanvases.foreground = foregroundCanvas;
+    this.layersFor(owner);
+    const pairs = [
+      ["background", backgroundCanvas],
+      ["foreground", foregroundCanvas],
+    ] as const;
 
-    const bgCtx = backgroundCanvas.getContext("2d");
-    const fgCtx = foregroundCanvas.getContext("2d");
-
-    if (bgCtx) {
-      bgCtx.imageSmoothingEnabled = false;
-      this.domContexts.background = bgCtx;
+    for (const [layer, canvas] of pairs) {
+      const key = slotKey(owner, layer);
+      this.domCanvases[key] = canvas;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.imageSmoothingEnabled = false;
+        this.domContexts[key] = ctx;
+      }
     }
+  }
 
-    if (fgCtx) {
-      fgCtx.imageSmoothingEnabled = false;
-      this.domContexts.foreground = fgCtx;
+  /** Forgets a participant's canvases, buffers and repaint bookkeeping. */
+  public releaseOwner(owner: LayerOwner): void {
+    const slot = this.owners.get(owner);
+    if (!slot || owner === this.localOwner) return;
+    for (const layer of ["background", "foreground"] as const) {
+      this.bufferOwners.delete(slot.layers[layer]);
+      const key = slotKey(owner, layer);
+      delete this.layerCanvases[key];
+      delete this.layerContexts[key];
+      delete this.domCanvases[key];
+      delete this.domContexts[key];
+      this.pendingUpdates.delete(key);
+      this.writtenRegions.delete(key);
     }
+    this.owners.delete(owner);
+    this.announceOwners();
   }
 
   /**
@@ -247,12 +434,13 @@ export class DrawingEngine {
    * handing it the whole buffer saves nothing. So a partial repaint stages
    * just its own rows and hands over an ImageData that size.
    */
-  private updateDOMCanvas(layerName: LayerName) {
-    const domCtx = this.domContexts[layerName];
-    const layerData = this.layers[layerName];
-    const region = this.pendingUpdates[layerName];
+  private updateDOMCanvas(owner: LayerOwner, layerName: LayerName) {
+    const key = slotKey(owner, layerName);
+    const domCtx = this.domContexts[key];
+    const layerData = this.owners.get(owner)?.layers[layerName];
+    const region = this.pendingUpdates.get(key);
     if (!domCtx || !layerData || !region) return;
-    this.pendingUpdates[layerName] = null;
+    this.pendingUpdates.delete(key);
 
     if (region === "all") {
       domCtx.putImageData(
@@ -287,10 +475,12 @@ export class DrawingEngine {
 
   // Update all attached DOM canvases
   public updateAllDOMCanvases() {
-    this.pendingUpdates.background = "all";
-    this.pendingUpdates.foreground = "all";
-    this.updateDOMCanvas("background");
-    this.updateDOMCanvas("foreground");
+    for (const owner of this.owners.keys()) {
+      for (const layer of ["background", "foreground"] as const) {
+        this.pendingUpdates.set(slotKey(owner, layer), "all");
+        this.updateDOMCanvas(owner, layer);
+      }
+    }
   }
 
   // Batched update methods
@@ -302,16 +492,19 @@ export class DrawingEngine {
   }
 
   private processBatchedUpdates() {
-    this.updateDOMCanvas("background");
-    this.updateDOMCanvas("foreground");
+    for (const owner of this.owners.keys()) {
+      this.updateDOMCanvas(owner, "background");
+      this.updateDOMCanvas(owner, "foreground");
+    }
     this.updateScheduled = false;
     this.rafId = null;
   }
 
   /** Queues a repaint of the whole layer: everything in it may have changed. */
-  public queueLayerUpdate(layerName: LayerName) {
-    this.pendingUpdates[layerName] = "all";
-    this.writtenRegions[layerName] = null;
+  public queueLayerUpdate(layerName: LayerName, owner: LayerOwner = this.localOwner) {
+    const key = slotKey(owner, layerName);
+    this.pendingUpdates.set(key, "all");
+    this.writtenRegions.delete(key);
     this.scheduleBatchedUpdate();
   }
 
@@ -323,15 +516,18 @@ export class DrawingEngine {
    * layer buffer directly. Those must use `queueLayerUpdate`, or the screen
    * keeps pixels the buffer no longer has.
    */
-  public queueLayerRegionUpdate(layerName: LayerName) {
-    const written = this.writtenRegions[layerName];
+  public queueLayerRegionUpdate(layerName: LayerName, owner: LayerOwner = this.localOwner) {
+    const key = slotKey(owner, layerName);
+    const written = this.writtenRegions.get(key);
     if (!written) return;
-    this.writtenRegions[layerName] = null;
-    const pending = this.pendingUpdates[layerName];
-    this.pendingUpdates[layerName] =
+    this.writtenRegions.delete(key);
+    const pending = this.pendingUpdates.get(key);
+    this.pendingUpdates.set(
+      key,
       pending === "all"
         ? "all"
-        : unionRegion(pending, written.x0, written.y0, written.x1, written.y1);
+        : unionRegion(pending ?? null, written.x0, written.y0, written.x1, written.y1)
+    );
     this.scheduleBatchedUpdate();
   }
 
@@ -481,15 +677,22 @@ export class DrawingEngine {
   /**
    * Wraps a pixel buffer so a kernel can draw into it.
    *
-   * The two live layers get their standing surfaces. Anything else is a
-   * buffer canvasHistory owns -- it replays history into temporary forks when
-   * compacting -- and it gets a surface over *that* buffer. Falling through
-   * to the foreground surface instead, as this used to, meant a compaction
-   * drew its replay onto the live canvas.
+   * Every participant's live layers get their own standing surfaces, which is
+   * how an operation replayed into someone else's layer marks their canvas
+   * dirty and nobody else's. Anything else is a buffer canvasHistory owns --
+   * it replays history into temporary forks when compacting -- and it gets a
+   * surface over *that* buffer. Falling through to the foreground surface
+   * instead, as this used to, meant a compaction drew its replay onto the
+   * live canvas.
    */
   private surfaceFor(ctx: Uint8ClampedArray): BufferSurface {
-    if (ctx === this.layers.background) return this.backgroundSurface;
-    if (ctx === this.layers.foreground) return this.foregroundSurface;
+    const live = this.bufferOwners.get(ctx);
+    if (live) {
+      const slot = this.owners.get(live.owner);
+      if (slot) {
+        return slot.surfaces[live.layer === "background" ? 0 : 1];
+      }
+    }
     let surface = this.foreignSurfaces.get(ctx);
     if (!surface) {
       surface = new BufferSurface(ctx, this.imageWidth, this.imageHeight);
@@ -522,10 +725,10 @@ export class DrawingEngine {
     }
   }
 
-  /** Only our own buffers are on screen; a fork's repaint would be a lie. */
+  /** Only live buffers are on screen; a fork's repaint would be a lie. */
   private queueUpdateIfLive(ctx: Uint8ClampedArray): void {
-    if (ctx === this.layers.background) this.queueLayerRegionUpdate("background");
-    else if (ctx === this.layers.foreground) this.queueLayerRegionUpdate("foreground");
+    const live = this.bufferOwners.get(ctx);
+    if (live) this.queueLayerRegionUpdate(live.layer, live.owner);
   }
 
   /**
@@ -534,8 +737,8 @@ export class DrawingEngine {
    * because nothing knows any better.
    */
   private queueFullUpdateIfLive(ctx: Uint8ClampedArray): void {
-    if (ctx === this.layers.background) this.queueLayerUpdate("background");
-    else if (ctx === this.layers.foreground) this.queueLayerUpdate("foreground");
+    const live = this.bufferOwners.get(ctx);
+    if (live) this.queueLayerUpdate(live.layer, live.owner);
   }
 
   public doFloodFill(
@@ -648,12 +851,13 @@ export class DrawingEngine {
     }
     });
 
-    if (targets) return;
     // merge writes both layers, the rest write one, and copy writes neither.
     // The surfaces reported which, so asking for both costs nothing when only
-    // one of them has a region to upload.
-    this.queueLayerRegionUpdate("background");
-    this.queueLayerRegionUpdate("foreground");
+    // one of them has a region to upload. A fork's buffers are not live and
+    // resolve to nothing, which is how a compaction stays off the screen.
+    const written = targets ?? (this.layers as unknown as LayerBuffers);
+    this.queueUpdateIfLive(written.background);
+    this.queueUpdateIfLive(written.foreground);
   }
 
   /**
@@ -674,7 +878,7 @@ export class DrawingEngine {
     this.withTargets(targets, () =>
       this.neo.eraseAll(layer === "foreground" ? 1 : 0)
     );
-    if (!targets) this.queueLayerRegionUpdate(layer);
+    this.queueUpdateIfLive((targets ?? (this.layers as unknown as LayerBuffers))[layer]);
   }
 
   /**
@@ -775,18 +979,20 @@ export class DrawingEngine {
     this.layers.background = new Uint8ClampedArray(0);
     this.layers.foreground = new Uint8ClampedArray(0);
     this.compositeBuffer = new Uint8ClampedArray(0);
+    this.owners.clear();
+    this.bufferOwners.clear();
 
     // Clean up offscreen canvases
     this.layerCanvases = {};
     this.layerContexts = {};
+    this.domCanvases = {};
+    this.domContexts = {};
     this.compositeCanvas = null;
     this.compositeContext = null;
 
     // Reset batched update state
-    this.pendingUpdates.foreground = null;
-    this.pendingUpdates.background = null;
-    this.writtenRegions.foreground = null;
-    this.writtenRegions.background = null;
+    this.pendingUpdates.clear();
+    this.writtenRegions.clear();
     this.updateScheduled = false;
   }
 }
