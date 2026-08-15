@@ -25,6 +25,8 @@ interface NeoWindowProps {
   initialSize?: { width: number; height: number };
   /** Keeps tall floating controls reachable in a small viewport. */
   constrainToViewport?: boolean;
+  /** Keeps a window below the chrome a host draws above the painter. */
+  minimumY?: number;
   children: React.ReactNode;
 }
 
@@ -44,6 +46,7 @@ export function NeoWindow({
   resizable = false,
   initialSize,
   constrainToViewport = false,
+  minimumY = 0,
   children,
 }: NeoWindowProps) {
   const initialWidth = initialSize?.width;
@@ -64,8 +67,8 @@ export function NeoWindow({
     const frame = frameRef.current;
     const handle = handleRef.current;
     if (!frame || !handle) return;
-    return attachWindowDrag(frame, handle, { onPosition: setPosition });
-  }, []);
+    return attachWindowDrag(frame, handle, { minimumY, onPosition: setPosition });
+  }, [minimumY]);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -97,7 +100,7 @@ export function NeoWindow({
     const onResize = () => {
       const frame = frameRef.current;
       if (!frame) return;
-      setPosition((prev) => clampWindowPosition(prev, frame));
+      setPosition((prev) => clampWindowPosition(prev, frame, minimumY));
     };
     const visual = window.visualViewport;
     window.addEventListener("resize", onResize);
@@ -106,7 +109,7 @@ export function NeoWindow({
       window.removeEventListener("resize", onResize);
       visual?.removeEventListener("resize", onResize);
     };
-  }, []);
+  }, [minimumY]);
 
   return (
     <div

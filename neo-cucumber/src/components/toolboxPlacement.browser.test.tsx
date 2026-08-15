@@ -8,14 +8,16 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 /**
  * Where the toolboxes open relative to the page around them.
  *
- * They do not clear it. A host may draw a session header above the painter,
- * and the panels still open a margin from the top of the window, because they
- * are fixed-position windows and the window is the space they are in -- and
- * because a panel over a header can be dragged off it, while a band the panels
- * refuse to enter is one you find out about by being stopped at it.
+ * Below it. A host may draw a session header above the painter -- on the
+ * collaborative page that bar carries the title, the owner, the share button,
+ * the connection indicator and the only link back to the lobby -- and a panel
+ * opening on top of it hides all five. So the panels are inset from the
+ * painter's area, by the same margin at the top as at the sides, and cannot be
+ * dragged above it either.
  *
- * Anchoring to the painter's own area instead made the gap at the top the
- * height of the header plus the margin, against a margin at the sides.
+ * This only works because the painter's root fills the element it was mounted
+ * into. While it pinned itself to the viewport, everything measured inside it
+ * reported the whole screen and the panels anchored to the top of that.
  */
 
 const HEADER_HEIGHT = 64;
@@ -63,24 +65,67 @@ afterEach(() => {
 });
 
 describe("toolbox placement", () => {
-  it("opens a margin from the top of the window, header or no header", async () => {
-    mountBelowAHeader();
+  it("opens the panels below the chrome the host draws above the painter", async () => {
+    const area = mountBelowAHeader();
     await act(async () => painter?.ready);
 
     const tops = panels().map((rect) => Math.round(rect.top));
     expect(tops.length).toBe(2);
-    expect(tops).toEqual([PANEL_MARGIN, PANEL_MARGIN]);
+    expect(tops).toEqual([
+      HEADER_HEIGHT + PANEL_MARGIN,
+      HEADER_HEIGHT + PANEL_MARGIN,
+    ]);
+    for (const top of tops) {
+      expect(top).toBeGreaterThanOrEqual(
+        Math.round(area.getBoundingClientRect().top),
+      );
+    }
   });
 
-  it("leaves the same gap at the top as at the side", async () => {
+  it("insets them from the painter by the same margin top and side", async () => {
+    const area = mountBelowAHeader();
+    await act(async () => painter?.ready);
+
+    const painterBox = area.getBoundingClientRect();
+    const rightmost = panels().sort((a, b) => b.right - a.right)[0];
+
+    expect(Math.round(rightmost.top - painterBox.top)).toBe(PANEL_MARGIN);
+    expect(Math.round(painterBox.right - rightmost.right)).toBe(PANEL_MARGIN);
+  });
+
+  it("refuses to be dragged up onto the header", async () => {
     mountBelowAHeader();
     await act(async () => painter?.ready);
 
-    const rightmost = panels().sort((a, b) => b.right - a.right)[0];
-    const sideGap = Math.round(
-      document.documentElement.clientWidth - rightmost.right,
-    );
+    const frame = [...document.querySelectorAll<HTMLElement>("body div")].find(
+      (el) =>
+        getComputedStyle(el).position === "fixed" &&
+        el.className.includes("shadow-lg"),
+    )!;
+    const handle = frame.firstElementChild as HTMLElement;
+    handle.setPointerCapture = () => {};
 
-    expect(Math.round(rightmost.top)).toBe(sideGap);
+    const start = frame.getBoundingClientRect();
+    for (const [type, y] of [
+      ["pointerdown", start.top + 4],
+      ["pointermove", -200],
+      ["pointerup", -200],
+    ] as const) {
+      await act(async () => {
+        handle.dispatchEvent(
+          new PointerEvent(type, {
+            pointerId: 5,
+            pointerType: "touch",
+            button: type === "pointermove" ? -1 : 0,
+            buttons: type === "pointerup" ? 0 : 1,
+            clientX: start.left + 10,
+            clientY: y,
+            bubbles: true,
+          }),
+        );
+      });
+    }
+
+    expect(Math.round(frame.getBoundingClientRect().top)).toBe(HEADER_HEIGHT);
   });
 });

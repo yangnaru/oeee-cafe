@@ -63,6 +63,8 @@ export interface ToolboxPanelProps {
   onZoomFit: () => void;
   onSaveCollaborativeDrawing: () => void;
   initialPosition?: { x: number; y: number };
+  /** How high the panel may be dragged. See `minimumTop`. */
+  minimumY?: number;
 }
 
 /**
@@ -96,6 +98,7 @@ export const ToolboxPanel = ({
   onSaveCollaborativeDrawing,
   section = "all",
   initialPosition,
+  minimumY = 0,
 }: ToolboxPanelProps) => {
   const { t } = useLingui();
   const { theme, toggle: toggleTheme } = useTheme();
@@ -112,6 +115,7 @@ export const ToolboxPanel = ({
       // "Halftone" spilling past the edge -- and that spill has to stop at the
       // panel rather than land on the canvas.
       className="w-max overflow-hidden select-text"
+      minimumY={minimumY}
     >
       <div className="flex flex-col gap-[2px] p-[2px]">
         {showNeo && (

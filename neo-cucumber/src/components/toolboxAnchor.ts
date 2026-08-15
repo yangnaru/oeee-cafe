@@ -56,27 +56,37 @@ export interface PanelPositions {
 }
 
 /**
- * Opening positions for both panels.
+ * How high a panel may go: the top of the painter's own area.
  *
- * Measured against the window, not against whatever the host draws above the
- * painter. These are `position: fixed` windows -- the window is the space they
- * are in -- so the same margin holds them off the top as off the sides, and a
- * panel is never pushed down by chrome it is free to be dragged over anyway.
- * Anchoring to the painter's area instead made the gap at the top the height of
- * a session header plus the margin, while the gap at the sides stayed the
- * margin.
+ * Not the top of the window. A host may draw chrome above the painter -- the
+ * collaborative page draws the session header there, which carries the title,
+ * the share button, the connection indicator and the only link back to the
+ * lobby -- and a panel parked on it hides all four. The painter's area is where
+ * the painter begins, so it is also where its windows do.
  */
-export function anchorTo(): PanelPositions {
-  const width = windowBounds().width;
-  const y = PANEL_MARGIN;
-  const rightEdge = Math.max(0, width - PANEL_MARGIN - PANEL_WIDTH);
+export function minimumTop(area: DOMRect | null): number {
+  return Math.max(0, area ? area.top : 0);
+}
+
+/**
+ * Opening positions for both panels, given the painter's area.
+ *
+ * The gap above a panel is the gap beside it, both measured from that area:
+ * the panels sit in the painter, so the painter is what they are inset from.
+ */
+export function anchorTo(area: DOMRect | null): PanelPositions {
+  const width = area?.width ?? windowBounds().width;
+  const left = area?.left ?? 0;
+  const right = area?.right ?? width;
+  const y = minimumTop(area) + PANEL_MARGIN;
+  const rightEdge = Math.max(0, right - PANEL_MARGIN - PANEL_WIDTH);
 
   // NEO's own column keeps the side NEO puts it on; the extras it never had
   // take the other one.
   if (width < NARROW_WORKSPACE) {
     return {
       neo: { x: rightEdge, y },
-      extras: { x: PANEL_MARGIN, y },
+      extras: { x: Math.max(0, left + PANEL_MARGIN), y },
     };
   }
 

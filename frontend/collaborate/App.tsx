@@ -6,6 +6,7 @@ import {
   NEO_BUTTON,
   NEO_PANEL,
   NEO_PANEL_BUTTON,
+  minimumTop,
   PANEL_MARGIN,
   NEO_RESIZE_GRIP,
   NEO_RESIZE_HANDLE,
@@ -89,13 +90,16 @@ export default function App() {
   });
   const [synchronizationError, setSynchronizationError] = useState<string | null>(null);
 
-  // The chat window opens where the toolbox's own windows do: the same margin
-  // from the window's edge, top and side alike, taken from the package rather
-  // than written out again here.
+  // The chat window opens where the toolbox's own windows do, and is held out
+  // of the header for the same reason they are: it would cover the session
+  // title, the share button and the way back to the lobby. Both numbers are
+  // measured from the painter's area rather than written out here, so the two
+  // kinds of window cannot drift apart.
   const [chatPosition, setChatPosition] = useState({
     x: PANEL_MARGIN,
     y: PANEL_MARGIN,
   });
+  const [chatCeiling, setChatCeiling] = useState(0);
   const [chatSize, setChatSize] = useState({ width: 224, height: 469 });
   const chatFrameRef = useRef<HTMLDivElement>(null);
   const chatHandleRef = useRef<HTMLDivElement>(null);
@@ -214,12 +218,26 @@ export default function App() {
     if (pointerFrameRef.current !== null) cancelAnimationFrame(pointerFrameRef.current);
   }, []);
 
+  // Once the canvas metadata arrives the session header is on the page, so the
+  // painter's area is where it will stay.
+  useEffect(() => {
+    if (!canvasMeta) return;
+    const top = minimumTop(
+      painterElementRef.current?.getBoundingClientRect() ?? null,
+    );
+    setChatCeiling(top);
+    setChatPosition((prev) => ({ ...prev, y: top + PANEL_MARGIN }));
+  }, [canvasMeta]);
+
   useEffect(() => {
     const frame = chatFrameRef.current;
     const handle = chatHandleRef.current;
     if (!frame || !handle) return;
-    return attachWindowDrag(frame, handle, { onPosition: setChatPosition });
-  }, []);
+    return attachWindowDrag(frame, handle, {
+      minimumY: chatCeiling,
+      onPosition: setChatPosition,
+    });
+  }, [chatCeiling]);
 
   useEffect(() => {
     const frame = chatFrameRef.current;

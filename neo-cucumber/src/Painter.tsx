@@ -823,6 +823,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
             )}
             {controls.kind === "none" ? null : twoToneConfig ? (
               <SimplifiedToolbox
+                anchorRef={appRef}
                 brushSize={drawingState.brushSize}
                 paletteColors={paletteColors}
                 selectedPaletteIndex={selectedPaletteIndex}
@@ -838,6 +839,10 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
               />
             ) : (
               <ToolboxPanels
+                // The painter's own area, which now really is where the
+                // painter is: its root fills the element the host mounted it
+                // into rather than pinning itself to the viewport.
+                anchorRef={appRef}
                 // An offline drawing records lineType straight into the .pch,
                 // which already has codes for every one of these.
                 tools={ALL_TOOLS}
