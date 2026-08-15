@@ -50,6 +50,22 @@ afterEach(() => {
 });
 
 describe("resizing a floating window", () => {
+  it("does not jump when the corner is grabbed away from its last pixel", () => {
+    const { corner, sizes } = mount();
+
+    // 8px up and to the left of the frame's corner at (264, 220), which is
+    // where a finger on a 20px handle actually lands.
+    corner.dispatchEvent(pointer("pointerdown", 256, 212));
+    corner.dispatchEvent(pointer("pointermove", 256, 212));
+
+    // Nothing moved, so nothing resized.
+    expect(sizes.at(-1)).toEqual({ width: 224, height: 200 });
+
+    // And from there the window follows the pointer one-for-one.
+    corner.dispatchEvent(pointer("pointermove", 296, 262));
+    expect(sizes.at(-1)).toEqual({ width: 264, height: 250 });
+  });
+
   it("sizes it to the corner under a touch pointer", () => {
     const { corner, sizes } = mount();
 

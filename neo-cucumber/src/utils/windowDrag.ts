@@ -28,15 +28,30 @@ export interface WindowDragOptions {
 /**
  * The area a window has to stay reachable inside.
  *
- * `window.innerHeight` counts the strip underneath mobile Safari's URL bar, so
- * clamping a window against it can park the thing just below the fold with no
- * way left to grab it. `visualViewport` reports what is actually on screen.
+ * Two viewports disagree here and each is right about something. `window.inner*`
+ * counts the strip underneath mobile Safari's URL bar, so clamping against it
+ * can park a window just below the fold with no way left to grab it;
+ * `visualViewport` reports what is genuinely on screen and fixes that.
+ *
+ * But pinch zoom shrinks the visual viewport while leaving the layout viewport
+ * exactly as it was -- and a `position: fixed` window is placed against the
+ * layout viewport. Clamping a fixed window to the visual one while zoomed in
+ * dragged every panel inward to the edge of the magnified region, which is
+ * nowhere near the edge of the screen it is pinned to. So the visual viewport
+ * is used only at scale 1, where it differs from the layout viewport by the
+ * browser's own chrome and nothing else.
  */
-function viewportBounds(): { width: number; height: number } {
-  const visual = window.visualViewport;
+export function windowBounds(
+  visual: Pick<VisualViewport, "width" | "height" | "scale"> | null =
+    window.visualViewport,
+): { width: number; height: number } {
+  if (visual && Math.abs(visual.scale - 1) < 0.01) {
+    return { width: visual.width, height: visual.height };
+  }
+  const layout = document.documentElement;
   return {
-    width: visual?.width ?? window.innerWidth,
-    height: visual?.height ?? window.innerHeight,
+    width: layout.clientWidth || window.innerWidth,
+    height: layout.clientHeight || window.innerHeight,
   };
 }
 
@@ -79,7 +94,7 @@ export function attachWindowDrag(
   const onPointerMove = (event: PointerEvent) => {
     if (!offset) return;
     const rect = frame.getBoundingClientRect();
-    const bounds = viewportBounds();
+    const bounds = windowBounds();
     options.onPosition({
       x: within(event.clientX - offset.x, 0, bounds.width - rect.width),
       y: within(
@@ -130,17 +145,34 @@ export interface WindowResizeOptions {
  *
  * Sizes are reported rather than applied, and the anchor is the corner the
  * window is pinned by, so a resize never moves it.
+ *
+ * Where inside the handle the gesture started is remembered, because the handle
+ * is 20px of grabbable corner and almost nobody lands on its last pixel.
+ * Sizing to the pointer alone snapped the window's corner under the finger the
+ * instant it moved -- a jump of however far off the corner you happened to
+ * press, before the resize proper had begun.
  */
 export function attachWindowResize(
   frame: HTMLElement,
   handle: HTMLElement,
   options: WindowResizeOptions,
 ): () => void {
-  let origin: { left: number; top: number } | null = null;
+  let origin: {
+    left: number;
+    top: number;
+    /** How far the frame's corner sits beyond the pointer that grabbed it. */
+    offsetX: number;
+    offsetY: number;
+  } | null = null;
 
   const onPointerDown = (event: PointerEvent) => {
     const rect = frame.getBoundingClientRect();
-    origin = { left: rect.left, top: rect.top };
+    origin = {
+      left: rect.left,
+      top: rect.top,
+      offsetX: rect.right - event.clientX,
+      offsetY: rect.bottom - event.clientY,
+    };
     handle.setPointerCapture(event.pointerId);
     event.preventDefault();
     event.stopPropagation();
@@ -148,15 +180,19 @@ export function attachWindowResize(
 
   const onPointerMove = (event: PointerEvent) => {
     if (!origin) return;
-    const bounds = viewportBounds();
+    const bounds = windowBounds();
+    const corner = {
+      x: event.clientX + origin.offsetX,
+      y: event.clientY + origin.offsetY,
+    };
     options.onSize({
       width: Math.max(
         options.minimum?.width ?? 0,
-        Math.min(event.clientX - origin.left, bounds.width - origin.left),
+        Math.min(corner.x - origin.left, bounds.width - origin.left),
       ),
       height: Math.max(
         options.minimum?.height ?? 0,
-        Math.min(event.clientY - origin.top, bounds.height - origin.top),
+        Math.min(corner.y - origin.top, bounds.height - origin.top),
       ),
     });
   };
@@ -189,7 +225,7 @@ export function clampWindowPosition(
   minimumY = 0,
 ): WindowPosition {
   const rect = frame.getBoundingClientRect();
-  const bounds = viewportBounds();
+  const bounds = windowBounds();
   return {
     x: within(position.x, 0, bounds.width - rect.width),
     y: within(position.y, minimumY, bounds.height - rect.height),

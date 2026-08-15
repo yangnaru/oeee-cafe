@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { attachWindowDrag, type WindowPosition } from "./windowDrag";
+import { attachWindowDrag, windowBounds, type WindowPosition } from "./windowDrag";
 
 /**
  * Dragging a floating window by its title bar.
@@ -103,5 +103,36 @@ describe("dragging a floating window", () => {
 
     expect(positions.at(-1)?.y).toBe(window.innerHeight - tall);
     expect(positions.at(-1)?.y).toBeLessThan(0);
+  });
+});
+
+describe("the bounds a window is held inside", () => {
+  const layout = () => ({
+    width: document.documentElement.clientWidth,
+    height: document.documentElement.clientHeight,
+  });
+
+  it("follows the visual viewport at rest, which is what the URL bar moves", () => {
+    // Shorter than the layout viewport, as when mobile Safari's bar slides in.
+    const visual = { width: 390, height: 500, scale: 1 };
+
+    expect(windowBounds(visual)).toEqual({ width: 390, height: 500 });
+  });
+
+  it("ignores the visual viewport while pinched, since fixed windows are not", () => {
+    // Pinch zoom shrinks the visual viewport and leaves the layout viewport --
+    // which is what `position: fixed` is placed against -- untouched. Following
+    // it here pulled every panel in to the edge of the magnified region.
+    const pinched = { width: 195, height: 332, scale: 2 };
+
+    expect(windowBounds(pinched)).toEqual(layout());
+  });
+
+  it("ignores it when zoomed out as well", () => {
+    expect(windowBounds({ width: 900, height: 1400, scale: 0.5 })).toEqual(layout());
+  });
+
+  it("falls back to the layout viewport when there is no visual viewport", () => {
+    expect(windowBounds(null)).toEqual(layout());
   });
 });
