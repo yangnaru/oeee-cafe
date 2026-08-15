@@ -107,6 +107,77 @@ export function attachWindowDrag(
   };
 }
 
+export interface WindowSize {
+  width: number;
+  height: number;
+}
+
+export interface WindowResizeOptions {
+  /** Called with the frame's new size while its corner is dragged. */
+  onSize(size: WindowSize): void;
+  /** How small the window may be made. */
+  minimum?: WindowSize;
+}
+
+/**
+ * Make `handle` resize `frame` from its bottom-right corner, and return the
+ * function that undoes it.
+ *
+ * A window is resized by an element of ours rather than by CSS `resize`, which
+ * draws no grabber at all on a touch browser -- on Chrome for Android a window
+ * using it simply looks unresizable. The gesture is here beside the drag for
+ * the same reason the drag is here: two windows, one implementation.
+ *
+ * Sizes are reported rather than applied, and the anchor is the corner the
+ * window is pinned by, so a resize never moves it.
+ */
+export function attachWindowResize(
+  frame: HTMLElement,
+  handle: HTMLElement,
+  options: WindowResizeOptions,
+): () => void {
+  let origin: { left: number; top: number } | null = null;
+
+  const onPointerDown = (event: PointerEvent) => {
+    const rect = frame.getBoundingClientRect();
+    origin = { left: rect.left, top: rect.top };
+    handle.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!origin) return;
+    const bounds = viewportBounds();
+    options.onSize({
+      width: Math.max(
+        options.minimum?.width ?? 0,
+        Math.min(event.clientX - origin.left, bounds.width - origin.left),
+      ),
+      height: Math.max(
+        options.minimum?.height ?? 0,
+        Math.min(event.clientY - origin.top, bounds.height - origin.top),
+      ),
+    });
+  };
+
+  const endResize = () => {
+    origin = null;
+  };
+
+  handle.addEventListener("pointerdown", onPointerDown);
+  handle.addEventListener("pointermove", onPointerMove);
+  handle.addEventListener("pointerup", endResize);
+  handle.addEventListener("pointercancel", endResize);
+
+  return () => {
+    handle.removeEventListener("pointerdown", onPointerDown);
+    handle.removeEventListener("pointermove", onPointerMove);
+    handle.removeEventListener("pointerup", endResize);
+    handle.removeEventListener("pointercancel", endResize);
+  };
+}
+
 /**
  * Keep a window reachable when the viewport shrinks under it. Returns the
  * position it should sit at, which is the one it already has when it is

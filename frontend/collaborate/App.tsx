@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   attachWindowDrag,
+  attachWindowResize,
+  minimumTop,
   mount,
   NEO_BUTTON,
   NEO_PANEL,
   NEO_PANEL_BUTTON,
+  NEO_RESIZE_GRIP,
+  NEO_RESIZE_HANDLE,
   NEO_TITLEBAR_DOT,
   NEO_TITLEBAR_HANDLE,
   type CanonicalPainterOperation,
@@ -86,10 +90,16 @@ export default function App() {
   const [synchronizationError, setSynchronizationError] = useState<string | null>(null);
 
   // The chat window opens where the toolbox's own windows do, and stays below
-  // the session header for the same reason they do.
+  // the session header for the same reason they do. Both numbers come from
+  // measuring the painter's area rather than from a constant kept here: the
+  // toolboxes are placed the same way, and a header that changes height would
+  // otherwise leave this window sitting at an altitude of its own.
   const [chatPosition, setChatPosition] = useState({ x: 16, y: 70 });
+  const [chatCeiling, setChatCeiling] = useState(70);
+  const [chatSize, setChatSize] = useState({ width: 224, height: 469 });
   const chatFrameRef = useRef<HTMLDivElement>(null);
   const chatHandleRef = useRef<HTMLDivElement>(null);
+  const chatResizeRef = useRef<HTMLDivElement>(null);
 
   const painterElementRef = useRef<HTMLDivElement>(null);
   const painterRef = useRef<PainterHandle | null>(null);
@@ -204,13 +214,34 @@ export default function App() {
     if (pointerFrameRef.current !== null) cancelAnimationFrame(pointerFrameRef.current);
   }, []);
 
+  // Once the canvas metadata arrives the session header is on the page, so the
+  // painter's area is where it will stay and both windows can be levelled with
+  // the toolboxes against it.
+  useEffect(() => {
+    if (!canvasMeta) return;
+    const area = painterElementRef.current?.getBoundingClientRect() ?? null;
+    const top = minimumTop(area);
+    setChatCeiling(top);
+    setChatPosition((prev) => ({ ...prev, y: top + 12 }));
+  }, [canvasMeta]);
+
   useEffect(() => {
     const frame = chatFrameRef.current;
     const handle = chatHandleRef.current;
     if (!frame || !handle) return;
     return attachWindowDrag(frame, handle, {
-      minimumY: 70,
+      minimumY: chatCeiling,
       onPosition: setChatPosition,
+    });
+  }, [chatCeiling]);
+
+  useEffect(() => {
+    const frame = chatFrameRef.current;
+    const corner = chatResizeRef.current;
+    if (!frame || !corner) return;
+    return attachWindowResize(frame, corner, {
+      minimum: { width: 180, height: 140 },
+      onSize: setChatSize,
     });
   }, []);
 
@@ -582,14 +613,23 @@ export default function App() {
         {/*
           The chat is the toolbox's neighbour, so it is one of the painter's
           own windows: the same face, the same bevel, the same handle, and it
-          moves the same way. All of that comes from neo-cucumber rather than
-          from a copy of its values kept here, which is the only version of
-          this that stays true.
+          moves, sizes and sits at the same height. All of that comes from
+          neo-cucumber rather than from a copy of its values kept here, which
+          is the only version of this that stays true.
+
+          The corner is an element rather than CSS `resize` because `resize`
+          draws no grabber on a touch browser -- on Chrome for Android there
+          was nothing there to find.
         */}
         <div
           ref={chatFrameRef}
-          className={`${NEO_PANEL} fixed z-40 flex h-[469px] w-56 resize flex-col overflow-hidden shadow-lg`}
-          style={{ left: `${chatPosition.x}px`, top: `${chatPosition.y}px` }}
+          className={`${NEO_PANEL} fixed z-40 flex flex-col overflow-hidden shadow-lg`}
+          style={{
+            left: `${chatPosition.x}px`,
+            top: `${chatPosition.y}px`,
+            width: `${chatSize.width}px`,
+            height: `${chatSize.height}px`,
+          }}
         >
           <div ref={chatHandleRef} className={NEO_TITLEBAR_HANDLE}>
             <span className={NEO_TITLEBAR_DOT} />
@@ -597,6 +637,9 @@ export default function App() {
             <span className={NEO_TITLEBAR_DOT} />
           </div>
           <Chat wsRef={wsRef} userId={userIdRef.current} participants={participants} connectionState={connectionState} onChatMessage={() => {}} onAddMessage={(add) => { chatAddMessageRef.current = add; }} />
+          <div ref={chatResizeRef} aria-hidden="true" className={NEO_RESIZE_HANDLE}>
+            <span className={NEO_RESIZE_GRIP} />
+          </div>
         </div>
         <div ref={painterElementRef} className="h-full w-full" />
         <ConnectionStatusModal isCatchingUp={isCatchingUp} connectionState={connectionState} syncProgress={syncProgress} synchronizationError={synchronizationError} onReconnect={() => location.reload()} onDownloadPNG={downloadPng} />

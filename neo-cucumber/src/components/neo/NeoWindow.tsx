@@ -1,10 +1,16 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   NEO_PANEL,
+  NEO_RESIZE_GRIP,
+  NEO_RESIZE_HANDLE,
   NEO_TITLEBAR_DOT,
   NEO_TITLEBAR_HANDLE,
 } from "./neoClasses";
-import { attachWindowDrag, clampWindowPosition } from "../../utils/windowDrag";
+import {
+  attachWindowDrag,
+  attachWindowResize,
+  clampWindowPosition,
+} from "../../utils/windowDrag";
 
 interface NeoWindowProps {
   /** Where it opens. It is draggable afterwards, so this is a starting point. */
@@ -53,13 +59,10 @@ export function NeoWindow({
   );
   const frameRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLDivElement>(null);
-  const resizeOrigin = useRef<{
-    left: number;
-    top: number;
-  } | null>(null);
+  const resizeRef = useRef<HTMLDivElement>(null);
 
-  // The gesture itself is the package's, so the host's panels move exactly
-  // the way the painter's own windows do.
+  // Both gestures are the package's, so the host's panels move and size
+  // exactly the way the painter's own windows do.
   useEffect(() => {
     const frame = frameRef.current;
     const handle = handleRef.current;
@@ -67,33 +70,15 @@ export function NeoWindow({
     return attachWindowDrag(frame, handle, { minimumY, onPosition: setPosition });
   }, [minimumY]);
 
-  const handleResizeStart = useCallback((e: React.PointerEvent) => {
-    const rect = frameRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    resizeOrigin.current = { left: rect.left, top: rect.top };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  const handleResizeMove = useCallback((e: React.PointerEvent) => {
-    const origin = resizeOrigin.current;
-    if (!origin) return;
-    setSize({
-      width: Math.max(
-        180,
-        Math.min(e.clientX - origin.left, window.innerWidth - origin.left)
-      ),
-      height: Math.max(
-        140,
-        Math.min(e.clientY - origin.top, window.innerHeight - origin.top)
-      ),
+  useEffect(() => {
+    const frame = frameRef.current;
+    const corner = resizeRef.current;
+    if (!frame || !corner) return;
+    return attachWindowResize(frame, corner, {
+      minimum: { width: 180, height: 140 },
+      onSize: setSize,
     });
-  }, []);
-
-  const endResize = useCallback(() => {
-    resizeOrigin.current = null;
-  }, []);
+  }, [resizable]);
 
   // A changed opening position is an explicit re-anchor.
   useEffect(() => {
@@ -157,15 +142,8 @@ export function NeoWindow({
       </div>
       {children}
       {resizable && (
-        <div
-          aria-hidden="true"
-          className="absolute right-0 bottom-0 z-30 h-[20px] w-[20px] touch-none cursor-se-resize"
-          onPointerDown={handleResizeStart}
-          onPointerMove={handleResizeMove}
-          onPointerUp={endResize}
-          onPointerCancel={endResize}
-        >
-          <span className="pointer-events-none absolute right-[2px] bottom-[2px] h-[12px] w-[12px] bg-[linear-gradient(135deg,transparent_0%,transparent_42%,var(--neo-panel-shadow)_42%,var(--neo-panel-shadow)_50%,transparent_50%,transparent_62%,var(--neo-panel-shadow)_62%,var(--neo-panel-shadow)_70%,transparent_70%)]" />
+        <div ref={resizeRef} aria-hidden="true" className={NEO_RESIZE_HANDLE}>
+          <span className={NEO_RESIZE_GRIP} />
         </div>
       )}
     </div>

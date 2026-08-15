@@ -46,4 +46,8 @@ export {
   NEO_WELL,
   /** A key cap, as in the toolbox's shortcut list. */
   NEO_KBD,
+  /** The corner a window is resized by; pair it with `attachWindowResize`. */
+  NEO_RESIZE_HANDLE,
+  /** The ticks drawn inside that corner. */
+  NEO_RESIZE_GRIP,
 } from "./components/neo/neoClasses";

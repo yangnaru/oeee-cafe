@@ -322,6 +322,23 @@ export const NEO_TITLEBAR_DOT =
   "h-[3px] w-[3px] shrink-0 rounded-full bg-white/70 first:ml-[3px] " +
   "pointer-coarse:h-[4px] pointer-coarse:w-[4px] pointer-coarse:first:ml-0";
 
+/**
+ * The corner you drag to resize a window, and the ticks drawn in it.
+ *
+ * This is a real element rather than CSS `resize` because CSS `resize` draws
+ * nothing on a touch browser -- Chrome on Android renders no grabber at all,
+ * so a window using it looks like a window that cannot be resized. Drawing the
+ * corner ourselves is also the only way it can wear NEO's shadow colour rather
+ * than the browser's idea of a resizer.
+ */
+export const NEO_RESIZE_HANDLE =
+  "absolute right-0 bottom-0 z-30 h-[20px] w-[20px] touch-none cursor-se-resize";
+
+/** The diagonal ticks inside the corner. Purely a mark: it takes no pointers. */
+export const NEO_RESIZE_GRIP =
+  "pointer-events-none absolute right-[2px] bottom-[2px] h-[12px] w-[12px] " +
+  "bg-[linear-gradient(135deg,transparent_0%,transparent_42%,var(--neo-panel-shadow)_42%,var(--neo-panel-shadow)_50%,transparent_50%,transparent_62%,var(--neo-panel-shadow)_62%,var(--neo-panel-shadow)_70%,transparent_70%)]";
+
 /** A key cap in the shortcut list. */
 export const NEO_KBD =
   "bg-(--neo-icon) rounded-none px-[3px] " +

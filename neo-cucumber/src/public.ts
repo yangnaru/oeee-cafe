@@ -27,6 +27,8 @@ export {
   NEO_KBD,
   NEO_PANEL,
   NEO_PANEL_BUTTON,
+  NEO_RESIZE_GRIP,
+  NEO_RESIZE_HANDLE,
   NEO_TITLEBAR,
   NEO_TITLEBAR_DOT,
   NEO_TITLEBAR_HANDLE,
@@ -34,16 +36,30 @@ export {
 } from "./styles";
 
 /**
- * Dragging a floating panel by its title bar, the way the painter's own
- * windows move. Framework-neutral: it reports positions and leaves applying
- * them to the caller.
+ * Moving and sizing a floating panel the way the painter's own windows do:
+ * by its title bar, and by the corner named by `NEO_RESIZE_HANDLE`.
+ * Framework-neutral, and both report rather than apply -- a React window keeps
+ * the numbers in state, a plain one writes them to `style`.
  */
 export {
   attachWindowDrag,
+  attachWindowResize,
   clampWindowPosition,
   type WindowDragOptions,
   type WindowPosition,
+  type WindowResizeOptions,
+  type WindowSize,
 } from "./utils/windowDrag";
+
+/**
+ * How high a floating panel may go, given the painter's area: the top of that
+ * area, rather than a fixed reservation guessed at the chrome above it.
+ *
+ * Exported so a host's own panels sit level with the painter's. The toolboxes
+ * are positioned with it, and a host that hardcodes its own number instead is a
+ * host whose windows drift out of line the moment its header changes height.
+ */
+export { minimumTop } from "./components/toolboxAnchor";
 
 /**
  * Public API for neo-cucumber.
