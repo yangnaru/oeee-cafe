@@ -60,12 +60,20 @@ export function NeoWindow({
 
   // The gesture itself is the package's, so the host's panels move exactly
   // the way the painter's own windows do.
+  //
+  // A window that scrolls keeps its background to itself: `constrainToViewport`
+  // is what makes the frame a scroller, and one finger cannot both scroll a
+  // panel and carry it.
   useEffect(() => {
     const frame = frameRef.current;
     const handle = handleRef.current;
     if (!frame || !handle) return;
-    return attachWindowDrag(frame, handle, { minimumY, onPosition: setPosition });
-  }, [minimumY]);
+    return attachWindowDrag(frame, handle, {
+      minimumY,
+      dragFromBody: constrainToViewport ? "never" : "coarse-pointer",
+      onPosition: setPosition,
+    });
+  }, [minimumY, constrainToViewport]);
 
   const handleResizeStart = useCallback((e: React.PointerEvent) => {
     const rect = frameRef.current?.getBoundingClientRect();
@@ -106,15 +114,24 @@ export function NeoWindow({
     }
   }, [initialWidth, initialHeight]);
 
-  // Keep the whole frame reachable when the viewport shrinks under it.
+  // Keep the whole frame reachable when the viewport shrinks under it. The
+  // visual viewport is watched as well as the window because the two do not
+  // always change together: a mobile browser sliding its URL bar back in, or
+  // an on-screen keyboard opening, shrinks what is on screen without
+  // necessarily resizing the window around it.
   useEffect(() => {
     const onResize = () => {
       const frame = frameRef.current;
       if (!frame) return;
       setPosition((prev) => clampWindowPosition(prev, frame, minimumY));
     };
+    const visual = window.visualViewport;
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    visual?.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      visual?.removeEventListener("resize", onResize);
+    };
   }, [minimumY]);
 
   return (
@@ -122,9 +139,17 @@ export function NeoWindow({
       ref={frameRef}
       className={`${NEO_PANEL} fixed flex flex-col shadow-lg ${
         resizable ? "min-h-[140px] min-w-[180px] overflow-hidden" : ""
-      } ${constrainToViewport ? "overflow-y-auto" : ""} ${
-        className
-      }`}
+      } ${
+        constrainToViewport
+          ? "overflow-y-auto"
+          : // The frame is a drag surface on a touch screen, so it has to claim
+            // the gesture the way the handle already does -- otherwise the
+            // browser reads the same finger as a page scroll and cancels the
+            // pointer mid-drag. Regions that scroll or select for themselves
+            // are unaffected: the browser stops at the nearest scroller when it
+            // works out what a touch is allowed to do.
+            "pointer-coarse:touch-none"
+      } ${className}`}
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,

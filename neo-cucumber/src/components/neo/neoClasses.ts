@@ -294,10 +294,21 @@ export const NEO_TITLEBAR =
  *
  * `touch-none` is load bearing: without it a drag on a touch screen scrolls
  * the page instead of moving the window.
+ *
+ * Three 3px dots inside 1px of padding make a strip five pixels tall, which is
+ * a fine target for a cursor and no target at all for a fingertip -- and the
+ * next thing down is always a tool button, so missing it does not fail
+ * harmlessly, it draws. On a coarse pointer the strip grows to 28px. That is
+ * still under the 44px a touch target is supposed to be, and deliberately:
+ * these panels are 52px wide, so a bar tall enough to satisfy the guideline
+ * would be a square of chrome sitting on the canvas. The rest of the target is
+ * the panel itself, which `attachWindowDrag` makes draggable on the same
+ * pointers; this bar is what says so.
  */
 export const NEO_TITLEBAR_HANDLE =
   NEO_TITLEBAR +
-  " flex touch-none items-center gap-[3px] cursor-grab active:cursor-grabbing";
+  " flex touch-none items-center gap-[3px] cursor-grab active:cursor-grabbing " +
+  "pointer-coarse:min-h-[28px] pointer-coarse:gap-[6px] pointer-coarse:px-[6px]";
 
 /**
  * One of the three dots that mark a handle as grabbable. NEO has no such
@@ -305,7 +316,8 @@ export const NEO_TITLEBAR_HANDLE =
  * affordance, and it is the reason a window needs no title to be legible.
  */
 export const NEO_TITLEBAR_DOT =
-  "h-[3px] w-[3px] shrink-0 rounded-full bg-white/70 first:ml-[3px]";
+  "h-[3px] w-[3px] shrink-0 rounded-full bg-white/70 first:ml-[3px] " +
+  "pointer-coarse:h-[5px] pointer-coarse:w-[5px] pointer-coarse:first:ml-0";
 
 /** A key cap in the shortcut list. */
 export const NEO_KBD =

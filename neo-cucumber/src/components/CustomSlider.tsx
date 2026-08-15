@@ -18,6 +18,10 @@ export const CustomSlider: React.FC<CustomSliderProps> = ({
   return (
     <div>
       <div
+        // A bar with its own drag, and no role saying so the way NEO's own
+        // sliders have one -- so on a touch screen it has to say here that a
+        // press landing on it is not a press on the panel behind it.
+        data-no-window-drag=""
         className="relative flex h-[22px] w-full cursor-pointer items-center border-t border-l border-t-(--neo-panel-shadow) border-l-(--neo-panel-shadow) border-r border-b border-r-(--neo-bevel-light) border-b-(--neo-bevel-light)"
         style={{
           background: `linear-gradient(to right, var(--main-text-color) 0%, var(--main-text-color) ${

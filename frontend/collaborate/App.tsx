@@ -588,7 +588,7 @@ export default function App() {
         */}
         <div
           ref={chatFrameRef}
-          className={`${NEO_PANEL} fixed z-40 flex h-[469px] w-56 resize flex-col overflow-hidden shadow-lg`}
+          className={`${NEO_PANEL} fixed z-40 flex h-[469px] w-56 resize flex-col overflow-hidden shadow-lg pointer-coarse:touch-none`}
           style={{ left: `${chatPosition.x}px`, top: `${chatPosition.y}px` }}
         >
           <div ref={chatHandleRef} className={NEO_TITLEBAR_HANDLE}>
