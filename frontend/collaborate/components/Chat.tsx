@@ -221,13 +221,7 @@ export const Chat = ({
                 </div>
               ))}
           </div>
-          {/*
-            The log scrolls and is meant to be read and copied out of, so it is
-            the one part of this window a touch drag must not pick the window
-            up by. Everything else in the panel is either a control or
-            background the painter's drag is welcome to.
-          */}
-          <div ref={messagesRef} onScroll={handleMessagesScroll} data-no-window-drag="" className={`${NEO_WELL} relative min-h-0 flex-1 touch-pan-y overflow-y-auto p-[3px] text-[11px] leading-[15px]`}>
+          <div ref={messagesRef} onScroll={handleMessagesScroll} className={`${NEO_WELL} relative min-h-0 flex-1 overflow-y-auto p-[3px] text-[11px] leading-[15px]`}>
             <div>
               {messages.map((msg) => (
                 <div

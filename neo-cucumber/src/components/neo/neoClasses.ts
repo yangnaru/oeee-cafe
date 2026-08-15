@@ -301,11 +301,12 @@ export const NEO_TITLEBAR =
  * harmlessly, it draws. On a coarse pointer the strip grows to 18px, about the
  * height of one of the widgets below it.
  *
- * That is well under the 44px a touch target is supposed to be, and
- * deliberately: these panels are 52px wide, so a bar sized to the guideline
- * would be a square of chrome sitting on the canvas. The bar is not carrying
- * the gesture on its own -- `attachWindowDrag` makes the whole panel draggable
- * on the same pointers, and this is the affordance that says so.
+ * That is well under the 44px a touch target is supposed to be, and it is the
+ * whole of the target: dragging the panel by its background was tried and
+ * removed, being worth little on a column that is almost entirely widgets.
+ * These panels are 52px wide, so a bar sized to the guideline would be a square
+ * of chrome sitting on the canvas -- 18px is the compromise, and if it proves
+ * too mean under a thumb this is the number to raise.
  */
 export const NEO_TITLEBAR_HANDLE =
   NEO_TITLEBAR +

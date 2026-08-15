@@ -37,15 +37,10 @@ export {
  * Dragging a floating panel by its title bar, the way the painter's own
  * windows move. Framework-neutral: it reports positions and leaves applying
  * them to the caller.
- *
- * On a touch screen the panel's background drags it too, so a host whose panel
- * holds anything that scrolls or is meant to be selected marks that region
- * with `WINDOW_DRAG_IGNORE_ATTRIBUTE`. Controls need no marking.
  */
 export {
   attachWindowDrag,
   clampWindowPosition,
-  WINDOW_DRAG_IGNORE_ATTRIBUTE,
   type WindowDragOptions,
   type WindowPosition,
 } from "./utils/windowDrag";
