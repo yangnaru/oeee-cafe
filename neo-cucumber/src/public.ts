@@ -52,15 +52,20 @@ export {
 } from "./utils/windowDrag";
 
 /**
- * Placing a window the way the painter places its own: `PANEL_MARGIN` is how
- * far from an edge they stand, and `minimumTop` is how high they may go, given
- * the element the painter was mounted into.
+ * Placing a window the way the painter places its own: `anchorBesideCanvas`
+ * puts one against either side of the drawing, `minimumTop` is how high it may
+ * go given the element the painter was mounted into, and `PANEL_MARGIN` is the
+ * gap all of them leave.
  *
  * Exported so a host's windows line up with the toolboxes and respect the same
  * chrome. A host that hardcodes its own numbers is a host whose windows drift
  * out of line the moment its header changes height.
  */
-export { minimumTop, PANEL_MARGIN } from "./components/toolboxAnchor";
+export {
+  anchorBesideCanvas,
+  minimumTop,
+  PANEL_MARGIN,
+} from "./components/toolboxAnchor";
 
 /**
  * Public API for neo-cucumber.

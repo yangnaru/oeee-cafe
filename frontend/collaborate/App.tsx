@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  anchorBesideCanvas,
   attachWindowDrag,
   attachWindowResize,
   mount,
@@ -100,6 +101,8 @@ export default function App() {
     y: PANEL_MARGIN,
   });
   const [chatCeiling, setChatCeiling] = useState(0);
+  /** The painter's controls and its opening zoom are both settled. */
+  const [painterReady, setPainterReady] = useState(false);
   const [chatSize, setChatSize] = useState({ width: 224, height: 469 });
   const chatFrameRef = useRef<HTMLDivElement>(null);
   const chatHandleRef = useRef<HTMLDivElement>(null);
@@ -110,6 +113,15 @@ export default function App() {
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const saveProxyRef = useRef<HTMLButtonElement | null>(null);
   const userIdRef = useRef("");
+  /**
+   * The locale the server resolved for this user.
+   *
+   * Handed to the painter when it mounts. Lingui's `i18n` is one shared
+   * instance, so a painter mounted without a locale does not merely leave its
+   * own toolbox in English -- it activates English over whatever this page had
+   * already chosen, taking the session header and the chat with it.
+   */
+  const localeRef = useRef<string | undefined>(undefined);
   const userLoginNameRef = useRef("");
   const localUserJoinTimeRef = useRef(0);
   const localIdRef = useRef<number | null>(null);
@@ -195,6 +207,9 @@ export default function App() {
     const painter = mount(element, {
       width: canvasMeta.width,
       height: canvasMeta.height,
+      // Read from /api/auth below, which resolves the user's own preference
+      // before falling back to what the browser asked for.
+      locale: localeRef.current,
       mode: { kind: "standard" },
       controls: { kind: "toolbox" },
       synchronization: {
@@ -207,7 +222,10 @@ export default function App() {
       },
     });
     painterRef.current = painter;
-    void painter.ready.then(() => painter.setInteractionEnabled(false));
+    void painter.ready.then(() => {
+      painter.setInteractionEnabled(false);
+      setPainterReady(true);
+    });
     return () => {
       painter.unmount();
       if (painterRef.current === painter) painterRef.current = null;
@@ -218,16 +236,31 @@ export default function App() {
     if (pointerFrameRef.current !== null) cancelAnimationFrame(pointerFrameRef.current);
   }, []);
 
-  // Once the canvas metadata arrives the session header is on the page, so the
-  // painter's area is where it will stay.
+  /**
+   * Open the chat against the left edge of the drawing.
+   *
+   * The toolbox takes the right, so the chat takes the left, and both are
+   * placed by the same function from the package -- on a wide display the edge
+   * of the screen is nowhere near the canvas, and a chat window parked out
+   * there is as far from the drawing as the toolbox used to be.
+   *
+   * It waits for the painter to be ready, which is when the opening zoom has
+   * been applied: until then the canvas is the size it was declared at rather
+   * than the size it is shown at.
+   */
   useEffect(() => {
-    if (!canvasMeta) return;
-    const top = minimumTop(
-      painterElementRef.current?.getBoundingClientRect() ?? null,
-    );
-    setChatCeiling(top);
-    setChatPosition((prev) => ({ ...prev, y: top + PANEL_MARGIN }));
-  }, [canvasMeta]);
+    if (!painterReady) return;
+    const painterElement = painterElementRef.current;
+    const area = painterElement?.getBoundingClientRect() ?? null;
+    setChatCeiling(minimumTop(area));
+    const canvas =
+      painterElement
+        ?.querySelector<HTMLElement>(".canvas-container")
+        ?.getBoundingClientRect() ?? null;
+    setChatPosition(anchorBesideCanvas(area, canvas, chatSize.width, "left"));
+    // The opening position only: afterwards the window is where it was dragged.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [painterReady]);
 
   useEffect(() => {
     const frame = chatFrameRef.current;
@@ -463,6 +496,7 @@ export default function App() {
       const auth = await authResponse.json();
       userIdRef.current = auth.user_id;
       userLoginNameRef.current = auth.login_name;
+      localeRef.current = auth.preferred_locale || undefined;
       const response = await fetch(`/collaboration/${sessionId}/meta`, { credentials: "include" });
       if (!response.ok) throw new Error(`Failed to fetch collaboration meta: ${response.status}`);
       const meta: CollaborationMeta = await response.json();

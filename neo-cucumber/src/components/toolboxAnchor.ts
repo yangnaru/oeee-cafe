@@ -13,7 +13,6 @@
 import { windowBounds } from "../utils/windowDrag";
 
 export const PANEL_WIDTH = 56;
-export const PANEL_PITCH = 76;
 
 /**
  * How far a floating panel sits from the edge it is anchored to.
@@ -23,6 +22,16 @@ export const PANEL_PITCH = 76;
  * placed differently.
  */
 export const PANEL_MARGIN = 12;
+
+/**
+ * Left edge to left edge, for two panels standing side by side.
+ *
+ * Derived rather than chosen, so the space between the panels is the same
+ * space that separates the first of them from the drawing. It was 76 against a
+ * 56px panel, which put 20px between the two and 12px between the pair and the
+ * canvas -- close enough to look like a mistake rather than a rhythm.
+ */
+export const PANEL_PITCH = PANEL_WIDTH + PANEL_MARGIN;
 
 
 /**
@@ -145,20 +154,30 @@ export function anchorTo(area: DOMRect | null, canvas?: DOMRect | null): PanelPo
 }
 
 /**
- * Where a single wide panel opens: just right of the drawing, or against the
- * painter's right edge when it does not fit there.
+ * Where a single wide panel opens: just outside the drawing on the side asked
+ * for, or against the painter's own edge on that side when it does not fit
+ * there. Hosts use it for windows of their own -- the collaborative chat opens
+ * to the left of the canvas the way the toolbox opens to its right.
  */
 export function anchorBesideCanvas(
   area: DOMRect | null,
   canvas: DOMRect | null,
   panelWidth: number,
+  side: "left" | "right" = "right",
 ): Point {
   const y = besideCanvasY(area, canvas);
   const right = area?.right ?? windowBounds().width;
   const left = area?.left ?? 0;
-  const atEdge = Math.max(left, right - PANEL_MARGIN - panelWidth);
+  const atEdge =
+    side === "right"
+      ? Math.max(left, right - PANEL_MARGIN - panelWidth)
+      : left + PANEL_MARGIN;
   if (!area || !canvas) return { x: atEdge, y };
 
-  const x = canvas.right + PANEL_MARGIN;
-  return { x: x + panelWidth <= area.right ? x : atEdge, y };
+  const x =
+    side === "right"
+      ? canvas.right + PANEL_MARGIN
+      : canvas.left - PANEL_MARGIN - panelWidth;
+  const fits = side === "right" ? x + panelWidth <= area.right : x >= area.left;
+  return { x: fits ? x : atEdge, y };
 }

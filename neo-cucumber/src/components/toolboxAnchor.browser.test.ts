@@ -60,8 +60,11 @@ describe("anchoring the toolbox panels", () => {
     const { neo, extras } = anchorTo(area, canvas);
 
     expect(neo.x - canvas.right).toBe(PANEL_MARGIN);
-    expect(extras.x - neo.x).toBe(76);
     expect(neo.y).toBe(canvas.top);
+
+    // The space between the two panels is the space between the pair and the
+    // drawing: one rhythm, not two numbers that nearly match.
+    expect(extras.x - (neo.x + PANEL_WIDTH)).toBe(PANEL_MARGIN);
     // Not where the old rule put it, which was most of a metre away.
     expect(neo.x).toBeLessThan(area.right - 1000);
   });
@@ -87,7 +90,8 @@ describe("anchoring the toolbox panels", () => {
   it("still clusters them against one edge on a desktop", () => {
     const { neo, extras } = anchorTo(DESKTOP);
 
-    expect(neo).toEqual({ x: 1296, y: PANEL_MARGIN });
+    expect(neo).toEqual({ x: 1304, y: PANEL_MARGIN });
     expect(extras).toEqual({ x: 1372, y: PANEL_MARGIN });
+    expect(extras.x - (neo.x + PANEL_WIDTH)).toBe(PANEL_MARGIN);
   });
 });
