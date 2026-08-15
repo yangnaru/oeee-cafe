@@ -1,9 +1,9 @@
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Icon } from "@iconify/react";
 import { CustomSlider } from "./CustomSlider";
-import { minimumTop, PANEL_MARGIN } from "./toolboxAnchor";
+import { anchorBesideCanvas, minimumTop } from "./toolboxAnchor";
 import { TIMER_DURATIONS_MINUTES } from "../hooks/useDrawingTimer";
 import { useTheme } from "../hooks/useTheme";
 import { NeoWindow } from "./neo/NeoWindow";
@@ -32,9 +32,14 @@ interface SimplifiedToolboxProps {
   onTimerChange: (minutes: number) => void;
   onUndo: () => void;
   onRedo: () => void;
-  /** The painter's area: what the panel is inset from and kept inside. */
+  /** The painter's area: what the panel is kept inside. */
   anchorRef?: React.RefObject<HTMLElement | null>;
+  /** The drawing itself, which is what the panel opens beside. */
+  canvasRef?: React.RefObject<HTMLElement | null>;
 }
+
+/** The width the panel is given below, needed before it is rendered. */
+const TWO_TONE_PANEL_WIDTH = 200;
 
 const formatRemaining = (seconds: number): string => {
   if (seconds > 60) return `${Math.ceil(seconds / 60)}m`;
@@ -55,12 +60,23 @@ export const SimplifiedToolbox = ({
   onUndo,
   onRedo,
   anchorRef,
+  canvasRef,
 }: SimplifiedToolboxProps) => {
   const { t } = useLingui();
   const [ceiling, setCeiling] = useState(0);
-  useEffect(() => {
-    setCeiling(minimumTop(anchorRef?.current?.getBoundingClientRect() ?? null));
-  }, [anchorRef]);
+  const [opensAt, setOpensAt] = useState<{ x: number; y: number } | null>(null);
+  // See ToolboxPanels: in the DOM by the end of this commit, not the next one.
+  useLayoutEffect(() => {
+    const area = anchorRef?.current?.getBoundingClientRect() ?? null;
+    setCeiling(minimumTop(area));
+    setOpensAt(
+      anchorBesideCanvas(
+        area,
+        canvasRef?.current?.getBoundingClientRect() ?? null,
+        TWO_TONE_PANEL_WIDTH,
+      ),
+    );
+  }, [anchorRef, canvasRef]);
   const { theme, toggle: toggleTheme } = useTheme();
   const backgroundColor = paletteColors[TWO_TONE_BACKGROUND_PEN_INDEX] || "#ffffff";
   const foregroundColor = paletteColors[TWO_TONE_FOREGROUND_PEN_INDEX] || "#000000";
@@ -78,10 +94,7 @@ export const SimplifiedToolbox = ({
 
   return (
     <NeoWindow
-      initialPosition={{
-        x: Math.max(0, window.innerWidth - 200 - PANEL_MARGIN),
-        y: ceiling + PANEL_MARGIN,
-      }}
+      initialPosition={opensAt ?? { x: 0, y: ceiling }}
       className="z-40 w-[200px] overflow-hidden select-text"
       minimumY={ceiling}
       constrainToViewport

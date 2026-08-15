@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useLayoutEffect, useState } from "react";
 import { ToolboxPanel, type ToolboxPanelProps } from "./ToolboxPanel";
 import {
   anchorTo,
@@ -14,14 +14,17 @@ import {
  */
 export interface ToolboxPanelsProps
   extends Omit<ToolboxPanelProps, "section" | "initialPosition" | "minimumY"> {
-  /** The painter's area: what the panels are inset from and kept inside. */
+  /** The painter's area: what the panels are kept inside. */
   anchorRef?: React.RefObject<HTMLElement | null>;
+  /** The drawing itself, which is what they open beside. */
+  canvasRef?: React.RefObject<HTMLElement | null>;
   /** Overrides the opening positions entirely. */
   origin?: { x: number; y: number };
 }
 
 export function ToolboxPanels({
   anchorRef,
+  canvasRef,
   origin,
   ...shared
 }: ToolboxPanelsProps) {
@@ -37,12 +40,15 @@ export function ToolboxPanels({
   /** As high as either panel may be dragged; see `minimumTop`. */
   const [ceiling, setCeiling] = useState(0);
 
-  useEffect(() => {
+  // Laid out rather than deferred: the panels have to be in the DOM by the end
+  // of this commit, because that is when the painter reports itself ready and a
+  // host may go looking for them.
+  useLayoutEffect(() => {
     const area = anchorRef?.current?.getBoundingClientRect() ?? null;
     setCeiling(minimumTop(area));
     if (origin) return;
-    setPositions(anchorTo(area));
-  }, [anchorRef, origin]);
+    setPositions(anchorTo(area, canvasRef?.current?.getBoundingClientRect()));
+  }, [anchorRef, canvasRef, origin]);
 
   if (!positions) return null;
 

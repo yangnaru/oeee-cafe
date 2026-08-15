@@ -10,6 +10,7 @@ import {
   attachWindowDrag,
   attachWindowResize,
   clampWindowPosition,
+  windowBounds,
 } from "../../utils/windowDrag";
 
 interface NeoWindowProps {
@@ -79,6 +80,40 @@ export function NeoWindow({
       onSize: setSize,
     });
   }, [resizable]);
+
+  /**
+   * A window that fits on screen never hangs off the bottom of it.
+   *
+   * Opening positions are chosen before the window exists, so they are chosen
+   * without its height -- a panel opened level with the drawing may run past
+   * the fold. Measuring once at mount is not enough either: NEO's tips paint
+   * their artwork into canvases after the frame is laid out, and the column
+   * grew by fourteen pixels afterwards, which was exactly how far off the
+   * screen it ended up. So the height is watched rather than sampled.
+   *
+   * This never fights a drag, because dragging is already clamped inside the
+   * window -- the only thing it corrects is growth. A window too tall to fit at
+   * all is left alone: being able to push that one past an edge is the whole
+   * point of it.
+   */
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const settle = () => {
+      const rect = frame.getBoundingClientRect();
+      const bounds = windowBounds();
+      if (rect.height > bounds.height - minimumY) return;
+      setPosition((prev) =>
+        prev.y + rect.height <= bounds.height
+          ? prev
+          : { ...prev, y: Math.max(minimumY, bounds.height - rect.height) },
+      );
+    };
+    settle();
+    const observer = new ResizeObserver(settle);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [minimumY]);
 
   // A changed opening position is an explicit re-anchor.
   useEffect(() => {

@@ -130,6 +130,15 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     canRedo: false,
   });
   const [interactionEnabled, setInteractionEnabled] = useState(true);
+  /**
+   * Whether the opening zoom has been applied.
+   *
+   * The toolboxes wait for it. They open beside the drawing, and until this is
+   * done the drawing is whatever size it was declared at rather than the size
+   * it will be shown at -- on a phone that is a 300px canvas about to become
+   * 212px, and panels placed beside the wrong one land off the screen.
+   */
+  const [openedAtFittedZoom, setOpenedAtFittedZoom] = useState(false);
   const operationCounterRef = useRef(0);
   const synchronizationHistoryRef = useRef<CanvasHistory | null>(null);
   const appliedCheckpointRef = useRef<PainterCheckpoint | undefined>(undefined);
@@ -310,9 +319,19 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     });
     readinessRef.current = { promise, resolve };
   }
+  /**
+   * Ready means the controls are up too, not just the canvases.
+   *
+   * The toolbox waits for the opening zoom, because it opens beside a drawing
+   * whose size that zoom decides. A host is entitled to find the toolbox in the
+   * DOM once this resolves -- both of ours reach into it, to move a Save button
+   * into the panel where it belongs -- so resolving before the panels exist
+   * turned that into "could not find the extra toolbox actions".
+   */
+  const controlsReady = controls.kind === "none" || openedAtFittedZoom;
   useEffect(() => {
-    if (drawingEngine) readinessRef.current?.resolve();
-  }, [drawingEngine]);
+    if (drawingEngine && controlsReady) readinessRef.current?.resolve();
+  }, [drawingEngine, controlsReady]);
 
   const actionCount = getActionCount();
   const onChange = config?.onChange;
@@ -642,6 +661,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       reservedWidth: narrow && !twoToneConfig ? TOOLBOX_LANE * 2 : 0,
       maximumZoom: 1,
     });
+    setOpenedAtFittedZoom(true);
   }, [controls.kind, twoToneConfig, zoomToFit]);
 
   // Ensure drawing engine DOM canvases are updated when engine becomes available
@@ -821,9 +841,10 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
                 ?
               </button>
             )}
-            {controls.kind === "none" ? null : twoToneConfig ? (
+            {controls.kind === "none" || !openedAtFittedZoom ? null : twoToneConfig ? (
               <SimplifiedToolbox
                 anchorRef={appRef}
+                canvasRef={canvasContainerRef}
                 brushSize={drawingState.brushSize}
                 paletteColors={paletteColors}
                 selectedPaletteIndex={selectedPaletteIndex}
@@ -843,6 +864,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
                 // painter is: its root fills the element the host mounted it
                 // into rather than pinning itself to the viewport.
                 anchorRef={appRef}
+                canvasRef={canvasContainerRef}
                 // An offline drawing records lineType straight into the .pch,
                 // which already has codes for every one of these.
                 tools={ALL_TOOLS}

@@ -6,18 +6,17 @@ import { PANEL_MARGIN } from "./toolboxAnchor";
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
- * Where the toolboxes open relative to the page around them.
+ * Where the toolboxes open relative to the drawing and to the page around it.
  *
- * Below it. A host may draw a session header above the painter -- on the
- * collaborative page that bar carries the title, the owner, the share button,
- * the connection indicator and the only link back to the lobby -- and a panel
- * opening on top of it hides all five. So the panels are inset from the
- * painter's area, by the same margin at the top as at the sides, and cannot be
- * dragged above it either.
+ * Beside the drawing. They are the tools you reach for while using it, and the
+ * edge of a wide display can be an arm's reach from a small canvas centred in
+ * the middle of it.
  *
- * This only works because the painter's root fills the element it was mounted
- * into. While it pinned itself to the viewport, everything measured inside it
- * reported the whole screen and the panels anchored to the top of that.
+ * Still below the host's chrome, though: on the collaborative page that bar
+ * carries the title, the owner, the share button, the connection indicator and
+ * the only link back to the lobby, and a panel on top of it hides all five. So
+ * the drawing decides where they open and the painter's area decides how high
+ * they may go, and they cannot be dragged above it either.
  */
 
 const HEADER_HEIGHT = 64;
@@ -64,33 +63,43 @@ afterEach(() => {
   host = null;
 });
 
+function canvasBox(): DOMRect {
+  return document
+    .querySelector<HTMLElement>(".canvas-container")!
+    .getBoundingClientRect();
+}
+
 describe("toolbox placement", () => {
-  it("opens the panels below the chrome the host draws above the painter", async () => {
-    const area = mountBelowAHeader();
+  it("opens the panels beside the drawing, not beside the screen", async () => {
+    mountBelowAHeader();
     await act(async () => painter?.ready);
 
-    const tops = panels().map((rect) => Math.round(rect.top));
-    expect(tops.length).toBe(2);
-    expect(tops).toEqual([
-      HEADER_HEIGHT + PANEL_MARGIN,
-      HEADER_HEIGHT + PANEL_MARGIN,
-    ]);
-    for (const top of tops) {
-      expect(top).toBeGreaterThanOrEqual(
-        Math.round(area.getBoundingClientRect().top),
-      );
+    const canvas = canvasBox();
+    const nearest = panels().sort((a, b) => a.left - b.left)[0];
+
+    // Hard against the canvas rather than out at the workspace edge, which on
+    // a wide display is an arm's reach from the drawing.
+    expect(Math.round(nearest.left - canvas.right)).toBe(PANEL_MARGIN);
+
+    // Level with it, and never below: a panel that would run off the bottom is
+    // pulled up, which is the only reason one may sit higher than the drawing.
+    const shortest = panels().sort((a, b) => a.height - b.height)[0];
+    expect(Math.round(shortest.top)).toBe(Math.round(canvas.top));
+    for (const rect of panels()) {
+      expect(Math.round(rect.top)).toBeLessThanOrEqual(Math.round(canvas.top));
     }
   });
 
-  it("insets them from the painter by the same margin top and side", async () => {
+  it("still opens below the chrome the host draws above the painter", async () => {
     const area = mountBelowAHeader();
     await act(async () => painter?.ready);
 
-    const painterBox = area.getBoundingClientRect();
-    const rightmost = panels().sort((a, b) => b.right - a.right)[0];
-
-    expect(Math.round(rightmost.top - painterBox.top)).toBe(PANEL_MARGIN);
-    expect(Math.round(painterBox.right - rightmost.right)).toBe(PANEL_MARGIN);
+    for (const rect of panels()) {
+      expect(Math.round(rect.top)).toBeGreaterThanOrEqual(
+        Math.round(area.getBoundingClientRect().top),
+      );
+      expect(Math.round(rect.top)).toBeGreaterThanOrEqual(HEADER_HEIGHT);
+    }
   });
 
   it("refuses to be dragged up onto the header", async () => {

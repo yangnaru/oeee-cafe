@@ -53,6 +53,37 @@ describe("anchoring the toolbox panels", () => {
     expect(neo.x).toBeGreaterThanOrEqual(UNDER_A_HEADER.width - TOOLBOX_LANE);
   });
 
+  it("puts them beside the drawing, not out at the edge of an ultrawide", () => {
+    const area = new DOMRect(0, 0, 3440, 1440);
+    // A 300px canvas centred in all that space.
+    const canvas = new DOMRect(1570, 584, 300, 300);
+    const { neo, extras } = anchorTo(area, canvas);
+
+    expect(neo.x - canvas.right).toBe(PANEL_MARGIN);
+    expect(extras.x - neo.x).toBe(76);
+    expect(neo.y).toBe(canvas.top);
+    // Not where the old rule put it, which was most of a metre away.
+    expect(neo.x).toBeLessThan(area.right - 1000);
+  });
+
+  it("takes a side each when the drawing leaves room for only one", () => {
+    const area = new DOMRect(0, 0, 500, 900);
+    const canvas = new DOMRect(80, 100, 340, 300);
+    const { neo, extras } = anchorTo(area, canvas);
+
+    expect(neo.x - canvas.right).toBe(PANEL_MARGIN);
+    expect(canvas.left - (extras.x + PANEL_WIDTH)).toBe(PANEL_MARGIN);
+  });
+
+  it("falls back to the painter's edges when the drawing fills it", () => {
+    const area = new DOMRect(0, 0, 400, 900);
+    const canvas = new DOMRect(10, 100, 380, 300);
+    const { neo, extras } = anchorTo(area, canvas);
+
+    expect(neo.x).toBe(400 - PANEL_MARGIN - PANEL_WIDTH);
+    expect(extras.x).toBe(PANEL_MARGIN);
+  });
+
   it("still clusters them against one edge on a desktop", () => {
     const { neo, extras } = anchorTo(DESKTOP);
 
