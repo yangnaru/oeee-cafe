@@ -124,6 +124,16 @@ export default function App() {
    * already chosen, taking the session header and the chat with it.
    */
   const localeRef = useRef<string | undefined>(undefined);
+  /**
+   * Joining happens once.
+   *
+   * Everything downstream hangs off the metadata this fetches -- the painter is
+   * mounted from it, and mounting the painter activates a locale, which is
+   * enough to make a hook that merely reads a translation look changed. Running
+   * this twice does not just repeat two requests: it hands back a new metadata
+   * object, which remounts the painter, which activates again.
+   */
+  const joinedRef = useRef(false);
   const userLoginNameRef = useRef("");
   const localUserJoinTimeRef = useRef(0);
   const localIdRef = useRef<number | null>(null);
@@ -517,9 +527,17 @@ export default function App() {
       setInitializationError(error instanceof Error ? error.message : String(error));
       setAuthError(true);
     }
-  }, [t]);
+    // `t` is deliberately absent: activating a locale hands out a new one even
+    // when the locale is unchanged, and the painter activates one as it mounts.
+    // See utils/linguiChurn.browser.test.tsx in neo-cucumber.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => { void initializeApp(); }, [initializeApp]);
+  useEffect(() => {
+    if (joinedRef.current) return;
+    joinedRef.current = true;
+    void initializeApp();
+  }, [initializeApp]);
   useEffect(() => {
     if (canvasMeta && painterRef.current && shouldConnectRef.current) void connectWebSocket();
   }, [canvasMeta, connectWebSocket]);
