@@ -17,8 +17,6 @@ interface NeoWindowProps {
   resizable?: boolean;
   /** Explicit opening size for resizable windows. */
   initialSize?: { width: number; height: number };
-  /** Keeps tall floating controls reachable in a small viewport. */
-  constrainToViewport?: boolean;
   /** Keeps a window below persistent application chrome. */
   minimumY?: number;
   children: React.ReactNode;
@@ -39,7 +37,6 @@ export function NeoWindow({
   title,
   resizable = false,
   initialSize,
-  constrainToViewport = false,
   minimumY = 0,
   children,
 }: NeoWindowProps) {
@@ -129,18 +126,27 @@ export function NeoWindow({
   return (
     <div
       ref={frameRef}
-      className={`${NEO_PANEL} fixed flex flex-col shadow-lg ${
-        resizable ? "min-h-[140px] min-w-[180px] overflow-hidden" : ""
-      } ${constrainToViewport ? "overflow-y-auto" : ""} ${
-        className
-      }`}
+      className={`${NEO_PANEL} fixed flex flex-col shadow-lg overflow-y-auto ${
+        resizable ? "min-h-[140px] min-w-[180px] overflow-x-hidden" : ""
+      } ${className}`}
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
         ...(size && { width: `${size.width}px`, height: `${size.height}px` }),
-        ...(constrainToViewport && {
-          maxHeight: `calc(100vh - ${position.y + 12}px)`,
-        }),
+        /*
+         * No window is taller than the screen it is on.
+         *
+         * NEO's tool column is 482px of tips, swatches and sliders, which is
+         * fine until a phone turns landscape and the whole viewport is 390px:
+         * a hundred pixels of it hung off the bottom with no way to reach them,
+         * because a window may not be dragged above the painter either. Capped
+         * here, the surplus scrolls inside the panel instead. A window that
+         * fits is unaffected -- the cap is simply larger than it is.
+         *
+         * `dvh` rather than `vh`: `vh` on mobile Safari counts the strip behind
+         * the URL bar, which is exactly the height that is not there.
+         */
+        maxHeight: `calc(100dvh - ${position.y + 12}px)`,
       }}
     >
       <div ref={handleRef} className={NEO_TITLEBAR_HANDLE}>

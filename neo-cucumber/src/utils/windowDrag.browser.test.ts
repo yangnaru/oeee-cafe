@@ -18,9 +18,9 @@ interface Harness {
 
 let harness: Harness | null = null;
 
-function mount(minimumY?: number): Harness {
+function mount(minimumY?: number, height = 200): Harness {
   const frame = document.createElement("div");
-  frame.style.cssText = "position:fixed;left:0;top:0;width:200px;height:200px";
+  frame.style.cssText = `position:fixed;left:0;top:0;width:200px;height:${height}px`;
   const handle = document.createElement("div");
   handle.style.cssText = "height:18px";
   frame.appendChild(handle);
@@ -90,5 +90,18 @@ describe("dragging a floating window", () => {
     drag(handle, { x: 10, y: 100 }, { x: 10, y: 20 });
 
     expect(positions.at(-1)?.y).toBe(70);
+  });
+
+  it("lets a window taller than the screen be dragged up past the top", () => {
+    // NEO's tool column against a phone in landscape. Pinning it below the
+    // chrome would put its bottom out of reach for good, so the range inverts
+    // and the only limit left is that its bottom edge stays on screen.
+    const tall = window.innerHeight + 200;
+    const { handle, positions } = mount(70, tall);
+
+    drag(handle, { x: 10, y: 100 }, { x: 10, y: -500 });
+
+    expect(positions.at(-1)?.y).toBe(window.innerHeight - tall);
+    expect(positions.at(-1)?.y).toBeLessThan(0);
   });
 });

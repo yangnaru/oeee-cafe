@@ -13,7 +13,6 @@
 export const PANEL_WIDTH = 56;
 export const PANEL_PITCH = 76;
 const MARGIN = 12;
-const MINIMUM_TOP = 70;
 
 /**
  * Below this the panels take an edge each instead of sharing the right one.
@@ -45,13 +44,26 @@ export interface PanelPositions {
   extras: Point;
 }
 
+/**
+ * How high a panel may go: the top of the painter's own area.
+ *
+ * This used to be a flat 70px everywhere, which was a guess at how much chrome
+ * a host puts above the painter. It is not a guess -- the workspace knows where
+ * it starts. A host with a session header gets the same reservation it always
+ * had, and the offline page, which moves its Save button into the toolbox and
+ * has nothing up there at all, stops holding back 70px of a phone in landscape
+ * for nothing.
+ */
+export function minimumTop(area: DOMRect | null): number {
+  return Math.max(0, area ? area.top : 0);
+}
+
 /** Opening positions for both panels, given the workspace they belong to. */
 export function anchorTo(area: DOMRect | null): PanelPositions {
   const right = area ? area.right : window.innerWidth;
   const left = area ? area.left : 0;
   const width = area?.width ?? window.innerWidth;
-  const top = area ? area.top : 0;
-  const y = Math.max(MINIMUM_TOP, top + MARGIN);
+  const y = minimumTop(area) + MARGIN;
   const rightEdge = Math.max(0, right - MARGIN - PANEL_WIDTH);
 
   // NEO's own column keeps the side NEO puts it on; the extras it never had

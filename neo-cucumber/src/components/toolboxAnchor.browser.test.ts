@@ -42,8 +42,14 @@ describe("anchoring the toolbox panels", () => {
   it("still clusters them against one edge on a desktop", () => {
     const { neo, extras } = anchorTo(DESKTOP);
 
-    expect(neo).toEqual({ x: 1296, y: 70 });
-    expect(extras).toEqual({ x: 1372, y: 70 });
+    expect(neo).toEqual({ x: 1296, y: 12 });
+    expect(extras).toEqual({ x: 1372, y: 12 });
+  });
+
+  it("opens at the top of a workspace that has nothing above it", () => {
+    // The offline page moves its Save button into the toolbox, so there is no
+    // chrome to clear and none is reserved.
+    expect(anchorTo(PHONE).neo.y).toBe(12);
   });
 
   it("switches layout at the narrow threshold and not before", () => {

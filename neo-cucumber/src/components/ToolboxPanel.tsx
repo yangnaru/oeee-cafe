@@ -63,6 +63,11 @@ export interface ToolboxPanelProps {
   onZoomFit: () => void;
   onSaveCollaborativeDrawing: () => void;
   initialPosition?: { x: number; y: number };
+  /**
+   * How high the panel may be dragged, which is the top of the painter's own
+   * area rather than a fixed reservation. See `minimumTop`.
+   */
+  minimumY?: number;
 }
 
 /**
@@ -96,6 +101,7 @@ export const ToolboxPanel = ({
   onSaveCollaborativeDrawing,
   section = "all",
   initialPosition,
+  minimumY = 0,
 }: ToolboxPanelProps) => {
   const { t } = useLingui();
   const { theme, toggle: toggleTheme } = useTheme();
@@ -108,8 +114,12 @@ export const ToolboxPanel = ({
   return (
     <NeoWindow
       initialPosition={initialPosition ?? { x: 304, y: 70 }}
-      className="w-max overflow-hidden select-text"
-      minimumY={70}
+      // Horizontal only: NEO's own labels overflow their buttons -- its English
+      // toolbox reads "Halftone" spilling past the edge -- and that spill has
+      // to stop at the panel rather than land on the canvas. The vertical axis
+      // is the window's to scroll when it is taller than the screen.
+      className="w-max overflow-x-hidden select-text"
+      minimumY={minimumY}
     >
       <div className="flex flex-col gap-[2px] p-[2px]">
         {showNeo && (

@@ -823,6 +823,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
             )}
             {controls.kind === "none" ? null : twoToneConfig ? (
               <SimplifiedToolbox
+                anchorRef={appRef}
                 brushSize={drawingState.brushSize}
                 paletteColors={paletteColors}
                 selectedPaletteIndex={selectedPaletteIndex}

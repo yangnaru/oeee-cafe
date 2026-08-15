@@ -41,6 +41,20 @@ function viewportBounds(): { width: number; height: number } {
 }
 
 /**
+ * Hold a coordinate between the two limits on its axis, whichever way round
+ * they are.
+ *
+ * They invert when a window is bigger than the space it is in: the far limit
+ * (viewport minus window) falls below the near one, and the only way to see the
+ * window's bottom is to push its top off the screen. Ordering the pair rather
+ * than assuming one is the minimum is what makes that possible instead of
+ * pinning the window at the top with its tail out of reach.
+ */
+function within(value: number, a: number, b: number): number {
+  return Math.min(Math.max(value, Math.min(a, b)), Math.max(a, b));
+}
+
+/**
  * Make `handle` drag `frame`, and return the function that undoes it.
  *
  * One pointer gesture rather than a mouse pair and a touch pair. Pointer
@@ -67,10 +81,11 @@ export function attachWindowDrag(
     const rect = frame.getBoundingClientRect();
     const bounds = viewportBounds();
     options.onPosition({
-      x: Math.max(0, Math.min(event.clientX - offset.x, bounds.width - rect.width)),
-      y: Math.max(
+      x: within(event.clientX - offset.x, 0, bounds.width - rect.width),
+      y: within(
+        event.clientY - offset.y,
         options.minimumY ?? 0,
-        Math.min(event.clientY - offset.y, bounds.height - rect.height),
+        bounds.height - rect.height,
       ),
     });
   };
@@ -105,7 +120,7 @@ export function clampWindowPosition(
   const rect = frame.getBoundingClientRect();
   const bounds = viewportBounds();
   return {
-    x: Math.max(0, Math.min(position.x, bounds.width - rect.width)),
-    y: Math.max(minimumY, Math.min(position.y, bounds.height - rect.height)),
+    x: within(position.x, 0, bounds.width - rect.width),
+    y: within(position.y, minimumY, bounds.height - rect.height),
   };
 }
