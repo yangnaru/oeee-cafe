@@ -1091,8 +1091,14 @@ export class CanvasHistory {
    * snapshot, a blanked canvas.
    */
   private queueUpdates(): void {
-    this.engine.queueLayerUpdate("foreground");
-    this.engine.queueLayerUpdate("background");
+    // Every participant's, not just our own. A replay rewrites whoever's
+    // layers the entries touch, and an undo of somebody else's fill rewrites
+    // theirs: repainting only ours would leave their canvas showing pixels
+    // the buffer behind it no longer has.
+    for (const owner of this.engine.ownerIds()) {
+      this.engine.queueLayerUpdate("foreground", owner);
+      this.engine.queueLayerUpdate("background", owner);
+    }
   }
 
   /**
@@ -1105,6 +1111,10 @@ export class CanvasHistory {
    * than drawing it did.
    */
   private queueDrawnUpdates(): void {
+    // No owner loop here: every write on this path went through the engine's
+    // own surfaces, which resolve the participant from the buffer and have
+    // already marked the right canvas dirty. Only the whole-layer path above,
+    // which puts pixels somewhere the engine never saw, has to name them.
     this.engine.queueLayerRegionUpdate("foreground");
     this.engine.queueLayerRegionUpdate("background");
   }

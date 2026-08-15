@@ -105,11 +105,15 @@ class FakeEngine {
   // than drawing the message did, so "did this ask for the whole canvas?" is
   // worth being able to assert.
   repaints: string[] = [];
-  queueLayerUpdate(layer: string) {
+  /** The same repaints, naming whose canvas each one was for. */
+  ownedRepaints: string[] = [];
+  queueLayerUpdate(layer: string, owner?: string) {
     this.repaints.push(`all:${layer}`);
+    this.ownedRepaints.push(`all:${owner ?? String(LOCAL)}/${layer}`);
   }
-  queueLayerRegionUpdate(layer: string) {
+  queueLayerRegionUpdate(layer: string, owner?: string) {
     this.repaints.push(`region:${layer}`);
+    this.ownedRepaints.push(`region:${owner ?? String(LOCAL)}/${layer}`);
   }
 
   // Region ops record what they were asked to do, and which buffers they were
@@ -586,6 +590,57 @@ describe("collaborative undo", () => {
     expect(red(engine, 1, 1)).toBe(100);
     expect(history.canUndo()).toBe(true);
     expect(history.canRedo()).toBe(false);
+  });
+
+  it("reflects a fill's undo to the participants watching it", async () => {
+    const { engine, history } = setup();
+    // Someone else fills and then undoes it. We hold no fork of our own, so
+    // this is purely the receiving side: mark and replay.
+    await remote(history, encodeUndoPoint(REMOTE), 1);
+    await remote(
+      history,
+      encodeFill(REMOTE, REMOTE, "foreground", 4, 4, 30, 0, 0, 255),
+      2
+    );
+    expect(redFor(engine, REMOTE, 1, 1)).toBe(30);
+
+    await remote(history, encodeUndo(REMOTE, false), 3);
+    expect(redFor(engine, REMOTE, 1, 1)).toBe(0);
+  });
+
+  it("reflects our own fill's undo, once the server echoes it", async () => {
+    const { engine, history } = setup();
+    local(history, encodeUndoPoint(LOCAL));
+    const bytes = encodeFill(LOCAL, LOCAL, "foreground", 4, 4, 30, 0, 0, 255);
+    local(history, bytes);
+    expect(red(engine, 1, 1)).toBe(30);
+
+    await remote(history, encodeUndoPoint(LOCAL), 1);
+    await remote(history, bytes, 2);
+    const undo = encodeUndo(LOCAL, false);
+    local(history, undo);
+    await remote(history, undo, 3);
+    expect(red(engine, 1, 1)).toBe(0);
+  });
+
+  it("repaints the canvas of whoever's fill was undone, not only our own", async () => {
+    // A replay rewrites the layers of whichever participants the entries
+    // touch. Repainting only ours leaves theirs showing pixels their buffer
+    // no longer has -- and a fill covers the whole layer, so what stays on
+    // screen is the entire fill.
+    const { engine, history } = setup();
+    await remote(history, encodeUndoPoint(REMOTE), 1);
+    await remote(
+      history,
+      encodeFill(REMOTE, REMOTE, "foreground", 4, 4, 30, 0, 0, 255),
+      2
+    );
+
+    engine.ownedRepaints.length = 0;
+    await remote(history, encodeUndo(REMOTE, false), 3);
+
+    expect(redFor(engine, REMOTE, 1, 1)).toBe(0);
+    expect(engine.ownedRepaints).toContain(`all:${REMOTE}/foreground`);
   });
 
   it("a new stroke kills the redo stack", async () => {
