@@ -106,7 +106,9 @@ export default function App() {
   const [chatCeiling, setChatCeiling] = useState(0);
   /** The painter's controls and its opening zoom are both settled. */
   const [painterReady, setPainterReady] = useState(false);
-  const [chatSize, setChatSize] = useState({ width: 224, height: 469 });
+  // Half the height it used to open at. It was tall enough to reach most of
+  // the way down the drawing, and the layers window now shares that column.
+  const [chatSize, setChatSize] = useState({ width: 224, height: 234 });
   const chatFrameRef = useRef<HTMLDivElement>(null);
   const chatHandleRef = useRef<HTMLDivElement>(null);
   const chatResizeRef = useRef<HTMLDivElement>(null);
@@ -302,7 +304,15 @@ export default function App() {
       painterElement
         ?.querySelector<HTMLElement>(".canvas-container")
         ?.getBoundingClientRect() ?? null;
-    setChatPosition(anchorBesideCanvas(area, canvas, chatSize.width, "left"));
+    const opening = anchorBesideCanvas(area, canvas, chatSize.width, "left");
+    setChatPosition(opening);
+    // The layers window goes under the chat, in the same column. The painter
+    // would otherwise put it beside its own toolboxes, where it knows nothing
+    // about the chat and would open on top of it.
+    painterRef.current?.setLayersOrigin({
+      x: opening.x,
+      y: opening.y + chatSize.height + PANEL_MARGIN,
+    });
     // The opening position only: afterwards the window is where it was dragged.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [painterReady]);

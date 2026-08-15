@@ -54,7 +54,14 @@ export function NeoParticipantLayers({
 }: NeoParticipantLayersProps) {
   const { t } = useLingui();
   return (
-    <div className={`${NEO_WELL} flex w-[168px] flex-col gap-[2px] p-[3px]`}>
+    // Sized to the longest name rather than to a number picked in advance: a
+    // fixed width leaves a gap after every short name and truncates every long
+    // one. Bounded at both ends so one participant does not make a sliver of a
+    // window, and a pathological name does not make a wall of one -- past that
+    // the name ellipsizes.
+    <div
+      className={`${NEO_WELL} flex w-max min-w-[128px] max-w-[260px] flex-col gap-[2px] p-[3px]`}
+    >
       {participants.map((participant) => {
         const isHidden = hidden.has(participant.actorId);
         const isTarget = participant.actorId === target;

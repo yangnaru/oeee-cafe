@@ -141,6 +141,8 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     () => new Set(),
   );
   const [targetOwner, setTargetOwner] = useState<string | null>(null);
+  /** Where the host would like the layers window, if it has an opinion. */
+  const [layersOrigin, setLayersOrigin] = useState<{ x: number; y: number } | null>(null);
   const selectTargetOwner = useCallback((actorId: string) => {
     setTargetOwner(actorId);
   }, []);
@@ -715,6 +717,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       setInteractionEnabled,
       setLocalActorId,
       setParticipants,
+      setLayersOrigin,
       applyCanonicalOperation,
       exportCheckpoint,
       applyCheckpoint,
@@ -724,7 +727,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       // The owning mount adapter replaces this with its React-root teardown.
       unmount: () => {},
     }),
-    [save, exportPng, exportReplay, loadImage, undo, redo, setLocalActorId, setParticipants, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive, compactCanonicalHistory, isSynchronizationSettled],
+    [save, exportPng, exportReplay, loadImage, undo, redo, setLocalActorId, setParticipants, setLayersOrigin, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive, compactCanonicalHistory, isSynchronizationSettled],
   );
 
   // Point the engine, the history and the emitter at the selected participant
@@ -1031,6 +1034,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
                 localActorId={localActorIdRef.current}
                 onToggleOwnerVisible={toggleOwnerVisible}
                 onSelectTargetOwner={selectTargetOwner}
+                layersOrigin={layersOrigin ?? undefined}
               />
             )}
         </PainterWorkspace>

@@ -209,6 +209,16 @@ export interface PainterHandle {
     participants: { actorId: string; name: string; color?: string }[],
   ): void;
 
+  /**
+   * Place the layers window yourself.
+   *
+   * The painter opens it under its own columns and clear of the drawing, which
+   * is right when the painter is the only thing on the page. A host with
+   * windows of its own knows better -- the collaborative page stacks it under
+   * the chat -- and the painter cannot see those to keep out of their way.
+   */
+  setLayersOrigin(origin: { x: number; y: number } | null): void;
+
   /** Apply a server-ordered echo or remote operation in controlled mode. */
   applyCanonicalOperation(
     operation: import("./operations").CanonicalPainterOperation,

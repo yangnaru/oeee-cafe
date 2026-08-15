@@ -22,12 +22,22 @@ export interface ToolboxPanelsProps
   canvasRef?: React.RefObject<HTMLElement | null>;
   /** Overrides the opening positions entirely. */
   origin?: { x: number; y: number };
+  /**
+   * Where the layers window opens, when the host would rather say.
+   *
+   * The painter places it under its own columns and clear of the drawing,
+   * which is right when the painter is the only thing on the page. A host with
+   * windows of its own knows better -- the collaborative page stacks it under
+   * the chat -- and the painter cannot see those to avoid them.
+   */
+  layersOrigin?: { x: number; y: number };
 }
 
 export function ToolboxPanels({
   anchorRef,
   canvasRef,
   origin,
+  layersOrigin,
   ...shared
 }: ToolboxPanelsProps) {
   const [positions, setPositions] = useState<PanelPositions | null>(
@@ -64,6 +74,11 @@ export function ToolboxPanels({
 
   useLayoutEffect(() => {
     if (!positions) return;
+    if (layersOrigin) {
+      setLayersLeft(layersOrigin.x);
+      setLayersTop(layersOrigin.y);
+      return;
+    }
     const extrasHeight =
       document.querySelector(".toolbox-extras")?.getBoundingClientRect().height ?? 0;
     const width =
@@ -98,7 +113,7 @@ export function ToolboxPanels({
     }
     setLayersLeft(preferred);
     setLayersTop(stacked);
-  }, [positions, anchorRef, canvasRef, shared.participantLayers]);
+  }, [positions, anchorRef, canvasRef, layersOrigin, shared.participantLayers]);
 
   if (!positions) return null;
 

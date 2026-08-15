@@ -123,6 +123,10 @@ export function mountOfflinePainter(
       if (!mounted) throw unmountedError();
       controller?.setParticipants(participants);
     },
+    setLayersOrigin(origin) {
+      if (!mounted) throw unmountedError();
+      controller?.setLayersOrigin(origin);
+    },
     async applyCanonicalOperation(operation) {
       return (await liveController()).applyCanonicalOperation(operation);
     },
