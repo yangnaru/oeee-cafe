@@ -79,8 +79,9 @@ export const SimplifiedToolbox = ({
   return (
     <NeoWindow
       initialPosition={{ x: Math.max(0, window.innerWidth - 216), y: ceiling + 12 }}
-      className="z-40 w-[200px] overflow-x-hidden select-text"
+      className="z-40 w-[200px] overflow-hidden select-text"
       minimumY={ceiling}
+      constrainToViewport
     >
       <div className="flex flex-col gap-[6px] p-[4px] font-[Arial] text-[12px] leading-[16px]">
       {/* Pen Size Slider */}
