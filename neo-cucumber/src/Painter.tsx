@@ -12,6 +12,7 @@ import { useCanvasView, useDeferredHandler } from "./hooks/useCanvasView";
 import "./App.css";
 import { useLingui } from "@lingui/react/macro";
 import { ToolboxPanels } from "./components/ToolboxPanels";
+import { NARROW_WORKSPACE, TOOLBOX_LANE } from "./components/toolboxAnchor";
 import { NEO_BUTTON } from "./components/neo/neoClasses";
 import { ALL_TOOLS } from "./constants/drawing";
 import { SimplifiedToolbox } from "./components/SimplifiedToolbox";
@@ -396,13 +397,19 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
   );
 
   // Zoom controls
-  const { currentZoom, handleZoomIn, handleZoomOut, handleZoomReset, handleZoomFit } =
-    useZoomControls({
-      canvasContainerRef: tempCanvasContainerRef,
-      appRef,
-      drawingEngine,
-      setDrawingState,
-    });
+  const {
+    currentZoom,
+    handleZoomIn,
+    handleZoomOut,
+    handleZoomReset,
+    handleZoomFit,
+    zoomToFit,
+  } = useZoomControls({
+    canvasContainerRef: tempCanvasContainerRef,
+    appRef,
+    drawingEngine,
+    setDrawingState,
+  });
 
   // Canvas management
   const { canvasContainerRef } = useOfflineCanvas({
@@ -603,6 +610,39 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       tempCanvasContainerRef.current = canvasContainerRef.current;
     }
   }, [canvasContainerRef]);
+
+  /**
+   * Open at a size that is actually on screen.
+   *
+   * The toolboxes float rather than dock, so nothing in the layout keeps the
+   * canvas out from under them, and the canvas is centred in the whole
+   * workspace whatever else is over it. On a phone that is the difference
+   * between a drawing and a drawing with two panels sitting on it: 390px of
+   * viewport against a 300px canvas leaves 45px a side, and a panel needs 68.
+   *
+   * So the space the panels will take is reserved before the canvas is fitted
+   * into what is left. Never above 100%: a small canvas on a desktop opens at
+   * its own size, the way it always has, and this does nothing at all.
+   *
+   * It sits below the ref synchronisation above deliberately -- that is what
+   * hands the zoom controls their canvas, and a fit with no canvas to measure
+   * is a silent no-op.
+   */
+  const fittedOnOpen = useRef(false);
+  useEffect(() => {
+    if (fittedOnOpen.current || controls.kind === "none") return;
+    const workspace = appRef.current;
+    if (!workspace || !tempCanvasContainerRef.current) return;
+    if (workspace.clientWidth === 0) return;
+    fittedOnOpen.current = true;
+    const narrow = workspace.clientWidth < NARROW_WORKSPACE;
+    zoomToFit({
+      // The two-tone toolbox is one panel and sizes itself, so it gets no
+      // reservation; the pair of NEO panels take an edge each.
+      reservedWidth: narrow && !twoToneConfig ? TOOLBOX_LANE * 2 : 0,
+      maximumZoom: 1,
+    });
+  }, [controls.kind, twoToneConfig, zoomToFit]);
 
   // Ensure drawing engine DOM canvases are updated when engine becomes available
   useEffect(() => {

@@ -185,7 +185,17 @@ export const useZoomControls = ({
     }
   }, [zoomLevels, drawingEngine, canvasContainerRef, setDrawingState]);
 
-  const handleZoomFit = useCallback(() => {
+  /**
+   * Zoom so the whole drawing is on screen.
+   *
+   * `reservedWidth` is horizontal space the caller knows is spoken for --
+   * floating panels, which are not in the layout and so do not shrink the
+   * viewport the way a docked column would. `maximumZoom` is for fitting on
+   * open: a small canvas on a large display should stay at 100%, not be blown
+   * up to fill the window.
+   */
+  const zoomToFit = useCallback(
+    (options?: { reservedWidth?: number; maximumZoom?: number }) => {
     const canvas = canvasContainerRef.current;
     const viewport = appRef.current;
     if (!canvas || !viewport) return;
@@ -193,8 +203,10 @@ export const useZoomControls = ({
     // Leave a little room around the drawing so the border remains visible.
     const padding = 32;
     const fitScale = Math.min(
-      (viewport.clientWidth - padding) / canvas.offsetWidth,
-      (viewport.clientHeight - padding) / canvas.offsetHeight
+      (viewport.clientWidth - padding - (options?.reservedWidth ?? 0)) /
+        canvas.offsetWidth,
+      (viewport.clientHeight - padding) / canvas.offsetHeight,
+      options?.maximumZoom ?? Infinity
     );
     const fitIndex = zoomLevels.reduce(
       (best, level, index) =>
@@ -211,7 +223,11 @@ export const useZoomControls = ({
       pendingPanDeltaY: undefined,
     }));
     drawingEngine?.resetPan(canvas, fitZoom);
-  }, [appRef, canvasContainerRef, drawingEngine, setDrawingState, zoomLevels]);
+    },
+    [appRef, canvasContainerRef, drawingEngine, setDrawingState, zoomLevels]
+  );
+
+  const handleZoomFit = useCallback(() => zoomToFit(), [zoomToFit]);
 
   // Add scroll wheel zoom functionality
   useEffect(() => {
@@ -251,5 +267,6 @@ export const useZoomControls = ({
     handleZoomOut,
     handleZoomReset,
     handleZoomFit,
+    zoomToFit,
   };
 };
