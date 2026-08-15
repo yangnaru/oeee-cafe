@@ -1,6 +1,11 @@
 import { Icon } from "@iconify/react";
 import { useLingui } from "@lingui/react/macro";
-import { NEO_BUTTON_ON, NEO_PANEL_BUTTON, NEO_WELL } from "./neoClasses";
+import {
+  NEO_BUTTON_ON,
+  NEO_ICON_BUTTON,
+  NEO_PANEL_BUTTON,
+  NEO_WELL,
+} from "./neoClasses";
 
 /** One participant's row in the layer toolbox. */
 export interface ParticipantLayer {
@@ -89,20 +94,25 @@ export function NeoParticipantLayers({
             </span>
             <button
               type="button"
-              // NEO_BUTTON_ON is the pressed face and bevel only; it carries no
-              // text colour or padding of its own, so it goes on top of the
-              // button rather than in place of it.
-              className={`${NEO_PANEL_BUTTON} ${isTarget ? NEO_BUTTON_ON : ""} min-w-0 flex-1 justify-start truncate px-[4px] text-left`}
+              // Built from the icon button rather than the panel button: that
+              // one centres its contents and zeroes its padding, and a second
+              // utility for either is settled by stylesheet order rather than
+              // by the order it is written in -- which left the name floating
+              // in the middle of the row. NEO_BUTTON_ON is the pressed face
+              // and bevel only, so it sits on top rather than in place.
+              className={`${NEO_ICON_BUTTON} ${isTarget ? NEO_BUTTON_ON : ""} flex min-w-0 flex-1 items-center gap-[4px] overflow-hidden px-[5px] text-left`}
               aria-pressed={isTarget}
               aria-label={t`Draw on ${participant.name}'s layers`}
               title={t`Draw on these layers`}
               onClick={() => onSelectTarget(participant.actorId)}
             >
-              <span
-                aria-hidden="true"
-                className="mr-[4px] inline-block h-[8px] w-[8px] align-middle"
-                style={{ backgroundColor: participant.color ?? "transparent" }}
-              />
+              {participant.color && (
+                <span
+                  aria-hidden="true"
+                  className="h-[8px] w-[8px] shrink-0"
+                  style={{ backgroundColor: participant.color }}
+                />
+              )}
               <span className="truncate text-[11px]">
                 {participant.name}
                 {isSelf ? t` (you)` : ""}

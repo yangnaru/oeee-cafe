@@ -137,4 +137,32 @@ describe("toolbox placement", () => {
 
     expect(Math.round(frame.getBoundingClientRect().top)).toBe(HEADER_HEIGHT);
   });
+
+  it("never opens the layers window over the drawing", async () => {
+    // It is three times the width of the columns it hangs under, so the side
+    // they are on may have no room for it. Covering the drawing with a list of
+    // names is worse than sitting below it.
+    mountBelowAHeader();
+    await act(async () => painter?.ready);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 120)));
+
+    await act(async () => {
+      painter?.setParticipants([
+        { actorId: "1", name: "limeburst" },
+        { actorId: "2", name: "a-much-longer-name" },
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
+
+    const layers = document.querySelector(".toolbox-layers");
+    const canvas = document.querySelector(".canvas-container");
+    expect(layers).not.toBeNull();
+    expect(canvas).not.toBeNull();
+    const a = layers!.getBoundingClientRect();
+    const b = canvas!.getBoundingClientRect();
+    const overlaps =
+      a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    expect(overlaps).toBe(false);
+    expect(Math.round(a.top)).toBeGreaterThanOrEqual(HEADER_HEIGHT);
+  });
 });

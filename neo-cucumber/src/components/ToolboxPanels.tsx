@@ -6,7 +6,6 @@ import {
   minimumTop,
   PANEL_MARGIN,
   PANEL_PITCH,
-  PANEL_WIDTH,
   type PanelPositions,
 } from "./toolboxAnchor";
 
@@ -65,24 +64,40 @@ export function ToolboxPanels({
 
   useLayoutEffect(() => {
     if (!positions) return;
-    const extras = document.querySelector(".toolbox-extras");
-    const height = extras?.getBoundingClientRect().height ?? 0;
-    setLayersTop(positions.extras.y + height + PANEL_MARGIN);
-
-    // The window is far wider than the column it hangs under, so left-aligning
-    // it would push it out over the drawing whenever the columns sit to the
-    // drawing's left. Grow away from the canvas instead: rightwards when the
-    // columns are to its right, leftwards when they are to its left.
-    const layers = document.querySelector(".toolbox-layers");
-    const width = layers?.getBoundingClientRect().width ?? 0;
+    const extrasHeight =
+      document.querySelector(".toolbox-extras")?.getBoundingClientRect().height ?? 0;
+    const width =
+      document.querySelector(".toolbox-layers")?.getBoundingClientRect().width ?? 0;
     const area = anchorRef?.current?.getBoundingClientRect() ?? null;
     const canvas = canvasRef?.current?.getBoundingClientRect() ?? null;
-    const columnsLeftOfCanvas = canvas ? positions.extras.x < canvas.left : false;
-    const left = columnsLeftOfCanvas
-      ? positions.extras.x + PANEL_WIDTH - width
-      : positions.extras.x;
-    const floor = (area?.left ?? 0) + PANEL_MARGIN;
-    setLayersLeft(Math.max(floor, left));
+    // Under the columns it hangs from, wherever those ended up.
+    const stacked = positions.extras.y + extrasHeight + PANEL_MARGIN;
+
+    if (!area || !canvas || width === 0) {
+      setLayersTop(stacked);
+      setLayersLeft(positions.extras.x);
+      return;
+    }
+
+    // This window is three times the width of the columns, so the side they
+    // are on may have no room for it. Take a side that does, preferring
+    // theirs; if neither fits, go under the drawing rather than over it.
+    const leftSlot = canvas.left - PANEL_MARGIN - width;
+    const rightSlot = canvas.right + PANEL_MARGIN;
+    const fitsLeft = leftSlot >= area.left + PANEL_MARGIN;
+    const fitsRight = rightSlot + width <= area.right - PANEL_MARGIN;
+    const columnsOnLeft = positions.extras.x < canvas.left;
+    const preferred = columnsOnLeft
+      ? (fitsLeft ? leftSlot : fitsRight ? rightSlot : null)
+      : (fitsRight ? rightSlot : fitsLeft ? leftSlot : null);
+
+    if (preferred === null) {
+      setLayersLeft(area.left + PANEL_MARGIN);
+      setLayersTop(canvas.bottom + PANEL_MARGIN);
+      return;
+    }
+    setLayersLeft(preferred);
+    setLayersTop(stacked);
   }, [positions, anchorRef, canvasRef, shared.participantLayers]);
 
   if (!positions) return null;
