@@ -298,17 +298,19 @@ export const NEO_TITLEBAR =
  * Three 3px dots inside 1px of padding make a strip five pixels tall, which is
  * a fine target for a cursor and no target at all for a fingertip -- and the
  * next thing down is always a tool button, so missing it does not fail
- * harmlessly, it draws. On a coarse pointer the strip grows to 28px. That is
- * still under the 44px a touch target is supposed to be, and deliberately:
- * these panels are 52px wide, so a bar tall enough to satisfy the guideline
- * would be a square of chrome sitting on the canvas. The rest of the target is
- * the panel itself, which `attachWindowDrag` makes draggable on the same
- * pointers; this bar is what says so.
+ * harmlessly, it draws. On a coarse pointer the strip grows to 18px, about the
+ * height of one of the widgets below it.
+ *
+ * That is well under the 44px a touch target is supposed to be, and
+ * deliberately: these panels are 52px wide, so a bar sized to the guideline
+ * would be a square of chrome sitting on the canvas. The bar is not carrying
+ * the gesture on its own -- `attachWindowDrag` makes the whole panel draggable
+ * on the same pointers, and this is the affordance that says so.
  */
 export const NEO_TITLEBAR_HANDLE =
   NEO_TITLEBAR +
   " flex touch-none items-center gap-[3px] cursor-grab active:cursor-grabbing " +
-  "pointer-coarse:min-h-[28px] pointer-coarse:gap-[6px] pointer-coarse:px-[6px]";
+  "pointer-coarse:min-h-[18px] pointer-coarse:gap-[5px] pointer-coarse:px-[4px]";
 
 /**
  * One of the three dots that mark a handle as grabbable. NEO has no such
@@ -317,7 +319,7 @@ export const NEO_TITLEBAR_HANDLE =
  */
 export const NEO_TITLEBAR_DOT =
   "h-[3px] w-[3px] shrink-0 rounded-full bg-white/70 first:ml-[3px] " +
-  "pointer-coarse:h-[5px] pointer-coarse:w-[5px] pointer-coarse:first:ml-0";
+  "pointer-coarse:h-[4px] pointer-coarse:w-[4px] pointer-coarse:first:ml-0";
 
 /** A key cap in the shortcut list. */
 export const NEO_KBD =
