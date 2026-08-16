@@ -21,10 +21,6 @@ msgstr "验证失败"
 msgid "by"
 msgstr "作者:"
 
-#: ../frontend/collaborate/App.tsx:547
-#~ msgid "Chat"
-#~ msgstr "聊天"
-
 #: ../frontend/collaborate/components/SessionHeader.tsx:72
 msgid "Connected"
 msgstr "已连接"
@@ -61,8 +57,8 @@ msgstr "保存会话失败。请尝试下载为 PNG。"
 msgid "Go to Lobby"
 msgstr "去大厅"
 
-#: ../frontend/collaborate/App.tsx:693
-#: ../frontend/collaborate/App.tsx:697
+#: ../frontend/collaborate/App.tsx:707
+#: ../frontend/collaborate/App.tsx:711
 msgid "Help"
 msgstr "帮助"
 
@@ -83,15 +79,11 @@ msgstr "加载中"
 msgid "Loading..."
 msgstr "加载中..."
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
-#~ msgid "LOADING..."
-#~ msgstr "加载中..."
-
 #: ../frontend/collaborate/components/Chat.tsx:117
 msgid "Message too long (max 500 characters)"
 msgstr "消息过长（最多 500 个字符）"
 
-#: ../frontend/collaborate/App.tsx:593
+#: ../frontend/collaborate/App.tsx:607
 msgid "No Title"
 msgstr "无标题"
 
@@ -118,28 +110,18 @@ msgstr "返回大厅"
 msgid "Save as PNG"
 msgstr "保存为 PNG"
 
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
-#~ msgid "Save to gallery"
-#~ msgstr "保存到画廊"
-
-#: ../frontend/collaborate/App.tsx:730
-#: ../frontend/collaborate/App.tsx:774
+#: ../frontend/collaborate/App.tsx:744
+#: ../frontend/collaborate/App.tsx:788
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:111
 msgid "Save to Gallery"
 msgstr "保存到画廊"
 
-#: ../frontend/collaborate/App.tsx:730
-#: ../frontend/collaborate/App.tsx:774
+#: ../frontend/collaborate/App.tsx:744
+#: ../frontend/collaborate/App.tsx:788
 #: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:12
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:106
 msgid "Saving..."
 msgstr "保存中..."
-
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
-#~ msgid "Saving…"
-#~ msgstr "保存中…"
 
 #: ../frontend/collaborate/components/Chat.tsx:288
 msgid "Send"

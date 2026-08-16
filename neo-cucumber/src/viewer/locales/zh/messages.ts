@@ -1,0 +1,1 @@
+/*eslint-disable*/import type{Messages}from"@lingui/core";export const messages=JSON.parse("{\"F79wtE\":[\"正在加载回放…\"],\"GGHK6g\":[\"跳到结尾\"],\"OiNmQp\":[\"重新开始\"],\"QQExbr\":[\"无法加载这幅画的回放。\"],\"sYxqsj\":[\"跳转\"],\"xwApJD\":[\"暂停\"],\"yN6E75\":[\"播放\"]}")as Messages;

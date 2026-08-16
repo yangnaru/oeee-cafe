@@ -13,7 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/components/neo/NeoParticipantLayers.tsx:86
+#: src/components/neo/NeoParticipantLayers.tsx:177
 msgid " (you)"
 msgstr " (나)"
 
@@ -21,34 +21,100 @@ msgstr " (나)"
 msgid "{minutes} min"
 msgstr "{minutes}분"
 
+#. NEO 加算
+#: src/neo/labels.ts:92
+msgctxt "painter mask mode"
+msgid "And"
+msgstr "더하기"
+
+#. NEO 角取り, soften edges within a region
+#: src/neo/labels.ts:68
+msgctxt "painter tool"
+msgid "antiAlias"
+msgstr "각깎기"
+
 #: src/components/SimplifiedToolbox.tsx:89
 #: src/components/SimplifiedToolbox.tsx:123
 #: src/components/SimplifiedToolbox.tsx:124
 msgid "Background pen"
 msgstr "배경색 펜"
 
+#. NEO BZ曲線
+#: src/neo/labels.ts:79
+msgctxt "painter tool"
+msgid "Bezier"
+msgstr "베지어"
+
+#. NEO ぼかし
+#: src/neo/labels.ts:57
+msgctxt "painter tool"
+msgid "Blur"
+msgstr "흐리기"
+
+#. NEO 全消し, erase the layer
+#: src/neo/labels.ts:75
+msgctxt "painter tool"
+msgid "Clear"
+msgstr "전체지움"
+
 #: src/components/SimplifiedToolbox.tsx:117
 msgid "Color"
 msgstr "색상"
 
+#. NEO コピー
+#: src/neo/labels.ts:66
+msgctxt "painter tool"
+msgid "Copy"
+msgstr "복사"
+
+#. NEO 焼き込み, burn
+#: src/neo/labels.ts:59
+msgctxt "painter tool"
+msgid "Dark"
+msgstr "어둡게"
+
 #: src/components/SimplifiedToolbox.tsx:221
-#: src/components/ToolboxPanel.tsx:332
+#: src/components/ToolboxPanel.tsx:333
 msgid "Dark"
 msgstr "다크"
 
+#. NEO 逆加算
+#: src/neo/labels.ts:93
+msgctxt "painter mask mode"
+msgid "Divide"
+msgstr "빼기"
+
 #. placeholder {0}: participant.name
-#: src/components/neo/NeoParticipantLayers.tsx:76
+#: src/components/neo/NeoParticipantLayers.tsx:164
 msgid "Draw on {0}'s layers"
 msgstr "{0}의 레이어에 그리기"
 
-#: src/components/neo/NeoParticipantLayers.tsx:77
+#: src/components/neo/NeoParticipantLayers.tsx:165
 msgid "Draw on these layers"
 msgstr "이 레이어에 그리기"
 
-#: src/components/ToolboxPanel.tsx:199
-#: src/components/ToolboxPanel.tsx:200
+#. NEO 塗り潰し
+#: src/neo/labels.ts:81
+msgctxt "painter tool"
+msgid "Fill"
+msgstr "채우기"
+
+#: src/components/ToolboxPanel.tsx:181
+#: src/components/ToolboxPanel.tsx:182
 msgid "Fit canvas"
 msgstr "캔버스 맞추기"
+
+#. NEO 左右反転, truncated by NEO itself
+#: src/neo/labels.ts:69
+msgctxt "painter tool"
+msgid "flipHorita"
+msgstr "좌우반전"
+
+#. NEO 上下反転, truncated by NEO itself
+#: src/neo/labels.ts:70
+msgctxt "painter tool"
+msgid "flipVertic"
+msgstr "상하반전"
 
 #: src/components/SimplifiedToolbox.tsx:88
 #: src/components/SimplifiedToolbox.tsx:142
@@ -56,36 +122,128 @@ msgstr "캔버스 맞추기"
 msgid "Foreground pen"
 msgstr "전경색 펜"
 
+#. NEO 手書き, truncated by NEO itself
+#: src/neo/labels.ts:77
+msgctxt "painter tool"
+msgid "Freehan"
+msgstr "자유선"
+
+#. NEO トーン
+#: src/neo/labels.ts:56
+msgctxt "painter tool"
+msgid "Halftone"
+msgstr "톤"
+
 #. placeholder {0}: participant.name
-#: src/components/neo/NeoParticipantLayers.tsx:65
+#: src/components/neo/NeoParticipantLayers.tsx:125
 msgid "Hide {0}'s layers"
 msgstr "{0}의 레이어 숨기기"
 
-#: src/components/neo/NeoParticipantLayers.tsx:67
+#: src/components/neo/NeoParticipantLayers.tsx:127
 msgid "Hide these layers"
 msgstr "이 레이어 숨기기"
 
+#. NEO Layer0
+#: src/neo/labels.ts:105
+msgctxt "painter layer"
+msgid "LayerBG"
+msgstr "배경"
+
+#. NEO Layer1
+#: src/neo/labels.ts:106
+msgctxt "painter layer"
+msgid "LayerFG"
+msgstr "전경"
+
+#. NEO ﾚｲﾔ結合, merge the two layers
+#: src/neo/labels.ts:67
+msgctxt "painter tool"
+msgid "layerUnit"
+msgstr "병합"
+
+#. NEO 覆い焼き, dodge
+#: src/neo/labels.ts:58
+msgctxt "painter tool"
+msgid "Light"
+msgstr "밝게"
+
 #: src/components/SimplifiedToolbox.tsx:221
-#: src/components/ToolboxPanel.tsx:332
+#: src/components/ToolboxPanel.tsx:333
 msgid "Light"
 msgstr "라이트"
+
+#. NEO 直線
+#: src/neo/labels.ts:78
+msgctxt "painter tool"
+msgid "Line"
+msgstr "직선"
+
+#. NEO 線楕円, the outlined ellipse
+#: src/neo/labels.ts:64
+msgctxt "painter tool"
+msgid "LineOval"
+msgstr "선타원"
+
+#. NEO 線四角, the outlined rectangle
+#: src/neo/labels.ts:62
+msgctxt "painter tool"
+msgid "LineRect"
+msgstr "선사각"
+
+#. NEO マスク
+#: src/neo/labels.ts:90
+msgctxt "painter mask mode"
+msgid "Mask"
+msgstr "마스크"
+
+#. NEO 通常
+#: src/neo/labels.ts:89
+msgctxt "painter mask mode"
+msgid "Normal"
+msgstr "일반"
 
 #: src/components/SimplifiedToolbox.tsx:173
 msgid "Off"
 msgstr "끄기"
 
+#. NEO 楕円, the filled ellipse
+#: src/neo/labels.ts:63
+msgctxt "painter tool"
+msgid "Oval"
+msgstr "타원"
+
+#: src/neo/labels.ts:84
+msgctxt "painter tool"
+msgid "Pan"
+msgstr "이동"
+
+#: src/neo/labels.ts:83
+msgctxt "painter tool"
+msgid "Paste"
+msgstr "붙여넣기"
+
 #: src/components/SimplifiedToolbox.tsx:90
 msgid "Pen size"
 msgstr "펜 크기"
 
-#: src/components/ToolboxPanel.tsx:261
-#: src/components/ToolboxPanel.tsx:262
+#: src/components/ToolboxPanel.tsx:243
+#: src/components/ToolboxPanel.tsx:244
 msgid "Pick a colour"
 msgstr "색 선택"
 
+#: src/components/ToolboxPanel.tsx:259
+msgid "Pick a colour from the drawing with the next click"
+msgstr "다음 클릭으로 그림에서 색을 가져옵니다"
+
+#. NEO 四角, the filled rectangle
+#: src/neo/labels.ts:61
+msgctxt "painter tool"
+msgid "Rect"
+msgstr "사각"
+
 #: src/components/SimplifiedToolbox.tsx:92
 #: src/components/SimplifiedToolbox.tsx:202
-#: src/components/ToolboxPanel.tsx:301
+#: src/components/ToolboxPanel.tsx:302
 msgid "Redo"
 msgstr "다시 실행"
 
@@ -93,15 +251,31 @@ msgstr "다시 실행"
 msgid "Remaining: {remaining}"
 msgstr "남은 시간: {remaining}"
 
-#: src/components/ToolboxPanel.tsx:230
+#. NEO 逆ﾏｽｸ
+#: src/neo/labels.ts:91
+msgctxt "painter mask mode"
+msgid "ReMask"
+msgstr "역마스크"
+
+#: src/components/ToolboxPanel.tsx:212
 msgid "Reset zoom"
 msgstr "확대 초기화"
 
-#: src/components/ToolboxPanel.tsx:353
+#: src/components/ToolboxPanel.tsx:260
+msgid "Right click"
+msgstr "오른쪽 클릭"
+
+#. NEO 傾け, tilt a region
+#: src/neo/labels.ts:71
+msgctxt "painter tool"
+msgid "rotate"
+msgstr "기울이기"
+
+#: src/components/ToolboxPanel.tsx:354
 msgid "Save"
 msgstr "저장"
 
-#: src/components/ToolboxPanel.tsx:341
+#: src/components/ToolboxPanel.tsx:342
 msgid "Save drawing to gallery"
 msgstr "그림을 갤러리에 저장"
 
@@ -110,29 +284,41 @@ msgid "Shortcuts"
 msgstr "단축키"
 
 #. placeholder {0}: participant.name
-#: src/components/neo/NeoParticipantLayers.tsx:64
+#: src/components/neo/NeoParticipantLayers.tsx:124
 msgid "Show {0}'s layers"
 msgstr "{0}의 레이어 표시"
 
-#: src/components/neo/NeoParticipantLayers.tsx:67
+#: src/components/neo/NeoParticipantLayers.tsx:127
 msgid "Show these layers"
 msgstr "이 레이어 표시"
+
+#. NEO 鉛筆
+#: src/neo/labels.ts:52
+msgctxt "painter tool"
+msgid "Solid"
+msgstr "연필"
 
 #: src/components/SimplifiedToolbox.tsx:87
 msgid "Swap pens"
 msgstr "펜 전환"
 
 #: src/components/SimplifiedToolbox.tsx:209
-#: src/components/ToolboxPanel.tsx:317
+#: src/components/ToolboxPanel.tsx:318
 msgid "Switch to dark"
 msgstr "다크 모드로 전환"
 
 #: src/components/SimplifiedToolbox.tsx:209
-#: src/components/ToolboxPanel.tsx:317
+#: src/components/ToolboxPanel.tsx:318
 msgid "Switch to light"
 msgstr "라이트 모드로 전환"
 
-#: src/Painter.tsx:824
+#. NEO ﾃｷｽﾄ
+#: src/neo/labels.ts:54
+msgctxt "painter tool"
+msgid "Text"
+msgstr "텍스트"
+
+#: src/Painter.tsx:915
 msgid "Time's up."
 msgstr "설정한 시간이 지났습니다."
 
@@ -144,185 +330,38 @@ msgstr "타이머"
 msgid "Timer off"
 msgstr "타이머 꺼짐"
 
-#: src/components/ToolboxPanel.tsx:243
+#: src/components/ToolboxPanel.tsx:225
 msgid "Toggle horizontal flip"
 msgstr "좌우 반전 전환"
 
 #: src/components/SimplifiedToolbox.tsx:91
 #: src/components/SimplifiedToolbox.tsx:194
-#: src/components/ToolboxPanel.tsx:292
+#: src/components/ToolboxPanel.tsx:293
 msgid "Undo"
 msgstr "실행 취소"
 
-#: src/components/ToolboxPanel.tsx:222
-msgid "Zoom in"
-msgstr "확대"
-
-#: src/components/ToolboxPanel.tsx:214
-msgid "Zoom out"
-msgstr "축소"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Solid"
-msgstr "연필"
-
-#: src/neo/labels.ts
+#. NEO 水彩, truncated by NEO itself
+#: src/neo/labels.ts:53
 msgctxt "painter tool"
 msgid "WaterCo"
 msgstr "수채"
 
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Text"
-msgstr "텍스트"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Halftone"
-msgstr "톤"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Blur"
-msgstr "흐리기"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Light"
-msgstr "밝게"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Dark"
-msgstr "어둡게"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Rect"
-msgstr "사각"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "LineRect"
-msgstr "선사각"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Oval"
-msgstr "타원"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "LineOval"
-msgstr "선타원"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Copy"
-msgstr "복사"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "layerUnit"
-msgstr "병합"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "antiAlias"
-msgstr "각깎기"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "flipHorita"
-msgstr "좌우반전"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "flipVertic"
-msgstr "상하반전"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "rotate"
-msgstr "기울이기"
-
-#: src/neo/labels.ts
+#. NEO 消しペン, the eraser
+#: src/neo/labels.ts:73
 msgctxt "painter tool"
 msgid "White"
 msgstr "지우개"
 
-#: src/neo/labels.ts
+#. NEO 消し四角, erase a rectangle
+#: src/neo/labels.ts:74
 msgctxt "painter tool"
 msgid "WhiteRe"
 msgstr "사각지움"
 
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Clear"
-msgstr "전체지움"
+#: src/components/ToolboxPanel.tsx:204
+msgid "Zoom in"
+msgstr "확대"
 
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Freehan"
-msgstr "자유선"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Line"
-msgstr "직선"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Bezier"
-msgstr "베지어"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Fill"
-msgstr "채우기"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Paste"
-msgstr "붙여넣기"
-
-#: src/neo/labels.ts
-msgctxt "painter tool"
-msgid "Pan"
-msgstr "이동"
-
-#: src/neo/labels.ts
-msgctxt "painter mask mode"
-msgid "Normal"
-msgstr "일반"
-
-#: src/neo/labels.ts
-msgctxt "painter mask mode"
-msgid "Mask"
-msgstr "마스크"
-
-#: src/neo/labels.ts
-msgctxt "painter mask mode"
-msgid "ReMask"
-msgstr "역마스크"
-
-#: src/neo/labels.ts
-msgctxt "painter mask mode"
-msgid "And"
-msgstr "더하기"
-
-#: src/neo/labels.ts
-msgctxt "painter mask mode"
-msgid "Divide"
-msgstr "빼기"
-
-#: src/neo/labels.ts
-msgctxt "painter layer"
-msgid "LayerBG"
-msgstr "배경"
-
-#: src/neo/labels.ts
-msgctxt "painter layer"
-msgid "LayerFG"
-msgstr "전경"
+#: src/components/ToolboxPanel.tsx:196
+msgid "Zoom out"
+msgstr "축소"

@@ -2,12 +2,19 @@
  * Standalone replay viewer, mounted straight into a server-rendered page the
  * way neo.js was.
  *
- * Deliberately free of React, Lingui and the rest of the collaborative app:
- * NeoPainter, NeoReplay and ReplayPlayer are all plain TypeScript, so a page
- * that only wants to watch a drawing does not have to download a painter and a
- * WebSocket client to do it.
+ * Deliberately free of React and the rest of the collaborative app: NeoPainter,
+ * NeoReplay and ReplayPlayer are all plain TypeScript, so a page that only
+ * wants to watch a drawing does not have to download a painter and a WebSocket
+ * client to do it.
+ *
+ * It does carry Lingui's runtime, because its handful of labels belong in the
+ * catalogs with every other string here rather than in a table of their own.
+ * That costs about 2kB gzipped, against a second place to translate -- which is
+ * how a string comes to be forgotten. Its catalog is its own, though; see
+ * ./i18n.
  */
 import { decodePCH } from "../neo/NeoReplay";
+import { labelsFor } from "./i18n";
 import {
   DEFAULT_SPEED_INDEX,
   ReplayPlayer,
@@ -27,36 +34,6 @@ export interface MountOptions {
 
 export interface MountedViewer {
   dispose(): void;
-}
-
-type Labels = Record<string, string>;
-
-const STRINGS: Record<string, Labels> = {
-  en: {
-    play: "Play", pause: "Pause", rewind: "Rewind", skip: "Skip to end",
-    seek: "Seek", loading: "Loading replay…",
-    failed: "This drawing's replay could not be loaded.",
-  },
-  ko: {
-    play: "재생", pause: "일시정지", rewind: "처음으로", skip: "끝으로",
-    seek: "탐색", loading: "리플레이 불러오는 중…",
-    failed: "이 그림의 리플레이를 불러올 수 없습니다.",
-  },
-  ja: {
-    play: "再生", pause: "一時停止", rewind: "最初から", skip: "最後まで",
-    seek: "シーク", loading: "リプレイを読み込み中…",
-    failed: "この絵のリプレイを読み込めませんでした。",
-  },
-  zh: {
-    play: "播放", pause: "暂停", rewind: "重新开始", skip: "跳到结尾",
-    seek: "跳转", loading: "正在加载回放…",
-    failed: "无法加载这幅画的回放。",
-  },
-};
-
-function labelsFor(lang: string | undefined): Labels {
-  const tag = (lang || document.documentElement.lang || "en").toLowerCase();
-  return STRINGS[tag.split("-")[0]] ?? STRINGS.en;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(

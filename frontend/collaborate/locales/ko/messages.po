@@ -21,10 +21,6 @@ msgstr "인증 실패"
 msgid "by"
 msgstr "작성자:"
 
-#: ../frontend/collaborate/App.tsx:547
-#~ msgid "Chat"
-#~ msgstr "채팅"
-
 #: ../frontend/collaborate/components/SessionHeader.tsx:72
 msgid "Connected"
 msgstr "연결됨"
@@ -61,8 +57,8 @@ msgstr "세션 저장에 실패했습니다. 대신 PNG로 다운로드해 보�
 msgid "Go to Lobby"
 msgstr "로비로 가기"
 
-#: ../frontend/collaborate/App.tsx:693
-#: ../frontend/collaborate/App.tsx:697
+#: ../frontend/collaborate/App.tsx:707
+#: ../frontend/collaborate/App.tsx:711
 msgid "Help"
 msgstr "도움말"
 
@@ -83,15 +79,11 @@ msgstr "로딩 중"
 msgid "Loading..."
 msgstr "로딩 중..."
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
-#~ msgid "LOADING..."
-#~ msgstr "로딩 중..."
-
 #: ../frontend/collaborate/components/Chat.tsx:117
 msgid "Message too long (max 500 characters)"
 msgstr "메시지가 너무 깁니다 (최대 500자)"
 
-#: ../frontend/collaborate/App.tsx:593
+#: ../frontend/collaborate/App.tsx:607
 msgid "No Title"
 msgstr "제목 없음"
 
@@ -118,28 +110,18 @@ msgstr "로비로 돌아가기"
 msgid "Save as PNG"
 msgstr "PNG로 저장"
 
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
-#~ msgid "Save to gallery"
-#~ msgstr "갤러리에 저장"
-
-#: ../frontend/collaborate/App.tsx:730
-#: ../frontend/collaborate/App.tsx:774
+#: ../frontend/collaborate/App.tsx:744
+#: ../frontend/collaborate/App.tsx:788
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:111
 msgid "Save to Gallery"
 msgstr "갤러리에 저장"
 
-#: ../frontend/collaborate/App.tsx:730
-#: ../frontend/collaborate/App.tsx:774
+#: ../frontend/collaborate/App.tsx:744
+#: ../frontend/collaborate/App.tsx:788
 #: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:12
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:106
 msgid "Saving..."
 msgstr "저장 중..."
-
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
-#~ msgid "Saving…"
-#~ msgstr "저장 중…"
 
 #: ../frontend/collaborate/components/Chat.tsx:288
 msgid "Send"

@@ -1,4 +1,6 @@
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react-swc";
+import { lingui } from "@lingui/vite-plugin";
 import path from "node:path";
 
 /**
@@ -10,6 +12,14 @@ import path from "node:path";
  * Emits a stable filename; the templates cache-bust it themselves.
  */
 export default defineConfig({
+  // Library mode leaves CommonJS environment guards in place, and this bundle
+  // runs straight in a browser where `process` does not exist. Lingui's runtime
+  // checks it; without this the viewer throws before it can mount.
+  define: { "process.env.NODE_ENV": JSON.stringify("production") },
+  // The SWC plugin is here for Lingui's macro rather than for React: the
+  // viewer has no components, but its labels are messages like every other
+  // string in this package and the macro is what turns them into catalog ids.
+  plugins: [react({ plugins: [["@lingui/swc-plugin", {}]] }), lingui()],
   build: {
     outDir: "dist-viewer",
     emptyOutDir: true,

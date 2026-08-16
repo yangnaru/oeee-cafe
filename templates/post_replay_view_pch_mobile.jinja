@@ -28,6 +28,10 @@
     replay: "{{ r2_public_endpoint_url|safe }}/replay/{{ post.replay_filename[:2] }}/{{ post.replay_filename }}",
     width: {{ post.image_width|int }},
     height: {{ post.image_height|int }},
+    {# Said rather than inferred: the viewer would otherwise read the document's
+       own lang attribute, which is right today and silently English on any page
+       that forgets to set it. #}
+    lang: "{{ ftl_lang }}",
   });
 </script>
 </body>

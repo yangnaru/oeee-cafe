@@ -21,10 +21,6 @@ msgstr "Authentication Failed"
 msgid "by"
 msgstr "by"
 
-#: ../frontend/collaborate/App.tsx:547
-#~ msgid "Chat"
-#~ msgstr "Chat"
-
 #: ../frontend/collaborate/components/SessionHeader.tsx:72
 msgid "Connected"
 msgstr "Connected"
@@ -61,8 +57,8 @@ msgstr "Failed to save session. Please try downloading as PNG instead."
 msgid "Go to Lobby"
 msgstr "Go to Lobby"
 
-#: ../frontend/collaborate/App.tsx:693
-#: ../frontend/collaborate/App.tsx:697
+#: ../frontend/collaborate/App.tsx:707
+#: ../frontend/collaborate/App.tsx:711
 msgid "Help"
 msgstr "Help"
 
@@ -83,15 +79,11 @@ msgstr "Loading"
 msgid "Loading..."
 msgstr "Loading..."
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
-#~ msgid "LOADING..."
-#~ msgstr "LOADING..."
-
 #: ../frontend/collaborate/components/Chat.tsx:117
 msgid "Message too long (max 500 characters)"
 msgstr "Message too long (max 500 characters)"
 
-#: ../frontend/collaborate/App.tsx:593
+#: ../frontend/collaborate/App.tsx:607
 msgid "No Title"
 msgstr "No Title"
 
@@ -118,28 +110,18 @@ msgstr "Return to Lobby"
 msgid "Save as PNG"
 msgstr "Save as PNG"
 
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
-#~ msgid "Save to gallery"
-#~ msgstr "Save to gallery"
-
-#: ../frontend/collaborate/App.tsx:730
-#: ../frontend/collaborate/App.tsx:774
+#: ../frontend/collaborate/App.tsx:744
+#: ../frontend/collaborate/App.tsx:788
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:111
 msgid "Save to Gallery"
 msgstr "Save to Gallery"
 
-#: ../frontend/collaborate/App.tsx:730
-#: ../frontend/collaborate/App.tsx:774
+#: ../frontend/collaborate/App.tsx:744
+#: ../frontend/collaborate/App.tsx:788
 #: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:12
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:106
 msgid "Saving..."
 msgstr "Saving..."
-
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
-#~ msgid "Saving…"
-#~ msgstr "Saving…"
 
 #: ../frontend/collaborate/components/Chat.tsx:288
 msgid "Send"

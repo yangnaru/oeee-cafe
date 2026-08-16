@@ -1,0 +1,1 @@
+/*eslint-disable*/import type{Messages}from"@lingui/core";export const messages=JSON.parse("{\"F79wtE\":[\"리플레이 불러오는 중…\"],\"GGHK6g\":[\"끝으로\"],\"OiNmQp\":[\"처음으로\"],\"QQExbr\":[\"이 그림의 리플레이를 불러올 수 없습니다.\"],\"sYxqsj\":[\"탐색\"],\"xwApJD\":[\"일시정지\"],\"yN6E75\":[\"재생\"]}")as Messages;

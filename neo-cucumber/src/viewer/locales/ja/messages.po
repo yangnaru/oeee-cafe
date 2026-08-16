@@ -1,0 +1,49 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-08-16 21:00+0900\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: ja\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#: src/viewer/i18n.ts:48
+msgctxt "replay viewer"
+msgid "Loading replay…"
+msgstr "リプレイを読み込み中…"
+
+#: src/viewer/i18n.ts:44
+msgctxt "replay viewer"
+msgid "Pause"
+msgstr "一時停止"
+
+#: src/viewer/i18n.ts:43
+msgctxt "replay viewer"
+msgid "Play"
+msgstr "再生"
+
+#: src/viewer/i18n.ts:45
+msgctxt "replay viewer"
+msgid "Rewind"
+msgstr "最初から"
+
+#: src/viewer/i18n.ts:47
+msgctxt "replay viewer"
+msgid "Seek"
+msgstr "シーク"
+
+#: src/viewer/i18n.ts:46
+msgctxt "replay viewer"
+msgid "Skip to end"
+msgstr "最後まで"
+
+#: src/viewer/i18n.ts:49
+msgctxt "replay viewer"
+msgid "This drawing's replay could not be loaded."
+msgstr "この絵のリプレイを読み込めませんでした。"

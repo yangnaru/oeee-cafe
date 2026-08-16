@@ -21,10 +21,6 @@ msgstr "認証に失敗しました"
 msgid "by"
 msgstr "作成者:"
 
-#: ../frontend/collaborate/App.tsx:547
-#~ msgid "Chat"
-#~ msgstr "チャット"
-
 #: ../frontend/collaborate/components/SessionHeader.tsx:72
 msgid "Connected"
 msgstr "接続済み"
@@ -61,8 +57,8 @@ msgstr "セッションの保存に失敗しました。代わりに PNG とし�
 msgid "Go to Lobby"
 msgstr "ロビーに戻る"
 
-#: ../frontend/collaborate/App.tsx:693
-#: ../frontend/collaborate/App.tsx:697
+#: ../frontend/collaborate/App.tsx:707
+#: ../frontend/collaborate/App.tsx:711
 msgid "Help"
 msgstr "ヘルプ"
 
@@ -83,15 +79,11 @@ msgstr "読み込み中"
 msgid "Loading..."
 msgstr "読み込み中..."
 
-#: ../frontend/collaborate/components/modals/ConnectionStatusModal.tsx:25
-#~ msgid "LOADING..."
-#~ msgstr "読み込み中..."
-
 #: ../frontend/collaborate/components/Chat.tsx:117
 msgid "Message too long (max 500 characters)"
 msgstr "メッセージが長すぎます（最大500文字）"
 
-#: ../frontend/collaborate/App.tsx:593
+#: ../frontend/collaborate/App.tsx:607
 msgid "No Title"
 msgstr "無題"
 
@@ -118,28 +110,18 @@ msgstr "ロビーに戻る"
 msgid "Save as PNG"
 msgstr "PNG として保存"
 
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
-#~ msgid "Save to gallery"
-#~ msgstr "ギャラリーに保存"
-
-#: ../frontend/collaborate/App.tsx:730
-#: ../frontend/collaborate/App.tsx:774
+#: ../frontend/collaborate/App.tsx:744
+#: ../frontend/collaborate/App.tsx:788
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:111
 msgid "Save to Gallery"
 msgstr "ギャラリーに保存"
 
-#: ../frontend/collaborate/App.tsx:730
-#: ../frontend/collaborate/App.tsx:774
+#: ../frontend/collaborate/App.tsx:744
+#: ../frontend/collaborate/App.tsx:788
 #: ../frontend/collaborate/components/modals/SessionEndingModal.tsx:12
 #: ../frontend/collaborate/components/SessionExpiredModal.tsx:106
 msgid "Saving..."
 msgstr "保存中..."
-
-#: ../frontend/collaborate/App.tsx:692
-#: ../frontend/collaborate/App.tsx:736
-#~ msgid "Saving…"
-#~ msgstr "保存中…"
 
 #: ../frontend/collaborate/components/Chat.tsx:288
 msgid "Send"
