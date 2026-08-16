@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { act } from "react";
 import { DrawingEngine } from "./DrawingEngine";
+import { mount } from "./public";
 import { loadNeo } from "./test/neoHarness";
 
 /**
@@ -105,5 +107,78 @@ describe("picking the colour under the pointer", () => {
     const hex = (v: number) => v.toString(16).padStart(2, "0");
 
     expect(`#${hex(ours.r)}${hex(ours.g)}${hex(ours.b)}`).toBe(theirs);
+  });
+
+  it("picks on a right press, on ctrl-click, and leaves no browser menu behind", async () => {
+    // Ctrl-click is how a right press is made on a Mac, and the browser
+    // answers it with its own menu. NEO turns that menu off across its whole
+    // container; without doing the same the colour is picked and then buried
+    // under something nobody asked for, which is indistinguishable from the
+    // picker not working.
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    let painter!: ReturnType<typeof mount>;
+    act(() => {
+      painter = mount(element, {
+        width: 64, height: 48,
+        mode: { kind: "standard" },
+        controls: { kind: "toolbox" },
+        synchronization: { actorId: "1", onOperation: () => {} },
+      });
+    });
+    await act(async () => painter.ready);
+    act(() => painter.setLocalActorId("1"));
+
+    await act(async () => {
+      await painter.applyCanonicalOperation({
+        id: "x:1", actorId: "1", sequence: 1, operation: { kind: "undo-boundary" },
+      });
+      await painter.applyCanonicalOperation({
+        id: "x:2", actorId: "1", sequence: 2,
+        operation: {
+          kind: "fill", layer: "background", at: { x: 32, y: 24 },
+          color: { r: 200, g: 100, b: 50, a: 255 },
+          mask: { type: 0, r: 0, g: 0, b: 0 },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+
+    const canvas = element.querySelector("#canvas") as HTMLCanvasElement;
+    const box = canvas.getBoundingClientRect();
+    const press = async (init: PointerEventInit) => {
+      await act(async () => {
+        canvas.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            pointerId: 1, pointerType: "mouse", bubbles: true,
+            clientX: box.left + box.width / 2,
+            clientY: box.top + box.height / 2,
+            ...init,
+          }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      });
+    };
+    const chosen = () =>
+      (document.querySelector('input[type="color"]') as HTMLInputElement).value;
+
+    await press({ button: 2, buttons: 2 });
+    expect(chosen()).toBe("#c86432");
+
+    // Put it back to something else, then prove ctrl-click gets there too.
+    act(() => {
+      const input = document.querySelector('input[type="color"]') as HTMLInputElement;
+      input.value = "#000000";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await press({ button: 0, buttons: 1, ctrlKey: true });
+    expect(chosen()).toBe("#c86432");
+
+    // And the browser's menu never gets to open over the drawing.
+    const menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    canvas.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(true);
+
+    act(() => painter.unmount());
   });
 });

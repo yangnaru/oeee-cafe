@@ -29,6 +29,12 @@ export function PainterWorkspace({
       <div
         ref={workspaceRef}
         className="neo-ground flex gap-4 flex-row w-full h-full justify-center items-center"
+        // A right press is the eyedropper, and NEO turns the browser's own
+        // menu off across its whole container so one can be made at all.
+        // Without this the colour is picked and then buried under a menu
+        // nobody asked for -- and on a Mac, where Ctrl-click is how a right
+        // press is made, that is every attempt at it.
+        onContextMenu={(event) => event.preventDefault()}
       >
         {beforeCanvas}
         {canvas && <PainterCanvas {...canvas} />}
