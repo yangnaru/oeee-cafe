@@ -325,6 +325,100 @@ async fn multiple_clients_share_one_canonical_order_and_late_join_replay() {
     .expect("collaboration protocol scenario timed out");
 }
 
+/// A flood fill, which travels as a rectangle of compressed coverage rather
+/// than as a seed point, and is by far the largest thing we put on the wire.
+///
+/// What this reaches is the store: real sequencing, real history, real
+/// late-join replay. It does not reach the connection loop -- `serve_connection`
+/// above is the harness's own, so who gets an echo is settled by the unit tests
+/// in `websocket.rs` and not here.
+///
+/// So the claim is a narrow one, and it is about size. Every other test in this
+/// file sequences three bytes. A fill is kilobytes, and nothing until now has
+/// pushed one through Redis storage and got it back byte for byte, in order,
+/// with a mark on each side of it.
+#[tokio::test]
+async fn a_fill_sized_payload_survives_sequencing_and_replay_intact() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let harness = start_harness().await;
+        let (mut alice, _) = connect_async(&harness.url).await.expect("Alice connects");
+        let start = caught_up(&mut alice).await;
+
+        // [0x1d][author][target][layer][x:2][y:2][w:2][h:2][rgba:4][len:4][coverage]
+        let mut fill = vec![0x1d, 1, 7, 0];
+        fill.extend_from_slice(&5u16.to_le_bytes());
+        fill.extend_from_slice(&6u16.to_le_bytes());
+        fill.extend_from_slice(&600u16.to_le_bytes());
+        fill.extend_from_slice(&800u16.to_le_bytes());
+        fill.extend_from_slice(&[200, 100, 50, 255]);
+        // A coverage mask the size a full-canvas fill deflates to, and not a
+        // run of one byte: Redis is told this is binary, and a payload that
+        // happens to be uniform would not notice if it were not.
+        let coverage: Vec<u8> = (0..16_384u32)
+            .map(|index| (index.wrapping_mul(2_654_435_761) >> 24) as u8)
+            .collect();
+        fill.extend_from_slice(&(coverage.len() as u32).to_le_bytes());
+        fill.extend_from_slice(&coverage);
+
+        let before = vec![0x16, 1, 0xaa];
+        let after = vec![0x16, 1, 0xbb];
+        for payload in [&before, &fill, &after] {
+            alice
+                .send(Message::Binary(payload.clone().into()))
+                .await
+                .expect("Alice draws");
+        }
+
+        let live: Vec<Position> = {
+            let mut seen = Vec::new();
+            for _ in 0..3 {
+                seen.push(decode_position(alice.next().await.unwrap().expect("mark")));
+            }
+            seen
+        };
+        assert_eq!(
+            live.iter().map(|entry| entry.sequence).collect::<Vec<_>>(),
+            vec![1, 2, 3],
+            "the fill did not take an ordinary place in the order"
+        );
+        // Compared by hand rather than with `assert_eq!`: these are kilobytes,
+        // and a failure that prints both of them in full is a failure nobody
+        // reads. Length first, because truncation is the likely way to fail.
+        assert_eq!(
+            live[1].payload.len(),
+            fill.len(),
+            "the fill came back a different size"
+        );
+        let differs = live[1]
+            .payload
+            .iter()
+            .zip(&fill)
+            .position(|(got, want)| got != want);
+        assert!(
+            differs.is_none(),
+            "the fill was corrupted in storage, first at byte {:?}",
+            differs
+        );
+
+        // And the same again for someone arriving afterwards, who gets it out
+        // of history rather than off the wire.
+        let (mut late, _) = connect_async(&harness.url)
+            .await
+            .expect("late joiner connects");
+        let replayed: Vec<Position> = {
+            let mut seen = Vec::new();
+            for _ in 0..3 {
+                seen.push(decode_position(late.next().await.unwrap().expect("replay")));
+            }
+            seen
+        };
+        assert!(replayed == live, "replay did not match what was broadcast");
+        assert_eq!(caught_up(&mut late).await, (start.0, 3));
+    })
+    .await
+    .expect("collaboration protocol scenario timed out");
+}
+
 #[tokio::test]
 async fn reconnect_replays_missed_operations_once_and_reports_exact_position() {
     tokio::time::timeout(Duration::from_secs(10), async {
