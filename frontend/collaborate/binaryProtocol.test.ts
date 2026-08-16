@@ -16,6 +16,7 @@ import {
   MSG_TYPE,
   REGION_TOOL,
   unwrapSequenced,
+  isCanvasHistoryMessage,
 } from "./binaryProtocol";
 import type { PainterRegionTool as RegionTool } from "neo-cucumber";
 import type { PainterOperation } from "neo-cucumber";
@@ -324,6 +325,15 @@ describe("every operation the vocabulary has", () => {
       expect(decoded, `${kind} did not decode`).not.toBeNull();
       const back = decodePainterOperation(decoded!);
       expect(back?.kind, `${kind} came back as something else`).toBe(kind);
+
+      // And is recognised as history. A kind the client does not route is
+      // still sequenced by the server, so every client waits forever for a
+      // message that was delivered and never applied, then drops the
+      // connection believing it has fallen behind.
+      expect(
+        isCanvasHistoryMessage(decoded!),
+        `${kind} would not reach the canvas history`,
+      ).toBe(true);
     }
   });
 });

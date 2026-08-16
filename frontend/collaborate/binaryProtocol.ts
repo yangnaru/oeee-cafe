@@ -1379,6 +1379,41 @@ export function encodePainterOperation(userId: number, operation: PainterOperati
   }
 }
 
+/**
+ * The message types that belong in the canonical canvas history.
+ *
+ * One list, exported, because the client used to keep its own: a kind added to
+ * the vocabulary and not to that list was still sequenced by the server and
+ * never applied, so every client saw a gap in the sequence, decided it had
+ * fallen behind, and dropped the connection. The round-trip test walks every
+ * kind in the vocabulary and checks it lands here.
+ */
+export const CANVAS_HISTORY_MESSAGE_TYPES = [
+  "stroke",
+  "fill",
+  "putImage",
+  "region",
+  "line",
+  "bezier",
+  "eraseAll",
+  "text",
+  "snapshot",
+  "undoPoint",
+  "undo",
+] as const;
+
+export type CanvasHistoryMessageType =
+  (typeof CANVAS_HISTORY_MESSAGE_TYPES)[number];
+
+/** Whether this message is one the canonical history has to be given. */
+export function isCanvasHistoryMessage(
+  message: DecodedMessage,
+): message is DecodedMessage & { type: CanvasHistoryMessageType } {
+  return (CANVAS_HISTORY_MESSAGE_TYPES as readonly string[]).includes(
+    message.type,
+  );
+}
+
 /** Decode an oeee room drawing message into the library's public vocabulary. */
 export function decodePainterOperation(message: DecodedMessage): PainterOperation | null {
   switch (message.type) {

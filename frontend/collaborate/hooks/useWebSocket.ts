@@ -535,9 +535,13 @@ export const useWebSocket = ({
           case "bezier":
           case "eraseAll":
           case "text":
+          case "putImage":
           case "snapshot":
           case "undoPoint":
           case "undo": {
+            // The list above is asserted against the vocabulary in
+            // binaryProtocol.test.ts, so a kind cannot be added to one and
+            // forgotten in the other.
             if (raw) await onCanvasMessage(message, raw, seq);
 
             // Show remote users' cursors at their latest drawing position
