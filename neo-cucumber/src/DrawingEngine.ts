@@ -187,7 +187,14 @@ export class DrawingEngine {
     };
     const surfaceFor = (layer: LayerName) =>
       new BufferSurface(layers[layer], width, height, (x0, y0, x1, y1) => {
-        const key = slotKey(owner, layer);
+        // Whose pair this is, resolved at the moment of the write rather than
+        // captured when the slot was made. A participant is re-keyed when the
+        // server names them, and a captured name would keep filing regions
+        // under an owner nothing reads -- so the repaint that follows finds
+        // nothing to do and the pixels sit in the buffer, invisible, until
+        // something else forces a full repaint.
+        const live = this.bufferOwners.get(layers[layer]);
+        const key = slotKey(live?.owner ?? owner, layer);
         this.writtenRegions.set(
           key,
           unionRegion(this.writtenRegions.get(key) ?? null, x0, y0, x1, y1),

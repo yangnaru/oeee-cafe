@@ -639,6 +639,12 @@ export const useWebSocket = ({
           }
 
           case "movePointer": {
+            // Not while catching up. A pointer position is where somebody is
+            // right now, and during a replay it is neither: the positions
+            // arriving are from whenever the history was made, and drawing
+            // them puts other people's cursors on a canvas that has not
+            // finished being rebuilt.
+            if (isCatchingUpRef.current) break;
             if (message.userId !== localIdRef.current) {
               const username =
                 idNamesRef.current.get(message.userId) || `#${message.userId}`;
