@@ -894,6 +894,76 @@ export class DrawingEngine {
     this.queueUpdateIfLive(ctx);
   }
 
+  /**
+   * Floods, and says which pixels it touched.
+   *
+   * A fill that is going to be sent as pixels has to be cropped to the region
+   * it actually covered, and the surfaces already record exactly that as they
+   * write -- so this reads the region before the repaint consumes it rather
+   * than comparing the layer against a copy of itself.
+   *
+   * Returns null when the fill changed nothing, which is a click on a pixel
+   * that is already the fill colour.
+   */
+  public floodFillCapturingRegion(
+    ctx: Uint8ClampedArray,
+    startX: number,
+    startY: number,
+    fillR: number,
+    fillG: number,
+    fillB: number,
+    fillA: number
+  ): { x: number; y: number; width: number; height: number } | null {
+    // Compared against a copy rather than read from the surfaces: NEO's flood
+    // writes the whole layer back in one go, so what the surfaces record is
+    // "everything" and says nothing about where the paint landed. Diffing is
+    // a pass over the layer, which is what the flood itself just cost.
+    const before = new Uint32Array(
+      ctx.buffer.slice(ctx.byteOffset, ctx.byteOffset + ctx.byteLength)
+    );
+
+    this.doFloodFill(ctx, startX, startY, fillR, fillG, fillB, fillA);
+
+    const after = new Uint32Array(ctx.buffer, ctx.byteOffset, before.length);
+    const { imageWidth: width } = this;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (let i = 0; i < before.length; i++) {
+      if (before[i] === after[i]) continue;
+      const x = i % width;
+      const y = (i - x) / width;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    // Nothing changed: a click on a pixel that is already the fill colour.
+    if (x1 < x0) return null;
+    return { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
+  }
+
+  /** Replaces a rectangle of a participant's layer with the given pixels. */
+  public putImage(
+    ctx: Uint8ClampedArray,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    pixels: Uint8ClampedArray
+  ): void {
+    for (let row = 0; row < height; row++) {
+      const from = row * width * 4;
+      const into = ((y + row) * this.imageWidth + x) * 4;
+      ctx.set(pixels.subarray(from, from + width * 4), into);
+    }
+    // Written straight into the buffer, so no surface saw it and the whole
+    // layer has to repaint -- which is also what tells the history that this
+    // participant's layers have moved on.
+    this.queueFullUpdateIfLive(ctx);
+  }
+
   public drawLine(
     ctx: Uint8ClampedArray,
     x0: number,

@@ -76,6 +76,15 @@ export interface HistoryEraseAll extends TargetedOperation {
   type: "eraseAll";
 }
 
+export interface HistoryRaster extends MaskedOperation {
+  type: "raster";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  pixels: Uint8Array;
+}
+
 export interface HistoryText extends MaskedOperation {
   type: "text";
   x: number;
@@ -101,6 +110,7 @@ export type HistoryOperation =
   | HistoryRegion
   | HistoryLine
   | HistoryBezier
+  | HistoryRaster
   | HistoryEraseAll
   | HistoryText
   | HistoryUndoBoundary
@@ -114,6 +124,7 @@ export function isHistoryOperation(value: { type: string }): value is HistoryOpe
     "region",
     "line",
     "bezier",
+    "raster",
     "eraseAll",
     "text",
     "undoPoint",
@@ -167,6 +178,13 @@ export function toHistoryOperation(
         rect: operation.rect, color: operation.color,
         brushSize: operation.brushSize, mask: operation.mask,
       };
+    case "raster":
+      return {
+        type: "raster", userId, targetOwner, layer: operation.layer,
+        x: operation.at.x, y: operation.at.y,
+        width: operation.width, height: operation.height,
+        pixels: operation.pixels, mask: operation.mask,
+      };
     case "text":
       return {
         type: "text", userId, targetOwner, layer: operation.layer,
@@ -218,6 +236,13 @@ export function fromHistoryOperation(
         kind: "region", targetActorId: String(operation.targetOwner), layer: operation.layer, tool: operation.tool,
         rect: operation.rect, color: operation.color,
         brushSize: operation.brushSize, mask: operation.mask,
+      };
+    case "raster":
+      return {
+        kind: "raster", targetActorId: String(operation.targetOwner),
+        layer: operation.layer, at: { x: operation.x, y: operation.y },
+        width: operation.width, height: operation.height,
+        pixels: operation.pixels, mask: operation.mask,
       };
     case "text":
       return {

@@ -92,6 +92,25 @@ export type PainterOperation =
       brushSize: number;
     })
   | (PainterMark & {
+      /**
+       * A rectangle of pixels replacing what is under it.
+       *
+       * A flood fill travels this way rather than as the point that seeded it:
+       * replaying a seed re-runs the flood against whatever the layer holds at
+       * the time, so a fill could spread differently when something under it
+       * was undone. The pixels are the pixels.
+       */
+      kind: "raster";
+      at: PainterPoint;
+      width: number;
+      height: number;
+      /**
+       * The rectangle's RGBA, DEFLATE-compressed. Measured against PNG on the
+       * rasters a fill actually makes, this is several times smaller.
+       */
+      pixels: Uint8Array;
+    })
+  | (PainterMark & {
       kind: "text";
       at: PainterPoint;
       text: string;

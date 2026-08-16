@@ -1,6 +1,7 @@
 import { useRef, useCallback } from "react";
 import { useBaseDrawing, type DrawingState } from "./useBaseDrawing";
 import { ActionRecorder } from "../utils/ActionRecorder";
+import { deflateRaster } from "../utils/rasterCodec";
 import { maskFrom, NO_MASK, type Mask } from "../neo/mask";
 import type { BrushType } from "../types/drawing";
 import type { PainterBrush, PainterOperation } from "../operations";
@@ -94,6 +95,13 @@ export const useOfflineDrawing = (
     Extract<PainterOperation, { kind: "stroke" }> | null
   >(null);
   const strokeBoundaryEmittedRef = useRef(false);
+
+  /**
+   * The engine, reachable from the callbacks that are handed to the hook that
+   * builds it. Declared before them and filled after, because the callbacks
+   * only ever run later.
+   */
+  const engineRef = useRef<import("../DrawingEngine").DrawingEngine | null>(null);
 
   const emitOperation = useCallback((operation: PainterOperation) => {
     if (!onOperation) return;
@@ -321,16 +329,43 @@ export const useOfflineDrawing = (
           actionRecorderRef.current.step();
           hasCreatedStepRef.current = true;
         }
+        // The replay file keeps the flood as a flood: it is one participant's
+        // own drawing, replayed against the canvas it was made on, so the seed
+        // reproduces it exactly and costs four numbers instead of a raster.
         actionRecorderRef.current.push("floodFill", layer, Math.round(x), Math.round(y), color);
-        emitOperation({
-          kind: "fill",
-          layer: layer === 1 ? "foreground" : "background",
-          at: { x: Math.round(x), y: Math.round(y) },
-          color: { r: safeR, g: safeG, b: safeB, a: alpha },
-          mask: strokeMaskRef.current,
+
+        const engine = engineRef.current;
+        const layerName = layer === 1 ? "foreground" : "background";
+        if (!onOperation || !engine) return;
+
+        // Run it here and send what it covered. A seed replayed elsewhere
+        // floods whatever that layer holds at the time, which after an undo
+        // underneath it is not the same shape at all.
+        const target = engine.drawTarget[layerName];
+        const region = engine.floodFillCapturingRegion(
+          target, Math.round(x), Math.round(y), safeR, safeG, safeB, alpha,
+        );
+        if (!region) return;
+
+        const { x: rx, y: ry, width, height } = region;
+        const pixels = new Uint8ClampedArray(width * height * 4);
+        for (let row = 0; row < height; row++) {
+          const from = ((ry + row) * engine.imageWidth + rx) * 4;
+          pixels.set(target.subarray(from, from + width * 4), row * width * 4);
+        }
+        void deflateRaster(pixels).then((compressed) => {
+          emitOperation({
+            kind: "raster",
+            layer: layerName,
+            at: { x: rx, y: ry },
+            width,
+            height,
+            pixels: compressed,
+            mask: strokeMaskRef.current,
+          });
         });
       },
-      [drawingState.layerType, emitOperation]
+      [drawingState.layerType, emitOperation, onOperation]
     ),
 
     onRegionPreview,
@@ -463,6 +498,9 @@ export const useOfflineDrawing = (
     isDrawingDisabled,
     callbacks
   );
+  // Filled once the hook above has built it; the callbacks handed into it read
+  // this rather than a binding that does not exist yet when they are made.
+  engineRef.current = baseDrawing.drawingEngine;
 
   /**
    * Undo, through whichever history is the authority here.

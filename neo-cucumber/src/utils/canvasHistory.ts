@@ -24,6 +24,7 @@ import { NO_MASK, type Mask } from "../neo/mask";
 import type {
   HistoryActorId,
   HistoryOperation,
+  HistoryRaster,
   HistorySnapshot,
   HistoryStroke,
 } from "../synchronization/historyOperations";
@@ -36,6 +37,7 @@ import type {
   LocalPainterOperation,
 } from "../operations";
 import { pngDataToLayer } from "./canvasSnapshot";
+import { inflateRaster } from "./rasterCodec";
 import { extentFor, fontSizeForBrush, TEXT_FONT_FAMILY } from "../neo/tools";
 import type { WireBrushType } from "../types/drawing";
 
@@ -229,6 +231,19 @@ function affectedArea(msg: HistoryOperation): Area {
         y1: Math.max(...ys) + msg.brushSize,
       };
     }
+    case "raster":
+      // The rectangle it covers, and no more. A seeded fill had to claim the
+      // whole layer, because where a flood reaches is not known until it is
+      // run; pixels know exactly where they go, so two fills in different
+      // corners no longer make each other replay.
+      return {
+        kind: "pixels", owner,
+        layer: msg.layer,
+        x0: msg.x,
+        y0: msg.y,
+        x1: msg.x + msg.width - 1,
+        y1: msg.y + msg.height - 1,
+      };
     case "text":
       // Glyph metrics are the font's business, not ours, and guessing a box
       // too small would let a concurrent op reorder through it. Take the
@@ -280,6 +295,11 @@ export class CanvasHistory {
   /** One clipboard per user, so a paste replays the sender's copy. */
   private readonly clipboards = new Map<ActorKey, ImageData | null>();
   private snapshotCache = new WeakMap<HistorySnapshot, Uint8ClampedArray>();
+  /**
+   * Decoded raster marks, so a replay does not decode the same PNG again for
+   * every pass over the history it appears in.
+   */
+  private rasterCache = new WeakMap<HistoryRaster, Uint8ClampedArray>();
 
   constructor(
     engine: DrawingEngine,
@@ -1019,6 +1039,18 @@ export class CanvasHistory {
         this.snapshotCache.set(msg, data);
       }
       source(actorKey(msg.targetOwner))[msg.layer].set(data);
+      return;
+    }
+    if (msg.type === "raster") {
+      let pixels = this.rasterCache.get(msg);
+      if (!pixels) {
+        pixels = await inflateRaster(msg.pixels, msg.width, msg.height);
+        this.rasterCache.set(msg, pixels);
+      }
+      this.engine.putImage(
+        source(actorKey(msg.targetOwner))[msg.layer],
+        msg.x, msg.y, msg.width, msg.height, pixels,
+      );
       return;
     }
     if (msg.type === "undoPoint") {

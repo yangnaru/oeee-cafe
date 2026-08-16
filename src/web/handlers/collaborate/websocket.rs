@@ -558,6 +558,7 @@ mod forwarding_tests {
             0x19, // bezier
             0x1a, // erase all
             0x1b, // text
+            0x1d, // a rectangle of pixels, which is how a fill travels
         ] {
             assert!(
                 should_forward_to_connection(&message("same", msg_type), "same"),
