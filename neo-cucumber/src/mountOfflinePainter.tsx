@@ -6,6 +6,7 @@ import Painter from "./Painter";
 import { DefaultI18n } from "./components/DefaultI18n";
 import { setupI18n } from "./utils/i18n";
 import { installNeoGround } from "./neo/neoBackground";
+import { PainterLabelContext } from "./hooks/usePainterLabels";
 import type { ImageSource, PainterError, PainterHandle } from "./public";
 
 export function mountOfflinePainter(
@@ -72,6 +73,8 @@ export function mountOfflinePainter(
   root.render(
     <StrictMode>
       <I18nProvider i18n={i18n} defaultComponent={DefaultI18n}>
+        {/* A host's own words for things, if it gave any; see `painterLabels`. */}
+        <PainterLabelContext.Provider value={config.labels}>
         <Painter
           ref={(value) => {
             controller = value;
@@ -82,6 +85,7 @@ export function mountOfflinePainter(
           }}
           config={config}
         />
+        </PainterLabelContext.Provider>
       </I18nProvider>
     </StrictMode>,
   );

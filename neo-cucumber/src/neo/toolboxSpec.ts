@@ -13,7 +13,6 @@
  * are offered beside this column rather than inside it.
  */
 import type { DrawType, ToolId } from "./tools";
-import { neoTranslate } from "./dictionary";
 
 /*
   -------------------------------------------------------------------------
@@ -58,91 +57,11 @@ export const NEO_SLIDER_COLORS = {
     Labels
   -------------------------------------------------------------------------
 
-  NEO writes its toolbox in Japanese and translates it at runtime, so what a
-  tool is *called* belongs to `./dictionary`, and what a tool is named here is
-  the Japanese term NEO looks it up by. Resolving a label therefore needs a
-  locale, which is why these are functions rather than the flat English table
-  this used to be -- that table showed "Halftone" to a Japanese painter whose
-  NEO says トーン.
+  What a tool is *called* lives in `./labels`, as a message with a stable id
+  like everything else this package puts on screen. It used to live here, as a
+  flat table of one language's output -- which is how a Japanese painter came
+  to read "Halftone" where their NEO says トーン.
 */
-
-/** Tool id to the term NEO's dictionary keys it by. */
-export const NEO_TOOL_TERMS: Record<string, string> = {
-  // PenTip
-  solid: "鉛筆",
-  brush: "水彩",
-  text: "ﾃｷｽﾄ",
-  // Pen2Tip
-  halftone: "トーン",
-  blur: "ぼかし",
-  dodge: "覆い焼き",
-  burn: "焼き込み",
-  // EffectTip -- 四角 is the filled one
-  rectFill: "四角",
-  rect: "線四角",
-  ellipseFill: "楕円",
-  ellipse: "線楕円",
-  // Effect2Tip
-  copy: "コピー",
-  merge: "ﾚｲﾔ結合",
-  blurRect: "角取り",
-  flipH: "左右反転",
-  flipV: "上下反転",
-  turn: "傾け",
-  // EraserTip -- NEO calls erasing 消しペン, "White"
-  eraser: "消しペン",
-  eraseRect: "消し四角",
-  eraseAll: "全消し",
-  // DrawTip
-  freehand: "手書き",
-  line: "直線",
-  bezier: "BZ曲線",
-  // NEO has a fill button of its own, above its canvas rather than in the
-  // column, so the term is its. Paste and pan are ours outright and NEO has
-  // no word for them; they stay as they are until they have one.
-  fill: "塗り潰し",
-};
-
-/** Tools of ours that NEO has no name for, so no dictionary entry either. */
-const OUR_TOOL_LABELS: Record<string, string> = {
-  paste: "Paste",
-  pan: "Pan",
-};
-
-/** What to call a tool, in the painter's locale. */
-export function neoToolLabel(tool: string, locale: string): string {
-  const term = NEO_TOOL_TERMS[tool];
-  if (term) return neoTranslate(term, locale);
-  return OUR_TOOL_LABELS[tool] ?? tool;
-}
-
-/** MaskTip's five modes, in `Neo.Painter.MASKTYPE` order. */
-export const NEO_MASK_TERMS = [
-  "通常",
-  "マスク",
-  "逆ﾏｽｸ",
-  "加算",
-  "逆加算",
-] as const;
-
-/** What to call a mask mode, in the painter's locale. */
-export function neoMaskLabel(maskType: number, locale: string): string {
-  return neoTranslate(NEO_MASK_TERMS[maskType] ?? NEO_MASK_TERMS[0], locale);
-}
-
-/**
- * LayerControl's two labels: index 0 is the background layer.
- *
- * The one pair NEO keys in English rather than Japanese -- its dictionary maps
- * "Layer0" and "Layer1", and only its alternate tables have them at all, which
- * is why a NEO without the alternate translation shows "Layer0" here.
- */
-export const NEO_LAYER_TERMS = ["Layer0", "Layer1"] as const;
-
-/** What to call a layer, in the painter's locale. */
-export function neoLayerLabel(layer: number, locale: string): string {
-  return neoTranslate(NEO_LAYER_TERMS[layer] ?? NEO_LAYER_TERMS[0], locale);
-}
 
 /*
   -------------------------------------------------------------------------

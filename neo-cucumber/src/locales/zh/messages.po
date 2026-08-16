@@ -161,3 +161,168 @@ msgstr "放大"
 #: src/components/ToolboxPanel.tsx:214
 msgid "Zoom out"
 msgstr "缩小"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Solid"
+msgstr "铅笔"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "WaterCo"
+msgstr "水彩"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Text"
+msgstr "文字"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Halftone"
+msgstr "网点"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Blur"
+msgstr "模糊"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Light"
+msgstr "减淡"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Dark"
+msgstr "加深"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Rect"
+msgstr "矩形"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "LineRect"
+msgstr "线矩形"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Oval"
+msgstr "椭圆"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "LineOval"
+msgstr "线椭圆"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Copy"
+msgstr "复制"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "layerUnit"
+msgstr "合并"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "antiAlias"
+msgstr "抗锯齿"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "flipHorita"
+msgstr "水平翻转"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "flipVertic"
+msgstr "垂直翻转"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "rotate"
+msgstr "倾斜"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "White"
+msgstr "橡皮"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "WhiteRe"
+msgstr "矩形擦"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Clear"
+msgstr "全部清除"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Freehan"
+msgstr "手绘"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Line"
+msgstr "直线"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Bezier"
+msgstr "贝塞尔"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Fill"
+msgstr "填充"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Paste"
+msgstr "粘贴"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Pan"
+msgstr "平移"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "Normal"
+msgstr "普通"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "Mask"
+msgstr "蒙版"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "ReMask"
+msgstr "反蒙版"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "And"
+msgstr "相加"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "Divide"
+msgstr "相减"
+
+#: src/neo/labels.ts
+msgctxt "painter layer"
+msgid "LayerBG"
+msgstr "背景"
+
+#: src/neo/labels.ts
+msgctxt "painter layer"
+msgid "LayerFG"
+msgstr "前景"

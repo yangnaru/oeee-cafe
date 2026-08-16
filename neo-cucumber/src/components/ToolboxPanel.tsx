@@ -14,7 +14,7 @@ import { useTheme } from "../hooks/useTheme";
 import { usePressRepeat } from "../hooks/usePressRepeat";
 
 import { NON_NEO_TOOLS } from "../constants/drawing";
-import { neoToolLabel } from "../neo/toolboxSpec";
+import { usePainterLabels } from "../hooks/usePainterLabels";
 import type { ToolId } from "../neo/tools";
 
 /**
@@ -116,7 +116,8 @@ export const ToolboxPanel = ({
   initialPosition,
   minimumY = 0,
 }: ToolboxPanelProps) => {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
+  const labels = usePainterLabels();
   const { theme, toggle: toggleTheme } = useTheme();
   const zoomOutPress = usePressRepeat(onZoomOut);
   const zoomInPress = usePressRepeat(onZoomIn);
@@ -167,7 +168,7 @@ export const ToolboxPanel = ({
                     type="button"
                     onClick={() => onUpdateBrushType("pan")}
                     aria-pressed={drawingState.brushType === "pan"}
-                    title={neoToolLabel("pan", i18n.locale)}
+                    title={labels.tools.pan}
                     className={`${NEO_ICON_BUTTON} ${
                       drawingState.brushType === "pan" ? NEO_BUTTON_ON : ""
                     } flex items-center justify-center`}
@@ -273,7 +274,7 @@ export const ToolboxPanel = ({
                   type="button"
                   onClick={() => onUpdateBrushType(tool)}
                   aria-pressed={drawingState.brushType === tool}
-                  title={neoToolLabel(tool, i18n.locale)}
+                  title={labels.tools[tool] ?? tool}
                   className={`${NEO_ICON_BUTTON} ${
                     drawingState.brushType === tool ? NEO_BUTTON_ON : ""
                   } flex items-center justify-center`}

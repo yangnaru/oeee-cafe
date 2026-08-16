@@ -161,3 +161,168 @@ msgstr "확대"
 #: src/components/ToolboxPanel.tsx:214
 msgid "Zoom out"
 msgstr "축소"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Solid"
+msgstr "연필"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "WaterCo"
+msgstr "수채"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Text"
+msgstr "텍스트"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Halftone"
+msgstr "톤"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Blur"
+msgstr "흐리기"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Light"
+msgstr "밝게"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Dark"
+msgstr "어둡게"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Rect"
+msgstr "사각"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "LineRect"
+msgstr "선사각"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Oval"
+msgstr "타원"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "LineOval"
+msgstr "선타원"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Copy"
+msgstr "복사"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "layerUnit"
+msgstr "병합"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "antiAlias"
+msgstr "각깎기"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "flipHorita"
+msgstr "좌우반전"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "flipVertic"
+msgstr "상하반전"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "rotate"
+msgstr "기울이기"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "White"
+msgstr "지우개"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "WhiteRe"
+msgstr "사각지움"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Clear"
+msgstr "전체지움"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Freehan"
+msgstr "자유선"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Line"
+msgstr "직선"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Bezier"
+msgstr "베지어"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Fill"
+msgstr "채우기"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Paste"
+msgstr "붙여넣기"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Pan"
+msgstr "이동"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "Normal"
+msgstr "일반"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "Mask"
+msgstr "마스크"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "ReMask"
+msgstr "역마스크"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "And"
+msgstr "더하기"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "Divide"
+msgstr "빼기"
+
+#: src/neo/labels.ts
+msgctxt "painter layer"
+msgid "LayerBG"
+msgstr "배경"
+
+#: src/neo/labels.ts
+msgctxt "painter layer"
+msgid "LayerFG"
+msgstr "전경"

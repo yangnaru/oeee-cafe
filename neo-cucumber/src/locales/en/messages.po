@@ -161,3 +161,168 @@ msgstr "Zoom in"
 #: src/components/ToolboxPanel.tsx:214
 msgid "Zoom out"
 msgstr "Zoom out"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Solid"
+msgstr "Solid"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "WaterCo"
+msgstr "WaterCo"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Text"
+msgstr "Text"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Halftone"
+msgstr "Halftone"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Blur"
+msgstr "Blur"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Light"
+msgstr "Light"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Dark"
+msgstr "Dark"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Rect"
+msgstr "Rect"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "LineRect"
+msgstr "LineRect"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Oval"
+msgstr "Oval"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "LineOval"
+msgstr "LineOval"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Copy"
+msgstr "Copy"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "layerUnit"
+msgstr "layerUnit"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "antiAlias"
+msgstr "antiAlias"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "flipHorita"
+msgstr "flipHorita"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "flipVertic"
+msgstr "flipVertic"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "rotate"
+msgstr "rotate"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "White"
+msgstr "White"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "WhiteRe"
+msgstr "WhiteRe"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Clear"
+msgstr "Clear"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Freehan"
+msgstr "Freehan"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Line"
+msgstr "Line"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Bezier"
+msgstr "Bezier"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Fill"
+msgstr "Fill"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Paste"
+msgstr "Paste"
+
+#: src/neo/labels.ts
+msgctxt "painter tool"
+msgid "Pan"
+msgstr "Pan"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "Normal"
+msgstr "Normal"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "Mask"
+msgstr "Mask"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "ReMask"
+msgstr "ReMask"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "And"
+msgstr "And"
+
+#: src/neo/labels.ts
+msgctxt "painter mask mode"
+msgid "Divide"
+msgstr "Divide"
+
+#: src/neo/labels.ts
+msgctxt "painter layer"
+msgid "LayerBG"
+msgstr "LayerBG"
+
+#: src/neo/labels.ts
+msgctxt "painter layer"
+msgid "LayerFG"
+msgstr "LayerFG"

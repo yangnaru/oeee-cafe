@@ -53,6 +53,20 @@ export {
 } from "./utils/windowDrag";
 
 /**
+ * What the painter calls things.
+ *
+ * `painterLabels()` resolves every tool, mask and layer name into the locale
+ * the painter is running in, so a host can label controls of its own with the
+ * same words the column beside them uses rather than guessing at them. Pass
+ * overrides to `mount` to replace any of them.
+ */
+export {
+  painterLabels,
+  type PainterLabelOverrides,
+  type PainterLabels,
+} from "./labels";
+
+/**
  * Placing a window the way the painter places its own: `anchorBesideCanvas`
  * puts one against either side of the drawing, `minimumTop` is how high it may
  * go given the element the painter was mounted into, and `PANEL_MARGIN` is the
@@ -103,6 +117,11 @@ export interface PainterOptions {
   controls: PainterControls;
   /** BCP 47 language tag used by prebuilt controls. */
   locale?: string;
+  /**
+   * Replacements for the painter's own words, for a host that would rather
+   * choose them. Anything left out keeps the painter's; see `painterLabels`.
+   */
+  labels?: import("./neo/labels").PainterLabelOverrides;
   /**
    * Whether to record a `.pch` replay of this drawing. On by default.
    *
