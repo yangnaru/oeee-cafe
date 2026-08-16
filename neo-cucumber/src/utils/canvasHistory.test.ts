@@ -1034,3 +1034,78 @@ describe("undo through the public operation path", () => {
     expect(engine.layersFor("1").background[0]).toBe(0);
   });
 });
+
+describe("savepoints and the marks the canvas already carries", () => {
+  it("does not lose optimistic marks when a savepoint is taken over them", async () => {
+    // The controlled path paints through the interactive canvas and only
+    // registers the operation here. Those pixels are real and on screen, so a
+    // savepoint that shares the previous one's arrays for that participant is
+    // out of date the moment it is taken -- and an undo, which restores a
+    // savepoint, loses exactly the marks made since. Locally only: everyone
+    // else applied them through the source that marks.
+    const { engine, history } = setup();
+    history.setLocalUserId("1");
+
+    const paint = (owner: string, x: number, y: number, r: number) => {
+      // What the interactive canvas does: put the pixels down itself...
+      engine.layersFor(owner).foreground[(y * SIZE + x) * 4] = r;
+      // ...and tell the history the operation happened.
+      history.registerOptimisticOperation({
+        id: `local:${owner}:${x}`,
+        actorId: "1",
+        operation: {
+          kind: "stroke", layer: "foreground", targetActorId: owner,
+          brushSize: 1, brush: "solid",
+          color: { r, g: 0, b: 0, a: 255 },
+          points: [{ x, y }], mask: { type: 0, r: 0, g: 0, b: 0 },
+        },
+      });
+    };
+
+    history.registerOptimisticOperation({
+      id: "local:b", actorId: "1", operation: { kind: "undo-boundary" },
+    });
+    paint("1", 3, 3, 77);
+    paint("2", 5, 5, 88);
+
+    // The server confirms all of it. The echo carries the same id the fork
+    // entry has -- that is how a client recognises its own work coming back --
+    // so it takes the path that neither draws (the pixels are already there)
+    // nor records that anything changed.
+    for (const id of ["local:b", "local:1:3", "local:2:5"]) {
+      await history.handleCanonicalOperation({
+        id,
+        actorId: "1",
+        sequence: 1 + ["local:b", "local:1:3", "local:2:5"].indexOf(id),
+        operation:
+          id === "local:b"
+            ? { kind: "undo-boundary" }
+            : {
+                kind: "stroke",
+                layer: "foreground",
+                targetActorId: id === "local:1:3" ? "1" : "2",
+                brushSize: 1,
+                brush: "solid",
+                color: { r: id === "local:1:3" ? 77 : 88, g: 0, b: 0, a: 255 },
+                points: [{ x: id === "local:1:3" ? 3 : 5, y: id === "local:1:3" ? 3 : 5 }],
+                mask: { type: 0, r: 0, g: 0, b: 0 },
+              },
+      });
+    }
+    history.takeSavepointForTest();
+
+    // A later gesture, and an undo of just that one.
+    await remote(history, encodeUndoPoint(LOCAL), 4);
+    await remote(
+      history,
+      encodeFill(LOCAL, 2, "background", 1, 1, 99, 0, 0, 255),
+      5
+    );
+    await remote(history, encodeUndo(LOCAL, false), 6);
+
+    // The fill is gone and the earlier marks are still there.
+    expect(engine.layersFor("2").background[0]).toBe(0);
+    expect(redFor(engine, 1, 3, 3)).toBe(77);
+    expect(redFor(engine, 2, 5, 5)).toBe(88);
+  });
+});

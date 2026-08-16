@@ -518,6 +518,16 @@ export class CanvasHistory {
     this.fork.push({ id: entry.id, msg, area: affectedArea(msg) });
     if (msg.type === "undoPoint") {
       this.liveStrokes.set(actorKey(entry.actorId), null);
+    } else if ("targetOwner" in msg) {
+      // These pixels are already on the canvas -- the interactive canvas put
+      // them there, which is the whole point of this path -- so nothing here
+      // draws. But a savepoint shares the previous savepoint's arrays for any
+      // participant that has not been marked changed, and unmarked layers that
+      // have in fact changed make a savepoint that is quietly out of date.
+      // Restoring one, which is what an undo does, then loses exactly the
+      // marks made since it: locally, and only locally, because everyone else
+      // applied them through the source that does the marking.
+      this.dirtyOwners.add(actorKey(msg.targetOwner));
     }
     this.notify();
   }
@@ -942,6 +952,15 @@ export class CanvasHistory {
 
   private latestSavepoint(): Savepoint {
     return this.savepoints[this.savepoints.length - 1];
+  }
+
+  /** Forces the savepoint that would otherwise wait for the interval. */
+  takeSavepointForTest(): void {
+    this.savepoints.push({
+      index: this.entries.length,
+      layers: this.captureLayers(),
+      strokes: cloneStrokes(this.liveStrokes),
+    });
   }
 
   private maybeSavepoint(): void {
