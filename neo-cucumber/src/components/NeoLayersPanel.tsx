@@ -13,6 +13,8 @@ export interface NeoLayersPanelProps {
   onSelectTarget: (actorId: string) => void;
   initialPosition: { x: number; y: number };
   minimumY?: number;
+  drawThumbnail?: (actorId: string, target: HTMLCanvasElement) => void;
+  canvasAspect?: number;
 }
 
 /**
@@ -32,6 +34,8 @@ export function NeoLayersPanel({
   onSelectTarget,
   initialPosition,
   minimumY = 0,
+  drawThumbnail,
+  canvasAspect,
 }: NeoLayersPanelProps) {
   return (
     <NeoWindow
@@ -47,6 +51,8 @@ export function NeoLayersPanel({
           localActorId={localActorId}
           onToggleVisible={onToggleVisible}
           onSelectTarget={onSelectTarget}
+          drawThumbnail={drawThumbnail}
+          canvasAspect={canvasAspect}
         />
       </div>
     </NeoWindow>

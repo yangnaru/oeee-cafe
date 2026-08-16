@@ -162,6 +162,30 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     },
     [],
   );
+  /**
+   * Composites a participant's pair into their row's thumbnail.
+   *
+   * Drawn from their mounted canvases rather than their buffers: those are
+   * already what is on screen, and reading the buffers would mean copying a
+   * whole layer into an ImageData for every participant on every refresh.
+   */
+  const drawThumbnail = useCallback(
+    (actorId: string, target: HTMLCanvasElement) => {
+      const engine = drawingEngineRef.current;
+      const context = target.getContext("2d");
+      if (!engine || !context) return;
+      context.clearRect(0, 0, target.width, target.height);
+      for (const layer of ["background", "foreground"] as const) {
+        const source = engine.domCanvasFor(layer, actorId);
+        // A participant who has not drawn has no canvas yet, and an empty
+        // thumbnail is the honest picture of that.
+        if (source) {
+          context.drawImage(source, 0, 0, target.width, target.height);
+        }
+      }
+    },
+    [],
+  );
   const toggleOwnerVisible = useCallback((actorId: string) => {
     setHiddenOwners((current) => {
       const next = new Set(current);
@@ -1035,6 +1059,8 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
                 onToggleOwnerVisible={toggleOwnerVisible}
                 onSelectTargetOwner={selectTargetOwner}
                 layersOrigin={layersOrigin ?? undefined}
+                drawThumbnail={drawThumbnail}
+                canvasAspect={canvasWidth / canvasHeight}
               />
             )}
         </PainterWorkspace>

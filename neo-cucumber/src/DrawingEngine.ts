@@ -389,6 +389,21 @@ export class DrawingEngine {
    * Callers want the pixels currently on screen rather than the buffer behind
    * them; how the record holding them is keyed is this class's business.
    */
+  /**
+   * The mounted canvas for a participant's layer.
+   *
+   * For drawing one canvas into another -- a thumbnail of somebody's work is
+   * two `drawImage` calls from these. Reading the buffers instead would mean
+   * copying the whole layer to build an ImageData every time, which at the
+   * largest canvas size is megabytes per participant per refresh.
+   */
+  public domCanvasFor(
+    layerName: LayerName,
+    owner: LayerOwner = this.localOwner
+  ): HTMLCanvasElement | undefined {
+    return this.domCanvases[slotKey(owner, layerName)];
+  }
+
   public domContextFor(
     layerName: LayerName,
     owner: LayerOwner = this.localOwner

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
 import { useLingui } from "@lingui/react/macro";
 import {
@@ -17,6 +18,11 @@ export interface ParticipantLayer {
   color?: string;
 }
 
+/** How tall a row's thumbnail is; its width follows the canvas's shape. */
+const THUMBNAIL_HEIGHT = 18;
+/** How often the thumbnails catch up with the drawing. */
+const THUMBNAIL_INTERVAL_MS = 400;
+
 interface NeoParticipantLayersProps {
   /** Everyone with layers, bottom of the stack last -- as they composite. */
   participants: ParticipantLayer[];
@@ -28,6 +34,15 @@ interface NeoParticipantLayersProps {
   localActorId: string;
   onToggleVisible: (actorId: string) => void;
   onSelectTarget: (actorId: string) => void;
+  /**
+   * Paints a participant's layers into a thumbnail.
+   *
+   * The panel does not know how to reach anybody's pixels and should not: it
+   * is handed something that composites them at whatever size the target is.
+   */
+  drawThumbnail?: (actorId: string, target: HTMLCanvasElement) => void;
+  /** The drawing's shape, so the thumbnails have it too. */
+  canvasAspect?: number;
 }
 
 /**
@@ -51,8 +66,32 @@ export function NeoParticipantLayers({
   localActorId,
   onToggleVisible,
   onSelectTarget,
+  drawThumbnail,
+  canvasAspect = 1,
 }: NeoParticipantLayersProps) {
   const { t } = useLingui();
+  const thumbnails = useRef(new Map<string, HTMLCanvasElement>());
+
+  /**
+   * Repainted on a timer rather than on every stroke.
+   *
+   * A thumbnail is a glance, not a mirror: refreshing it as fast as the canvas
+   * changes would redraw every participant's for every segment of everybody's
+   * stroke, and nobody would see the difference.
+   */
+  useEffect(() => {
+    if (!drawThumbnail) return;
+    const paint = () => {
+      for (const [actorId, canvas] of thumbnails.current) {
+        drawThumbnail(actorId, canvas);
+      }
+    };
+    paint();
+    const timer = setInterval(paint, THUMBNAIL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [drawThumbnail, participants]);
+
+  const thumbnailWidth = Math.max(1, Math.round(THUMBNAIL_HEIGHT * canvasAspect));
   return (
     // Sized to the longest name rather than to a number picked in advance: a
     // fixed width leaves a gap after every short name and truncates every long
@@ -99,6 +138,19 @@ export function NeoParticipantLayers({
               />
             </button>
             </span>
+            {drawThumbnail && (
+              <canvas
+                aria-hidden="true"
+                className="shrink-0 bg-(--neo-bk2)"
+                width={thumbnailWidth}
+                height={THUMBNAIL_HEIGHT}
+                style={{ width: thumbnailWidth, height: THUMBNAIL_HEIGHT }}
+                ref={(node) => {
+                  if (node) thumbnails.current.set(participant.actorId, node);
+                  else thumbnails.current.delete(participant.actorId);
+                }}
+              />
+            )}
             <button
               type="button"
               // Built from the icon button rather than the panel button: that

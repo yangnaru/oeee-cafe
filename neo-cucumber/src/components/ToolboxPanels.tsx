@@ -31,6 +31,10 @@ export interface ToolboxPanelsProps
    * the chat -- and the painter cannot see those to avoid them.
    */
   layersOrigin?: { x: number; y: number };
+  /** Paints a participant's layers into a thumbnail for their row. */
+  drawThumbnail?: (actorId: string, target: HTMLCanvasElement) => void;
+  /** The drawing's shape, so the thumbnails share it. */
+  canvasAspect?: number;
 }
 
 export function ToolboxPanels({
@@ -38,6 +42,8 @@ export function ToolboxPanels({
   canvasRef,
   origin,
   layersOrigin,
+  drawThumbnail,
+  canvasAspect,
   ...shared
 }: ToolboxPanelsProps) {
   const [positions, setPositions] = useState<PanelPositions | null>(
@@ -144,6 +150,8 @@ export function ToolboxPanels({
             onSelectTarget={shared.onSelectTargetOwner ?? (() => {})}
             initialPosition={{ x: layersLeft, y: layersTop }}
             minimumY={ceiling}
+            drawThumbnail={drawThumbnail}
+            canvasAspect={canvasAspect}
           />
         )}
     </>
