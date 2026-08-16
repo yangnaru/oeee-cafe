@@ -372,6 +372,28 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     },
     []
   );
+  /**
+   * The offline history's answer, which only counts when it is the authority.
+   *
+   * There are two histories and one pair of buttons. In a session the
+   * canonical stream is in charge -- undo there is a message every client
+   * marks and replays -- and the offline snapshot stack is empty, so its
+   * answer is "nothing to undo" over the top of the real one. Offline it is
+   * the only history there is.
+   *
+   * Read through a ref rather than closed over, so this callback's identity
+   * never changes: it is handed to the drawing hook, and a new one on every
+   * render is a new reason for everything downstream of it to re-run.
+   */
+  const controlledRef = useRef(false);
+  controlledRef.current = Boolean(synchronization);
+  const handleOfflineHistoryChange = useCallback(
+    (canUndo: boolean, canRedo: boolean) => {
+      if (controlledRef.current) return;
+      setHistoryState({ canUndo, canRedo });
+    },
+    []
+  );
 
   // Create a ref to hold the DOM canvas update function
   const domCanvasUpdateRef = useRef<() => void>(() => {});
@@ -399,7 +421,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     tempLocalUserCanvasRef,
     appRef,
     drawingState,
-    handleHistoryChange,
+    handleOfflineHistoryChange,
     drawingState.zoomLevel,
     canvasWidth,
     canvasHeight,

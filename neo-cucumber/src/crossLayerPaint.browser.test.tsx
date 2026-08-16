@@ -211,3 +211,71 @@ it("undoing in a session only sends, and never moves the canvas by itself", asyn
 
   act(() => painter.unmount());
 });
+
+/**
+ * There are two histories and one pair of undo buttons.
+ *
+ * In a session the canonical stream is in charge; the offline snapshot stack
+ * is empty there, so its answer is "nothing to undo" over the top of the real
+ * one. Whichever spoke last used to win.
+ */
+it("takes undo state from the history that is in charge", async () => {
+  const seen: string[] = [];
+  const element = document.createElement("div");
+  document.body.appendChild(element);
+  let painter!: ReturnType<typeof mount>;
+  act(() => {
+    painter = mount(element, {
+      width: 32, height: 24,
+      mode: { kind: "standard" },
+      controls: { kind: "none" },
+      synchronization: { actorId: "1", onOperation: () => {} },
+      onChange: (state) => seen.push(`${state.canUndo}`),
+    });
+  });
+  await act(async () => painter.ready);
+  act(() => painter.setLocalActorId("1"));
+
+  await act(async () => {
+    await painter.applyCanonicalOperation({
+      id: "c:1", actorId: "1", sequence: 1, operation: { kind: "undo-boundary" },
+    });
+    await painter.applyCanonicalOperation({
+      id: "c:2", actorId: "1", sequence: 2,
+      operation: {
+        kind: "fill", layer: "background", targetActorId: "1",
+        at: { x: 16, y: 12 }, color: { r: 200, g: 0, b: 0, a: 255 },
+        mask: { type: 0, r: 0, g: 0, b: 0 },
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  });
+
+  // The canonical history has something to undo, and nothing has said otherwise.
+  expect(seen[seen.length - 1]).toBe("true");
+  act(() => painter.unmount());
+});
+
+/**
+ * Readiness must come from the engine existing, not from something unrelated
+ * happening to re-render. The engine lives in a ref, so building it moves
+ * nothing on its own; it says so explicitly now.
+ */
+it("becomes ready without needing an unrelated render", async () => {
+  const element = document.createElement("div");
+  document.body.appendChild(element);
+  let painter!: ReturnType<typeof mount>;
+  act(() => {
+    painter = mount(element, {
+      width: 16, height: 16,
+      mode: { kind: "standard" },
+      controls: { kind: "none" },
+      // A session, where the offline history is not the authority and so says
+      // nothing at all -- leaving no other reason for a render to happen.
+      synchronization: { actorId: "1", onOperation: () => {} },
+    });
+  });
+  await act(async () => painter.ready);
+  expect(element.querySelector("canvas")).not.toBeNull();
+  act(() => painter.unmount());
+});

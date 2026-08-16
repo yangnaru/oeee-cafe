@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { DrawingEngine } from "../DrawingEngine";
 import { useCanvasHistory } from "./useCanvasHistory";
 import type { BrushType, DrawingState } from "../types/drawing";
@@ -151,6 +151,17 @@ export const useBaseDrawing = (
 ) => {
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const drawingEngineRef = useRef<DrawingEngine | null>(null);
+  /**
+   * Forces the render that lets callers see the engine.
+   *
+   * The engine is held in a ref and handed out by reading that ref, so
+   * building it changes nothing anybody re-renders for: a caller asking "is
+   * there an engine yet" keeps getting the answer from before it existed,
+   * until something unrelated happens to re-render. Readiness was resolving on
+   * exactly that accident -- the initial undo-state report -- and stopped the
+   * moment there was a reason not to make that report.
+   */
+  const [, noticeEngine] = useState(0);
   const isInitializedRef = useRef(false);
   const onHistoryChangeRef = useRef(onHistoryChange);
   const lastModifiedLayerRef = useRef<"foreground" | "background">("foreground");
@@ -180,6 +191,7 @@ export const useBaseDrawing = (
 
     // Create and initialize drawing engine
     drawingEngineRef.current = new DrawingEngine(canvasWidth, canvasHeight);
+    noticeEngine((seen) => seen + 1);
     drawingEngineRef.current.initialize(ctx);
 
     // Save initial blank state to history
