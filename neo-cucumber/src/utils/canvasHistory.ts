@@ -79,6 +79,12 @@ interface Savepoint {
    * is only ever read, never drawn into, so sharing is safe.
    */
   layers: Map<ActorKey, OwnerLayers>;
+  /**
+   * What the engine's write count stood at for each participant when this was
+   * taken, so the next savepoint can ask whether their layers have moved on
+   * rather than trusting whoever wrote to them to have said so.
+   */
+  generations: Map<ActorKey, number>;
   strokes: StrokeStates;
 }
 
@@ -265,7 +271,6 @@ export class CanvasHistory {
   private entries: Entry[] = [];
   private savepoints: Savepoint[] = [];
   /** Who has drawn since the last savepoint, so the rest can share its arrays. */
-  private readonly dirtyOwners = new Set<ActorKey>();
   private releaseRenames?: () => void;
   private fork: ForkEntry[] = [];
   private canonicalLog: CanonicalPainterOperation[] = [];
@@ -293,7 +298,6 @@ export class CanvasHistory {
         savepoint.layers.delete(from);
         savepoint.layers.set(to, held);
       }
-      if (this.dirtyOwners.delete(from)) this.dirtyOwners.add(to);
     });
     this.reset();
   }
@@ -358,41 +362,57 @@ export class CanvasHistory {
     // dirty set just emptied that is everyone. Leaving the old savepoints in
     // place here would base the new one on the pixels of the old one rather
     // than on the canvas actually in front of us.
+    // Emptied before capturing: with no previous savepoint there is nothing
+    // to share with, so this one is copied from the canvas in front of us
+    // rather than from whatever the old one held.
     this.savepoints = [];
-    this.dirtyOwners.clear();
+    const captured = this.captureLayers();
     this.savepoints = [
-      { index: 0, layers: this.captureLayers(), strokes: new Map() },
+      {
+        index: 0,
+        layers: captured.layers,
+        generations: captured.generations,
+        strokes: new Map(),
+      },
     ];
     this.notify();
   }
 
   /** Where a live operation's pixels go: its author's own pair. */
-  private readonly liveSource: LayerSource = (owner) => {
-    this.dirtyOwners.add(owner);
-    return this.engine.layersFor(owner);
-  };
+  private readonly liveSource: LayerSource = (owner) =>
+    this.engine.layersFor(owner);
 
   /**
    * Copies every participant's current layers for a savepoint, sharing the
    * previous savepoint's arrays for anyone who has not drawn since it.
    */
-  private captureLayers(): Map<ActorKey, OwnerLayers> {
-    const previous = this.savepoints[this.savepoints.length - 1]?.layers;
-    const captured = new Map<ActorKey, OwnerLayers>();
+  private captureLayers(): {
+    layers: Map<ActorKey, OwnerLayers>;
+    generations: Map<ActorKey, number>;
+  } {
+    const last = this.savepoints[this.savepoints.length - 1];
+    const layers = new Map<ActorKey, OwnerLayers>();
+    const generations = new Map<ActorKey, number>();
     for (const owner of this.engine.ownerIds()) {
-      const shared = this.dirtyOwners.has(owner) ? undefined : previous?.get(owner);
+      const generation = this.engine.layerGeneration(owner);
+      generations.set(owner, generation);
+      // Unchanged since the last savepoint took its copy, so that copy still
+      // describes them and both savepoints can hold the one array. The engine
+      // answers this, so no writer has to remember to.
+      const unchanged =
+        last !== undefined && last.generations.get(owner) === generation;
+      const shared = unchanged ? last.layers.get(owner) : undefined;
       if (shared) {
-        captured.set(owner, shared);
+        layers.set(owner, shared);
         continue;
       }
       const live = this.engine.layersFor(owner);
-      captured.set(owner, {
+      layers.set(owner, {
         foreground: new Uint8ClampedArray(live.foreground),
         background: new Uint8ClampedArray(live.background),
       });
     }
-    this.dirtyOwners.clear();
-    return captured;
+    return { layers, generations };
   }
 
   /**
@@ -416,7 +436,6 @@ export class CanvasHistory {
         live.background.fill(0);
       }
     }
-    this.dirtyOwners.clear();
   }
 
   /** True while any locally drawn state is not yet server-confirmed. */
@@ -518,16 +537,6 @@ export class CanvasHistory {
     this.fork.push({ id: entry.id, msg, area: affectedArea(msg) });
     if (msg.type === "undoPoint") {
       this.liveStrokes.set(actorKey(entry.actorId), null);
-    } else if ("targetOwner" in msg) {
-      // These pixels are already on the canvas -- the interactive canvas put
-      // them there, which is the whole point of this path -- so nothing here
-      // draws. But a savepoint shares the previous savepoint's arrays for any
-      // participant that has not been marked changed, and unmarked layers that
-      // have in fact changed make a savepoint that is quietly out of date.
-      // Restoring one, which is what an undo does, then loses exactly the
-      // marks made since it: locally, and only locally, because everyone else
-      // applied them through the source that does the marking.
-      this.dirtyOwners.add(actorKey(msg.targetOwner));
     }
     this.notify();
   }
@@ -765,7 +774,16 @@ export class CanvasHistory {
       (entry) => entry.sequence > baseSeq,
     );
     this.savepoints = [
-      { index: 0, layers, strokes },
+      {
+        index: 0,
+        layers,
+        // These buffers were built here rather than copied from the canvas,
+        // so nothing about the engine's counts describes them: recording the
+        // current ones would let the next savepoint share arrays that never
+        // matched the layers in the first place.
+        generations: new Map(),
+        strokes,
+      },
       ...this.savepoints
         .filter((s) => s.index >= cut)
         .map((s) => ({ ...s, index: s.index - cut })),
@@ -956,9 +974,11 @@ export class CanvasHistory {
 
   /** Forces the savepoint that would otherwise wait for the interval. */
   takeSavepointForTest(): void {
+    const captured = this.captureLayers();
     this.savepoints.push({
       index: this.entries.length,
-      layers: this.captureLayers(),
+      layers: captured.layers,
+      generations: captured.generations,
       strokes: cloneStrokes(this.liveStrokes),
     });
   }
@@ -968,9 +988,11 @@ export class CanvasHistory {
     if (this.hasPendingLocal) return;
     const last = this.latestSavepoint();
     if (this.entries.length - last.index < SAVEPOINT_INTERVAL) return;
+    const captured = this.captureLayers();
     this.savepoints.push({
       index: this.entries.length,
-      layers: this.captureLayers(),
+      layers: captured.layers,
+      generations: captured.generations,
       strokes: cloneStrokes(this.liveStrokes),
     });
     if (this.savepoints.length > MAX_SAVEPOINTS) {

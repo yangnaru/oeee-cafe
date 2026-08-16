@@ -101,8 +101,32 @@ export class DrawingEngine {
    * and no one else's -- without a single call site having to name an owner.
    */
   private readonly bufferOwners = new Map<Uint8ClampedArray, BufferIdentity>();
+  /**
+   * How many times each participant's layers have been written to.
+   *
+   * Anything caching a copy of a pair can record this alongside it and ask
+   * later whether the pair has moved on, rather than relying on whoever did
+   * the writing to have remembered to say so. The history's savepoints share
+   * arrays between themselves on exactly that question, and every mutation
+   * path that forgot to report made a savepoint that was quietly out of date.
+   *
+   * Bumped from two places, which between them cover every way these buffers
+   * change: the surfaces, through which all drawing goes, and the whole-layer
+   * repaint, which is what a caller asks for after writing into a buffer in a
+   * way no surface saw.
+   */
+  private readonly generations = new Map<LayerOwner, number>();
   /** Whose pair `layers` refers to, and whose NEO `neo.surfaces` addresses. */
   private localOwner: LayerOwner = DEFAULT_LAYER_OWNER;
+
+  /** How many writes this participant's layers have taken. */
+  public layerGeneration(owner: LayerOwner): number {
+    return this.generations.get(owner) ?? 0;
+  }
+
+  private noteWrite(owner: LayerOwner): void {
+    this.generations.set(owner, (this.generations.get(owner) ?? 0) + 1);
+  }
   /** Whose layers interactive drawing paints into; null means our own. */
   private targetOwner: LayerOwner | null = null;
   /**
@@ -215,7 +239,9 @@ export class DrawingEngine {
         // nothing to do and the pixels sit in the buffer, invisible, until
         // something else forces a full repaint.
         const live = this.bufferOwners.get(layers[layer]);
-        const key = slotKey(live?.owner ?? owner, layer);
+        const owning = live?.owner ?? owner;
+        this.noteWrite(owning);
+        const key = slotKey(owning, layer);
         this.writtenRegions.set(
           key,
           unionRegion(this.writtenRegions.get(key) ?? null, x0, y0, x1, y1),
@@ -326,6 +352,11 @@ export class DrawingEngine {
           map.delete(from);
         }
       }
+    }
+    const carried = this.generations.get(previous);
+    if (carried !== undefined) {
+      this.generations.delete(previous);
+      this.generations.set(owner, carried);
     }
     for (const listener of this.ownerRenamedListeners) listener(previous, owner);
     this.announceOwners();
@@ -600,6 +631,10 @@ export class DrawingEngine {
 
   /** Queues a repaint of the whole layer: everything in it may have changed. */
   public queueLayerUpdate(layerName: LayerName, owner: LayerOwner = this.localOwner) {
+    // Asked for after putting pixels somewhere this engine cannot describe --
+    // a decoded snapshot, a restored savepoint, text composited a pixel at a
+    // time. Whatever it was, the layers are not what they were.
+    this.noteWrite(owner);
     const key = slotKey(owner, layerName);
     this.pendingUpdates.set(key, "all");
     this.writtenRegions.delete(key);

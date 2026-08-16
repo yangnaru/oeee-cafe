@@ -64,6 +64,19 @@ class FakeEngine {
     return [...this.owners.keys()];
   }
 
+  /**
+   * How many writes each participant's layers have taken. The real engine
+   * counts these in its surfaces; here every write goes through the helpers
+   * below, so they count instead.
+   */
+  generations = new Map<string, number>();
+  layerGeneration(owner: string): number {
+    return this.generations.get(owner) ?? 0;
+  }
+  noteWrite(owner: string): void {
+    this.generations.set(owner, (this.generations.get(owner) ?? 0) + 1);
+  }
+
   /** Renaming a pair, so savepoints holding it under the old name can follow. */
   private renameListeners = new Set<(from: string, to: string) => void>();
   onOwnerRenamed(listener: (from: string, to: string) => void): () => void {
@@ -89,6 +102,14 @@ class FakeEngine {
     return this.maskType === 0 ? "" : `:mask${this.maskType}(${this.maskColor.join(",")})`;
   }
 
+  /** Which participant a buffer belongs to, for the write count. */
+  private ownerOf(ctx: Uint8ClampedArray): string | undefined {
+    for (const [owner, pair] of this.owners) {
+      if (pair.foreground === ctx || pair.background === ctx) return owner;
+    }
+    return undefined;
+  }
+
   drawLine(
     ctx: Uint8ClampedArray,
     x0: number,
@@ -99,6 +120,8 @@ class FakeEngine {
     _brushType: string,
     r: number
   ) {
+    const owner = this.ownerOf(ctx);
+    if (owner) this.noteWrite(owner);
     ctx[(y0 * SIZE + x0) * 4] = r;
     ctx[(y1 * SIZE + x1) * 4] = r;
     this.ops.push(`line:${x0},${y0}-${x1},${y1}:${r}${this.maskTag()}`);
@@ -109,6 +132,8 @@ class FakeEngine {
   }
 
   doFloodFill(ctx: Uint8ClampedArray, _x: number, _y: number, r: number) {
+    const owner = this.ownerOf(ctx);
+    if (owner) this.noteWrite(owner);
     for (let i = 0; i < ctx.length; i += 4) {
       ctx[i] = r;
     }
@@ -122,6 +147,8 @@ class FakeEngine {
   /** The same repaints, naming whose canvas each one was for. */
   ownedRepaints: string[] = [];
   queueLayerUpdate(layer: string, owner?: string) {
+    // The real engine treats this as "written somewhere I could not see".
+    this.noteWrite(owner ?? String(LOCAL));
     this.repaints.push(`all:${layer}`);
     this.ownedRepaints.push(`all:${owner ?? String(LOCAL)}/${layer}`);
   }
@@ -1047,8 +1074,11 @@ describe("savepoints and the marks the canvas already carries", () => {
     history.setLocalUserId("1");
 
     const paint = (owner: string, x: number, y: number, r: number) => {
-      // What the interactive canvas does: put the pixels down itself...
-      engine.layersFor(owner).foreground[(y * SIZE + x) * 4] = r;
+      // What the interactive canvas does: draw through the engine itself...
+      engine.drawLine(
+        engine.layersFor(owner).foreground,
+        x, y, x, y, 1, "solid", r,
+      );
       // ...and tell the history the operation happened.
       history.registerOptimisticOperation({
         id: `local:${owner}:${x}`,
