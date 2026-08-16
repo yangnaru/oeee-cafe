@@ -404,6 +404,56 @@ export class DrawingEngine {
     return this.domCanvases[slotKey(owner, layerName)];
   }
 
+  /**
+   * The colour on screen at a point, as NEO's eyedropper reads it.
+   *
+   * Composited over white through every mounted layer that is showing, bottom
+   * to top, so it is what the eye is actually on: hiding a participant or a
+   * tier takes them out of it, because both are expressed as `display` on
+   * these very canvases and this asks the same question the screen does.
+   *
+   * NEO's own `pickColor` does the same thing and agrees with this, though
+   * its arithmetic reads as though it does not: the variable it calls `r`
+   * holds the sampled blue, and it then packs `r | g << 8 | b << 16` -- which
+   * `getColorString` renders high byte first, putting red back in the red
+   * position. Two swaps that cancel. Worth knowing before 'fixing' either of
+   * them, and worth knowing that `getColor` packs the other way round, ABGR
+   * with red low, which is what makes the pair look wrong at a glance.
+   */
+  public pickVisibleColor(
+    x: number,
+    y: number
+  ): { r: number; g: number; b: number } | null {
+    const px = Math.floor(x);
+    const py = Math.floor(y);
+    if (px < 0 || py < 0 || px >= this.imageWidth || py >= this.imageHeight) {
+      return null;
+    }
+    const showing = Object.values(this.domCanvases)
+      .filter((canvas) => canvas.style.display !== "none")
+      .sort(
+        (a, b) => (Number(a.style.zIndex) || 0) - (Number(b.style.zIndex) || 0)
+      );
+
+    let r = 255;
+    let g = 255;
+    let b = 255;
+    for (const canvas of showing) {
+      const context = canvas.getContext("2d");
+      if (!context) continue;
+      const [sr, sg, sb, sa] = context.getImageData(px, py, 1, 1).data;
+      const alpha = sa / 255;
+      r = r * (1 - alpha) + sr * alpha;
+      g = g * (1 - alpha) + sg * alpha;
+      b = b * (1 - alpha) + sb * alpha;
+    }
+    return {
+      r: Math.max(0, Math.min(255, Math.round(r))),
+      g: Math.max(0, Math.min(255, Math.round(g))),
+      b: Math.max(0, Math.min(255, Math.round(b))),
+    };
+  }
+
   public domContextFor(
     layerName: LayerName,
     owner: LayerOwner = this.localOwner

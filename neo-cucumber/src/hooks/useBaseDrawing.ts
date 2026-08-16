@@ -68,6 +68,12 @@ interface DrawingEventCallbacks {
     b: number,
     opacity: number
   ) => void;
+  /** The colour under a right press, for the caller to adopt. */
+  onPickColor?: (color: { r: number; g: number; b: number }) => void;
+  /** Whether the toolbox's sticky right-click button is armed. */
+  isVirtualRight?: () => boolean;
+  /** Called once the armed press has been spent, so the button can release. */
+  onVirtualRightUsed?: () => void;
   onFill?: (
     x: number,
     y: number,
@@ -440,6 +446,24 @@ export const useBaseDrawing = (
         app.setPointerCapture(e.pointerId);
       } catch (error) {
         console.warn("Failed to capture pointer:", error);
+      }
+
+      // NEO's right press is the eyedropper: it takes the colour under the
+      // pointer instead of drawing. Ctrl and Alt say the same thing, as they
+      // do in NEO, and the toolbox's sticky button says it once for a device
+      // with no second button at all.
+      const virtualRight = callbacks?.isVirtualRight?.() ?? false;
+      if (e.button === 2 || e.ctrlKey || e.altKey || virtualRight) {
+        const coords = getCanvasCoordinates(e.clientX, e.clientY);
+        const picked = drawingEngineRef.current?.pickVisibleColor(
+          coords.x,
+          coords.y,
+        );
+        if (picked) callbacks?.onPickColor?.(picked);
+        // One press per press of the button, like NEO's.
+        if (virtualRight) callbacks?.onVirtualRightUsed?.();
+        drawingStateRef.current.activePointerId = null;
+        return;
       }
 
       if (

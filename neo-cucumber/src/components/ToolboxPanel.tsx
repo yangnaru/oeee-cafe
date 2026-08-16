@@ -63,6 +63,9 @@ export interface ToolboxPanelProps {
   onZoomReset: () => void;
   onZoomFit: () => void;
   onSaveCollaborativeDrawing: () => void;
+  /** NEO's Right Click button: whether the next press is a right press. */
+  virtualRight?: boolean;
+  onToggleVirtualRight?: () => void;
   /**
    * Everyone with a layer pair, top of the stack first. Absent outside a
    * collaborative session, where there is only ever one participant.
@@ -107,6 +110,8 @@ export const ToolboxPanel = ({
   onZoomReset,
   onZoomFit,
   onSaveCollaborativeDrawing,
+  virtualRight,
+  onToggleVirtualRight,
   section = "all",
   initialPosition,
   minimumY = 0,
@@ -238,6 +243,25 @@ export const ToolboxPanel = ({
               aria-label={t`Pick a colour`}
               className={NEO_COLOR_INPUT}
             />
+
+            {/*
+              NEO's Right Click button. A right press takes the colour under
+              the pointer instead of drawing, and a tablet or trackpad may have
+              no way to make one -- so this says the next press is a right
+              press, and releases itself once that press has happened.
+            */}
+            {onToggleVirtualRight && (
+              <button
+                type="button"
+                onClick={onToggleVirtualRight}
+                aria-pressed={virtualRight ?? false}
+                title={t`Pick a colour from the drawing with the next click`}
+                aria-label={t`Right click`}
+                className={`${NEO_ICON_BUTTON} ${virtualRight ? NEO_BUTTON_ON : ""} flex items-center justify-center`}
+              >
+                <Icon icon="material-symbols:colorize" width={14} height={14} />
+              </button>
+            )}
 
             {/* Canvas editing tools NEO keeps outside its own column. */}
             <div className="grid grid-cols-2 gap-[2px]">

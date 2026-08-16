@@ -69,6 +69,12 @@ export const useOfflineDrawing = (
   isDrawingDisabled: boolean = false,
   onOperation?: (operation: PainterOperation) => void,
   onPointerRelease?: () => void,
+  /** The colour a right press found, for the host to adopt as the current one. */
+  onPickColor?: (color: { r: number; g: number; b: number }) => void,
+  /** Whether the toolbox's sticky right-click button is armed. */
+  isVirtualRight?: () => boolean,
+  /** Called when an armed press has been spent, so the button can release. */
+  onVirtualRightUsed?: () => void,
 ) => {
   // Initialize replay recording
   const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
@@ -281,6 +287,13 @@ export const useOfflineDrawing = (
       },
       [drawingState.layerType, emitStrokeOperation]
     ),
+
+    // The eyedropper reports a colour rather than drawing one, so it neither
+    // records nor broadcasts: what it changes is which colour this person is
+    // holding.
+    onPickColor: onPickColor,
+    isVirtualRight: isVirtualRight,
+    onVirtualRightUsed: onVirtualRightUsed,
 
     onFill: useCallback(
       (x: number, y: number, r: number, g: number, b: number, opacity: number) => {

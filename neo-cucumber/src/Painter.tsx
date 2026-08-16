@@ -271,6 +271,27 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     [layerOwners, participantNames],
   );
 
+  /**
+   * NEO's Right Click button: armed by a press, spent by the next one.
+   *
+   * A right press is the eyedropper, and a tablet or a trackpad may have no
+   * way to make one. NEO answers that with a button that says "the next press
+   * is a right press" and releases itself afterwards, which is what this is.
+   */
+  const [virtualRight, setVirtualRight] = useState(false);
+  const virtualRightRef = useRef(false);
+  useEffect(() => { virtualRightRef.current = virtualRight; }, [virtualRight]);
+  const isVirtualRight = useCallback(() => virtualRightRef.current, []);
+  const releaseVirtualRight = useCallback(() => setVirtualRight(false), []);
+  const toggleVirtualRight = useCallback(() => setVirtualRight((on) => !on), []);
+  const adoptPickedColor = useCallback(
+    (color: { r: number; g: number; b: number }) => {
+      const hex = (value: number) => value.toString(16).padStart(2, "0");
+      updateColor(`#${hex(color.r)}${hex(color.g)}${hex(color.b)}`);
+    },
+    [updateColor],
+  );
+
   const appRef = useRef<HTMLDivElement>(null);
   /**
    * The rubber band a region tool is being dragged out over. Its own canvas
@@ -392,6 +413,9 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     !interactionEnabled,
     emitLocalOperation,
     synchronization?.onPointerUp,
+    adoptPickedColor,
+    isVirtualRight,
+    releaseVirtualRight,
   );
   previewEngineRef.current = drawingEngine ?? null;
 
@@ -539,6 +563,8 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     drawingEngine,
     currentZoom,
     hiddenOwners,
+    bgVisible: drawingState.bgVisible,
+    fgVisible: drawingState.fgVisible,
   });
 
   const { cursorCanvasRef, paintCursor } = useCanvasView({
@@ -1049,6 +1075,8 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
                 onZoomReset={handleZoomReset}
                 onZoomFit={handleZoomFit}
                 onSaveCollaborativeDrawing={() => {}}
+                virtualRight={virtualRight}
+                onToggleVirtualRight={toggleVirtualRight}
                 // Only worth a panel once there is more than one participant;
                 // a solitary painter has nobody to hide and nowhere else to
                 // draw, and NEO's own layer button already covers their pair.

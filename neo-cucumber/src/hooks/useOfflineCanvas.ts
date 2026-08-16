@@ -18,6 +18,13 @@ interface UseOfflineCanvasParams {
    * not an edit, so it never travels and never reaches the exported image.
    */
   hiddenOwners?: ReadonlySet<string>;
+  /**
+   * NEO's own layer visibility, which is a view over both tiers rather than
+   * over a participant: its layer button hides the background or the
+   * foreground, and with a pair per participant that means everybody's.
+   */
+  bgVisible?: boolean;
+  fgVisible?: boolean;
 }
 
 export const useOfflineCanvas = ({
@@ -26,6 +33,8 @@ export const useOfflineCanvas = ({
   drawingEngine,
   currentZoom,
   hiddenOwners,
+  bgVisible = true,
+  fgVisible = true,
 }: UseOfflineCanvasParams) => {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   /** One background/foreground canvas pair per participant. */
@@ -33,6 +42,16 @@ export const useOfflineCanvas = ({
     new Map<string, { background: HTMLCanvasElement; foreground: HTMLCanvasElement }>(),
   );
   const hiddenRef = useRef<ReadonlySet<string>>(hiddenOwners ?? new Set());
+  const tiersRef = useRef({ background: bgVisible, foreground: fgVisible });
+
+  /**
+   * Whether a canvas is shown, from both of the things that can hide it: the
+   * participant it belongs to, and the tier it is in. `display` carries the
+   * answer, so anything reading the screen -- the colour picker especially --
+   * gets the same one without being told about either.
+   */
+  const shownFor = (owner: string, layer: "background" | "foreground") =>
+    !hiddenRef.current.has(owner) && tiersRef.current[layer];
 
   /**
    * Gives every participant a canvas pair and puts the stack in join order.
@@ -75,9 +94,8 @@ export const useOfflineCanvas = ({
       }
       pair.background.style.zIndex = String(participantZIndex(rank, "background"));
       pair.foreground.style.zIndex = String(participantZIndex(rank, "foreground"));
-      const hidden = hiddenRef.current.has(owner);
-      pair.background.style.display = hidden ? "none" : "";
-      pair.foreground.style.display = hidden ? "none" : "";
+      pair.background.style.display = shownFor(owner, "background") ? "" : "none";
+      pair.foreground.style.display = shownFor(owner, "foreground") ? "" : "none";
     });
 
     drawingEngine.updateAllDOMCanvasesImmediate();
@@ -89,15 +107,16 @@ export const useOfflineCanvas = ({
     return drawingEngine.onOwnersChanged(syncOwnerCanvases);
   }, [drawingEngine, syncOwnerCanvases]);
 
-  // Show and hide participants without disturbing the stack
+  // Show and hide participants and tiers without disturbing the stack
   useEffect(() => {
     hiddenRef.current = hiddenOwners ?? new Set();
+    tiersRef.current = { background: bgVisible, foreground: fgVisible };
     for (const [owner, pair] of ownerCanvasesRef.current) {
-      const hidden = hiddenRef.current.has(owner);
-      pair.background.style.display = hidden ? "none" : "";
-      pair.foreground.style.display = hidden ? "none" : "";
+      pair.background.style.display = shownFor(owner, "background") ? "" : "none";
+      pair.foreground.style.display = shownFor(owner, "foreground") ? "" : "none";
     }
-  }, [hiddenOwners]);
+    // `shownFor` reads the refs this effect has just set.
+  }, [hiddenOwners, bgVisible, fgVisible]);
 
   // Update canvas zoom
   useEffect(() => {
