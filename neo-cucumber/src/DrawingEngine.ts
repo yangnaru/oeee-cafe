@@ -113,6 +113,27 @@ export class DrawingEngine {
    * hear about it to give the new participant one.
    */
   private readonly ownersChangedListeners = new Set<() => void>();
+  /**
+   * Told when a participant's pair is re-keyed rather than created.
+   *
+   * Anything holding a copy of these layers keyed by name -- the history's
+   * savepoints do -- would otherwise still be filing them under the name the
+   * pair had before the server named its participant, and restoring one would
+   * conjure a participant back out of the old name.
+   */
+  private readonly ownerRenamedListeners = new Set<
+    (from: LayerOwner, to: LayerOwner) => void
+  >();
+
+  /** Registers a rename listener; returns a function that removes it. */
+  public onOwnerRenamed(
+    listener: (from: LayerOwner, to: LayerOwner) => void
+  ): () => void {
+    this.ownerRenamedListeners.add(listener);
+    return () => {
+      this.ownerRenamedListeners.delete(listener);
+    };
+  }
 
   /** Registers a listener; returns a function that removes it. */
   public onOwnersChanged(listener: () => void): () => void {
@@ -306,6 +327,7 @@ export class DrawingEngine {
         }
       }
     }
+    for (const listener of this.ownerRenamedListeners) listener(previous, owner);
     this.announceOwners();
   }
 

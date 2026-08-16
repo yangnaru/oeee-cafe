@@ -266,6 +266,7 @@ export class CanvasHistory {
   private savepoints: Savepoint[] = [];
   /** Who has drawn since the last savepoint, so the rest can share its arrays. */
   private readonly dirtyOwners = new Set<ActorKey>();
+  private releaseRenames?: () => void;
   private fork: ForkEntry[] = [];
   private canonicalLog: CanonicalPainterOperation[] = [];
   private openBatch: OpenBatch | null = null;
@@ -281,7 +282,26 @@ export class CanvasHistory {
   ) {
     this.engine = engine;
     this.onChange = onChange;
+    // Savepoints hold a participant's layers under their name, and that name
+    // changes when the server names them. Following the rename is what stops a
+    // restore from conjuring the old name back into existence as a
+    // participant of its own, holding whatever those layers held at the time.
+    this.releaseRenames = engine.onOwnerRenamed((from, to) => {
+      for (const savepoint of this.savepoints) {
+        const held = savepoint.layers.get(from);
+        if (held === undefined) continue;
+        savepoint.layers.delete(from);
+        savepoint.layers.set(to, held);
+      }
+      if (this.dirtyOwners.delete(from)) this.dirtyOwners.add(to);
+    });
     this.reset();
+  }
+
+  /** Stops following the engine's renames. */
+  dispose(): void {
+    this.releaseRenames?.();
+    this.releaseRenames = undefined;
   }
 
   setLocalUserId(id: HistoryActorId): void {
@@ -333,6 +353,12 @@ export class CanvasHistory {
     this.canonicalLog = [];
     this.openBatch = null;
     this.liveStrokes = new Map();
+    // Cleared before capturing, not after: `captureLayers` shares the last
+    // savepoint's arrays for anyone who has not drawn since it, and with the
+    // dirty set just emptied that is everyone. Leaving the old savepoints in
+    // place here would base the new one on the pixels of the old one rather
+    // than on the canvas actually in front of us.
+    this.savepoints = [];
     this.dirtyOwners.clear();
     this.savepoints = [
       { index: 0, layers: this.captureLayers(), strokes: new Map() },

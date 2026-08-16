@@ -464,18 +464,33 @@ export const useOfflineDrawing = (
     callbacks
   );
 
-  // Wrap undo to sync with ActionRecorder
+  /**
+   * Undo, through whichever history is the authority here.
+   *
+   * Controlled mode has one: the canonical stream, where undo is a message
+   * that every client marks and replays in the same order. The snapshot stack
+   * below is the offline one, and running it as well puts a stale copy of our
+   * own layers straight onto the canvas -- a local revert nobody else sees,
+   * because it was never an operation. That is what made an undo here jump
+   * the drawing back further than it went for anybody watching.
+   */
   const wrappedUndo = useCallback(() => {
+    if (onOperation) {
+      onOperation({ kind: "undo", redo: false });
+      return;
+    }
     baseDrawing.undo();
     actionRecorderRef.current.back();
-    onOperation?.({ kind: "undo", redo: false });
   }, [baseDrawing, onOperation]);
 
-  // Wrap redo to sync with ActionRecorder
+  // Redo, for the same reason and by the same rule.
   const wrappedRedo = useCallback(() => {
+    if (onOperation) {
+      onOperation({ kind: "undo", redo: true });
+      return;
+    }
     baseDrawing.redo();
     actionRecorderRef.current.forward();
-    onOperation?.({ kind: "undo", redo: true });
   }, [baseDrawing, onOperation]);
 
   // Add restore action with final layer states

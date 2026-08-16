@@ -64,6 +64,20 @@ class FakeEngine {
     return [...this.owners.keys()];
   }
 
+  /** Renaming a pair, so savepoints holding it under the old name can follow. */
+  private renameListeners = new Set<(from: string, to: string) => void>();
+  onOwnerRenamed(listener: (from: string, to: string) => void): () => void {
+    this.renameListeners.add(listener);
+    return () => this.renameListeners.delete(listener);
+  }
+  renameOwner(from: string, to: string): void {
+    const pair = this.owners.get(from);
+    if (!pair) return;
+    this.owners.delete(from);
+    this.owners.set(to, pair);
+    for (const listener of this.renameListeners) listener(from, to);
+  }
+
   ops: string[] = [];
   // The mask the engine is currently pointed at. Logged with each op so a
   // test can tell whether the sender's mask survived the trip.
@@ -193,6 +207,24 @@ function setup() {
   const history = new CanvasHistory(engine as unknown as DrawingEngine);
   history.setLocalUserId(LOCAL);
   return { engine, history };
+}
+
+/** An undo point and a fill, both confirmed, starting at `seq`. */
+async function confirmedFill(
+  history: CanvasHistory,
+  author: number,
+  target: number,
+  x: number,
+  y: number,
+  r: number,
+  seq: number,
+) {
+  await remote(history, encodeUndoPoint(author), seq);
+  await remote(
+    history,
+    encodeFill(author, target, "background", x, y, r, 0, 0, 255),
+    seq + 1,
+  );
 }
 
 function red(engine: FakeEngine, x: number, y: number): number {
@@ -933,5 +965,72 @@ describe("masks over the wire", () => {
 
     const replayed = engine.ops.slice(drawn).filter((op) => op.startsWith("line:"));
     for (const op of replayed) expect(op).toContain("mask2(18,52,86)");
+  });
+});
+
+describe("undoing a mark made on somebody else's layers", () => {
+  it("undoes that mark only, leaving our own layers where they were", async () => {
+    const { engine, history } = setup();
+
+    // 1. We fill our own background.
+    await confirmedFill(history, LOCAL, LOCAL, 4, 4, 30, 1);
+    expect(engine.layersFor(String(LOCAL)).background[0]).toBe(30);
+
+    // 2. We clear it again.
+    await remote(history, encodeUndoPoint(LOCAL), 3);
+    await remote(history, encodeEraseAll(LOCAL, LOCAL, "background"), 4);
+    expect(engine.layersFor(String(LOCAL)).background[0]).toBe(0);
+
+    // 3. We draw on somebody else's layers.
+    await remote(history, encodeUndoPoint(LOCAL), 5);
+    await remote(
+      history,
+      encodeStroke(LOCAL, REMOTE, "foreground", 1, "solid", 90, 0, 0, 255, [
+        { x: 2, y: 2 },
+      ]),
+      6
+    );
+    expect(redFor(engine, REMOTE, 2, 2)).toBe(90);
+
+    // 4. Undo. Only step 3 goes.
+    await remote(history, encodeUndo(LOCAL, false), 7);
+    expect(redFor(engine, REMOTE, 2, 2)).toBe(0);
+    // Our own background stays cleared: step 2 is not undone with it.
+    expect(engine.layersFor(String(LOCAL)).background[0]).toBe(0);
+  });
+});
+
+describe("undo through the public operation path", () => {
+  it("keeps a clear that is older than the undone mark", async () => {
+    const { engine, history } = setup();
+    history.setLocalUserId("1");
+    const op = (sequence: number, operation: unknown, id = `a:${sequence}`) =>
+      history.handleCanonicalOperation({
+        id, actorId: "1", sequence,
+        operation: operation as never,
+      });
+
+    await op(1, { kind: "undo-boundary" });
+    await op(2, {
+      kind: "fill", layer: "background", targetActorId: "1",
+      at: { x: 1, y: 1 }, color: { r: 200, g: 0, b: 0, a: 255 },
+      mask: { type: 0, r: 0, g: 0, b: 0 },
+    });
+    expect(engine.layersFor("1").background[0]).toBe(200);
+
+    await op(3, { kind: "undo-boundary" });
+    await op(4, { kind: "clear-layer", layer: "background", targetActorId: "1" });
+    expect(engine.layersFor("1").background[0]).toBe(0);
+
+    await op(5, { kind: "undo-boundary" });
+    await op(6, {
+      kind: "stroke", layer: "foreground", targetActorId: "2",
+      brushSize: 1, brush: "solid", color: { r: 90, g: 0, b: 0, a: 255 },
+      points: [{ x: 2, y: 2 }], mask: { type: 0, r: 0, g: 0, b: 0 },
+    });
+    await op(7, { kind: "undo", redo: false });
+
+    expect(redFor(engine, 2, 2, 2)).toBe(0);
+    expect(engine.layersFor("1").background[0]).toBe(0);
   });
 });
