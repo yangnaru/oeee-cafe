@@ -49,6 +49,17 @@ const RESET_THRESHOLD_MESSAGES: usize = 500;
 // of its room.
 const HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
+// How often the server pings a quiet socket.
+//
+// A session where nobody is drawing sends nothing in either direction, and the
+// path to the browser runs through a tunnel that closes idle WebSockets after
+// about a hundred seconds. The socket dies, the client reconnects, and the
+// person watching gets a reconnecting dialog for no reason they can see. A
+// ping is the smallest thing that keeps it warm: browsers answer it themselves,
+// so the pong comes back without the page knowing, and both directions stay
+// busy enough to live.
+const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+
 // An in-progress session reset upload from this connection: `count` snapshot
 // messages follow a RESET_BEGIN and replace all history up to `base_seq`.
 struct PendingReset {
@@ -218,6 +229,11 @@ pub async fn handle_socket(
     // Handle outgoing messages (from Redis) in a separate task
     let outgoing_shutdown = state.shutdown.clone();
     let outgoing_task = tokio::spawn(async move {
+        let mut keepalive = tokio::time::interval_at(
+            tokio::time::Instant::now() + KEEPALIVE_INTERVAL,
+            KEEPALIVE_INTERVAL,
+        );
+        keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tokio::select! {
                 biased;
@@ -245,6 +261,12 @@ pub async fn handle_socket(
                     };
                     if sender.send(msg).await.is_err() {
                         debug!("WebSocket send failed");
+                        break;
+                    }
+                }
+                _ = keepalive.tick() => {
+                    if sender.send(Message::Ping(Vec::new())).await.is_err() {
+                        debug!("WebSocket keepalive failed");
                         break;
                     }
                 }
