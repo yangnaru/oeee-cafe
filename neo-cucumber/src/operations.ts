@@ -100,15 +100,19 @@ export type PainterOperation =
        * the time, so a fill could spread differently when something under it
        * was undone. The pixels are the pixels.
        */
-      kind: "raster";
+      kind: "fill-region";
       at: PainterPoint;
       width: number;
       height: number;
+      /** The one colour every covered pixel becomes. */
+      color: PainterColor;
       /**
-       * The rectangle's RGBA, DEFLATE-compressed. Measured against PNG on the
-       * rasters a fill actually makes, this is several times smaller.
+       * One bit per pixel of the box, row-major, DEFLATE-compressed: did the
+       * flood reach here. A picture of the box instead would carry whatever
+       * else lies inside it, and stamping that down on a replay brings back
+       * work somebody has since undone.
        */
-      pixels: Uint8Array;
+      coverage: Uint8Array;
     })
   | (PainterMark & {
       kind: "text";

@@ -1,65 +1,98 @@
 import { describe, expect, it } from "vitest";
 import { DrawingEngine } from "./DrawingEngine";
-import { deflateRaster, inflateRaster } from "./utils/rasterCodec";
+import { CanvasHistory } from "./utils/canvasHistory";
+import { deflateCoverage, inflateCoverage } from "./utils/rasterCodec";
 
-describe("a fill carried as the pixels it covered", () => {
-  it("crops to the region it actually filled", () => {
+describe("a flood fill sent as the ground it covered", () => {
+  const boxed = () => {
     const engine = new DrawingEngine(64, 48);
     engine.setLocalOwner("1");
     const layer = engine.layersFor("1").background;
-
     // A box to flood inside, so the fill cannot reach the whole layer.
-    for (let y = 10; y < 30; y++) {
+    for (let y = 10; y <= 29; y++) {
       for (const x of [10, 29]) layer[(y * 64 + x) * 4 + 3] = 255;
     }
     for (let x = 10; x <= 29; x++) {
       for (const y of [10, 29]) layer[(y * 64 + x) * 4 + 3] = 255;
     }
+    return { engine, layer };
+  };
 
+  it("crops to the region it actually filled", () => {
+    const { engine, layer } = boxed();
     const region = engine.floodFillCapturingRegion(layer, 20, 20, 200, 100, 50, 255);
     expect(region).not.toBeNull();
-    // Inside the box, nowhere near the 64x48 layer.
     expect(region!.width).toBeLessThan(64);
     expect(region!.height).toBeLessThan(48);
     expect(region!.x).toBeGreaterThanOrEqual(10);
     expect(region!.y).toBeGreaterThanOrEqual(10);
   });
 
-  it("round-trips through the wire codec", async () => {
-    const pixels = new Uint8ClampedArray(8 * 4 * 4);
-    for (let i = 0; i < pixels.length; i += 4) {
-      pixels[i] = 200; pixels[i + 1] = 100; pixels[i + 2] = 50; pixels[i + 3] = 255;
-    }
-    const compressed = await deflateRaster(pixels);
-    // A flat rectangle is exactly what a fill is, and it should be tiny.
-    expect(compressed.length).toBeLessThan(pixels.length);
-    const restored = await inflateRaster(compressed, 8, 4);
-    expect(Array.from(restored)).toEqual(Array.from(pixels));
+  it("round-trips its coverage through the wire codec", async () => {
+    const { engine, layer } = boxed();
+    const region = engine.floodFillCapturingRegion(layer, 20, 20, 200, 100, 50, 255)!;
+    const compressed = await deflateCoverage(region.coverage);
+    // A contiguous shape is exactly what a flood makes, and it should be tiny.
+    expect(compressed.length).toBeLessThan(region.coverage.length);
+    const restored = await inflateCoverage(compressed, region.width, region.height);
+    expect(Array.from(restored)).toEqual(Array.from(region.coverage));
   });
 
-  it("refuses a payload that is not the size it claims", async () => {
-    const compressed = await deflateRaster(new Uint8ClampedArray(4 * 4));
-    await expect(inflateRaster(compressed, 8, 4)).rejects.toThrow(/needs/);
+  it("refuses coverage that is not the size it claims", async () => {
+    const compressed = await deflateCoverage(new Uint8Array(2));
+    await expect(inflateCoverage(compressed, 64, 64)).rejects.toThrow(/needs/);
   });
 
-  it("puts the pixels back exactly where they came from", async () => {
+  /**
+   * The reason it is coverage rather than a picture of the box.
+   *
+   * A picture carries whatever else lies inside the rectangle. Stamping that
+   * back down on a replay puts other people's work back after they have undone
+   * it -- the fill reaching across somebody's stroke is enough to preserve it
+   * forever.
+   */
+  it("leaves work inside its box that somebody has since undone", async () => {
     const engine = new DrawingEngine(32, 24);
     engine.setLocalOwner("1");
-    const source = engine.layersFor("1").background;
-    const region = { x: 5, y: 6, width: 4, height: 3 };
-    const pixels = new Uint8ClampedArray(region.width * region.height * 4);
-    for (let i = 0; i < pixels.length; i += 4) {
-      pixels[i] = 10; pixels[i + 1] = 20; pixels[i + 2] = 30; pixels[i + 3] = 255;
-    }
+    const history = new CanvasHistory(engine);
+    history.setLocalUserId("1");
+    const layer = engine.layersFor("1").background;
+    const alphaAt = (x: number, y: number) => layer[(y * 32 + x) * 4 + 3];
 
-    engine.putImage(source, region.x, region.y, region.width, region.height, pixels);
+    await history.handleCanonicalOperation({
+      id: "b:1", actorId: "2", sequence: 1, operation: { kind: "undo-boundary" },
+    });
+    await history.handleCanonicalOperation({
+      id: "b:2", actorId: "2", sequence: 2,
+      operation: {
+        kind: "stroke", targetActorId: "1", layer: "background",
+        brushSize: 1, brush: "solid", color: { r: 0, g: 255, b: 0, a: 255 },
+        points: [{ x: 10, y: 10 }], mask: { type: 0, r: 0, g: 0, b: 0 },
+      },
+    });
+    expect(alphaAt(10, 10)).toBe(255);
 
-    const at = (x: number, y: number) => source[(y * 32 + x) * 4 + 3];
-    expect(at(5, 6)).toBe(255);
-    expect(at(8, 8)).toBe(255);
-    // and nowhere else
-    expect(at(4, 6)).toBe(0);
-    expect(at(9, 6)).toBe(0);
-    expect(at(5, 9)).toBe(0);
+    // Our fill, whose box covers that stroke without the flood reaching it.
+    const region = engine.floodFillCapturingRegion(layer, 20, 12, 200, 100, 50, 255)!;
+    await history.handleCanonicalOperation({
+      id: "a:1", actorId: "1", sequence: 3, operation: { kind: "undo-boundary" },
+    });
+    await history.handleCanonicalOperation({
+      id: "a:2", actorId: "1", sequence: 4,
+      operation: {
+        kind: "fill-region", targetActorId: "1", layer: "background",
+        at: { x: region.x, y: region.y },
+        width: region.width, height: region.height,
+        color: { r: 200, g: 100, b: 50, a: 255 },
+        coverage: await deflateCoverage(region.coverage),
+        mask: { type: 0, r: 0, g: 0, b: 0 },
+      },
+    });
+
+    // They undo their stroke. It goes, and stays gone.
+    await history.handleCanonicalOperation({
+      id: "b:3", actorId: "2", sequence: 5, operation: { kind: "undo", redo: false },
+    });
+    expect(alphaAt(10, 10)).toBe(0);
   });
 });

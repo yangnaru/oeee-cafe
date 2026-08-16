@@ -76,13 +76,14 @@ export interface HistoryEraseAll extends TargetedOperation {
   type: "eraseAll";
 }
 
-export interface HistoryRaster extends MaskedOperation {
-  type: "raster";
+export interface HistoryFillRegion extends MaskedOperation {
+  type: "fillRegion";
   x: number;
   y: number;
   width: number;
   height: number;
-  pixels: Uint8Array;
+  color: { r: number; g: number; b: number; a: number };
+  coverage: Uint8Array;
 }
 
 export interface HistoryText extends MaskedOperation {
@@ -110,7 +111,7 @@ export type HistoryOperation =
   | HistoryRegion
   | HistoryLine
   | HistoryBezier
-  | HistoryRaster
+  | HistoryFillRegion
   | HistoryEraseAll
   | HistoryText
   | HistoryUndoBoundary
@@ -124,7 +125,7 @@ export function isHistoryOperation(value: { type: string }): value is HistoryOpe
     "region",
     "line",
     "bezier",
-    "raster",
+    "fillRegion",
     "eraseAll",
     "text",
     "undoPoint",
@@ -178,12 +179,13 @@ export function toHistoryOperation(
         rect: operation.rect, color: operation.color,
         brushSize: operation.brushSize, mask: operation.mask,
       };
-    case "raster":
+    case "fill-region":
       return {
-        type: "raster", userId, targetOwner, layer: operation.layer,
+        type: "fillRegion", userId, targetOwner, layer: operation.layer,
         x: operation.at.x, y: operation.at.y,
         width: operation.width, height: operation.height,
-        pixels: operation.pixels, mask: operation.mask,
+        color: operation.color, coverage: operation.coverage,
+        mask: operation.mask,
       };
     case "text":
       return {
@@ -237,12 +239,13 @@ export function fromHistoryOperation(
         rect: operation.rect, color: operation.color,
         brushSize: operation.brushSize, mask: operation.mask,
       };
-    case "raster":
+    case "fillRegion":
       return {
-        kind: "raster", targetActorId: String(operation.targetOwner),
+        kind: "fill-region", targetActorId: String(operation.targetOwner),
         layer: operation.layer, at: { x: operation.x, y: operation.y },
         width: operation.width, height: operation.height,
-        pixels: operation.pixels, mask: operation.mask,
+        color: operation.color, coverage: operation.coverage,
+        mask: operation.mask,
       };
     case "text":
       return {

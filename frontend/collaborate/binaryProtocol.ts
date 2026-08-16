@@ -348,11 +348,14 @@ export async function encodeSnapshot(
 /**
  * Encode PUT_IMAGE message (0x1D)
  *
- * A rectangle of a participant's layer as DEFLATE-compressed RGBA. Measured
- * against PNG on the rasters a flood fill actually makes, this is several
- * times smaller, and `CompressionStream` means it costs the bundle nothing.
+ * A flood fill as the ground it covered: a box, the one colour every covered
+ * pixel became, and a bit per pixel saying which ones those were --
+ * DEFLATE-compressed, which `CompressionStream` gives us for nothing.
  *
- * Format: [0x1D][id:1][owner:1][layer:1][x:2][y:2][w:2][h:2][length:4][pixels]
+ * Not a picture of the box. That would carry whatever else lies inside it,
+ * and stamping it back down on a replay resurrects work since undone.
+ *
+ * Format: [0x1D][id:1][owner:1][layer:1][x:2][y:2][w:2][h:2][rgba:4][len:4][coverage]
  */
 export function encodePutImage(
   userId: number,
@@ -362,9 +365,10 @@ export function encodePutImage(
   y: number,
   width: number,
   height: number,
+  color: { r: number; g: number; b: number; a: number },
   compressed: Uint8Array
 ): ArrayBuffer {
-  const buffer = new Uint8Array(16 + compressed.length);
+  const buffer = new Uint8Array(20 + compressed.length);
 
   buffer[0] = MSG_TYPE.PUT_IMAGE;
   buffer[1] = userId;
@@ -374,8 +378,12 @@ export function encodePutImage(
   writeUint16LE(buffer, 6, y);
   writeUint16LE(buffer, 8, width);
   writeUint16LE(buffer, 10, height);
-  writeUint32LE(buffer, 12, compressed.length);
-  buffer.set(compressed, 16);
+  buffer[12] = color.r;
+  buffer[13] = color.g;
+  buffer[14] = color.b;
+  buffer[15] = color.a;
+  writeUint32LE(buffer, 16, compressed.length);
+  buffer.set(compressed, 20);
 
   return buffer.buffer;
 }
@@ -758,8 +766,10 @@ export interface PutImageMessage {
   y: number;
   width: number;
   height: number;
-  /** The rectangle's RGBA, DEFLATE-compressed. */
-  pixels: Uint8Array;
+  /** The one colour every covered pixel becomes. */
+  color: { r: number; g: number; b: number; a: number };
+  /** A bit per pixel of the box, DEFLATE-compressed. */
+  coverage: Uint8Array;
 }
 
 export interface SnapshotMessage {
@@ -1207,9 +1217,9 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       };
 
     case MSG_TYPE.PUT_IMAGE: {
-      if (buffer.length < 16) return null;
-      const length = readUint32LE(buffer, 12);
-      if (buffer.length < 16 + length) return null;
+      if (buffer.length < 20) return null;
+      const length = readUint32LE(buffer, 16);
+      if (buffer.length < 20 + length) return null;
       return {
         type: "putImage",
         userId: buffer[1],
@@ -1219,7 +1229,8 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
         y: readUint16LE(buffer, 6),
         width: readUint16LE(buffer, 8),
         height: readUint16LE(buffer, 10),
-        pixels: buffer.slice(16, 16 + length),
+        color: { r: buffer[12], g: buffer[13], b: buffer[14], a: buffer[15] },
+        coverage: buffer.slice(20, 20 + length),
       };
     }
 
@@ -1356,7 +1367,7 @@ export function encodePainterOperation(userId: number, operation: PainterOperati
     case "clear-layer": return encodeEraseAll(userId, target, operation.layer);
     // Raster marks are encoded by the caller: the payload is a PNG, and making
     // one is asynchronous where every other encoder here is not.
-    case "raster": throw new Error("Encode a raster mark with encodePutImage");
+    case "fill-region": throw new Error("Encode a fill region with encodePutImage");
   }
 }
 
@@ -1372,7 +1383,7 @@ export function decodePainterOperation(message: DecodedMessage): PainterOperatio
     case "region": return { kind: "region", targetActorId: String(message.targetOwner), layer: message.layer, tool: message.tool, rect: message.rect, color: message.color, brushSize: message.brushSize, mask: message.mask };
     case "text": return { kind: "text", targetActorId: String(message.targetOwner), layer: message.layer, at: { x: message.x, y: message.y }, text: message.text, color: message.color, brushSize: message.brushSize, mask: message.mask };
     case "eraseAll": return { kind: "clear-layer", targetActorId: String(message.targetOwner), layer: message.layer };
-    case "putImage": return { kind: "raster", targetActorId: String(message.targetOwner), layer: message.layer, at: { x: message.x, y: message.y }, width: message.width, height: message.height, pixels: message.pixels, mask: NO_MASK };
+    case "putImage": return { kind: "fill-region", targetActorId: String(message.targetOwner), layer: message.layer, at: { x: message.x, y: message.y }, width: message.width, height: message.height, color: message.color, coverage: message.coverage, mask: NO_MASK };
     default: return null;
   }
 }

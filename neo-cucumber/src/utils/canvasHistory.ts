@@ -24,7 +24,7 @@ import { NO_MASK, type Mask } from "../neo/mask";
 import type {
   HistoryActorId,
   HistoryOperation,
-  HistoryRaster,
+  HistoryFillRegion,
   HistorySnapshot,
   HistoryStroke,
 } from "../synchronization/historyOperations";
@@ -37,7 +37,7 @@ import type {
   LocalPainterOperation,
 } from "../operations";
 import { pngDataToLayer } from "./canvasSnapshot";
-import { inflateRaster } from "./rasterCodec";
+import { inflateCoverage } from "./rasterCodec";
 import { extentFor, fontSizeForBrush, TEXT_FONT_FAMILY } from "../neo/tools";
 import type { WireBrushType } from "../types/drawing";
 
@@ -231,7 +231,7 @@ function affectedArea(msg: HistoryOperation): Area {
         y1: Math.max(...ys) + msg.brushSize,
       };
     }
-    case "raster":
+    case "fillRegion":
       // The rectangle it covers, and no more. A seeded fill had to claim the
       // whole layer, because where a flood reaches is not known until it is
       // run; pixels know exactly where they go, so two fills in different
@@ -299,7 +299,7 @@ export class CanvasHistory {
    * Decoded raster marks, so a replay does not decode the same PNG again for
    * every pass over the history it appears in.
    */
-  private rasterCache = new WeakMap<HistoryRaster, Uint8ClampedArray>();
+  private coverageCache = new WeakMap<HistoryFillRegion, Uint8Array>();
 
   constructor(
     engine: DrawingEngine,
@@ -1041,15 +1041,14 @@ export class CanvasHistory {
       source(actorKey(msg.targetOwner))[msg.layer].set(data);
       return;
     }
-    if (msg.type === "raster") {
-      let pixels = this.rasterCache.get(msg);
-      if (!pixels) {
-        pixels = await inflateRaster(msg.pixels, msg.width, msg.height);
-        this.rasterCache.set(msg, pixels);
-      }
-      this.engine.putImage(
+    if (msg.type === "fillRegion") {
+      const cached = this.coverageCache.get(msg);
+      const coverage =
+        cached ?? (await inflateCoverage(msg.coverage, msg.width, msg.height));
+      if (!cached) this.coverageCache.set(msg, coverage);
+      this.engine.paintCoveredPixels(
         source(actorKey(msg.targetOwner))[msg.layer],
-        msg.x, msg.y, msg.width, msg.height, pixels,
+        msg.x, msg.y, msg.width, msg.height, msg.color, coverage,
       );
       return;
     }

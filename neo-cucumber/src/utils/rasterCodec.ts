@@ -1,11 +1,10 @@
 /**
- * Raw pixels for the wire, compressed with what the browser already has.
+ * A fill's coverage for the wire, compressed with what the browser already has.
  *
- * DEFLATE over the raw RGBA rather than PNG, which is the counterintuitive
- * one: measured on the rasters a flood fill actually produces, PNG came out
- * six times larger on a flat fill and twice on a ragged-edged one. PNG filters
- * each scanline and browser encoders tune for speed; DEFLATE's window simply
- * eats the long repeats that a filled region is made of.
+ * DEFLATE, which measured six times smaller than PNG on the rasters a flood
+ * actually makes -- PNG filters each scanline and browser encoders tune for
+ * speed, where DEFLATE's window eats the long repeats a filled region is made
+ * of. A mask of set bits is more of the same, only more so.
  *
  * Not zstd, which would be smaller again by perhaps a fifth: `CompressionStream`
  * offers gzip and deflate and nothing else, so zstd means carrying a compressor
@@ -20,10 +19,9 @@ async function through(bytes: Uint8Array, stream: TransformStream): Promise<Uint
   return new Uint8Array(await new Response(piped).arrayBuffer());
 }
 
-/** Compresses raw RGBA for transport. */
-export function deflateRaster(pixels: Uint8ClampedArray): Promise<Uint8Array> {
-  return through(new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength),
-    new CompressionStream("deflate"));
+/** Compresses a coverage mask for transport. */
+export function deflateCoverage(coverage: Uint8Array): Promise<Uint8Array> {
+  return through(coverage, new CompressionStream("deflate"));
 }
 
 /**
@@ -31,17 +29,17 @@ export function deflateRaster(pixels: Uint8ClampedArray): Promise<Uint8Array> {
  * short buffer would otherwise be blitted as a band of transparent pixels
  * across somebody's drawing.
  */
-export async function inflateRaster(
+export async function inflateCoverage(
   compressed: Uint8Array,
   width: number,
   height: number,
-): Promise<Uint8ClampedArray> {
+): Promise<Uint8Array> {
   const bytes = await through(compressed, new DecompressionStream("deflate"));
-  const expected = width * height * 4;
+  const expected = Math.ceil((width * height) / 8);
   if (bytes.length !== expected) {
     throw new Error(
-      `Raster is ${bytes.length} bytes; ${width}x${height} needs ${expected}`,
+      `Coverage is ${bytes.length} bytes; ${width}x${height} needs ${expected}`,
     );
   }
-  return new Uint8ClampedArray(bytes.buffer, bytes.byteOffset, expected);
+  return bytes;
 }

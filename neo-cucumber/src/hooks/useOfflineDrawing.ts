@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { useBaseDrawing, type DrawingState } from "./useBaseDrawing";
 import { ActionRecorder } from "../utils/ActionRecorder";
-import { deflateRaster } from "../utils/rasterCodec";
+import { deflateCoverage } from "../utils/rasterCodec";
 import { maskFrom, NO_MASK, type Mask } from "../neo/mask";
 import type { BrushType } from "../types/drawing";
 import type { PainterBrush, PainterOperation } from "../operations";
@@ -351,20 +351,16 @@ export const useOfflineDrawing = (
         );
         if (!region) return;
 
-        const { x: rx, y: ry, width, height } = region;
-        const pixels = new Uint8ClampedArray(width * height * 4);
-        for (let row = 0; row < height; row++) {
-          const from = ((ry + row) * engine.imageWidth + rx) * 4;
-          pixels.set(target.subarray(from, from + width * 4), row * width * 4);
-        }
-        void deflateRaster(pixels).then((compressed) => {
+        const { x: rx, y: ry, width, height, coverage } = region;
+        void deflateCoverage(coverage).then((compressed) => {
           emitOperation({
-            kind: "raster",
+            kind: "fill-region",
             layer: layerName,
             at: { x: rx, y: ry },
             width,
             height,
-            pixels: compressed,
+            color: { r: safeR, g: safeG, b: safeB, a: alpha },
+            coverage: compressed,
             mask: strokeMaskRef.current,
           });
         });

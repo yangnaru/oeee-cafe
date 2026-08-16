@@ -913,11 +913,17 @@ export class DrawingEngine {
     fillG: number,
     fillB: number,
     fillA: number
-  ): { x: number; y: number; width: number; height: number } | null {
+  ): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    /** One bit per pixel of the box, row-major: did the flood reach here. */
+    coverage: Uint8Array;
+  } | null {
     // Compared against a copy rather than read from the surfaces: NEO's flood
     // writes the whole layer back in one go, so what the surfaces record is
-    // "everything" and says nothing about where the paint landed. Diffing is
-    // a pass over the layer, which is what the flood itself just cost.
+    // "everything" and says nothing about where the paint landed.
     const before = new Uint32Array(
       ctx.buffer.slice(ctx.byteOffset, ctx.byteOffset + ctx.byteLength)
     );
@@ -941,26 +947,57 @@ export class DrawingEngine {
     }
     // Nothing changed: a click on a pixel that is already the fill colour.
     if (x1 < x0) return null;
-    return { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
+
+    // Which pixels the flood reached, rather than what the box now looks like.
+    // A box carries whatever else happens to lie inside it, and stamping that
+    // back down on a replay resurrects work somebody has since undone.
+    const boxWidth = x1 - x0 + 1;
+    const boxHeight = y1 - y0 + 1;
+    const coverage = new Uint8Array(Math.ceil((boxWidth * boxHeight) / 8));
+    for (let row = 0; row < boxHeight; row++) {
+      const source = (y0 + row) * width + x0;
+      const bitRow = row * boxWidth;
+      for (let column = 0; column < boxWidth; column++) {
+        if (before[source + column] === after[source + column]) continue;
+        const bit = bitRow + column;
+        coverage[bit >> 3] |= 0x80 >> (bit & 7);
+      }
+    }
+    return { x: x0, y: y0, width: boxWidth, height: boxHeight, coverage };
   }
 
-  /** Replaces a rectangle of a participant's layer with the given pixels. */
-  public putImage(
+  /**
+   * Sets every pixel the coverage names to one colour.
+   *
+   * How a flood fill arrives from somebody else. NEO's flood replaces a pixel
+   * outright rather than blending into it, so this does too -- and only where
+   * the flood actually reached, leaving everything else in the box as it
+   * currently is rather than as it was when the fill was made.
+   */
+  public paintCoveredPixels(
     ctx: Uint8ClampedArray,
     x: number,
     y: number,
     width: number,
     height: number,
-    pixels: Uint8ClampedArray
+    color: { r: number; g: number; b: number; a: number },
+    coverage: Uint8Array
   ): void {
+    const packed = new Uint32Array(1);
+    new Uint8ClampedArray(packed.buffer).set([color.r, color.g, color.b, color.a]);
+    const pixels = new Uint32Array(ctx.buffer, ctx.byteOffset, ctx.byteLength / 4);
     for (let row = 0; row < height; row++) {
-      const from = row * width * 4;
-      const into = ((y + row) * this.imageWidth + x) * 4;
-      ctx.set(pixels.subarray(from, from + width * 4), into);
+      const into = (y + row) * this.imageWidth + x;
+      const bitRow = row * width;
+      for (let column = 0; column < width; column++) {
+        const bit = bitRow + column;
+        if (coverage[bit >> 3] & (0x80 >> (bit & 7))) {
+          pixels[into + column] = packed[0];
+        }
+      }
     }
-    // Written straight into the buffer, so no surface saw it and the whole
-    // layer has to repaint -- which is also what tells the history that this
-    // participant's layers have moved on.
+    // Written straight into the buffer, so no surface saw it: the whole layer
+    // repaints, which is also what tells the history it has moved on.
     this.queueFullUpdateIfLive(ctx);
   }
 
