@@ -1,6 +1,22 @@
+/*
+ * Derived from Drawpile's `canvas_history.c`:
+ *   Copyright (C) 2022 askmeaboutloom
+ *   GNU General Public License, version 3 or (at your option) any later
+ *   version. See THIRD-PARTY-NOTICES.md at the root of this repository.
+ *
+ * The entry list, the savepoint scheme, the optimistic fork and the
+ * concurrency check that decides between applying a remote message directly
+ * and replaying history under it all follow that file. This is the one place
+ * in this repository that does; everywhere else Drawpile is named, it is a
+ * design being referred to rather than code being carried over.
+ *
+ * oeee-cafe is distributed under the GNU Affero General Public License v3,
+ * which AGPL-3 section 13 permits to be combined with GPL-3 code.
+ */
+
 /**
  * Client-side canonical canvas history for the shared-layer collaboration
- * model, ported from Drawpile's canvas_history.c.
+ * model.
  *
  * All clients receive the same server-sequenced message stream and fold it
  * into this history, so marking strokes undone and replaying from a savepoint

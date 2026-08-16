@@ -100,10 +100,40 @@ use time::Duration;
 use tokio::signal;
 use tokio::task::AbortHandle;
 use tower_http::catch_panic::CatchPanicLayer;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_sessions::cookie::SameSite;
 use tower_sessions::{session_store::ExpiredDeletion, Expiry, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
+
+/// Everything served straight off disk.
+///
+/// Its own function so that a test can ask the real thing for a file rather
+/// than assembling a second copy of these mounts and asking that -- a copy
+/// agrees with itself no matter what happens here.
+fn static_router() -> Router {
+    Router::new()
+        .nest_service(
+            "/static/viewer",
+            ServeDir::new("neo-cucumber/dist-viewer"),
+        )
+        // tegaki is MIT, which asks that its notice travel with the copies.
+        // Only css/js/lib are mounted and none of those files carry a header,
+        // so without this the notice is in the repository but not reachable
+        // from the thing being served.
+        .route_service("/static/tegaki/LICENSE", ServeFile::new("tegaki/LICENSE"))
+        .nest_service("/static/tegaki/css", ServeDir::new("tegaki/css"))
+        .nest_service("/static/tegaki/js", ServeDir::new("tegaki/js"))
+        .nest_service("/static/tegaki/lib", ServeDir::new("tegaki/lib"))
+        .nest_service(
+            "/collaborate/assets",
+            ServeDir::new("neo-cucumber/dist/assets"),
+        )
+        .nest_service(
+            "/static/neo-cucumber",
+            ServeDir::new("neo-cucumber/dist-offline"),
+        )
+        .nest_service("/static", ServeDir::new("static"))
+}
 
 pub struct App {
     state: AppState,
@@ -143,23 +173,7 @@ impl App {
 
         let auth_layer = AuthManagerLayerBuilder::new(authn_backend, session_layer).build();
 
-        let static_router = Router::new()
-            .nest_service(
-                "/static/viewer",
-                ServeDir::new("neo-cucumber/dist-viewer"),
-            )
-            .nest_service("/static/tegaki/css", ServeDir::new("tegaki/css"))
-            .nest_service("/static/tegaki/js", ServeDir::new("tegaki/js"))
-            .nest_service("/static/tegaki/lib", ServeDir::new("tegaki/lib"))
-            .nest_service(
-                "/collaborate/assets",
-                ServeDir::new("neo-cucumber/dist/assets"),
-            )
-            .nest_service(
-                "/static/neo-cucumber",
-                ServeDir::new("neo-cucumber/dist-offline"),
-            )
-            .nest_service("/static", ServeDir::new("static"));
+        let static_router = static_router();
 
         let protected_router = Router::new()
             .route("/home", get(my_timeline))
@@ -666,4 +680,45 @@ async fn shutdown_signal(
     // Tell live drawing sessions to wind down now, in parallel with axum
     // draining the plain HTTP connections.
     shutdown.signal();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tower::util::ServiceExt;
+
+    /// The real static mounts, asked for the tegaki notice.
+    ///
+    /// Two things at once. Axum settles overlapping paths when the router is
+    /// built rather than when it is compiled, and it settles them by
+    /// panicking, so a conflict between `/static/tegaki/LICENSE` and the
+    /// directories nested around it would be a crash on boot that `cargo
+    /// check` has nothing to say about -- and on this repository boot is a
+    /// deploy. And the notice has to actually come back, because MIT asks
+    /// that it travel with the copies we serve.
+    #[tokio::test]
+    async fn the_static_mounts_build_and_serve_the_tegaki_notice() {
+        let response = static_router()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/static/tegaki/LICENSE")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router responds");
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "the tegaki notice is not reachable"
+        );
+
+        let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .expect("read notice");
+        assert!(
+            String::from_utf8_lossy(&body).contains("Maxime Youdine"),
+            "that was not the tegaki notice"
+        );
+    }
 }
