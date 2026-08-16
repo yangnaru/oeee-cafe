@@ -259,6 +259,10 @@ export default function App() {
       locale: localeRef.current,
       mode: { kind: "standard" },
       controls: { kind: "toolbox" },
+      // A session saves a flattened image and never asks for a replay, and
+      // `.pch` could not describe one anyway: it addresses two layers, and
+      // every participant here has a pair.
+      recordReplay: false,
       synchronization: {
         // Stands in only until WELCOME assigns the session id every canonical
         // message is keyed by; see `handleWelcome`.

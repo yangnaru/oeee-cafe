@@ -45,6 +45,7 @@ import type {
   ImageSource,
   PainterCheckpoint,
   PainterExport,
+  PainterError,
   PainterHandle,
   PainterOptions,
   PainterSessionArchive,
@@ -438,6 +439,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     adoptPickedColor,
     isVirtualRight,
     releaseVirtualRight,
+    config.recordReplay ?? true,
   );
   previewEngineRef.current = drawingEngine ?? null;
 
@@ -618,9 +620,16 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
 
   const exportReplay = useCallback(async (): Promise<Blob> => {
     if (!drawingEngine) throw new Error("Painter is not ready");
+    if (config.recordReplay === false) {
+      const error = new Error(
+        "This painter was mounted without replay recording",
+      ) as PainterError;
+      error.code = "export-failed";
+      throw error;
+    }
     addRestoreAction();
     return getReplayBlob();
-  }, [drawingEngine, addRestoreAction, getReplayBlob]);
+  }, [drawingEngine, addRestoreAction, getReplayBlob, config.recordReplay]);
 
   const save = useCallback(async (): Promise<PainterExport> => {
     // Start both captures in the same JavaScript turn. exportPng snapshots the

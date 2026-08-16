@@ -184,3 +184,34 @@ describe("ActionRecorder", () => {
     });
   });
 });
+
+describe("a recorder that was told not to record", () => {
+  it("keeps nothing, whatever it is asked to keep", () => {
+    const recorder = new ActionRecorder(false);
+    recorder.step();
+    recorder.push("floodFill", 0, 1, 2, 3);
+    recorder.pushLine(
+      0, 1, { x: 0, y: 0 }, { x: 4, y: 4 },
+      { r: 0, g: 0, b: 0, a: 255 }, 1, { type: 0, r: 0, g: 0, b: 0 },
+    );
+    recorder.addRestoreAction("data:image/png;base64,AA", "data:image/png;base64,BB");
+    recorder.back();
+    recorder.forward();
+
+    expect(recorder.getActionCount()).toBe(0);
+    expect(recorder.isRecording).toBe(false);
+  });
+
+  it("refuses to produce a replay rather than producing an empty one", () => {
+    const recorder = new ActionRecorder(false);
+    expect(() => recorder.getReplayBlob(64, 48)).toThrow(/without replay recording/);
+  });
+
+  it("still records by default", () => {
+    const recorder = new ActionRecorder();
+    recorder.step();
+    recorder.push("floodFill", 0, 1, 2, 3);
+    expect(recorder.getActionCount()).toBe(1);
+    expect(recorder.isRecording).toBe(true);
+  });
+});

@@ -437,3 +437,46 @@ describe("public painter lifecycle", () => {
     act(() => painter.unmount());
   });
 });
+
+it("records no replay when the host says not to", async () => {
+  const element = document.createElement("div");
+  document.body.appendChild(element);
+  let painter!: ReturnType<typeof mount>;
+  act(() => {
+    painter = mount(element, {
+      width: 32, height: 24,
+      mode: { kind: "standard" },
+      controls: { kind: "none" },
+      recordReplay: false,
+      synchronization: { actorId: "1", onOperation: () => {} },
+    });
+  });
+  await act(async () => painter.ready);
+
+  // Refused rather than answered with an empty file that looks like a drawing.
+  await expect(painter.exportReplay()).rejects.toMatchObject({
+    code: "export-failed",
+  });
+  // The image is still there: that is what a session saves.
+  const png = await painter.exportPng();
+  expect(png.type).toBe("image/png");
+
+  act(() => painter.unmount());
+});
+
+it("still records a replay by default", async () => {
+  const element = document.createElement("div");
+  document.body.appendChild(element);
+  let painter!: ReturnType<typeof mount>;
+  act(() => {
+    painter = mount(element, {
+      width: 32, height: 24,
+      mode: { kind: "standard" },
+      controls: { kind: "none" },
+    });
+  });
+  await act(async () => painter.ready);
+  const replay = await painter.exportReplay();
+  expect(new TextDecoder().decode(await replay.slice(0, 4).arrayBuffer())).toBe("NEO ");
+  act(() => painter.unmount());
+});

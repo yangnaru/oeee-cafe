@@ -103,6 +103,19 @@ export interface PainterOptions {
   controls: PainterControls;
   /** BCP 47 language tag used by prebuilt controls. */
   locale?: string;
+  /**
+   * Whether to record a `.pch` replay of this drawing. On by default.
+   *
+   * A collaborative host turns it off. Such a session saves a flattened image
+   * and never asks for a replay, and the format could not describe it in any
+   * case: `.pch` addresses two layers, and a session has a pair per
+   * participant. Recording one anyway costs a list that grows with every mark
+   * and, at each restore point, two full-canvas images kept for nothing.
+   *
+   * With it off, `exportReplay` and `save` reject rather than hand back an
+   * empty file that looks like a drawing nobody made.
+   */
+  recordReplay?: boolean;
   /** Called after the pixels or replay history change. */
   onChange?: (state: PainterChange) => void;
   /** Called for asynchronous errors that cannot be returned to the caller. */

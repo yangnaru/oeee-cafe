@@ -76,9 +76,13 @@ export const useOfflineDrawing = (
   isVirtualRight?: () => boolean,
   /** Called when an armed press has been spent, so the button can release. */
   onVirtualRightUsed?: () => void,
+  /** Whether to keep a `.pch` replay; a collaborative host does not. */
+  recordReplay: boolean = true,
 ) => {
   // Initialize replay recording
-  const actionRecorderRef = useRef<ActionRecorder>(new ActionRecorder());
+  const actionRecorderRef = useRef<ActionRecorder>(
+    new ActionRecorder(recordReplay),
+  );
   const isFirstPointRef = useRef<boolean>(false);
   const hasCreatedStepRef = useRef<boolean>(false);
   // Layer captured at pointer down, alongside the settings useBaseDrawing

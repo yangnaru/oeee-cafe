@@ -21,9 +21,28 @@ export class ActionRecorder {
   private head: number = 0;
 
   /**
+   * Whether anything is being recorded at all.
+   *
+   * A collaborative session has no use for a replay file: it saves a flattened
+   * image, and the format could not describe the session anyway -- `.pch`
+   * addresses two layers and a session has a pair per participant. Recording
+   * one regardless costs a growing list of actions and, at every restore
+   * point, two full-canvas PNGs held in memory for nothing.
+   *
+   * The switch is here rather than at the call sites because there are a dozen
+   * of those and they only have to be right once each to be wrong forever.
+   */
+  private readonly recording: boolean;
+
+  constructor(recording: boolean = true) {
+    this.recording = recording;
+  }
+
+  /**
    * Create a new action frame (called on pointer down / stroke start)
    */
   step(): void {
+    if (!this.recording) return;
     // Truncate items array if we're not at the end (redo history should be discarded)
     if (this.items.length > this.head) {
       this.items.length = this.head;
@@ -37,6 +56,7 @@ export class ActionRecorder {
    * Add data to the current action frame
    */
   push(...args: ActionItem[]): void {
+    if (!this.recording) return;
     if (this.head > 0 && this.head <= this.items.length) {
       const currentAction = this.items[this.head - 1];
       currentAction.push(...args);
@@ -47,6 +67,7 @@ export class ActionRecorder {
    * Undo - move head back
    */
   back(): void {
+    if (!this.recording) return;
     if (this.head > 0) {
       this.head--;
     }
@@ -56,6 +77,7 @@ export class ActionRecorder {
    * Redo - move head forward
    */
   forward(): void {
+    if (!this.recording) return;
     if (this.head < this.items.length) {
       this.head++;
     }
@@ -66,6 +88,7 @@ export class ActionRecorder {
    * This enables animation skip in Neo.Painter
    */
   addRestoreAction(bgDataURL: string, fgDataURL: string): void {
+    if (!this.recording) return;
     // Discard undone actions first, exactly as step() does. Without this the
     // restore lands beyond the export window while head++ pulls an undone
     // action into it, so saving after an undo replays the wrong strokes and
@@ -182,7 +205,15 @@ export class ActionRecorder {
   /**
    * Generate replay blob in PCH format
    */
+  /** True when this recorder is keeping a replay at all. */
+  get isRecording(): boolean {
+    return this.recording;
+  }
+
   getReplayBlob(width: number, height: number): Blob {
+    if (!this.recording) {
+      throw new Error("This painter was mounted without replay recording");
+    }
     // Truncate items to current head position
     const itemsToExport = this.items.slice(0, this.head);
 
