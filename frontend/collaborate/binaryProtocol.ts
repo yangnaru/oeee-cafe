@@ -1367,7 +1367,15 @@ export function encodePainterOperation(userId: number, operation: PainterOperati
     case "clear-layer": return encodeEraseAll(userId, target, operation.layer);
     // Raster marks are encoded by the caller: the payload is a PNG, and making
     // one is asynchronous where every other encoder here is not.
-    case "fill-region": throw new Error("Encode a fill region with encodePutImage");
+    // Encoded here like everything else. Handing this one to a different
+    // function and trusting callers to notice is how a fill went out to
+    // nobody: the operation was made, the encoder threw, and the only screen
+    // it ever reached was the one that drew it.
+    case "fill-region": return encodePutImage(
+      userId, target, operation.layer,
+      operation.at.x, operation.at.y, operation.width, operation.height,
+      operation.color, operation.coverage,
+    );
   }
 }
 

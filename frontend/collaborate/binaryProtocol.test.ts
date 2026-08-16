@@ -271,3 +271,103 @@ describe("the tool messages", () => {
     });
   });
 });
+
+/**
+ * Every kind, through the adapter the app actually calls.
+ *
+ * The map below is typed so that adding a kind to the vocabulary and not to
+ * this test is a compile error. A fill went out to nobody for a day because it
+ * was the one kind this file did not carry: the encoder had a case for it that
+ * threw, which typechecks perfectly and is only wrong when it runs.
+ */
+const SAMPLES: Record<PainterOperation["kind"], PainterOperation> = {
+  stroke: {
+    kind: "stroke", layer: "background", brushSize: 1, brush: "solid",
+    color: COLOR, points: [{ x: 1, y: 2 }], mask: NO_WIRE_MASK,
+  },
+  fill: {
+    kind: "fill", layer: "background", at: { x: 1, y: 2 },
+    color: COLOR, mask: NO_WIRE_MASK,
+  },
+  "fill-region": {
+    kind: "fill-region", layer: "background", at: { x: 1, y: 2 },
+    width: 3, height: 2, color: COLOR,
+    coverage: new Uint8Array([0b10110000]), mask: NO_WIRE_MASK,
+  },
+  line: {
+    kind: "line", layer: "background", brushSize: 1, brush: "solid",
+    color: COLOR, from: { x: 0, y: 0 }, to: { x: 4, y: 4 }, mask: NO_WIRE_MASK,
+  },
+  bezier: {
+    kind: "bezier", layer: "background", brushSize: 1, brush: "solid",
+    color: COLOR, points: [0, 1, 2, 3, 4, 5, 6, 7], mask: NO_WIRE_MASK,
+  },
+  region: {
+    kind: "region", layer: "background", tool: "rect",
+    rect: { x: 1, y: 2, width: 3, height: 4 }, color: COLOR,
+    brushSize: 1, mask: NO_WIRE_MASK,
+  },
+  text: {
+    kind: "text", layer: "background", at: { x: 1, y: 2 }, text: "hi",
+    color: COLOR, brushSize: 4, mask: NO_WIRE_MASK,
+  },
+  "clear-layer": { kind: "clear-layer", layer: "background" },
+  "undo-boundary": { kind: "undo-boundary" },
+  undo: { kind: "undo", redo: false },
+};
+
+describe("every operation the vocabulary has", () => {
+  it("survives the trip out and back", () => {
+    for (const [kind, operation] of Object.entries(SAMPLES)) {
+      const bytes = encodePainterOperation(ID, operation);
+      const decoded = decodeMessage(bytes);
+      expect(decoded, `${kind} did not decode`).not.toBeNull();
+      const back = decodePainterOperation(decoded!);
+      expect(back?.kind, `${kind} came back as something else`).toBe(kind);
+    }
+  });
+});
+
+describe("a flood fill on the wire", () => {
+  it("encodes through the same door as everything else", () => {
+    // It was encoded by a different function for a while, and the adapter
+    // every caller actually uses threw instead. The fill was made, the send
+    // failed, and the only screen it reached was the one that drew it.
+    const operation: PainterOperation = {
+      kind: "fill-region",
+      layer: "background",
+      targetActorId: "7",
+      at: { x: 5, y: 6 },
+      width: 3,
+      height: 2,
+      color: { r: 200, g: 100, b: 50, a: 255 },
+      coverage: new Uint8Array([0b10110000]),
+      mask: NO_WIRE_MASK,
+    };
+
+    const bytes = encodePainterOperation(ID, operation);
+    const decoded = decodeMessage(bytes);
+    expect(decoded).toMatchObject({
+      type: "putImage",
+      userId: ID,
+      targetOwner: 7,
+      layer: "background",
+      x: 5,
+      y: 6,
+      width: 3,
+      height: 2,
+      color: { r: 200, g: 100, b: 50, a: 255 },
+    });
+
+    const back = decodePainterOperation(decoded!);
+    expect(back).toMatchObject({
+      kind: "fill-region",
+      targetActorId: "7",
+      at: { x: 5, y: 6 },
+      width: 3,
+      height: 2,
+      color: { r: 200, g: 100, b: 50, a: 255 },
+    });
+    expect(Array.from((back as { coverage: Uint8Array }).coverage)).toEqual([0b10110000]);
+  });
+});
