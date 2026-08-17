@@ -406,6 +406,79 @@ describe("the optimistic fork's patience", () => {
   });
 });
 
+describe("the synchronisation trace", () => {
+  /**
+   * A canvas that came out wrong is the worst failure here, and the operations
+   * alone do not explain one: what matters is the order they arrived in
+   * relative to local work and which branch of reconciliation each took, and
+   * neither survives the moment it happens. Drawpile records the equivalent
+   * for exactly this.
+   */
+  it("records which way each message went", async () => {
+    const { history } = setup();
+    const operation = {
+      kind: "stroke" as const,
+      layer: "foreground" as const,
+      brushSize: 1,
+      brush: "solid" as const,
+      color: { r: 10, g: 0, b: 0, a: 255 },
+      points: [{ x: 3, y: 3 }],
+      mask: { type: 0, r: 0, g: 0, b: 0 },
+    };
+
+    // Nothing pending: straight through.
+    await remote(history, stroke(REMOTE, 20, 20, 10), 1);
+
+    // Ours, then its echo.
+    history.handleLocalOperation({ id: "mine", actorId: String(LOCAL), operation });
+    // Somebody else, nowhere near our pending pixels.
+    await remote(history, stroke(REMOTE, 40, 40, 10), 2);
+    // Somebody else painting into *our* pair, right on top of them --
+    // drawing on another participant's layers is a thing this canvas allows,
+    // and it is the case where a rollback is actually required. Two people at
+    // the same coordinates on their own layers do not overlap at all.
+    await remote(
+      history,
+      encodeStroke(REMOTE, LOCAL, "foreground", 1, "solid", 99, 0, 0, 255, [
+        { x: 3, y: 3 },
+      ]),
+      3,
+    );
+    await history.handleCanonicalOperation({
+      id: "mine",
+      actorId: String(LOCAL),
+      operation,
+      sequence: 4,
+    });
+
+    const actions = history
+      .synchronizationTrace()
+      .map((event) => `${event.source}:${event.action ?? event.op}`);
+
+    expect(actions).toEqual([
+      "canonical:applied",
+      "local:stroke",
+      "canonical:concurrent",
+      "canonical:replay",
+      "canonical:echo",
+    ]);
+  });
+
+  it("keeps the trace bounded, and hands back a copy", async () => {
+    const { history } = setup();
+    for (let i = 0; i < 700; i++) {
+      await remote(history, stroke(REMOTE, 20, 20, 10), i + 1);
+    }
+    const trace = history.synchronizationTrace();
+    expect(trace.length).toBeLessThanOrEqual(512);
+    expect(trace.length).toBeGreaterThan(0);
+
+    // A caller cannot reach in and edit what was recorded.
+    trace[0].op = "tampered";
+    expect(history.synchronizationTrace()[0].op).not.toBe("tampered");
+  });
+});
+
 describe("canonical application", () => {
   it("reconciles public operation envelopes by operation id", async () => {
     const { engine, history } = setup();

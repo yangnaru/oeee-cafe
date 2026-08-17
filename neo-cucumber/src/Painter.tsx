@@ -759,6 +759,11 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     };
   }, [drawingEngine, canvasWidth, canvasHeight, config.mode]);
 
+  const synchronizationTrace = useCallback(
+    () => synchronizationHistoryRef.current?.synchronizationTrace() ?? [],
+    [],
+  );
+
   const compactCanonicalHistory = useCallback(async (sequence: number): Promise<void> => {
     const history = synchronizationHistoryRef.current;
     if (!history) throw new Error("Painter is not in controlled mode");
@@ -803,12 +808,13 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       exportCheckpoint,
       applyCheckpoint,
       exportSessionArchive,
+      synchronizationTrace,
       compactCanonicalHistory,
       isSynchronizationSettled,
       // The owning mount adapter replaces this with its React-root teardown.
       unmount: () => {},
     }),
-    [save, exportPng, exportReplay, loadImage, undo, redo, setLocalActorId, setParticipants, setLayersOrigin, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive, compactCanonicalHistory, isSynchronizationSettled],
+    [save, exportPng, exportReplay, loadImage, undo, redo, setLocalActorId, setParticipants, setLayersOrigin, applyCanonicalOperation, exportCheckpoint, applyCheckpoint, exportSessionArchive, compactCanonicalHistory, isSynchronizationSettled, synchronizationTrace],
   );
 
   // Point the engine, the history and the emitter at the selected participant

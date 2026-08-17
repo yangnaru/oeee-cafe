@@ -283,6 +283,17 @@ export interface PainterHandle {
   /** True when no pointer gesture or optimistic operation is outstanding. */
   isSynchronizationSettled(): boolean;
 
+  /**
+   * The recent history of what arrived and what reconciliation decided about
+   * it, for attaching to a report of a canvas that came out wrong.
+   *
+   * The operations are recoverable from `exportSessionArchive`; the order they
+   * arrived in relative to local work, and which branch each one took, is not
+   * recoverable from anything after the fact. Drawpile keeps the equivalent
+   * for the same reason. Empty outside controlled mode.
+   */
+  synchronizationTrace(): import("./utils/canvasHistory").HistoryTraceEvent[];
+
   /** Idempotently release listeners, canvases, controls, and framework roots. */
   unmount(): void;
 }

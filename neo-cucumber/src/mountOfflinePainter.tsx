@@ -146,6 +146,9 @@ export function mountOfflinePainter(
     async compactCanonicalHistory(sequence) {
       return (await liveController()).compactCanonicalHistory(sequence);
     },
+    synchronizationTrace() {
+      return synchronousController().synchronizationTrace();
+    },
     isSynchronizationSettled() {
       return synchronousController().isSynchronizationSettled();
     },

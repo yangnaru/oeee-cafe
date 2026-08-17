@@ -173,6 +173,50 @@ const MAX_SAVEPOINTS = 8;
  */
 export const MAX_FORK_FALLBEHIND = 10000;
 
+/** How many recent decisions the synchronisation trace keeps. */
+const TRACE_LENGTH = 512;
+
+/**
+ * One thing that happened to this history, and what was decided about it.
+ *
+ * Drawpile records every input to its canvas history -- local message, remote
+ * message, reset, cleanup -- so a divergence somebody reports can be replayed
+ * offline against the exact sequence that produced it (`DP_DUMP_*` in
+ * `canvas_history.h`). A replay that renders differently from the canvas it
+ * was recorded on is the worst failure this codebase can produce, and until
+ * now the only evidence of one was that somebody noticed.
+ *
+ * This is the same idea at the granularity that matters here: not the pixels,
+ * which are large and reproducible from the operations, but the order things
+ * arrived in and which branch of reconciliation each one took.
+ */
+export interface HistoryTraceEvent {
+  /** Milliseconds since this history was constructed. */
+  at: number;
+  source: "local" | "canonical" | "reset";
+  /** The operation type, e.g. `stroke`, `undo`, `fillRegion`. */
+  op: string;
+  actor: string;
+  seq?: number;
+  /**
+   * Which way reconciliation went, for canonical messages:
+   *
+   * - `echo` -- matched the head of our own fork, already on the canvas
+   * - `concurrent` -- someone else's, touching none of our pending pixels
+   * - `replay` -- overlapped pending work, so history was rebuilt under it
+   * - `diverged` -- our own id from elsewhere; the fork was dropped
+   * - `fallbehind` -- the fork waited too long and was given up on
+   * - `applied` -- nothing pending, applied straight
+   */
+  action?:
+    | "echo"
+    | "concurrent"
+    | "replay"
+    | "diverged"
+    | "fallbehind"
+    | "applied";
+}
+
 function transportId(bytes: Uint8Array): string {
   let result = "";
   for (const byte of bytes) result += byte.toString(16).padStart(2, "0");
@@ -328,6 +372,9 @@ export class CanvasHistory {
    * against `MAX_FORK_FALLBEHIND`. Reset whenever the fork empties.
    */
   private forkFallbehind = 0;
+  /** A bounded ring of recent decisions; see `HistoryTraceEvent`. */
+  private trace: HistoryTraceEvent[] = [];
+  private readonly startedAt = Date.now();
   private canonicalLog: CanonicalPainterOperation[] = [];
   private openBatch: OpenBatch | null = null;
   // Per-user stroke continuation state of the currently rendered canvas
@@ -571,6 +618,7 @@ export class CanvasHistory {
   /** Applies an optimistic operation emitted through the public API. */
   handleLocalOperation(entry: LocalPainterOperation): void {
     const msg = toHistoryOperation(entry.actorId, entry.operation);
+    this.record({ source: "local", op: msg.type, actor: entry.actorId });
     this.fork.push({
       id: entry.id,
       msg,
@@ -594,6 +642,7 @@ export class CanvasHistory {
    */
   registerOptimisticOperation(entry: LocalPainterOperation): void {
     const msg = toHistoryOperation(entry.actorId, entry.operation);
+    this.record({ source: "local", op: msg.type, actor: entry.actorId });
     this.fork.push({ id: entry.id, msg, area: affectedArea(msg) });
     if (msg.type === "undoPoint") {
       this.liveStrokes.set(actorKey(entry.actorId), null);
@@ -707,6 +756,23 @@ export class CanvasHistory {
     this.canonicalLog.push({ ...entry, sequence: seq });
   }
 
+  private record(event: Omit<HistoryTraceEvent, "at">): void {
+    this.trace.push({ at: Date.now() - this.startedAt, ...event });
+    if (this.trace.length > TRACE_LENGTH) this.trace.shift();
+  }
+
+  /**
+   * The recent history of what arrived and what was decided about it.
+   *
+   * For attaching to a report of a canvas that came out wrong: the operations
+   * themselves are recoverable from `getCanonicalOperations`, but the order
+   * they arrived in relative to local work, and which branch of reconciliation
+   * each took, is not recoverable from anything once it has happened.
+   */
+  synchronizationTrace(): HistoryTraceEvent[] {
+    return this.trace.map((event) => ({ ...event }));
+  }
+
   /** Canonical transport-neutral log since the most recent reset/checkpoint. */
   getCanonicalOperations(): CanonicalPainterOperation[] {
     return this.canonicalLog.map((entry) => ({
@@ -722,7 +788,10 @@ export class CanvasHistory {
   ): Promise<void> {
     // Echo of our own fork head: already on the canvas (except undo/undoPoint
     // which take effect now)
+    const actor = "userId" in msg ? actorKey(msg.userId) : "";
+
     if (this.fork.length > 0 && this.fork[0].id === id) {
+      this.record({ source: "canonical", op: msg.type, actor, seq, action: "echo" });
       this.fork.shift();
       // Caught up with itself: the fork is keeping pace again.
       if (this.fork.length === 0) this.forkFallbehind = 0;
@@ -747,6 +816,7 @@ export class CanvasHistory {
       "userId" in msg &&
       actorKey(msg.userId) === actorKey(this.localUserId)
     ) {
+      this.record({ source: "canonical", op: msg.type, actor, seq, action: "diverged" });
       console.warn(
         "Canvas history rollback: server order diverged from local fork"
       );
@@ -777,6 +847,7 @@ export class CanvasHistory {
       // the bound the echoes are not coming, and continuing to show pixels
       // only we have is worse than losing them.
       if (++this.forkFallbehind >= MAX_FORK_FALLBEHIND) {
+        this.record({ source: "canonical", op: msg.type, actor, seq, action: "fallbehind" });
         console.warn(
           `Canvas history rollback: local fork fell ${this.forkFallbehind} messages behind`
         );
@@ -793,11 +864,16 @@ export class CanvasHistory {
         pendingAreas.push(this.openBatch.area);
       }
       const concurrent = pendingAreas.every((a) => areasConcurrent(a, area));
+      this.record({
+        source: "canonical", op: msg.type, actor, seq,
+        action: concurrent ? "concurrent" : "replay",
+      });
       await this.applyCanonical(msg, seq, { replay: !concurrent });
       return;
     }
 
     this.forkFallbehind = 0;
+    this.record({ source: "canonical", op: msg.type, actor, seq, action: "applied" });
 
     await this.applyCanonical(msg, seq, { replay: false });
   }
@@ -809,6 +885,12 @@ export class CanvasHistory {
   async handleResetPoint(
     baseSeq: number
   ): Promise<Map<ActorKey, OwnerLayers> | null> {
+    this.record({
+      source: "reset",
+      op: "resetPoint",
+      actor: "",
+      seq: baseSeq,
+    });
     let cut = 0;
     while (
       cut < this.entries.length &&
