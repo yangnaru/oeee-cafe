@@ -14,6 +14,29 @@ use super::db;
 use super::types::*;
 use super::utils::get_preferred_locale;
 
+/// The canvases a session can be created with.
+///
+/// One list, because the lobby form offers these and the create endpoint has to
+/// insist on them. It used to only offer them: `width` and `height` went from
+/// the request body into the row untouched, so a session could be created at
+/// any size at all -- and a session's size is what bounds every checkpoint
+/// snapshot of it, which is what `MAX_SNAPSHOT_BYTES` is derived from and what
+/// the history ceiling is sized against.
+pub const CANVAS_SIZES: [(u32, u32); 2] = [(300, 300), (1024, 768)];
+
+/// The seats a session can offer. A checkpoint holds two snapshots per
+/// participant, so this is the other half of what bounds one.
+pub const MAX_PARTICIPANTS_CHOICES: [i32; 4] = [2, 4, 6, 8];
+
+/// `CANVAS_SIZES` as the form wants them: the value it posts back, and the
+/// label a person reads.
+fn canvas_size_options() -> Vec<(String, String)> {
+    CANVAS_SIZES
+        .iter()
+        .map(|(width, height)| (format!("{width}x{height}"), format!("{width}×{height}")))
+        .collect()
+}
+
 pub async fn get_auth_info(
     auth_session: AuthSession,
     ExtractAcceptLanguage(accept_language): ExtractAcceptLanguage,
@@ -399,10 +422,8 @@ pub async fn collaborate_lobby(
         other_communities => other_communities,
         selected_community_slug => query.community,
         r2_public_endpoint_url => state.config.r2_public_endpoint_url.clone(),
-        canvas_sizes => vec![
-            ("300x300", "300×300"),
-            ("1024x768", "1024×768"),
-        ],
+        canvas_sizes => canvas_size_options(),
+        participant_choices => MAX_PARTICIPANTS_CHOICES,
         draft_post_count => common_ctx.draft_post_count,
         unread_notification_count => common_ctx.unread_notification_count,
         ftl_lang
@@ -419,6 +440,22 @@ pub async fn create_collaborative_session(
     let user = auth_session
         .user
         .ok_or_else(|| anyhow::anyhow!("Authentication required"))?;
+
+    // A canvas and a seat count this server did not offer are not a matter of
+    // taste: both bound how large a checkpoint of this session can be, and the
+    // history ceiling is sized on the assumption that they hold.
+    if !CANVAS_SIZES.contains(&(request.width.max(0) as u32, request.height.max(0) as u32)) {
+        return Err(AppError::InvalidFormData(format!(
+            "unsupported canvas size {}x{}",
+            request.width, request.height
+        )));
+    }
+    if !MAX_PARTICIPANTS_CHOICES.contains(&request.max_participants) {
+        return Err(AppError::InvalidFormData(format!(
+            "unsupported participant limit {}",
+            request.max_participants
+        )));
+    }
 
     let db = &state.db_pool;
     let mut tx = db.begin().await?;
@@ -550,6 +587,7 @@ pub async fn get_active_sessions_json(
 
 #[cfg(test)]
 mod tests {
+    use super::{canvas_size_options, MAX_PARTICIPANTS_CHOICES};
     use crate::web::handlers::test_support;
     use minijinja::context;
     use serde_json::json;
@@ -638,7 +676,8 @@ mod tests {
                 has_more => false,
                 next_url => "",
             },
-            canvas_sizes => vec![("300x300", "300x300")],
+            canvas_sizes => canvas_size_options(),
+            participant_choices => MAX_PARTICIPANTS_CHOICES,
             has_postable_communities => signed_in,
             member_communities => members,
             participated_communities => participated,
@@ -970,7 +1009,8 @@ mod tests {
                     "/api/collaborate/posts",
                     0,
                 ),
-                canvas_sizes => vec![("300x300", "300x300")],
+                canvas_sizes => canvas_size_options(),
+            participant_choices => MAX_PARTICIPANTS_CHOICES,
                 has_postable_communities => false,
                 selected_community_slug => json!(null),
                 draft_post_count => 0,

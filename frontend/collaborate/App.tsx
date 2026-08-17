@@ -524,6 +524,24 @@ export default function App() {
     painterRef.current?.setInteractionEnabled(false);
   }, []);
 
+  /**
+   * Whether a checkpoint made right now would describe canonical state.
+   *
+   * The same two conditions `handleResetRequest` waits for below, asked without
+   * the waiting: a canvas still holding an optimistic fork, or one behind the
+   * canonical position, would checkpoint pixels the room has not agreed on.
+   * Answering the server's query on this rather than on willingness is what
+   * stops a room from picking a client that will silently give up.
+   */
+  const canUploadCheckpoint = useCallback((): boolean => {
+    const painter = painterRef.current;
+    if (!painter || localIdRef.current === null) return false;
+    return (
+      painter.isSynchronizationSettled() &&
+      appliedSequenceRef.current >= lastSeqRef.current
+    );
+  }, []);
+
   const handleResetRequest = useCallback(async () => {
     const painter = painterRef.current;
     const ws = wsRef.current;
@@ -570,7 +588,7 @@ export default function App() {
     createOrUpdateCursor, hideCursor,
     addParticipant, clearParticipants,
     addChatMessage: (message) => chatAddMessageRef.current?.(message),
-    handleResetRequest, onReconnectCanvas, onCanvasMessage,
+    handleResetRequest, canUploadCheckpoint, onReconnectCanvas, onCanvasMessage,
     onWelcome: handleWelcome,
     onResetPoint: handleResetPoint,
     verifyCanonicalPosition,

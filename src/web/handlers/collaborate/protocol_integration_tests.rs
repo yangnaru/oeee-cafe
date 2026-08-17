@@ -10,7 +10,7 @@ use tokio::task::JoinHandle;
 use tokio_tungstenite::{accept_async, connect_async, tungstenite::Message};
 use uuid::Uuid;
 
-use super::redis_messages::RedisMessageStore;
+use super::redis_messages::{self, RedisMessageStore, Sequenced};
 use super::redis_state::{RedisStateManager, RoomBroadcast};
 use super::websocket::{valid_reset_payloads, wrap_sequenced};
 use crate::redis::RedisPool;
@@ -523,7 +523,10 @@ async fn checkpoint_compaction_keeps_operations_that_race_after_its_base() {
         );
         let apply_checkpoint = store.apply_reset(harness.room, 2, &snapshots);
         let (published, compacted) = tokio::join!(publish_newer, apply_checkpoint);
-        assert_eq!(published.expect("newer operation sequenced"), 3);
+        assert!(matches!(
+            published.expect("newer operation sequenced"),
+            Sequenced::Stored { seq: 3, .. }
+        ));
         compacted.expect("checkpoint applied");
 
         let (mut late_joiner, _) = connect_async(&harness.url)
@@ -569,6 +572,115 @@ async fn future_checkpoint_is_rejected_without_mutating_history() {
         .expect("history remains readable");
     assert_eq!(history.len(), 1);
     assert!(matches!(&history[0], (1, AxumMessage::Binary(bytes)) if bytes == &payload));
+}
+
+/// A checkpoint is most of what a busy room's history weighs, so what the
+/// server measures for auto-reset is growth on top of it. Get this wrong and a
+/// room either asks for a checkpoint again the instant one lands, or -- with
+/// the base never moving -- stops asking altogether.
+#[tokio::test]
+async fn a_checkpoint_becomes_the_weight_that_later_growth_is_measured_from() {
+    let harness = start_harness().await;
+    let store = RedisMessageStore::new(harness.pool.clone());
+    let channel = format!("oeee:pubsub:{}", harness.room);
+
+    for marker in [0x11, 0x22, 0x33] {
+        let payload = vec![0x12, 1, marker];
+        store
+            .sequence_and_publish(harness.room, &payload, "alice", &channel)
+            .await
+            .expect("seed operation");
+    }
+    let before = store.history_size(harness.room).await.expect("size");
+    assert_eq!(before.messages, 3);
+    assert_eq!(before.bytes, 9);
+    // Nothing has been checkpointed, so all of it is growth.
+    assert_eq!(before.messages_since_reset(), 3);
+    assert_eq!(before.bytes_since_reset(), 9);
+
+    // A checkpoint heavier than the history it replaces, which is the normal
+    // case: ours are PNGs of every layer of every participant.
+    let snapshots = [vec![0x02; 40], vec![0x02; 60]];
+    store
+        .apply_reset(harness.room, 3, &snapshots)
+        .await
+        .expect("checkpoint applied");
+
+    let after = store.history_size(harness.room).await.expect("size");
+    assert_eq!(after.messages, 2);
+    assert_eq!(after.bytes, 100);
+    // The checkpoint is the new floor, not new growth. A room that has just
+    // been checkpointed has grown by nothing.
+    assert_eq!(after.messages_since_reset(), 0);
+    assert_eq!(after.bytes_since_reset(), 0);
+    assert!(after.bytes <= redis_messages::effective_auto_reset_bytes(after.base_bytes));
+
+    // And what is drawn after it counts again, from there.
+    store
+        .sequence_and_publish(harness.room, &[0x12, 1, 0x44], "alice", &channel)
+        .await
+        .expect("operation after the checkpoint");
+    let grown = store.history_size(harness.room).await.expect("size");
+    assert_eq!(grown.messages_since_reset(), 1);
+    assert_eq!(grown.bytes_since_reset(), 3);
+}
+
+/// The wall refuses the newest message. It does not make room by dropping the
+/// oldest, because the oldest is the checkpoint every later message is drawn on
+/// top of -- a history trimmed from the front replays into a canvas that never
+/// existed, and does it silently.
+#[tokio::test]
+async fn a_full_history_refuses_new_operations_instead_of_dropping_old_ones() {
+    let harness = start_harness().await;
+    let store = RedisMessageStore::new(harness.pool.clone());
+    let channel = format!("oeee:pubsub:{}", harness.room);
+
+    let checkpoint = vec![0x02, 1, 0, 0];
+    store
+        .sequence_and_publish(harness.room, &checkpoint, "alice", &channel)
+        .await
+        .expect("seed the checkpoint");
+
+    // Stand the room one byte short of its ceiling rather than actually
+    // writing two hundred megabytes through Redis to get there. The counter is
+    // what the sequencer reads, so this is the same state, arrived at cheaply.
+    let mut conn = harness.pool.get().await.expect("Redis connection");
+    let _: () = conn
+        .set(
+            format!("oeee:msg_bytes:v4:{}", harness.room),
+            redis_messages::MAX_HISTORY_BYTES - 1,
+        )
+        .await
+        .expect("stand the room at its ceiling");
+
+    let refused = store
+        .sequence_and_publish(harness.room, &[0x12, 1, 0x55], "alice", &channel)
+        .await
+        .expect("the ceiling is not an error");
+    assert!(matches!(refused, Sequenced::HistoryFull { .. }));
+
+    // The refused message was not stored, not sequenced, and -- the point of
+    // all this -- took nothing with it.
+    let (_, history) = store
+        .get_history_snapshot(harness.room)
+        .await
+        .expect("history remains readable");
+    assert_eq!(history.len(), 1);
+    assert!(matches!(&history[0], (1, AxumMessage::Binary(bytes)) if bytes == &checkpoint));
+
+    // A checkpoint is what gets a room out of this, and it puts the counter
+    // back to what the checkpoint itself weighs.
+    store
+        .apply_reset(harness.room, 1, &[vec![0x02; 10], vec![0x02; 10]])
+        .await
+        .expect("checkpoint applied");
+    assert!(matches!(
+        store
+            .sequence_and_publish(harness.room, &[0x12, 1, 0x66], "alice", &channel)
+            .await
+            .expect("drawing resumes"),
+        Sequenced::Stored { .. }
+    ));
 }
 
 #[tokio::test]
@@ -665,8 +777,11 @@ async fn concurrent_clients_receive_the_same_contiguous_high_contention_history(
     .expect("high-contention collaboration scenario timed out");
 }
 
+/// The checkpoint goes to whoever answers the query first, and to exactly one
+/// of them. Two clients that both feel able to do the work is the ordinary
+/// case, not the exceptional one.
 #[tokio::test]
-async fn reset_upload_authority_is_bound_to_one_selected_connection() {
+async fn the_first_connection_to_answer_a_checkpoint_query_gets_it_alone() {
     let (redis, redis_url) = start_redis().await;
     let pool = redis_pool(&redis_url).await;
     let state = RedisStateManager::new(pool);
@@ -674,17 +789,28 @@ async fn reset_upload_authority_is_bound_to_one_selected_connection() {
     let _redis = redis;
 
     assert!(state
-        .try_acquire_reset_pending(room)
+        .try_open_reset_query(room)
         .await
-        .expect("acquire reset lease"));
+        .expect("open checkpoint query"));
+    // A second query while one is outstanding is not opened: the room asked.
+    assert!(!state
+        .try_open_reset_query(room)
+        .await
+        .expect("query already open"));
     assert!(!state
         .is_reset_uploader(room, "alice")
         .await
-        .expect("unassigned lease"));
-    state
-        .assign_reset_uploader(room, "alice")
+        .expect("nobody has answered yet"));
+
+    assert!(state
+        .claim_reset_upload(room, "alice")
         .await
-        .expect("select uploader");
+        .expect("alice answers first"));
+    assert!(!state
+        .claim_reset_upload(room, "bob")
+        .await
+        .expect("bob answers second"));
+
     assert!(state
         .is_reset_uploader(room, "alice")
         .await
@@ -693,6 +819,7 @@ async fn reset_upload_authority_is_bound_to_one_selected_connection() {
         .is_reset_uploader(room, "bob")
         .await
         .expect("different connection"));
+
     state
         .clear_reset_pending(room)
         .await
@@ -701,6 +828,50 @@ async fn reset_upload_authority_is_bound_to_one_selected_connection() {
         .is_reset_uploader(room, "alice")
         .await
         .expect("expired authority"));
+}
+
+/// A room out of history cannot wait for a window to lapse before asking
+/// again -- nobody in it can draw until a checkpoint lands.
+#[tokio::test]
+async fn a_forced_query_reopens_one_that_is_already_outstanding() {
+    let (redis, redis_url) = start_redis().await;
+    let pool = redis_pool(&redis_url).await;
+    let state = RedisStateManager::new(pool);
+    let room = Uuid::new_v4();
+    let _redis = redis;
+
+    assert!(state
+        .try_open_reset_query(room)
+        .await
+        .expect("open checkpoint query"));
+    assert!(state
+        .claim_reset_upload(room, "alice")
+        .await
+        .expect("alice takes it"));
+
+    assert!(state
+        .reopen_reset_query(room)
+        .await
+        .expect("reopen the query"));
+
+    // Alice's claim is gone, and anyone may now take it -- including Alice, if
+    // she is still the only one able.
+    assert!(!state
+        .is_reset_uploader(room, "alice")
+        .await
+        .expect("claim released"));
+
+    // Every message a full room refuses arrives here, from every client in it.
+    // The second one must not put the room's question to it again.
+    assert!(!state
+        .reopen_reset_query(room)
+        .await
+        .expect("the query is already unanswered"));
+
+    assert!(state
+        .claim_reset_upload(room, "bob")
+        .await
+        .expect("bob answers the new query"));
 }
 
 #[test]

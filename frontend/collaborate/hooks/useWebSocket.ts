@@ -2,6 +2,7 @@ import { useCallback, useRef, useEffect } from "react";
 import {
   decodeMessage,
   encodeJoin,
+  encodeResetOffer,
   unwrapSequenced,
   type DecodedMessage,
 } from "../binaryProtocol";
@@ -30,6 +31,11 @@ const RECONNECT_MAX_MS = 10000;
 const RECONNECT_JITTER_MS = 500;
 // The server's close code for a refused join (session over or full).
 const WS_CLOSE_POLICY = 1008;
+// How long a participant who does not own the session waits before offering to
+// upload a checkpoint, giving the owner the first refusal. Long enough that the
+// owner's answer wins a same-tick race, short enough that nobody notices when
+// the owner is not there to take it.
+const NON_OWNER_RESET_OFFER_DELAY_MS = 300;
 
 interface Participant {
   userId: string;
@@ -76,6 +82,13 @@ interface WebSocketHookParams {
     timestamp: number;
   }) => void;
   handleResetRequest: () => void;
+  /**
+   * Whether this client could upload a checkpoint right now: caught up with
+   * canonical history and holding a settled canvas. Answering a reset query
+   * when this is false is how a room ends up waiting out the whole upload
+   * window for a checkpoint that was never coming.
+   */
+  canUploadCheckpoint: () => boolean;
   onReconnectCanvas: (reconnecting: boolean, resumeSequence: number | null) => Promise<void> | void;
   onCanvasMessage: (message: DecodedMessage, raw: Uint8Array, sequence?: number) => Promise<void>;
   onWelcome: (sessionId: number) => void;
@@ -111,6 +124,7 @@ export const useWebSocket = ({
   clearParticipants,
   addChatMessage,
   handleResetRequest,
+  canUploadCheckpoint,
   onReconnectCanvas,
   onCanvasMessage,
   onWelcome,
@@ -150,6 +164,42 @@ export const useWebSocket = ({
   useEffect(() => {
     handleResetRequestRef.current = handleResetRequest;
   }, [handleResetRequest]);
+
+  const canUploadCheckpointRef = useRef(canUploadCheckpoint);
+  useEffect(() => {
+    canUploadCheckpointRef.current = canUploadCheckpoint;
+  }, [canUploadCheckpoint]);
+
+  /**
+   * Answers a reset query, if we are in a position to mean it.
+   *
+   * Non-owners hold back a moment first. Whoever answers first does the work,
+   * and the session owner is the participant most likely to still be here when
+   * it finishes -- this is the cheap version of Drawpile's ranked candidate
+   * list, which weighs its volunteers before choosing between them. If the
+   * owner is absent or unable, the beat passes and everyone else answers.
+   */
+  const answerResetQuery = useCallback(async () => {
+    if (!canUploadCheckpointRef.current()) {
+      console.log("Checkpoint query declined: not caught up");
+      return;
+    }
+    const isOwner = userIdRef.current === canvasMeta?.ownerId;
+    if (!isOwner) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, NON_OWNER_RESET_OFFER_DELAY_MS)
+      );
+      if (!canUploadCheckpointRef.current()) return;
+    }
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(encodeResetOffer());
+  }, [canvasMeta?.ownerId, userIdRef]);
+
+  const answerResetQueryRef = useRef(answerResetQuery);
+  useEffect(() => {
+    answerResetQueryRef.current = answerResetQuery;
+  }, [answerResetQuery]);
 
   // Function to get WebSocket URL dynamically
   const getWebSocketUrl = useCallback(() => {
@@ -747,10 +797,17 @@ export const useWebSocket = ({
           case "resetRequest": {
             console.log("Session reset request received:", {
               timestamp: message.timestamp,
+              phase: message.phase,
             });
 
-            // The server chose this client to upload a session reset
-            handleResetRequestRef.current();
+            if (message.phase === "query") {
+              // The room is asking who can upload a checkpoint. Answering is
+              // one byte; the work only starts if we win.
+              void answerResetQueryRef.current();
+            } else {
+              // We answered first, so it is ours to do.
+              handleResetRequestRef.current();
+            }
             break;
           }
 

@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use super::{db, messages, redis_messages, utils};
+use super::{db, messages, protocol, redis_messages, utils};
 
 struct SessionContext<'a> {
     connection_id: &'a str,
@@ -22,9 +22,20 @@ struct SessionContext<'a> {
     user_id: Uuid,
     room_uuid: Uuid,
     is_owner: bool,
-    owner_id: Uuid,
+    /// The 1-byte id this connection draws under. Every canvas message it
+    /// sends is stamped with this before it is sequenced, so the author of a
+    /// mark is never the client's to claim.
+    session_user_id: u8,
     db: &'a sqlx::Pool<sqlx::Postgres>,
     state: &'a AppState,
+}
+
+/// Why the outgoing task should stop, and what to tell the client on its way
+/// out. A close frame with a reason lets the client decide whether to come
+/// back; a socket that simply dies leaves it guessing.
+struct Goodbye {
+    code: u16,
+    reason: Cow<'static, str>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -39,9 +50,14 @@ impl ResumeQuery {
     }
 }
 
-// Auto-reset threshold, in history messages: past this the server asks one
-// client to upload a session reset that replaces the accumulated history
-// (Drawpile's auto-reset). Keeps catch-up for late joiners fast.
+// How many messages a room may add on top of its last checkpoint before the
+// server asks for a new one (Drawpile's auto-reset). Keeps catch-up for late
+// joiners fast: this is what a joiner has to *apply*, where
+// `AUTO_RESET_THRESHOLD_BYTES` is what it has to be sent. Neither meter stands
+// in for the other -- our operations run from a two-byte undo point to half a
+// megabyte of pixels -- so whichever is reached first asks.
+//
+// Counted from the checkpoint, not from nothing: see `maybe_request_reset`.
 const RESET_THRESHOLD_MESSAGES: usize = 500;
 
 // How often a live connection refreshes its Redis registry entry. Comfortably
@@ -60,12 +76,38 @@ const HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1
 // busy enough to live.
 const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 
+// How many live messages may be waiting for one connection's socket before the
+// server gives up on it.
+//
+// This queue used to be unbounded, which meant a client that had stopped
+// draining -- a phone that went into a tunnel, a laptop that slept -- grew a
+// private backlog on the server for as long as it stayed connected, and had no
+// way of ever catching up with it. Drawpile does not keep a per-client queue at
+// all: each client holds a position in the shared history and is handed the
+// next batch only once its socket has drained.
+//
+// We get the same guarantee from the other end. The canonical history is in
+// Redis and a client can rejoin at any position it has already reached, so a
+// connection that falls this far behind is closed and told to come back, and
+// its replay starts from the last position it acknowledged. Bounded memory,
+// and the client loses nothing but the socket.
+//
+// The number is live traffic only -- history replay is written straight to the
+// socket, not through here -- so it is roughly "messages a room can produce
+// while one client stalls", and a room past auto-reset holds fewer than 500
+// messages in total.
+const OUTGOING_QUEUE_LIMIT: usize = 1024;
+
 // An in-progress session reset upload from this connection: `count` snapshot
 // messages follow a RESET_BEGIN and replace all history up to `base_seq`.
 struct PendingReset {
     base_seq: u64,
     remaining: u16,
     payloads: Vec<Vec<u8>>,
+    /// False when this connection was not the one asked for the checkpoint.
+    /// The snapshots are still counted off the wire -- see `parse_reset_begin`
+    /// -- and then dropped.
+    accepted: bool,
 }
 
 pub async fn websocket_collaborate_handler(
@@ -106,7 +148,7 @@ pub async fn handle_socket(
 
     let db = &state.db_pool;
 
-    let (is_owner, owner_id, session_user_id, connection_info) = match setup_connection(
+    let (is_owner, session_user_id, connection_info) = match setup_connection(
         db,
         room_uuid,
         user_id,
@@ -145,6 +187,23 @@ pub async fn handle_socket(
         return;
     }
 
+    // Who is already here, and which id each of them draws under -- before any
+    // of their strokes arrive.
+    //
+    // This mapping also reaches the room as a LAYERS broadcast, but that one is
+    // triggered by this client's own JOIN, which it cannot send until it has
+    // this socket and has begun replay. Without this a joiner spends the whole
+    // of its catch-up watching marks made by session ids it has no names for.
+    if let Some(layers) = messages::current_layers_message(room_uuid, &state).await {
+        if sender.send(Message::Binary(layers)).await.is_err() {
+            error!(
+                "Failed to send the participant list to connection {} in room {}",
+                connection_id, room_uuid
+            );
+            return;
+        }
+    }
+
     // Subscribe to the room channel BEFORE replaying history so no message can
     // fall into the gap between history replay and the live stream. Messages
     // covered by both are deduplicated below via their sequence numbers.
@@ -164,9 +223,15 @@ pub async fn handle_socket(
     };
 
     let (redis_tx, mut redis_rx) =
-        mpsc::unbounded_channel::<(Option<(Uuid, u64)>, Vec<u8>)>();
+        mpsc::channel::<(Option<(Uuid, u64)>, Vec<u8>)>(OUTGOING_QUEUE_LIMIT);
+    let (close_tx, close_rx) = tokio::sync::oneshot::channel::<Goodbye>();
+    // Two paths can decide this connection is over -- a client that has stopped
+    // draining, and a client that sent a frame this protocol does not have --
+    // and only one of them gets to say goodbye.
+    let close_tx = std::sync::Arc::new(std::sync::Mutex::new(Some(close_tx)));
 
     let connection_id_clone = connection_id.clone();
+    let overflow_close_tx = close_tx.clone();
     let redis_task = tokio::spawn(async move {
         loop {
             match pubsub.on_message().next().await {
@@ -176,12 +241,34 @@ pub async fn handle_socket(
                         Some(room_msg) => {
                             if should_forward_to_connection(&room_msg, &connection_id_clone) {
                                 let position = room_msg.history_id.zip(room_msg.seq);
-                                if redis_tx.send((position, room_msg.payload)).is_err() {
-                                    debug!(
-                                        "Redis message channel closed for connection {}",
-                                        connection_id_clone
-                                    );
-                                    break;
+                                match redis_tx.try_send((position, room_msg.payload)) {
+                                    Ok(()) => {}
+                                    Err(mpsc::error::TrySendError::Full(_)) => {
+                                        // Do not wait for room: blocking here
+                                        // backs the stall up into the Redis
+                                        // subscriber, and the room's other
+                                        // members are not the ones with the
+                                        // problem. Close, and let this client
+                                        // resume from the position it last
+                                        // acknowledged.
+                                        warn!(
+                                            "Connection {} is {} messages behind - closing so it can resume",
+                                            connection_id_clone, OUTGOING_QUEUE_LIMIT
+                                        );
+                                        send_goodbye(
+                                            &overflow_close_tx,
+                                            close_code::AGAIN,
+                                            "too far behind",
+                                        );
+                                        break;
+                                    }
+                                    Err(mpsc::error::TrySendError::Closed(_)) => {
+                                        debug!(
+                                            "Redis message channel closed for connection {}",
+                                            connection_id_clone
+                                        );
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -228,15 +315,28 @@ pub async fn handle_socket(
 
     // Handle outgoing messages (from Redis) in a separate task
     let outgoing_shutdown = state.shutdown.clone();
-    let outgoing_task = tokio::spawn(async move {
+    let mut outgoing_task = tokio::spawn(async move {
         let mut keepalive = tokio::time::interval_at(
             tokio::time::Instant::now() + KEEPALIVE_INTERVAL,
             KEEPALIVE_INTERVAL,
         );
         keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut close_rx = close_rx;
         loop {
             tokio::select! {
                 biased;
+                // Somebody decided this connection is over and left a reason.
+                goodbye = &mut close_rx => {
+                    if let Ok(goodbye) = goodbye {
+                        let _ = sender
+                            .send(Message::Close(Some(CloseFrame {
+                                code: goodbye.code,
+                                reason: goodbye.reason,
+                            })))
+                            .await;
+                    }
+                    break;
+                }
                 // A redeploy: say goodbye properly. A close frame lets the
                 // client start reconnecting to the new process right away
                 // instead of inferring the loss from a severed socket.
@@ -282,10 +382,11 @@ pub async fn handle_socket(
             user_id,
             room_uuid,
             is_owner,
-            owner_id,
+            session_user_id,
             db,
             state: &state,
         },
+        &close_tx,
     )
     .await;
 
@@ -304,7 +405,40 @@ pub async fn handle_socket(
     .await;
 
     redis_task.abort();
+
+    // A goodbye is only a goodbye if it reaches the wire. When one has been
+    // handed over, give the outgoing task a moment to send it before the abort
+    // takes the socket out from under it -- a client told "come back" resumes,
+    // where a client whose socket merely died has to work out what happened.
+    let goodbye_pending = close_tx
+        .lock()
+        .expect("close channel is never held across a panic")
+        .is_none();
+    if goodbye_pending {
+        let _ =
+            tokio::time::timeout(std::time::Duration::from_secs(1), &mut outgoing_task).await;
+    }
     outgoing_task.abort();
+}
+
+/// Hands the outgoing task a close frame to send before it stops. Only the
+/// first caller is heard: once the socket is closing, a second reason for it
+/// would be a frame sent after the close.
+fn send_goodbye(
+    close_tx: &std::sync::Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<Goodbye>>>>,
+    code: u16,
+    reason: &'static str,
+) {
+    let sender = close_tx
+        .lock()
+        .expect("close channel is never held across a panic")
+        .take();
+    if let Some(sender) = sender {
+        let _ = sender.send(Goodbye {
+            code,
+            reason: Cow::from(reason),
+        });
+    }
 }
 
 /// Refreshes this connection's Redis registry entry until the socket closes.
@@ -364,7 +498,7 @@ async fn setup_connection(
     user_login_name: &str,
     connection_id: &str,
     state: &AppState,
-) -> Result<(bool, Uuid, u8, super::redis_state::ConnectionInfo), ()> {
+) -> Result<(bool, u8, super::redis_state::ConnectionInfo), ()> {
     let session_info = match db::get_session_info(db, room_uuid).await {
         Ok(Some(info)) => info,
         Ok(None) => {
@@ -425,7 +559,6 @@ async fn setup_connection(
 
     Ok((
         session_info.owner_id == user_id,
-        session_info.owner_id,
         session_user_id,
         connection_info,
     ))
@@ -595,6 +728,36 @@ mod forwarding_tests {
         }
     }
 
+    /// Everything after a RESET_BEGIN is read as part of the checkpoint until
+    /// its count runs out, so a count the server should not have believed
+    /// either swallows the room's drawing or lets a checkpoint's snapshots
+    /// loose into history as ordinary messages.
+    #[test]
+    fn believes_only_a_snapshot_count_a_checkpoint_could_have() {
+        use super::reset_snapshot_count;
+
+        let announce = |base: u64, count: u16| {
+            let mut frame = vec![0x0c];
+            frame.extend_from_slice(&base.to_le_bytes());
+            frame.extend_from_slice(&count.to_le_bytes());
+            frame
+        };
+
+        // A pair per participant, from one participant up to the whole id space.
+        assert_eq!(reset_snapshot_count(&announce(7, 2)), Some((7, 2)));
+        assert_eq!(reset_snapshot_count(&announce(0, 16)), Some((0, 16)));
+        assert_eq!(reset_snapshot_count(&announce(1, 510)), Some((1, 510)));
+
+        // A checkpoint of nothing, of half a participant, or of more
+        // participants than a session can hold.
+        assert_eq!(reset_snapshot_count(&announce(7, 0)), None);
+        assert_eq!(reset_snapshot_count(&announce(7, 3)), None);
+        assert_eq!(reset_snapshot_count(&announce(7, 512)), None);
+
+        // A frame too short to hold the count at all.
+        assert_eq!(reset_snapshot_count(&[0x0c, 0, 0]), None);
+    }
+
     #[test]
     fn resumes_only_a_position_on_the_current_history() {
         let history_id = Uuid::new_v4();
@@ -695,6 +858,7 @@ async fn send_history_to_new_connection(
 async fn handle_incoming_messages(
     receiver: &mut futures_util::stream::SplitStream<WebSocket>,
     ctx: SessionContext<'_>,
+    close_tx: &std::sync::Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<Goodbye>>>>,
 ) {
     let mut pending_reset: Option<PendingReset> = None;
 
@@ -717,7 +881,7 @@ async fn handle_incoming_messages(
             },
         };
 
-        let mut msg = match msg {
+        let msg = match msg {
             Ok(msg) => msg,
             Err(e) => {
                 error!(
@@ -728,9 +892,48 @@ async fn handle_incoming_messages(
             }
         };
 
-        if !matches!(msg, Message::Binary(_)) {
+        let Message::Binary(mut data) = msg else {
             continue;
+        };
+
+        // Nothing the server cannot lay out gets past here. History is
+        // replayed to everyone who joins later, so a frame accepted once is
+        // accepted for as long as the session lives, and a frame nobody can
+        // parse is a gap in every future replay.
+        match protocol::validate(&data) {
+            Ok(()) => {}
+            Err(rejection) if rejection.is_fatal() => {
+                warn!(
+                    "Closing connection {} in room {}: {}",
+                    ctx.connection_id, ctx.room_uuid, rejection
+                );
+                send_goodbye(close_tx, close_code::INVALID, "malformed message");
+                break;
+            }
+            Err(rejection) => {
+                debug!(
+                    "Ignoring message from connection {} in room {}: {}",
+                    ctx.connection_id, ctx.room_uuid, rejection
+                );
+                continue;
+            }
         }
+
+        // The author of a mark is the server's to decide, not the sender's.
+        if let Some(claimed) = protocol::enforce_origin(&mut data, ctx.session_user_id) {
+            warn!(
+                "Connection {} (user {}) sent a 0x{:02x} authored by session user {} in room {}; \
+                 rewritten as {}",
+                ctx.connection_id,
+                ctx.user_login_name,
+                data[0],
+                claimed,
+                ctx.room_uuid,
+                ctx.session_user_id
+            );
+        }
+
+        let mut msg = Message::Binary(data);
 
         if let Message::Binary(data) = &msg {
             // Session reset upload: RESET_BEGIN announces the snapshots, then
@@ -739,11 +942,15 @@ async fn handle_incoming_messages(
             // state; only late joiners replay the reset)
             if let Some(reset) = pending_reset.as_mut() {
                 if data.first() == Some(&(messages::MessageType::Snapshot as u8)) {
-                    reset.payloads.push(data.clone());
+                    if reset.accepted {
+                        reset.payloads.push(data.clone());
+                    }
                     reset.remaining -= 1;
                     if reset.remaining == 0 {
                         let reset = pending_reset.take().expect("pending reset exists");
-                        finish_reset(&ctx, reset).await;
+                        if reset.accepted {
+                            finish_reset(&ctx, reset).await;
+                        }
                     }
                     continue;
                 }
@@ -753,15 +960,13 @@ async fn handle_incoming_messages(
                 continue;
             }
 
-            if !data.is_empty() {
-                let msg_type = data[0];
-
-                if msg_type < 0x10 {
-                    msg = match process_server_message(msg_type, data, &msg, &ctx).await {
-                        Some(processed_msg) => processed_msg,
-                        None => continue,
-                    };
-                }
+            // Validation above guarantees a type byte.
+            let msg_type = data[0];
+            if msg_type < 0x10 {
+                msg = match process_server_message(msg_type, data, &msg, &ctx).await {
+                    Some(processed_msg) => processed_msg,
+                    None => continue,
+                };
             }
         }
 
@@ -769,15 +974,31 @@ async fn handle_incoming_messages(
             // History messages go through the atomic sequencer, which stores
             // and broadcasts them in one step so every client observes the
             // same canonical order (Drawpile-style server-side serialization)
-            if let Err(e) =
-                messages::sequence_and_broadcast(&msg, ctx.room_uuid, ctx.connection_id, ctx.state)
-                    .await
+            match messages::sequence_and_broadcast(
+                &msg,
+                ctx.room_uuid,
+                ctx.connection_id,
+                ctx.state,
+            )
+            .await
             {
-                error!(
-                    "Failed to sequence message for room {}: {}",
-                    ctx.room_uuid, e
-                );
-                continue;
+                Ok(redis_messages::Sequenced::Stored { .. }) => {}
+                Ok(redis_messages::Sequenced::HistoryFull { .. }) => {
+                    // The room is out of room. The message is gone -- its
+                    // sender will notice, because the echo it is waiting on to
+                    // confirm its own stroke never arrives -- and the one thing
+                    // that can help is a checkpoint, so ask for one even if an
+                    // earlier request is still outstanding.
+                    force_reset_request(&ctx).await;
+                    continue;
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to sequence message for room {}: {}",
+                        ctx.room_uuid, e
+                    );
+                    continue;
+                }
             }
 
             if let Err(e) = ctx.state.redis_state.update_room_activity(ctx.room_uuid).await {
@@ -801,8 +1022,10 @@ async fn handle_incoming_messages(
     }
 
     // If this connection was mid-reset, release the flag so another client
-    // can be asked without waiting for the TTL
-    if pending_reset.is_some() {
+    // can be asked without waiting for the TTL. Only if the checkpoint was
+    // actually ours: a connection whose unasked-for upload we were discarding
+    // would otherwise take the job away from whoever really has it.
+    if pending_reset.is_some_and(|reset| reset.accepted) {
         if let Err(e) = ctx.state.redis_state.clear_reset_pending(ctx.room_uuid).await {
             error!(
                 "Failed to clear reset-pending flag for room {}: {}",
@@ -833,56 +1056,79 @@ async fn send_recent_chat_to_new_connection(
     }
 }
 
-async fn parse_reset_begin(data: &[u8], ctx: &SessionContext<'_>) -> Option<PendingReset> {
+/// The position and snapshot count a RESET_BEGIN announces, if it announces a
+/// checkpoint that could exist.
+///
+/// A checkpoint is one background and one foreground per participant who has
+/// drawn, so the count is even, non-zero, and bounded by the session user id
+/// space. The pairing itself -- which participant each snapshot belongs to --
+/// is checked against the payloads once they arrive, in `valid_reset_payloads`.
+///
+/// None means the count cannot be trusted, and a count that cannot be trusted
+/// is worse than useless: everything after a RESET_BEGIN is read as part of the
+/// checkpoint until the count runs out, so a wrong one either swallows ordinary
+/// drawing or lets snapshots loose into history.
+pub(super) fn reset_snapshot_count(data: &[u8]) -> Option<(u64, u16)> {
     if data.len() < 11 {
-        warn!(
-            "Malformed RESET_BEGIN from connection {} in room {}",
-            ctx.connection_id, ctx.room_uuid
-        );
         return None;
     }
     let base_seq = utils::read_u64_le(data, 1);
     let count = u16::from_le_bytes([data[9], data[10]]);
-    // One background and one foreground per participant who has drawn. The
-    // ceiling is the session user id space, and the pairing itself is checked
-    // against the payloads in `valid_reset_payloads`.
     if count == 0 || count % 2 != 0 || count > 2 * u16::from(u8::MAX) {
-        warn!(
-            "Rejecting RESET_BEGIN with snapshot count {} from connection {} in room {}",
-            count, ctx.connection_id, ctx.room_uuid
-        );
         return None;
     }
-    match ctx
+    Some((base_seq, count))
+}
+
+async fn parse_reset_begin(data: &[u8], ctx: &SessionContext<'_>) -> Option<PendingReset> {
+    let Some((base_seq, count)) = reset_snapshot_count(data) else {
+        warn!(
+            "Rejecting an unusable RESET_BEGIN from connection {} in room {}",
+            ctx.connection_id, ctx.room_uuid
+        );
+        return None;
+    };
+    let accepted = match ctx
         .state
         .redis_state
         .is_reset_uploader(ctx.room_uuid, ctx.connection_id)
         .await
     {
-        Ok(true) => {}
-        Ok(false) => {
-            warn!(
-                "Rejecting reset upload from unselected connection {}",
-                ctx.connection_id
-            );
-            return None;
-        }
+        Ok(accepted) => accepted,
         Err(e) => {
             error!(
                 "Could not authorize reset uploader {}: {}",
                 ctx.connection_id, e
             );
-            return None;
+            false
         }
+    };
+
+    if accepted {
+        info!(
+            "Session reset upload started for room {} at seq {} ({} snapshots)",
+            ctx.room_uuid, base_seq, count
+        );
+    } else {
+        // The snapshots are coming whether we asked for them or not: a client
+        // that predates the query phase reads the query as an instruction and
+        // starts uploading, and a client that lost the race to answer may
+        // already be under way. They are counted off the wire and dropped
+        // here, because a snapshot the server does not recognise as part of a
+        // checkpoint is still a valid message -- it would be sequenced into
+        // history as an ordinary one and stamp the uploader's canvas over
+        // everybody's.
+        warn!(
+            "Discarding a {}-snapshot upload from unselected connection {} in room {}",
+            count, ctx.connection_id, ctx.room_uuid
+        );
     }
-    info!(
-        "Session reset upload started for room {} at seq {} ({} snapshots)",
-        ctx.room_uuid, base_seq, count
-    );
+
     Some(PendingReset {
         base_seq,
         remaining: count,
-        payloads: Vec::with_capacity(count as usize),
+        payloads: Vec::with_capacity(if accepted { count as usize } else { 0 }),
+        accepted,
     })
 }
 
@@ -980,92 +1226,101 @@ pub(super) fn valid_reset_payloads(payloads: &[Vec<u8>]) -> bool {
     seen.values().all(|held| *held == 0b11)
 }
 
+/// Asks the room for a checkpoint once it has drawn enough on top of the last
+/// one to be worth replacing.
 async fn maybe_request_reset(ctx: &SessionContext<'_>) {
     let redis_store = redis_messages::RedisMessageStore::new(ctx.state.redis_pool.clone());
-    let history_len = match redis_store.history_len(ctx.room_uuid).await {
-        Ok(len) => len,
+    let size = match redis_store.history_size(ctx.room_uuid).await {
+        Ok(size) => size,
         Err(e) => {
-            error!(
-                "Failed to get history length for room {}: {}",
-                ctx.room_uuid, e
-            );
+            error!("Failed to measure history for room {}: {}", ctx.room_uuid, e);
             return;
         }
     };
-    if history_len < RESET_THRESHOLD_MESSAGES {
+
+    // Two meters, both counted from the last checkpoint rather than from
+    // nothing, because a checkpoint is most of what a busy room's history
+    // weighs and an absolute threshold would be over the moment one landed.
+    //
+    // Bytes for what a late joiner has to be sent, messages for what it then
+    // has to apply: our operations run from a two-byte undo point to a
+    // half-megabyte region of pixels, so neither meter stands in for the other.
+    let over_bytes = size.bytes > redis_messages::effective_auto_reset_bytes(size.base_bytes);
+    let over_messages = size.messages_since_reset() >= RESET_THRESHOLD_MESSAGES;
+    if !over_bytes && !over_messages {
         return;
     }
 
-    match ctx
-        .state
-        .redis_state
-        .try_acquire_reset_pending(ctx.room_uuid)
-        .await
-    {
+    match ctx.state.redis_state.try_open_reset_query(ctx.room_uuid).await {
         Ok(true) => {}
-        Ok(false) => return, // a reset is already in flight
+        Ok(false) => return, // a query or an upload is already in flight
         Err(e) => {
             error!(
-                "Failed to acquire reset-pending flag for room {}: {}",
+                "Failed to open a checkpoint query for room {}: {}",
                 ctx.room_uuid, e
             );
             return;
         }
     }
 
-    // Choose the reset client: prefer the session owner's connection, falling
-    // back to the earliest-connected one (Drawpile prefers operators)
-    let connections = ctx
-        .state
-        .redis_state
-        .get_room_connections(ctx.room_uuid)
-        .await
-        .unwrap_or_default();
-    let mut target: Option<String> = None;
-    let mut earliest: Option<(u64, String)> = None;
-    for conn_id in connections {
-        if let Ok(Some(info)) = ctx.state.redis_state.get_connection_info(&conn_id).await {
-            if info.user_id == ctx.owner_id {
-                target = Some(conn_id);
-                break;
-            }
-            if earliest
-                .as_ref()
-                .map_or(true, |(t, _)| info.connected_at < *t)
-            {
-                earliest = Some((info.connected_at, conn_id));
-            }
+    info!(
+        "Room {} has added {} messages and {} bytes since its last checkpoint - asking for a new one",
+        ctx.room_uuid,
+        size.messages_since_reset(),
+        size.bytes_since_reset()
+    );
+    messages::send_reset_request(ctx.room_uuid, None, messages::ResetPhase::Query, ctx.state).await;
+}
+
+/// Asks again regardless of what is already outstanding, for the room that has
+/// run out of history and cannot draw until somebody checkpoints it.
+async fn force_reset_request(ctx: &SessionContext<'_>) {
+    match ctx.state.redis_state.reopen_reset_query(ctx.room_uuid).await {
+        // A query is already out and unanswered; asking again would only add
+        // to what the room cannot deliver.
+        Ok(false) => return,
+        Ok(true) => {}
+        Err(e) => {
+            error!(
+                "Failed to reopen the checkpoint query for room {}: {}",
+                ctx.room_uuid, e
+            );
+            return;
         }
     }
-    let target = target.or_else(|| earliest.map(|(_, conn_id)| conn_id));
+    messages::send_reset_request(ctx.room_uuid, None, messages::ResetPhase::Query, ctx.state).await;
+}
 
-    match target {
-        Some(conn_id) => {
+/// A client says it is caught up and able to upload the checkpoint. The first
+/// one to say so gets it; the rest are told nothing and do nothing.
+async fn handle_reset_offer(ctx: &SessionContext<'_>) {
+    match ctx
+        .state
+        .redis_state
+        .claim_reset_upload(ctx.room_uuid, ctx.connection_id)
+        .await
+    {
+        Ok(true) => {
             info!(
-                "History for room {} reached {} messages - requesting session reset",
-                ctx.room_uuid, history_len
+                "Connection {} (user {}) volunteered to checkpoint room {}",
+                ctx.connection_id, ctx.user_login_name, ctx.room_uuid
             );
-            if let Err(e) = ctx
-                .state
-                .redis_state
-                .assign_reset_uploader(ctx.room_uuid, &conn_id)
-                .await
-            {
-                error!("Failed to assign reset uploader for room {}: {}", ctx.room_uuid, e);
-                let _ = ctx.state.redis_state.clear_reset_pending(ctx.room_uuid).await;
-                return;
-            }
-            messages::send_reset_request(ctx.room_uuid, &conn_id, ctx.state).await;
+            messages::send_reset_request(
+                ctx.room_uuid,
+                Some(ctx.connection_id),
+                messages::ResetPhase::Upload,
+                ctx.state,
+            )
+            .await;
         }
-        None => {
-            // No live connection can serve the reset; release the flag
-            if let Err(e) = ctx.state.redis_state.clear_reset_pending(ctx.room_uuid).await {
-                error!(
-                    "Failed to clear reset-pending flag for room {}: {}",
-                    ctx.room_uuid, e
-                );
-            }
-        }
+        Ok(false) => debug!(
+            "Connection {} offered to checkpoint room {}, but the job was taken",
+            ctx.connection_id, ctx.room_uuid
+        ),
+        Err(e) => error!(
+            "Failed to claim the checkpoint for room {}: {}",
+            ctx.room_uuid, e
+        ),
     }
 }
 
@@ -1101,6 +1356,12 @@ async fn process_server_message(
             Some(msg.clone())
         }
         0x03 => messages::handle_chat_message(data, ctx.user_id, ctx.user_login_name),
+        0x04 => {
+            // An answer to a checkpoint query. It is between this connection
+            // and the server; nobody else in the room needs to hear it.
+            handle_reset_offer(ctx).await;
+            None
+        }
         0x07 => {
             messages::handle_end_session_message(
                 data,

@@ -1,6 +1,7 @@
 pub mod db;
 pub mod http_handlers;
 pub mod messages;
+pub mod protocol;
 pub mod redis_messages;
 pub mod redis_state;
 pub mod types;

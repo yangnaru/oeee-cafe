@@ -14,9 +14,76 @@ const MESSAGE_HISTORY_TTL: u64 = 3600;
 const MESSAGE_HISTORY_PREFIX: &str = "oeee:msg_history:v4:";
 const MESSAGE_SEQ_PREFIX: &str = "oeee:msg_seq:v4:";
 const MESSAGE_HISTORY_ID_PREFIX: &str = "oeee:msg_history_id:v4:";
+// What the history weighs, and what it weighed just after the last checkpoint
+// replaced it. Kept as counters beside the list because the alternative is
+// summing every entry on the path of every drawing message.
+const MESSAGE_BYTES_PREFIX: &str = "oeee:msg_bytes:v4:";
+const RESET_BASE_PREFIX: &str = "oeee:msg_reset_base:v4:";
 const CHAT_HISTORY_PREFIX: &str = "oeee:chat_history:v1:";
-const MAX_REDIS_MESSAGES: usize = 50000;
 const MAX_CHAT_MESSAGES: usize = 100;
+
+/// The most a room's canonical history may weigh.
+///
+/// This is a wall, not a trim. The history used to be `LTRIM`med to a message
+/// count, which drops entries from the *front* -- and the front is where a
+/// checkpoint's snapshots live. Everything after them is relative to them, so
+/// trimming produced a history that replayed into a canvas nobody had ever
+/// drawn, silently, an hour after the fact. Drawpile's `addMessage` returns
+/// false when there is no space and the reset path disconnects with "History
+/// limit exceeded" rather than truncate; refusing the newest message is a loss
+/// its sender can see, where losing the oldest is a loss nobody can.
+///
+/// Auto-reset asks for a checkpoint far below this (see
+/// `effective_auto_reset_bytes`), so reaching it means checkpoints have been
+/// failing for a long time.
+///
+/// It has to clear the largest checkpoint that can exist -- 64 MiB, from
+/// `MAX_SNAPSHOT_BYTES` and the largest seat count a session can be created
+/// with -- by enough that a room can still draw after receiving one. A ceiling
+/// a checkpoint could not fit under would refuse every message forever the
+/// moment one landed, which is the one failure worse than the trimming this
+/// replaced.
+pub const MAX_HISTORY_BYTES: u64 = 192 * 1024 * 1024;
+
+/// A checkpoint has to fit, with room left to draw on top of it. Checked here
+/// rather than trusted, because the three numbers it relates live in three
+/// files and only this relationship between them keeps a room drawable.
+const _: () = assert!(
+    MAX_HISTORY_BYTES
+        > 2 * (largest_session() as u64) * (super::protocol::MAX_SNAPSHOT_BYTES as u64)
+);
+
+/// The largest seat count a session can be created with. Two snapshots per
+/// participant is what a checkpoint is made of.
+const fn largest_session() -> i32 {
+    let choices = super::http_handlers::MAX_PARTICIPANTS_CHOICES;
+    let mut largest = 0;
+    let mut index = 0;
+    while index < choices.len() {
+        if choices[index] > largest {
+            largest = choices[index];
+        }
+        index += 1;
+    }
+    largest
+}
+
+/// How much a room may add on top of its last checkpoint before the server
+/// asks for a new one.
+///
+/// Measured as growth since the checkpoint, never as absolute size: our
+/// checkpoints are PNGs of every participant's layers and weigh far more than
+/// the strokes they replace, so a fixed ceiling would be over the moment a
+/// checkpoint landed and every reset would immediately ask for another. This
+/// is Drawpile's `autoResetThresholdBase`, which exists for exactly that
+/// reason.
+pub const AUTO_RESET_THRESHOLD_BYTES: u64 = 4 * 1024 * 1024;
+
+/// The largest total this counts up to before refusing. Growth beyond what a
+/// `u64` holds is not the failure mode worth guarding, but Lua numbers are
+/// doubles and lose integer precision past 2^53, so the counter is kept in a
+/// range where `tonumber` is exact.
+const _: () = assert!(MAX_HISTORY_BYTES < (1u64 << 53));
 
 /// Atomically assigns the next per-room sequence number, appends the message to
 /// the history list, and publishes it to the room's Pub/Sub channel under the
@@ -27,7 +94,16 @@ const MAX_CHAT_MESSAGES: usize = 100;
 /// in one atomic step, the history replayed to late joiners and the live
 /// Pub/Sub stream are guaranteed to present messages in the same canonical
 /// order to every client.
+///
+/// A message that would take the history past `MAX_HISTORY_BYTES` is refused
+/// outright -- no sequence number, no broadcast, nothing stored -- and the
+/// caller is told. Nothing is ever dropped from the front to make room.
 const SEQUENCE_AND_PUBLISH_SCRIPT: &str = r#"
+local bytes = tonumber(redis.call('GET', KEYS[6]) or '0')
+local grown = bytes + #ARGV[1]
+if grown > tonumber(ARGV[3]) then
+    return {-1, '', bytes}
+end
 local seq = redis.call('INCR', KEYS[1])
 local history_id = redis.call('GET', KEYS[5])
 if not history_id then
@@ -35,17 +111,19 @@ if not history_id then
     redis.call('SET', KEYS[5], history_id)
 end
 redis.call('RPUSH', KEYS[2], tostring(seq) .. ':' .. ARGV[1])
-redis.call('LTRIM', KEYS[2], -tonumber(ARGV[3]), -1)
+redis.call('SET', KEYS[6], grown)
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[4], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[5], tonumber(ARGV[4]))
+redis.call('EXPIRE', KEYS[6], tonumber(ARGV[4]))
+redis.call('EXPIRE', KEYS[7], tonumber(ARGV[4]))
 -- RoomBroadcast framing, written by hand because the payload must stay the
 -- bytes the client sent: header, newline, payload. The empty field is
 -- target_connection -- history messages go to the whole room.
 redis.call('PUBLISH', KEYS[3],
     '1|' .. ARGV[2] .. '||' .. seq .. '|' .. history_id .. '\n' .. ARGV[1])
-return {seq, history_id}
+return {seq, history_id, grown}
 "#;
 
 /// Compiled once: `Script::new` hashes the source, and this runs on every
@@ -72,8 +150,65 @@ fn history_id_key(room_uuid: Uuid) -> String {
     format!("{}{}", MESSAGE_HISTORY_ID_PREFIX, room_uuid)
 }
 
+fn bytes_key(room_uuid: Uuid) -> String {
+    format!("{}{}", MESSAGE_BYTES_PREFIX, room_uuid)
+}
+
+fn reset_base_key(room_uuid: Uuid) -> String {
+    format!("{}{}", RESET_BASE_PREFIX, room_uuid)
+}
+
+/// What the history weighs, against what the last checkpoint left behind.
+///
+/// Both meters are reported as growth since that checkpoint, because that is
+/// what a late joiner has to replay on top of it and what a new checkpoint
+/// would remove. Absolute size says nothing useful: most of it is the
+/// checkpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistorySize {
+    pub messages: usize,
+    pub bytes: u64,
+    pub base_messages: usize,
+    pub base_bytes: u64,
+}
+
+impl HistorySize {
+    pub fn messages_since_reset(&self) -> usize {
+        self.messages.saturating_sub(self.base_messages)
+    }
+
+    pub fn bytes_since_reset(&self) -> u64 {
+        self.bytes.saturating_sub(self.base_bytes)
+    }
+}
+
+/// The size at which this room should be asked for a fresh checkpoint.
+///
+/// Drawpile's `SessionHistory::effectiveAutoResetThreshold`: the threshold sits
+/// on top of whatever the last checkpoint weighs, and is clamped below the hard
+/// ceiling so there is always room to ask before there is no room to draw.
+pub fn effective_auto_reset_bytes(base_bytes: u64) -> u64 {
+    (base_bytes + AUTO_RESET_THRESHOLD_BYTES).min(MAX_HISTORY_BYTES / 10 * 9)
+}
+
+/// What became of a message handed to the sequencer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sequenced {
+    /// Given this canonical position, with the history weighing `bytes` after.
+    Stored { seq: u64, bytes: u64 },
+    /// Refused. The history is at `MAX_HISTORY_BYTES` and nothing was stored,
+    /// sequenced or broadcast.
+    HistoryFull { bytes: u64 },
+}
+
 fn chat_history_key(room_uuid: Uuid) -> String {
     format!("{}{}", CHAT_HISTORY_PREFIX, room_uuid)
+}
+
+/// Splits a stored "{messages}:{bytes}" checkpoint base.
+fn decode_reset_base(base: &str) -> Option<(usize, u64)> {
+    let (messages, bytes) = base.split_once(':')?;
+    Some((messages.parse().ok()?, bytes.parse().ok()?))
 }
 
 /// Splits a stored "{seq}:{payload}" entry. Returns None for malformed entries.
@@ -118,13 +253,13 @@ impl RedisMessageStore {
         payload: &[u8],
         from_connection: &str,
         channel: &str,
-    ) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Sequenced, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await.map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             e
         })?;
 
-        let (seq, _history_id): (u64, String) = sequence_and_publish_script()
+        let (seq, _history_id, bytes): (i64, String, u64) = sequence_and_publish_script()
             .key(seq_key(room_uuid))
             .key(history_key(room_uuid))
             .key(channel)
@@ -134,9 +269,11 @@ impl RedisMessageStore {
                 room_uuid
             ))
             .key(history_id_key(room_uuid))
+            .key(bytes_key(room_uuid))
+            .key(reset_base_key(room_uuid))
             .arg(payload)
             .arg(from_connection)
-            .arg(MAX_REDIS_MESSAGES)
+            .arg(MAX_HISTORY_BYTES)
             .arg(MESSAGE_HISTORY_TTL)
             .arg(Uuid::new_v4().to_string())
             .invoke_async(&mut *conn)
@@ -146,13 +283,43 @@ impl RedisMessageStore {
                 e
             })?;
 
+        if seq < 0 {
+            return Ok(Sequenced::HistoryFull { bytes });
+        }
+
+        let seq = seq as u64;
         debug!(
-            "Sequenced message {} for room {} ({} bytes)",
+            "Sequenced message {} for room {} ({} bytes, history now {} bytes)",
             seq,
             room_uuid,
-            payload.len()
+            payload.len(),
+            bytes
         );
-        Ok(seq)
+        Ok(Sequenced::Stored { seq, bytes })
+    }
+
+    /// Both meters at once, and the checkpoint they are measured from.
+    pub async fn history_size(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<HistorySize, Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn = self.pool.get().await?;
+        let (messages, bytes, base): (usize, Option<u64>, Option<String>) = redis::pipe()
+            .llen(history_key(room_uuid))
+            .get(bytes_key(room_uuid))
+            .get(reset_base_key(room_uuid))
+            .query_async(&mut *conn)
+            .await?;
+        let (base_messages, base_bytes) = base
+            .as_deref()
+            .and_then(decode_reset_base)
+            .unwrap_or((0, 0));
+        Ok(HistorySize {
+            messages,
+            bytes: bytes.unwrap_or(0),
+            base_messages,
+            base_bytes,
+        })
     }
 
     pub async fn get_history(
@@ -212,6 +379,8 @@ end
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[2]))
 redis.call('EXPIRE', KEYS[3], tonumber(ARGV[2]))
+redis.call('EXPIRE', KEYS[4], tonumber(ARGV[2]))
+redis.call('EXPIRE', KEYS[5], tonumber(ARGV[2]))
 return {history_id, redis.call('LRANGE', KEYS[2], 0, -1)}
 "#;
         let mut conn = self.pool.get().await?;
@@ -219,6 +388,8 @@ return {history_id, redis.call('LRANGE', KEYS[2], 0, -1)}
             .key(history_id_key(room_uuid))
             .key(history_key(room_uuid))
             .key(seq_key(room_uuid))
+            .key(bytes_key(room_uuid))
+            .key(reset_base_key(room_uuid))
             .arg(Uuid::new_v4().to_string())
             .arg(MESSAGE_HISTORY_TTL)
             .invoke_async(&mut *conn)
@@ -244,18 +415,11 @@ return {history_id, redis.call('LRANGE', KEYS[2], 0, -1)}
             .expire(history_id_key(room_uuid), MESSAGE_HISTORY_TTL as i64)
             .expire(history_key(room_uuid), MESSAGE_HISTORY_TTL as i64)
             .expire(seq_key(room_uuid), MESSAGE_HISTORY_TTL as i64)
+            .expire(bytes_key(room_uuid), MESSAGE_HISTORY_TTL as i64)
+            .expire(reset_base_key(room_uuid), MESSAGE_HISTORY_TTL as i64)
             .query_async(&mut *conn)
             .await?;
         Ok(())
-    }
-
-    pub async fn history_len(
-        &self,
-        room_uuid: Uuid,
-    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
-        let mut conn = self.pool.get().await?;
-        let len: usize = conn.llen(history_key(room_uuid)).await?;
-        Ok(len)
     }
 
     /// Atomically replaces the history prefix up to and including `base_seq`
@@ -272,6 +436,11 @@ return {history_id, redis.call('LRANGE', KEYS[2], 0, -1)}
         base_seq: u64,
         payloads: &[Vec<u8>],
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // The two counters are rebuilt here rather than adjusted, because the
+        // checkpoint is what everything after it is measured against: its own
+        // weight becomes the base that auto-reset compares growth to, and
+        // getting that wrong in either direction means a room that either never
+        // checkpoints again or checkpoints continuously.
         const APPLY_RESET_SCRIPT: &str = r#"
 local base = tonumber(ARGV[1])
 local current = tonumber(redis.call('GET', KEYS[2]) or '0')
@@ -280,6 +449,7 @@ if base > current then
 end
 local entries = redis.call('LRANGE', KEYS[1], 0, -1)
 local kept = {}
+local kept_bytes = 0
 for i = 1, #entries do
     local e = entries[i]
     local sep = string.find(e, ':', 1, true)
@@ -287,18 +457,26 @@ for i = 1, #entries do
         local seq = tonumber(string.sub(e, 1, sep - 1))
         if seq and seq > base then
             kept[#kept + 1] = e
+            kept_bytes = kept_bytes + #e - sep
         end
     end
 end
 redis.call('DEL', KEYS[1])
+local checkpoint_bytes = 0
 for i = 3, #ARGV do
     redis.call('RPUSH', KEYS[1], ARGV[1] .. ':' .. ARGV[i])
+    checkpoint_bytes = checkpoint_bytes + #ARGV[i]
 end
 for i = 1, #kept do
     redis.call('RPUSH', KEYS[1], kept[i])
 end
+local checkpoint_messages = #ARGV - 2
+redis.call('SET', KEYS[3], checkpoint_bytes + kept_bytes)
+redis.call('SET', KEYS[4], checkpoint_messages .. ':' .. checkpoint_bytes)
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
-return #kept
+redis.call('EXPIRE', KEYS[3], tonumber(ARGV[2]))
+redis.call('EXPIRE', KEYS[4], tonumber(ARGV[2]))
+return {#kept, checkpoint_bytes}
 "#;
 
         let mut conn = self.pool.get().await?;
@@ -306,17 +484,21 @@ return #kept
         let script = redis::Script::new(APPLY_RESET_SCRIPT);
         let mut invocation = script.key(history_key(room_uuid));
         invocation.key(seq_key(room_uuid));
+        invocation.key(bytes_key(room_uuid));
+        invocation.key(reset_base_key(room_uuid));
         invocation.arg(base_seq).arg(MESSAGE_HISTORY_TTL);
         for payload in payloads {
             invocation.arg(payload.as_slice());
         }
-        let kept: usize = invocation.invoke_async(&mut *conn).await?;
+        let (kept, checkpoint_bytes): (usize, u64) = invocation.invoke_async(&mut *conn).await?;
 
         debug!(
-            "Applied session reset for room {} at seq {}: {} snapshots, {} newer entries kept",
+            "Applied session reset for room {} at seq {}: {} snapshots weighing {} bytes, \
+             {} newer entries kept",
             room_uuid,
             base_seq,
             payloads.len(),
+            checkpoint_bytes,
             kept
         );
         Ok(())
@@ -333,6 +515,8 @@ return #kept
                 history_key(room_uuid),
                 seq_key(room_uuid),
                 history_id_key(room_uuid),
+                bytes_key(room_uuid),
+                reset_base_key(room_uuid),
                 chat_history_key(room_uuid),
                 format!("{}{}", super::redis_state::USER_ID_PREFIX, room_uuid),
             ])
@@ -344,41 +528,21 @@ return #kept
         Ok(())
     }
 
-    pub async fn enforce_history_limits(
+    /// How close a room is to the wall, for the sweep that used to trim it.
+    ///
+    /// It reports and does not act. Trimming was the bug: it deleted the oldest
+    /// entries, which are a checkpoint's snapshots, and left every later
+    /// message describing a canvas that no longer had a beginning. A room that
+    /// shows up here is one whose checkpoints are not happening, and that is
+    /// what wants fixing -- not the evidence of it.
+    pub async fn history_pressure(
         &self,
         room_uuid: Uuid,
-    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
-        let mut conn = self.pool.get().await?;
-        let key = history_key(room_uuid);
-
-        // Get current message count
-        let current_length: usize = conn.llen(&key).await?;
-
-        if current_length <= MAX_REDIS_MESSAGES {
-            return Ok(0);
-        }
-
-        // Keep only the newest MAX_REDIS_MESSAGES entries (oldest are on the left)
-        let to_remove = current_length - MAX_REDIS_MESSAGES;
-        conn.ltrim::<_, ()>(&key, -(MAX_REDIS_MESSAGES as isize), -1)
-            .await?;
-
-        debug!(
-            "Enforced history limits for room {}: removed {} messages (was {}, now {})",
-            room_uuid, to_remove, current_length, MAX_REDIS_MESSAGES
-        );
-
-        Ok(to_remove)
-    }
-
-    pub async fn refresh_ttl(
-        &self,
-        room_uuid: Uuid,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut conn = self.pool.get().await?;
-
-        conn.expire::<_, ()>(history_key(room_uuid), MESSAGE_HISTORY_TTL as i64)
-            .await?;
-        Ok(())
+    ) -> Result<Option<HistorySize>, Box<dyn std::error::Error + Send + Sync>> {
+        let size = self.history_size(room_uuid).await?;
+        // Auto-reset asks for a checkpoint at nine tenths of the wall at the
+        // very latest, so anything past that has already been asked and has
+        // not been given one.
+        Ok((size.bytes > effective_auto_reset_bytes(size.base_bytes)).then_some(size))
     }
 }

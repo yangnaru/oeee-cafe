@@ -59,10 +59,7 @@
         <label for="max-participants">{{ ftl_get_message("collaborate-max-participants-label") }}</label>
         <div class="field">
           <select id="max-participants" name="max_participants" required>
-            <option value="2">2 {{ ftl_get_message("collaborate-participants") }}</option>
-            <option value="4" selected>4 {{ ftl_get_message("collaborate-participants") }}</option>
-            <option value="6">6 {{ ftl_get_message("collaborate-participants") }}</option>
-            <option value="8">8 {{ ftl_get_message("collaborate-participants") }}</option>
+            {% for seats in participant_choices %}<option value="{{ seats }}" {% if seats == 4 %}selected{% endif %}>{{ seats }} {{ ftl_get_message("collaborate-participants") }}</option>{% endfor %}
           </select>
         </div>
 

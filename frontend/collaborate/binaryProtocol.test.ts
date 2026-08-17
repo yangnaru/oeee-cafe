@@ -12,6 +12,7 @@ import {
   encodeLine,
   encodeMovePointer,
   encodeRegion,
+  encodeResetOffer,
   encodeText,
   MSG_TYPE,
   REGION_TOOL,
@@ -221,6 +222,54 @@ describe("the tool messages", () => {
   it("keeps the new codes clear of the existing ones", () => {
     const codes = Object.values(MSG_TYPE);
     expect(new Set(codes).size).toBe(codes.length);
+  });
+});
+
+/**
+ * The server asks the room who can make a checkpoint before it asks anyone to
+ * make one, because making one is expensive and a client mid catch-up cannot
+ * make a correct one at all. These pin the two things a client has to get
+ * right about that exchange.
+ */
+describe("the checkpoint query", () => {
+  const resetRequest = (phase?: number): ArrayBuffer => {
+    const bytes = new Uint8Array(phase === undefined ? 9 : 10);
+    bytes[0] = MSG_TYPE.RESET_REQUEST;
+    new DataView(bytes.buffer).setBigUint64(1, 1234n, true);
+    if (phase !== undefined) bytes[9] = phase;
+    return bytes.buffer;
+  };
+
+  it("tells being asked apart from being told", () => {
+    expect(decodeMessage(resetRequest(0))).toMatchObject({
+      type: "resetRequest",
+      phase: "query",
+    });
+    expect(decodeMessage(resetRequest(1))).toMatchObject({
+      type: "resetRequest",
+      phase: "upload",
+    });
+  });
+
+  /**
+   * Both colours of a blue/green deploy serve at once, so a client can meet a
+   * server that predates the query phase. That server only ever meant "upload",
+   * and a client that read the missing byte as a query would answer a question
+   * nobody asked and never make the checkpoint.
+   */
+  it("reads a request from before the query phase as an instruction", () => {
+    expect(decodeMessage(resetRequest())).toMatchObject({
+      type: "resetRequest",
+      phase: "upload",
+    });
+  });
+
+  it("answers with nothing but the answer", () => {
+    // The server knows which connection sent it; anything else in here would
+    // be a claim the server would have to check.
+    expect(new Uint8Array(encodeResetOffer())).toEqual(
+      new Uint8Array([MSG_TYPE.RESET_OFFER]),
+    );
   });
 
   /**

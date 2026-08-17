@@ -34,6 +34,16 @@ pub enum MessageType {
     Join = 0x01,
     Snapshot = 0x02,
     Chat = 0x03,
+    // Answers a reset query: this client is caught up and willing to upload
+    // the checkpoint (client -> server).
+    //
+    // Only ever sent in reply to a query, which only a server that knows this
+    // message sends -- so a client cannot put one in front of a server from
+    // before it existed, where an unknown type would be sequenced into history
+    // and leave every client in the room reading a message it cannot apply.
+    // That is why the phase rides on RESET_REQUEST instead of being a message
+    // of its own: it keeps this one unreachable from an older server.
+    ResetOffer = 0x04,
     ReplayStart = 0x05,
     Layers = 0x06,
     EndSession = 0x07,
@@ -75,9 +85,29 @@ pub struct ChatMessage {
     pub message: String,
 }
 
+/// The two things the server can say to a client about a checkpoint.
+///
+/// Drawpile asks before it tells: a reset query goes to every eligible client,
+/// and whoever answers first is the one asked to do the work
+/// (`ThinSession::checkAutoResetQuery`). Making the checkpoint is expensive --
+/// a PNG of every layer of every participant -- and a client that is mid
+/// catch-up cannot make a correct one at all, so asking a client picked by the
+/// server from what little it knows about them means the request can land on
+/// the one client unable to answer it, and the room waits out the whole
+/// pending window for a checkpoint that was never coming.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ResetPhase {
+    /// "Can anyone here upload a checkpoint?" -- sent to the whole room.
+    Query = 0,
+    /// "You have it, go ahead." -- sent to the one connection that answered.
+    Upload = 1,
+}
+
 #[derive(Debug, Clone)]
 pub struct ResetRequestMessage {
     pub timestamp: u64,
+    pub phase: ResetPhase,
 }
 
 #[derive(Debug, Clone)]
@@ -164,9 +194,16 @@ impl ChatMessage {
 
 impl ResetRequestMessage {
     pub fn serialize(&self) -> Vec<u8> {
-        let mut buffer = Vec::with_capacity(1 + 8);
+        let mut buffer = Vec::with_capacity(1 + 8 + 1);
         buffer.push(MessageType::ResetRequest as u8);
         buffer.extend_from_slice(&self.timestamp.to_le_bytes());
+        // The phase is appended rather than given its own message type so that
+        // a client from before the query phase existed still understands the
+        // frame -- it reads the timestamp, ignores the byte after it, and
+        // starts uploading. That client answers a query by doing the work; if
+        // it wins the claim the checkpoint is real, and if it loses,
+        // `parse_reset_begin` counts its snapshots off the wire and drops them.
+        buffer.push(self.phase as u8);
 
         buffer
     }
@@ -198,6 +235,7 @@ pub fn parse_message_type(data: &[u8]) -> Option<MessageType> {
         0x01 => Some(MessageType::Join),
         0x02 => Some(MessageType::Snapshot),
         0x03 => Some(MessageType::Chat),
+        0x04 => Some(MessageType::ResetOffer),
         0x05 => Some(MessageType::ReplayStart),
         0x06 => Some(MessageType::Layers),
         0x07 => Some(MessageType::EndSession),
@@ -298,65 +336,81 @@ async fn get_session_participants(
     Ok(participants)
 }
 
-async fn broadcast_layers(_db: &Pool<Postgres>, room_uuid: Uuid, state: &AppState, _user_id: Uuid) {
+/// Who is in the room and which 1-byte id each of them draws under.
+///
+/// Presence travels beside the canonical drawing stream rather than inside it,
+/// which means a stroke can reach a client before the message naming its
+/// author. That costs a name on a cursor for a moment and nothing else: a
+/// participant's place in the canvas stack comes from their session id, not
+/// from when this message happened to arrive (`canvasStack.inJoinOrder`), and
+/// their layers are allocated on first mention. Drawpile puts presence in
+/// history because its history is the transport for everything; here it would
+/// buy ordering for something that does not need it, at the cost of replaying
+/// joins and leaves to everyone who ever catches up.
+///
+/// What does matter is that a *connecting* client has the mapping before the
+/// history it is about to replay -- see `handle_socket`.
+pub async fn current_layers_message(room_uuid: Uuid, state: &AppState) -> Option<Vec<u8>> {
     // Use database as the canonical source for participant join order
-    match get_session_participants(room_uuid, state).await {
-        Ok(participants) => {
-            // Attach the 1-byte session ids from Redis (0 = unknown/expired)
-            let session_ids = state
-                .redis_state
-                .get_user_ids(room_uuid)
-                .await
-                .unwrap_or_default();
-            let participants: Vec<(Uuid, u8, String, i64)> = participants
+    let participants = match get_session_participants(room_uuid, state).await {
+        Ok(participants) => participants,
+        Err(e) => {
+            error!("Failed to query participants for room {}: {}", room_uuid, e);
+            return None;
+        }
+    };
+
+    // Attach the 1-byte session ids from Redis (0 = unknown/expired)
+    let session_ids = state
+        .redis_state
+        .get_user_ids(room_uuid)
+        .await
+        .unwrap_or_default();
+
+    // Participants are already sorted by join time from the database query
+    Some(
+        LayersMessage {
+            participants: participants
                 .into_iter()
                 .map(|(uuid, name, ts)| {
                     (uuid, session_ids.get(&uuid).copied().unwrap_or(0), name, ts)
                 })
-                .collect();
+                .collect(),
+        }
+        .serialize(),
+    )
+}
 
-            // Participants are already sorted by join time from the database query
-            let layers_message = LayersMessage {
-                participants: participants.clone(),
-            };
+async fn broadcast_layers(_db: &Pool<Postgres>, room_uuid: Uuid, state: &AppState, _user_id: Uuid) {
+    let Some(payload) = current_layers_message(room_uuid, state).await else {
+        return;
+    };
 
-            // Use Redis pub/sub to send LAYERS message to all connections in the room
-            let room_message = super::redis_state::RoomBroadcast {
-                from_connection: "system".to_string(),
-                target_connection: None,
-                seq: None,
-                history_id: None,
-                payload: layers_message.serialize(),
-            };
+    // Use Redis pub/sub to send LAYERS message to all connections in the room
+    let room_message = super::redis_state::RoomBroadcast {
+        from_connection: "system".to_string(),
+        target_connection: None,
+        seq: None,
+        history_id: None,
+        payload,
+    };
 
-            match state
-                .redis_state
-                .publish_message(room_uuid, &room_message)
-                .await
-            {
-                Ok(subscriber_count) => {
-                    info!(
-                        "Broadcasted LAYERS with {} users (ordered by join time) to {} subscribers in room {}",
-                        participants.len(),
-                        subscriber_count,
-                        room_uuid
-                    );
-                }
-                Err(e) => {
-                    error!(
-                        "Failed to publish LAYERS message for room {}: {}",
-                        room_uuid, e
-                    );
-                }
-            }
-
-            // Note: With Redis Pub/Sub architecture, existing participant information
-            // is now sent through the normal message flow. The LAYERS message above
-            // contains the list of all current users with their usernames and join timestamps,
-            // providing complete participant state ordered by join time to all connections.
+    match state
+        .redis_state
+        .publish_message(room_uuid, &room_message)
+        .await
+    {
+        Ok(subscriber_count) => {
+            info!(
+                "Broadcasted LAYERS (ordered by join time) to {} subscribers in room {}",
+                subscriber_count, room_uuid
+            );
         }
         Err(e) => {
-            error!("Failed to query participants for JOIN_RESPONSE: {}", e);
+            error!(
+                "Failed to publish LAYERS message for room {}: {}",
+                room_uuid, e
+            );
         }
     }
 }
@@ -506,17 +560,25 @@ pub fn should_store_message(msg: &Message) -> bool {
     }
 }
 
-/// Sends a RESET_REQUEST to a single chosen connection, asking it to upload a
-/// session reset (Drawpile-style: one client provides the canvas state that
-/// replaces the accumulated history).
-pub async fn send_reset_request(room_uuid: Uuid, target_connection: &str, state: &AppState) {
+/// Asks about a session reset: the whole room when `target_connection` is
+/// None, one connection when it is Some.
+///
+/// One client provides the canvas state that replaces the accumulated history,
+/// and which client that is settled by whoever answers the query first.
+pub async fn send_reset_request(
+    room_uuid: Uuid,
+    target_connection: Option<&str>,
+    phase: ResetPhase,
+    state: &AppState,
+) {
     let reset_request = ResetRequestMessage {
         timestamp: get_current_timestamp_ms(),
+        phase,
     };
 
     let room_message = super::redis_state::RoomBroadcast {
         from_connection: "system".to_string(),
-        target_connection: Some(target_connection.to_string()),
+        target_connection: target_connection.map(str::to_string),
         seq: None,
         history_id: None,
         payload: reset_request.serialize(),
@@ -527,12 +589,16 @@ pub async fn send_reset_request(room_uuid: Uuid, target_connection: &str, state:
         .publish_message(room_uuid, &room_message)
         .await
     {
-        Ok(_) => {
-            info!(
-                "Sent reset request to connection {} in room {}",
-                target_connection, room_uuid
-            );
-        }
+        Ok(subscribers) => match target_connection {
+            Some(connection) => info!(
+                "Asked connection {} in room {} to upload a checkpoint",
+                connection, room_uuid
+            ),
+            None => info!(
+                "Asked {} subscribers in room {} whether any can upload a checkpoint",
+                subscribers, room_uuid
+            ),
+        },
         Err(e) => {
             error!(
                 "Failed to publish reset request for room {}: {}",
@@ -594,7 +660,7 @@ pub async fn sequence_and_broadcast(
     room_uuid: Uuid,
     connection_id: &str,
     state: &AppState,
-) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<redis_messages::Sequenced, Box<dyn std::error::Error + Send + Sync>> {
     let payload = match msg {
         Message::Binary(data) => data.clone(),
         Message::Text(text) => text.as_bytes().to_vec(),
@@ -603,15 +669,23 @@ pub async fn sequence_and_broadcast(
 
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
     let channel = state.redis_state.get_room_channel(room_uuid);
-    let seq = redis_store
+    let outcome = redis_store
         .sequence_and_publish(room_uuid, &payload, connection_id, &channel)
         .await?;
 
-    debug!(
-        "Sequenced and broadcast message {} for room {}",
-        seq, room_uuid
-    );
-    Ok(seq)
+    match outcome {
+        redis_messages::Sequenced::Stored { seq, .. } => debug!(
+            "Sequenced and broadcast message {} for room {}",
+            seq, room_uuid
+        ),
+        redis_messages::Sequenced::HistoryFull { bytes } => error!(
+            "Refused a message for room {}: history is at its {} byte ceiling ({} bytes)",
+            room_uuid,
+            redis_messages::MAX_HISTORY_BYTES,
+            bytes
+        ),
+    }
+    Ok(outcome)
 }
 
 // This function is now handled by Redis automatic limits and TTL

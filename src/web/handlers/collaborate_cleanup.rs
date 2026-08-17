@@ -53,7 +53,7 @@ pub async fn cleanup_collaborative_sessions(state: AppState) {
         cleanup_stale_redis_connections(&state).await;
 
         // Step 5: Enforce history limits on active sessions
-        enforce_history_limits_for_active_sessions(&state).await;
+        report_history_pressure(&state).await;
 
         let elapsed = start_time.elapsed();
         debug!(
@@ -410,9 +410,14 @@ async fn cleanup_inactive_sessions(
     Ok(())
 }
 
-async fn enforce_history_limits_for_active_sessions(state: &AppState) {
-    let mut rooms_processed = 0;
-    let mut total_messages_removed = 0;
+/// Names the rooms whose history has outgrown what a checkpoint should have
+/// replaced by now.
+///
+/// This sweep used to trim them, which quietly destroyed the only copy of the
+/// canvas those histories began from. It reports instead: a room here is a room
+/// whose auto-reset is not working, and the messages it holds are the evidence.
+async fn report_history_pressure(state: &AppState) {
+    let mut rooms_under_pressure = 0;
 
     // Get all active room IDs from database since we don't have in-memory tracking
     let db = &state.db_pool;
@@ -432,26 +437,30 @@ async fn enforce_history_limits_for_active_sessions(state: &AppState) {
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
 
     for room_uuid in room_ids {
-        match redis_store.enforce_history_limits(room_uuid).await {
-            Ok(removed) => {
-                if removed > 0 {
-                    total_messages_removed += removed;
-                }
-                rooms_processed += 1;
-            }
-            Err(e) => {
+        match redis_store.history_pressure(room_uuid).await {
+            Ok(Some(size)) => {
+                rooms_under_pressure += 1;
                 error!(
-                    "Failed to enforce history limits for room {}: {}",
-                    room_uuid, e
+                    "Room {} has gone {} bytes past its checkpoint without a new one \
+                     ({} messages, {} bytes total, wall at {}): its auto-reset is not completing",
+                    room_uuid,
+                    size.bytes_since_reset(),
+                    size.messages,
+                    size.bytes,
+                    redis_messages::MAX_HISTORY_BYTES
                 );
+            }
+            Ok(None) => {}
+            Err(e) => {
+                error!("Failed to measure history for room {}: {}", room_uuid, e);
             }
         }
     }
 
-    if total_messages_removed > 0 {
-        debug!(
-            "Enforced Redis history limits on {} active sessions: removed {} total messages",
-            rooms_processed, total_messages_removed
+    if rooms_under_pressure > 0 {
+        error!(
+            "{} active sessions are drawing past the point a checkpoint should have replaced",
+            rooms_under_pressure
         );
     }
 }

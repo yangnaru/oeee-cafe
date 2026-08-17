@@ -66,6 +66,9 @@ export const MSG_TYPE = {
   JOIN: 0x01,
   SNAPSHOT: 0x02,
   CHAT: 0x03,
+  // Answers a reset query: this client is caught up and can upload the
+  // checkpoint (client -> server)
+  RESET_OFFER: 0x04,
   // Announces the accepted replay start and target before history arrives.
   REPLAY_START: 0x05,
   LAYERS: 0x06,
@@ -499,6 +502,17 @@ export function encodeResetBegin(lastSeq: number, count: number): ArrayBuffer {
 }
 
 /**
+ * Encode RESET_OFFER message (0x04)
+ *
+ * "I am caught up and can upload the checkpoint." The server knows which
+ * connection sent it, so the message is the answer and nothing else.
+ * Format: [0x04]
+ */
+export function encodeResetOffer(): ArrayBuffer {
+  return new Uint8Array([MSG_TYPE.RESET_OFFER]).buffer;
+}
+
+/**
  * Encode UNDO_POINT message (0x14)
  * Format: [0x14][id:1]
  */
@@ -877,9 +891,21 @@ export interface ChatMessage {
   message: string;
 }
 
+/**
+ * What the server wants of us about a checkpoint.
+ *
+ * `query` goes to the whole room and asks who *can*; `upload` goes to the one
+ * client that answered first and asks it to actually do the work. Making a
+ * checkpoint means exporting every layer of every participant as a PNG, and a
+ * client that is mid catch-up cannot make a correct one at all -- so the
+ * server asks before it picks, rather than picking and hoping.
+ */
+export type ResetPhase = "query" | "upload";
+
 export interface ResetRequestMessage {
   type: "resetRequest";
   timestamp: number;
+  phase: ResetPhase;
 }
 
 export interface ResetPointMessage {
@@ -1174,6 +1200,9 @@ export function decodeMessage(data: ArrayBuffer): DecodedMessage | null {
       return {
         type: "resetRequest",
         timestamp: readUint64LE(buffer, 1),
+        // A server from before the query phase existed sends nine bytes and
+        // means "upload", which is what it always meant.
+        phase: buffer.length > 9 && buffer[9] === 0 ? "query" : "upload",
       };
 
     case MSG_TYPE.REPLAY_START:

@@ -17,7 +17,18 @@ const USER_ID_TTL: u64 = 3600; // matches (and is refreshed with) message histor
 
 // TTL constants
 const ACTIVITY_TTL: u64 = 3600; // 1 hour
-const RESET_PENDING_TTL: u64 = 120; // retry window if the reset client stalls
+// How long a room waits for somebody to volunteer for a checkpoint before it
+// asks again. Answering is one message and costs a willing client nothing, so
+// a room where nobody answers is a room where nobody *can*, and asking again
+// soon is what gets a checkpoint out of the first client to finish catching up.
+const RESET_QUERY_TTL: u64 = 20;
+// How long the volunteer then has to deliver it. Exporting every layer of
+// every participant as a PNG is not quick on a phone, and a client that gives
+// up silently costs the room this much before anyone else is asked.
+const RESET_UPLOAD_TTL: u64 = 120;
+/// The value the pending key holds while the room is waiting for an answer.
+/// Anything else is a connection id: the volunteer that got there first.
+const RESET_UNCLAIMED: &str = "?";
 const CONNECTION_TTL: u64 = 30; // 30 seconds (with heartbeat)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -177,10 +188,12 @@ impl RedisStateManager {
 
     // Session Reset Tracking
     //
-    // At most one session reset is requested at a time per room; the flag
-    // expires so a stalled or disconnected reset client only delays the next
-    // attempt instead of blocking resets forever.
-    pub async fn try_acquire_reset_pending(
+    // At most one session reset is in flight at a time per room, in two steps:
+    // the room is asked whether anyone can upload a checkpoint, and the first
+    // connection to answer claims the job. Both steps expire, so a room whose
+    // volunteer goes quiet -- or whose members are all still catching up -- is
+    // only delayed by one window rather than blocked until someone reconnects.
+    pub async fn try_open_reset_query(
         &self,
         room_uuid: Uuid,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
@@ -189,18 +202,75 @@ impl RedisStateManager {
 
         let acquired: bool = redis::cmd("SET")
             .arg(&key)
-            .arg(1u8)
+            .arg(RESET_UNCLAIMED)
             .arg("NX")
             .arg("EX")
-            .arg(RESET_PENDING_TTL)
+            .arg(RESET_QUERY_TTL)
             .query_async::<Option<String>>(&mut *conn)
             .await?
             .is_some();
 
         if acquired {
-            debug!("Acquired reset-pending flag for room {}", room_uuid);
+            debug!("Opened a checkpoint query for room {}", room_uuid);
         }
         Ok(acquired)
+    }
+
+    /// Takes the job back off a volunteer who has not delivered, and asks
+    /// again.
+    ///
+    /// For the room that has hit the hard history ceiling: it cannot draw until
+    /// a checkpoint lands, so waiting out the upload window on somebody who has
+    /// evidently given up helps nobody.
+    ///
+    /// Returns false when a query is *already* unanswered, which is the caller's
+    /// signal not to ask again. Every refused message reaches here, and a room
+    /// at its ceiling refuses a lot of them; without this the room would be
+    /// asked once per stroke by every client in it.
+    pub async fn reopen_reset_query(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        const REOPEN_SCRIPT: &str = r#"
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    return 0
+end
+redis.call('SET', KEYS[1], ARGV[1], 'EX', tonumber(ARGV[2]))
+return 1
+"#;
+        let mut conn = self.pool.get().await?;
+        let reopened: i64 = redis::Script::new(REOPEN_SCRIPT)
+            .key(format!("{}{}", RESET_PENDING_PREFIX, room_uuid))
+            .arg(RESET_UNCLAIMED)
+            .arg(RESET_QUERY_TTL)
+            .invoke_async(&mut *conn)
+            .await?;
+        Ok(reopened == 1)
+    }
+
+    /// The first connection to answer an open query gets the upload; everyone
+    /// else is told, by getting `false` back, that somebody beat them to it.
+    pub async fn claim_reset_upload(
+        &self,
+        room_uuid: Uuid,
+        connection_id: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        const CLAIM_SCRIPT: &str = r#"
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    redis.call('SET', KEYS[1], ARGV[2], 'EX', tonumber(ARGV[3]))
+    return 1
+end
+return 0
+"#;
+        let mut conn = self.pool.get().await?;
+        let claimed: i64 = redis::Script::new(CLAIM_SCRIPT)
+            .key(format!("{}{}", RESET_PENDING_PREFIX, room_uuid))
+            .arg(RESET_UNCLAIMED)
+            .arg(connection_id)
+            .arg(RESET_UPLOAD_TTL)
+            .invoke_async(&mut *conn)
+            .await?;
+        Ok(claimed == 1)
     }
 
     pub async fn clear_reset_pending(
@@ -210,24 +280,6 @@ impl RedisStateManager {
         let mut conn = self.pool.get().await?;
         let key = format!("{}{}", RESET_PENDING_PREFIX, room_uuid);
         conn.del::<_, ()>(&key).await?;
-        Ok(())
-    }
-
-    pub async fn assign_reset_uploader(
-        &self,
-        room_uuid: Uuid,
-        connection_id: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut conn = self.pool.get().await?;
-        let key = format!("{}{}", RESET_PENDING_PREFIX, room_uuid);
-        redis::cmd("SET")
-            .arg(key)
-            .arg(connection_id)
-            .arg("XX")
-            .arg("EX")
-            .arg(RESET_PENDING_TTL)
-            .query_async::<()>(&mut *conn)
-            .await?;
         Ok(())
     }
 
@@ -372,6 +424,17 @@ impl RedisStateManager {
     // of a 16-byte UUID (Drawpile's context id). The mapping is stable for
     // the lifetime of the session history: it lives in a Redis hash whose TTL
     // is refreshed by the message sequencer alongside the history itself.
+    //
+    // Deliberately a counter and not Drawpile's `IdQueue`, which recycles the
+    // ids of departed users least-recently-used first. Recycling is what lets
+    // Drawpile run a session of any length inside 254 ids, and it costs us
+    // something it does not cost them: our canvas stack is ordered *by* these
+    // ids -- ascending id is join order is z-order (`canvasStack.inJoinOrder`)
+    // -- so a reissued id would drop a newcomer into the departed user's place
+    // in the stack, under people who joined before them. A session that runs
+    // out at 255 distinct participants refuses the 256th, which is a far better
+    // failure than a canvas that composites differently than it did a moment
+    // ago.
     pub async fn assign_user_id(
         &self,
         room_uuid: Uuid,
