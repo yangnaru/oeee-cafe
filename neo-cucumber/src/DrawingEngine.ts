@@ -62,14 +62,11 @@ export class DrawingEngine {
   public imageWidth: number;
   public imageHeight: number;
   public layers: { [key: string]: Uint8ClampedArray };
-  public compositeBuffer: Uint8ClampedArray;
   public canvas: HTMLCanvasElement | null = null;
 
   // Offscreen canvases for hardware-accelerated compositing
   public layerCanvases: { [key: string]: HTMLCanvasElement } = {};
   public layerContexts: { [key: string]: CanvasRenderingContext2D } = {};
-  public compositeCanvas: HTMLCanvasElement | null = null;
-  public compositeContext: CanvasRenderingContext2D | null = null;
 
   // DOM canvases for direct rendering
   public domCanvases: { [key: string]: HTMLCanvasElement } = {};
@@ -202,8 +199,6 @@ export class DrawingEngine {
   constructor(width: number = 500, height: number = 500) {
     this.imageWidth = width;
     this.imageHeight = height;
-
-    this.compositeBuffer = new Uint8ClampedArray(width * height * 4);
 
     this.neo = new NeoPainter(width, height);
 
@@ -362,45 +357,6 @@ export class DrawingEngine {
     this.announceOwners();
   }
 
-
-  // Function to get tone data based on alpha value
-  // Function to composite layers with FG on top of BG
-  public compositeLayers(fgVisible: boolean = true, bgVisible: boolean = true) {
-    for (let i = 0; i < this.compositeBuffer.length; i += 4) {
-      // Get background layer values (only if visible)
-      const bgR = bgVisible ? this.layers.background[i] : 0;
-      const bgG = bgVisible ? this.layers.background[i + 1] : 0;
-      const bgB = bgVisible ? this.layers.background[i + 2] : 0;
-      const bgA = bgVisible ? this.layers.background[i + 3] / 255 : 0;
-
-      // Get foreground layer values (only if visible)
-      const fgR = fgVisible ? this.layers.foreground[i] : 0;
-      const fgG = fgVisible ? this.layers.foreground[i + 1] : 0;
-      const fgB = fgVisible ? this.layers.foreground[i + 2] : 0;
-      const fgA = fgVisible ? this.layers.foreground[i + 3] / 255 : 0;
-
-      // Alpha composite: FG over BG
-      const outA = fgA + bgA * (1 - fgA);
-
-      if (outA > 0) {
-        this.compositeBuffer[i] = Math.round(
-          (fgR * fgA + bgR * bgA * (1 - fgA)) / outA
-        );
-        this.compositeBuffer[i + 1] = Math.round(
-          (fgG * fgA + bgG * bgA * (1 - fgA)) / outA
-        );
-        this.compositeBuffer[i + 2] = Math.round(
-          (fgB * fgA + bgB * bgA * (1 - fgA)) / outA
-        );
-        this.compositeBuffer[i + 3] = Math.round(outA * 255);
-      } else {
-        this.compositeBuffer[i] = 0;
-        this.compositeBuffer[i + 1] = 0;
-        this.compositeBuffer[i + 2] = 0;
-        this.compositeBuffer[i + 3] = 0;
-      }
-    }
-  }
 
   // Get individual layer canvas for hardware compositing
   public getLayerCanvas(
@@ -1189,22 +1145,20 @@ export class DrawingEngine {
     if (!target) this.queueLayerRegionUpdate(layer);
   }
 
+  /**
+   * Remembers the canvas the host mounted us into.
+   *
+   * Nothing is painted here. The drawing itself lives in one DOM canvas per
+   * participant per layer, stacked in the container and repainted through
+   * `queueLayerRegionUpdate`; this canvas is underneath them and takes pointer
+   * events. It used to be handed a full-canvas composite built by a
+   * pixel-by-pixel loop over a buffer this engine kept for the purpose -- of a
+   * blank canvas, onto a blank canvas, once, and never again.
+   */
   public initialize(ctx?: CanvasRenderingContext2D) {
-    // Store the canvas reference
     if (ctx) {
       this.canvas = ctx.canvas;
-    }
-
-    // Initial composite and render
-    this.compositeLayers();
-
-    if (ctx) {
       ctx.imageSmoothingEnabled = false;
-      ctx.putImageData(
-        new ImageData(new Uint8ClampedArray(this.compositeBuffer), this.imageWidth, this.imageHeight),
-        0,
-        0
-      );
     }
   }
 
@@ -1218,7 +1172,6 @@ export class DrawingEngine {
     // Clean up resources if needed
     this.layers.background = new Uint8ClampedArray(0);
     this.layers.foreground = new Uint8ClampedArray(0);
-    this.compositeBuffer = new Uint8ClampedArray(0);
     this.owners.clear();
     this.bufferOwners.clear();
 
@@ -1227,8 +1180,6 @@ export class DrawingEngine {
     this.layerContexts = {};
     this.domCanvases = {};
     this.domContexts = {};
-    this.compositeCanvas = null;
-    this.compositeContext = null;
 
     // Reset batched update state
     this.pendingUpdates.clear();
