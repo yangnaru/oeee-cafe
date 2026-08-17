@@ -18,8 +18,10 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const W = 80;
 const H = 60;
-// useBaseDrawing throttles pointermove to one every 12ms
-const MOVE_INTERVAL_MS = 20;
+// Moves used to have to be spaced out because useBaseDrawing throttled
+// pointermove to one every 12ms. It takes every sample now, so this only has
+// to yield far enough for React to flush between them.
+const MOVE_INTERVAL_MS = 0;
 
 type OfflineApi = ReturnType<typeof useOfflineDrawing>;
 

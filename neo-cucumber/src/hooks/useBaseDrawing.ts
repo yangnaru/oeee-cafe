@@ -10,6 +10,7 @@ import {
   type RegionTool,
 } from "../neo/tools";
 import { RegionDrag, type RegionRect } from "../neo/regionDrag";
+import { StrokeSmoother, strokeSmootherSizeFor } from "../neo/strokeSmoother";
 import type { BezierPreviewStyle } from "../neo/regionPreview";
 import { screenToArtwork } from "../neo/canvasTransform";
 
@@ -227,10 +228,26 @@ export const useBaseDrawing = (
     activePointerId: null as number | null,
   });
 
-  // Throttling refs
-  const lastPointerMoveTime = useRef(0);
-  const POINTER_MOVE_THROTTLE_MS = 12;
+  /**
+   * How far the pen has to travel before another segment is worth drawing.
+   *
+   * A distance gate rather than the time gate this used to have beside it. A
+   * 12ms throttle drops samples during fast motion, which is when a stroke
+   * most needs them -- a quick flick came out as a polygon. Distance drops
+   * only the samples that add no shape, so a slow careful line still costs
+   * few points and a fast one keeps all the ones that describe it.
+   */
   const MIN_MOVE_DISTANCE = 1.5;
+
+  /**
+   * Averages the pen's tremor out of the stroke in progress
+   * (Drawpile's smoother; see `strokeSmoother.ts`). Sized per stroke from the
+   * kind of pointer that started it, and drained at pointer-up so the stroke
+   * ends where the pen did.
+   */
+  const smootherRef = useRef(new StrokeSmoother(0));
+  /** The last point a segment was actually drawn to, in canvas coordinates. */
+  const lastDrawnRef = useRef<{ x: number; y: number } | null>(null);
 
   const currentDrawingStateRef = useRef(drawingState);
   const isDrawingDisabledRef = useRef(isDrawingDisabled);
@@ -579,10 +596,18 @@ export const useBaseDrawing = (
           }
           isDrawingRef.current = false;
         } else {
-          performDrawing("point", coords);
+          // A pen's samples get averaged; a touch digitiser's are smooth
+          // already and averaging them twice only adds lag.
+          smootherRef.current = new StrokeSmoother(
+            strokeSmootherSizeFor(e.pointerType)
+          );
+          const first = smootherRef.current.push(coords.x, coords.y);
+          lastDrawnRef.current = { x: first.x, y: first.y };
+
+          performDrawing("point", first);
           drawingStateRef.current.isDrawing = true;
-          drawingStateRef.current.currentX = coords.x;
-          drawingStateRef.current.currentY = coords.y;
+          drawingStateRef.current.currentX = first.x;
+          drawingStateRef.current.currentY = first.y;
           drawingStateRef.current.prevX = drawingStateRef.current.currentX;
           drawingStateRef.current.prevY = drawingStateRef.current.currentY;
         }
@@ -766,6 +791,9 @@ export const useBaseDrawing = (
           (e.button === 0 || e.pointerType === "touch" || e.pointerType === "pen") &&
           isDrawingRef.current
         ) {
+          // Before the history entry and before the stroke is closed: these
+          // segments belong to the stroke that is ending.
+          if (drawingStateRef.current.isDrawing) finishSmoothedStroke();
           if (!remoteSyncRef.current) {
             saveToHistory();
           }
@@ -789,6 +817,62 @@ export const useBaseDrawing = (
         callbacks?.onHoverMove?.(null);
         cleanupPointerState(e.pointerId);
       }
+    };
+
+    /**
+     * Smooths one raw sample and draws the segment it earns, if any.
+     *
+     * The gate is on the *smoothed* point, not the raw one: what matters is
+     * whether the line being drawn has moved, and after averaging a jittery
+     * pen held still barely does.
+     */
+    const drawSmoothedTo = (raw: { x: number; y: number }) => {
+      const point = smootherRef.current.push(raw.x, raw.y);
+      const last = lastDrawnRef.current;
+      if (last) {
+        const dx = point.x - last.x;
+        const dy = point.y - last.y;
+        if (Math.sqrt(dx * dx + dy * dy) < MIN_MOVE_DISTANCE) return;
+      }
+      lastDrawnRef.current = { x: point.x, y: point.y };
+
+      drawingStateRef.current.prevX = drawingStateRef.current.currentX;
+      drawingStateRef.current.prevY = drawingStateRef.current.currentY;
+      drawingStateRef.current.currentX = point.x;
+      drawingStateRef.current.currentY = point.y;
+
+      performDrawing("line", {
+        x: drawingStateRef.current.currentX,
+        y: drawingStateRef.current.currentY,
+        prevX: drawingStateRef.current.prevX,
+        prevY: drawingStateRef.current.prevY,
+      });
+    };
+
+    /**
+     * Walks the smoothed line up to where the pen actually stopped.
+     *
+     * The average trails the pen by half its window, so without this every
+     * stroke would end a few pixels short of where it was released --
+     * Drawpile's `smoother_drain`.
+     */
+    const finishSmoothedStroke = () => {
+      for (const point of smootherRef.current.drain()) {
+        const last = lastDrawnRef.current;
+        if (last && last.x === point.x && last.y === point.y) continue;
+        lastDrawnRef.current = { x: point.x, y: point.y };
+        drawingStateRef.current.prevX = drawingStateRef.current.currentX;
+        drawingStateRef.current.prevY = drawingStateRef.current.currentY;
+        drawingStateRef.current.currentX = point.x;
+        drawingStateRef.current.currentY = point.y;
+        performDrawing("line", {
+          x: drawingStateRef.current.currentX,
+          y: drawingStateRef.current.currentY,
+          prevX: drawingStateRef.current.prevX,
+          prevY: drawingStateRef.current.prevY,
+        });
+      }
+      lastDrawnRef.current = null;
     };
 
     const handlePointerMove = (e: PointerEvent) => {
@@ -863,34 +947,14 @@ export const useBaseDrawing = (
       )
         return;
 
-      const now = Date.now();
-      const coords = getCanvasCoordinates(e.clientX, e.clientY);
-
-      if (now - lastPointerMoveTime.current < POINTER_MOVE_THROTTLE_MS) {
-        return;
+      // Every sample the device actually reported, not just the one the
+      // browser chose to wake us with. A pen at a few hundred hertz produces
+      // several between frames, and they are the difference between a curve
+      // and the chord across it.
+      const samples = e.getCoalescedEvents?.() ?? [];
+      for (const sample of samples.length > 0 ? samples : [e]) {
+        drawSmoothedTo(getCanvasCoordinates(sample.clientX, sample.clientY));
       }
-
-      const dx = coords.x - drawingStateRef.current.currentX;
-      const dy = coords.y - drawingStateRef.current.currentY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance < MIN_MOVE_DISTANCE) {
-        return;
-      }
-
-      lastPointerMoveTime.current = now;
-
-      drawingStateRef.current.prevX = drawingStateRef.current.currentX;
-      drawingStateRef.current.prevY = drawingStateRef.current.currentY;
-      drawingStateRef.current.currentX = coords.x;
-      drawingStateRef.current.currentY = coords.y;
-
-      performDrawing("line", {
-        x: drawingStateRef.current.currentX,
-        y: drawingStateRef.current.currentY,
-        prevX: drawingStateRef.current.prevX,
-        prevY: drawingStateRef.current.prevY,
-      });
     };
 
     app.addEventListener("pointerdown", handlePointerDown);
