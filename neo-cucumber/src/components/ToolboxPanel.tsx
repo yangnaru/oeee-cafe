@@ -1,6 +1,6 @@
 import React from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Icon } from "@iconify/react";
+import { Icon } from "./Icon";
 import { NeoToolColumn } from "./neo/NeoToolColumn";
 import {
   NEO_BUTTON_ON,

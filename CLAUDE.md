@@ -103,3 +103,18 @@ When extracting and compiling Lingui locales, use these commands:
 pnpm run extract
 pnpm run compile
 ```
+
+### Icons
+
+Icons are drawn by `src/components/Icon.tsx`, never by `@iconify/react`
+directly — it registers bundled artwork so an icon paints with the frame that
+asks for it instead of after a request to Iconify's API, which the offline
+bundle cannot make at all. Hosts under `frontend/` import `Icon` from
+`neo-cucumber`. After using a `material-symbols:` name that was not used
+before, regenerate the bundled set:
+
+```bash
+pnpm run build:icons
+```
+
+`materialSymbols.test.ts` fails when a referenced icon is not bundled.

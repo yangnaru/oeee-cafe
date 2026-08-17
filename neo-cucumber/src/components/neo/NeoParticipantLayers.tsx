@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Icon } from "@iconify/react";
+import { Icon } from "../Icon";
 import { useLingui } from "@lingui/react/macro";
 import {
   NEO_BUTTON_ON,

@@ -1,7 +1,7 @@
 import type React from "react";
 import { useLayoutEffect, useState } from "react";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Icon } from "@iconify/react";
+import { Icon } from "./Icon";
 import { CustomSlider } from "./CustomSlider";
 import { anchorBesideCanvas, minimumTop } from "./toolboxAnchor";
 import { TIMER_DURATIONS_MINUTES } from "../hooks/useDrawingTimer";

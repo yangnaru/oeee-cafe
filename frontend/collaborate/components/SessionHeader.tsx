@@ -1,6 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Icon } from "@iconify/react";
-import { NEO_BUTTON, NEO_PANEL } from "neo-cucumber";
+import { Icon, NEO_BUTTON, NEO_PANEL } from "neo-cucumber";
 
 interface CollaborationMeta {
   title: string;

@@ -1,6 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Icon } from "@iconify/react";
-import { NEO_BUTTON } from "neo-cucumber";
+import { Icon, NEO_BUTTON } from "neo-cucumber";
 import { ModalWrapper } from "./modals/ModalWrapper";
 
 export interface SessionExpiredModalProps {

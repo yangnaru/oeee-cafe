@@ -83,6 +83,18 @@ export {
 } from "./components/toolboxAnchor";
 
 /**
+ * The icons the painter's own controls are drawn with, for a host labelling
+ * controls beside them.
+ *
+ * Their artwork is bundled rather than fetched from Iconify's API, so they
+ * appear with the frame that asks for them -- which is also why a host should
+ * take this one rather than `@iconify/react`'s: an icon that is not in the
+ * bundled set is still a network round trip, and none at all offline. See
+ * `./components/materialSymbols` for what is bundled.
+ */
+export { Icon, type IconProps } from "./components/Icon";
+
+/**
  * Public API for neo-cucumber.
  *
  * This file is deliberately host- and framework-neutral. It is the contract
