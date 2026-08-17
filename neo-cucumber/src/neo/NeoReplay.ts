@@ -8,9 +8,20 @@
  */
 import { decompressFromUint8Array } from "lz-string";
 import { NeoPainter } from "./NeoPainter";
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Frame = any[];
+import {
+  readBezier,
+  readDrawingState,
+  readFill,
+  readFloodFill,
+  readFreeHand,
+  readLine,
+  readPaste,
+  readRect,
+  readRestore,
+  readText,
+  FREEHAND_PAIRS_AT,
+  type Frame,
+} from "./pchFrames";
 
 export interface DecodedPCH {
   width: number;
@@ -91,10 +102,11 @@ export class NeoReplay {
   /** Applies pushCurrent's slots: colour, mask, width, mask type. */
   private getCurrent(item: Frame): void {
     const p = this.painter;
-    p._currentColor = [item[2], item[3], item[4], item[5]];
-    p._currentMask = [item[6], item[7], item[8]];
-    p._currentWidth = item[9];
-    p._currentMaskType = item[10];
+    const state = readDrawingState(item);
+    p._currentColor = state.color;
+    p._currentMask = state.mask;
+    p._currentWidth = state.width;
+    p._currentMaskType = state.maskType;
   }
 
   /**
@@ -112,12 +124,11 @@ export class NeoReplay {
       case "freeHand": {
         // freeHandFast: header holds the start point twice, then one x,y pair
         // per recorded move. Segments are drawn newest-to-previous.
-        const layer = item[1];
         this.getCurrent(item);
-        const lineType = item[11];
-        let x0 = item[12];
-        let y0 = item[13];
-        for (let i = 14; i + 1 < item.length; i += 2) {
+        const { layer, lineType, firstX, firstY, pairsAt } = readFreeHand(item);
+        let x0 = firstX;
+        let y0 = firstY;
+        for (let i = pairsAt; i + 1 < item.length; i += 2) {
           const x1 = x0;
           const y1 = y0;
           x0 = item[i + 0];
@@ -133,37 +144,29 @@ export class NeoReplay {
       }
 
       case "line": {
-        const layer = item[1];
         this.getCurrent(item);
-        const lineType = item[11];
-        const x0 = item[12];
-        const y0 = item[13];
-        const x1 = item[14] === null ? x0 : item[14];
-        const y1 = item[15] === null ? y0 : item[15];
+        const { layer, lineType, x0, y0, x1, y1 } = readLine(item);
         p.drawLine(p.canvasCtx[layer], x0, y0, x1, y1, lineType);
         return true;
       }
 
       case "bezier": {
-        const layer = item[1];
         this.getCurrent(item);
-        p.drawBezier(
-          p.canvasCtx[layer],
-          item[12], item[13], item[14], item[15],
-          item[16], item[17], item[18], item[19],
-          item[11]
-        );
+        const { layer, lineType, points } = readBezier(item);
+        p.drawBezier(p.canvasCtx[layer], ...points, lineType);
         return true;
       }
 
-      case "floodFill":
-        p.doFloodFill(p.canvasCtx[item[1]], item[2], item[3], item[4]);
+      case "floodFill": {
+        const { layer, x, y, color } = readFloodFill(item);
+        p.doFloodFill(p.canvasCtx[layer], x, y, color);
         return true;
+      }
 
       case "fill": {
-        const layer = item[1];
         this.getCurrent(item);
-        p.doFill(layer, item[11], item[12], item[13], item[14], item[15]);
+        const { layer, x, y, width, height, toolType } = readFill(item);
+        p.doFill(layer, x, y, width, height, toolType);
         return true;
       }
 
@@ -175,59 +178,77 @@ export class NeoReplay {
         p.clearCanvas();
         return true;
 
-      case "eraseRect":
-        p.eraseRect(item[1], item[2], item[3], item[4], item[5]);
+      case "eraseRect": {
+        const r = readRect(item, "eraseRect");
+        p.eraseRect(r.layer, r.x, r.y, r.width, r.height);
         return true;
+      }
 
       case "eraseRect2": {
         // Same operation as eraseRect but records pushCurrent first, so its
         // geometry starts at slot 11 rather than 2.
-        const layer = item[1];
         this.getCurrent(item);
-        p.eraseRect(layer, item[11], item[12], item[13], item[14]);
+        const r = readRect(item, "eraseRect2");
+        p.eraseRect(r.layer, r.x, r.y, r.width, r.height);
         return true;
       }
 
-      case "blurRect":
-        p.blurRect(item[1], item[2], item[3], item[4], item[5]);
+      case "blurRect": {
+        const r = readRect(item, "blurRect");
+        p.blurRect(r.layer, r.x, r.y, r.width, r.height);
         return true;
+      }
 
-      case "merge":
-        p.merge(item[1], item[2], item[3], item[4], item[5]);
+      case "merge": {
+        const r = readRect(item, "merge");
+        p.merge(r.layer, r.x, r.y, r.width, r.height);
         return true;
+      }
 
-      case "flipH":
-        p.flipH(item[1], item[2], item[3], item[4], item[5]);
+      case "flipH": {
+        const r = readRect(item, "flipH");
+        p.flipH(r.layer, r.x, r.y, r.width, r.height);
         return true;
+      }
 
-      case "flipV":
-        p.flipV(item[1], item[2], item[3], item[4], item[5]);
+      case "flipV": {
+        const r = readRect(item, "flipV");
+        p.flipV(r.layer, r.x, r.y, r.width, r.height);
         return true;
+      }
 
-      case "turn":
-        p.turn(item[1], item[2], item[3], item[4], item[5]);
+      case "turn": {
+        const r = readRect(item, "turn");
+        p.turn(r.layer, r.x, r.y, r.width, r.height);
         return true;
+      }
 
-      case "copy":
-        p.copy(item[1], item[2], item[3], item[4], item[5]);
+      case "copy": {
+        const r = readRect(item, "copy");
+        p.copy(r.layer, r.x, r.y, r.width, r.height);
         return true;
+      }
 
-      case "paste":
-        p.paste(item[1], item[2], item[3], item[4], item[5], item[6], item[7]);
+      case "paste": {
+        const r = readPaste(item);
+        p.paste(r.layer, r.x, r.y, r.width, r.height, r.dx, r.dy);
         return true;
+      }
 
-      case "text":
+      case "text": {
+        const t = readText(item);
         p.doText(
-          item[1], item[2], item[3], item[4], item[5],
-          item[6], item[7], item[8]
+          t.layer, t.x, t.y, t.color, t.alpha, t.text, t.fontSize, t.fontFamily
         );
         return true;
+      }
 
       case "restore": {
         // Final state of both layers as PNG data URLs
+        const { background, foreground } = readRestore(item);
         const [img0, img1] = await Promise.all([
-          loadImage(item[1]),
-          loadImage(item[2]),
+          loadImage(background),
+          loadImage(foreground),
         ]);
         const w = p.canvasWidth;
         const h = p.canvasHeight;
@@ -250,7 +271,7 @@ export class NeoReplay {
    */
   static stepsFor(item: Frame): number {
     if (!Array.isArray(item) || item[0] !== "freeHand") return 1;
-    const pairs = Math.floor((item.length - 14) / 2);
+    const pairs = Math.floor((item.length - FREEHAND_PAIRS_AT) / 2);
     return Math.max(1, pairs);
   }
 
@@ -270,15 +291,14 @@ export class NeoReplay {
     }
 
     const p = this.painter;
-    const layer = item[1];
     this.getCurrent(item);
-    const lineType = item[11];
+    const { layer, lineType, firstX, firstY, pairsAt } = readFreeHand(item);
 
-    const i = 14 + step * 2;
+    const i = pairsAt + step * 2;
     if (i + 1 >= item.length) return;
 
-    const x1 = step === 0 ? item[12] : item[i - 2];
-    const y1 = step === 0 ? item[13] : item[i - 1];
+    const x1 = step === 0 ? firstX : item[i - 2];
+    const y1 = step === 0 ? firstY : item[i - 1];
     const x0 = item[i + 0];
     const y0 = item[i + 1];
 

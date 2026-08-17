@@ -24,6 +24,18 @@ export const LINETYPE = {
 
 export const LAYER = { BACKGROUND: 0, FOREGROUND: 1 } as const;
 
+import {
+  readBezier,
+  readDrawingState,
+  readFill,
+  readFloodFill,
+  readFreeHand,
+  readLine,
+  readPaste,
+  readRect,
+  readText,
+} from "../neo/pchFrames";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
@@ -176,10 +188,11 @@ export function replayWithNeo(cp: CanonicalPainter, items: Any[][]): void {
   const p = cp.painter;
 
   const getCurrent = (item: Any[]) => {
-    p._currentColor = [item[2], item[3], item[4], item[5]];
-    p._currentMask = [item[6], item[7], item[8]];
-    p._currentWidth = item[9];
-    p._currentMaskType = item[10];
+    const state = readDrawingState(item);
+    p._currentColor = state.color;
+    p._currentMask = state.mask;
+    p._currentWidth = state.width;
+    p._currentMaskType = state.maskType;
   };
 
   for (const item of items) {
@@ -191,15 +204,15 @@ export function replayWithNeo(cp: CanonicalPainter, items: Any[][]): void {
     switch (verb) {
       case "freeHand": {
         getCurrent(item);
-        const lineType = item[11];
-        let x0 = item[12];
-        let y0 = item[13];
-        for (let i = 14; i + 1 < item.length; i += 2) {
+        const { layer, lineType, firstX, firstY, pairsAt } = readFreeHand(item);
+        let x0 = firstX;
+        let y0 = firstY;
+        for (let i = pairsAt; i + 1 < item.length; i += 2) {
           const x1 = x0;
           const y1 = y0;
           x0 = item[i + 0];
           y0 = item[i + 1];
-          p.drawLine(cp.contexts[item[1]], x0, y0, x1, y1, lineType);
+          p.drawLine(cp.contexts[layer], x0, y0, x1, y1, lineType);
         }
         p.prevLine = null;
         break;
@@ -207,33 +220,30 @@ export function replayWithNeo(cp: CanonicalPainter, items: Any[][]): void {
 
       case "line": {
         getCurrent(item);
-        const x0 = item[12];
-        const y0 = item[13];
-        const x1 = item[14] === null ? x0 : item[14];
-        const y1 = item[15] === null ? y0 : item[15];
-        p.drawLine(cp.contexts[item[1]], x0, y0, x1, y1, item[11]);
+        const { layer, lineType, x0, y0, x1, y1 } = readLine(item);
+        p.drawLine(cp.contexts[layer], x0, y0, x1, y1, lineType);
         break;
       }
 
-      case "bezier":
+      case "bezier": {
         getCurrent(item);
-        p.drawBezier(
-          cp.contexts[item[1]],
-          item[12], item[13], item[14], item[15],
-          item[16], item[17], item[18], item[19],
-          item[11],
-          true
-        );
+        const { layer, lineType, points } = readBezier(item);
+        p.drawBezier(cp.contexts[layer], ...points, lineType, true);
         break;
+      }
 
-      case "floodFill":
-        p.doFloodFill(item[1], item[2], item[3], item[4]);
+      case "floodFill": {
+        const { layer, x, y, color } = readFloodFill(item);
+        p.doFloodFill(layer, x, y, color);
         break;
+      }
 
-      case "fill":
+      case "fill": {
         getCurrent(item);
-        p.doFill(item[1], item[11], item[12], item[13], item[14], item[15]);
+        const { layer, x, y, width, height, toolType } = readFill(item);
+        p.doFill(layer, x, y, width, height, toolType);
         break;
+      }
 
       case "eraseAll":
         cp.contexts[item[1]].clearRect(0, 0, cp.width, cp.height);
@@ -244,49 +254,68 @@ export function replayWithNeo(cp: CanonicalPainter, items: Any[][]): void {
         cp.contexts[1].clearRect(0, 0, cp.width, cp.height);
         break;
 
-      case "eraseRect":
-        p.eraseRect(item[1], item[2], item[3], item[4], item[5]);
+      case "eraseRect": {
+        const r = readRect(item, "eraseRect");
+        p.eraseRect(r.layer, r.x, r.y, r.width, r.height);
         break;
+      }
 
-      case "eraseRect2":
+      case "eraseRect2": {
         getCurrent(item);
-        p.eraseRect(item[1], item[11], item[12], item[13], item[14]);
+        const r = readRect(item, "eraseRect2");
+        p.eraseRect(r.layer, r.x, r.y, r.width, r.height);
         break;
+      }
 
-      case "blurRect":
-        p.blurRect(item[1], item[2], item[3], item[4], item[5]);
+      case "blurRect": {
+        const r = readRect(item, "blurRect");
+        p.blurRect(r.layer, r.x, r.y, r.width, r.height);
         break;
+      }
 
-      case "merge":
-        p.merge(item[1], item[2], item[3], item[4], item[5]);
+      case "merge": {
+        const r = readRect(item, "merge");
+        p.merge(r.layer, r.x, r.y, r.width, r.height);
         break;
+      }
 
-      case "flipH":
-        p.flipH(item[1], item[2], item[3], item[4], item[5]);
+      case "flipH": {
+        const r = readRect(item, "flipH");
+        p.flipH(r.layer, r.x, r.y, r.width, r.height);
         break;
+      }
 
-      case "flipV":
-        p.flipV(item[1], item[2], item[3], item[4], item[5]);
+      case "flipV": {
+        const r = readRect(item, "flipV");
+        p.flipV(r.layer, r.x, r.y, r.width, r.height);
         break;
+      }
 
-      case "turn":
-        p.turn(item[1], item[2], item[3], item[4], item[5]);
+      case "turn": {
+        const r = readRect(item, "turn");
+        p.turn(r.layer, r.x, r.y, r.width, r.height);
         break;
+      }
 
-      case "copy":
-        p.copy(item[1], item[2], item[3], item[4], item[5]);
+      case "copy": {
+        const r = readRect(item, "copy");
+        p.copy(r.layer, r.x, r.y, r.width, r.height);
         break;
+      }
 
-      case "paste":
-        p.paste(item[1], item[2], item[3], item[4], item[5], item[6], item[7]);
+      case "paste": {
+        const r = readPaste(item);
+        p.paste(r.layer, r.x, r.y, r.width, r.height, r.dx, r.dy);
         break;
+      }
 
-      case "text":
+      case "text": {
+        const t = readText(item);
         p.doText(
-          item[1], item[2], item[3], item[4], item[5],
-          item[6], item[7], item[8]
+          t.layer, t.x, t.y, t.color, t.alpha, t.text, t.fontSize, t.fontFamily
         );
         break;
+      }
 
       case "restore":
         // Final-state images. Applying them would overwrite the replayed

@@ -1,5 +1,6 @@
 import { compressToUint8Array } from "lz-string";
 import { NO_MASK, type Mask } from "../neo/mask";
+import { AFTER_DRAWING_STATE, DRAWING_STATE_AT } from "../neo/pchFrames";
 
 // Type for action items - can be strings, numbers, or nested arrays
 type ActionItem = string | number | ActionItem[];
@@ -114,9 +115,10 @@ export class ActionRecorder {
    *
    * Verbs that carry the drawing state write pushCurrent's nine slots first --
    * colour, mask, width, mask type -- which is why their geometry starts at
-   * slot 11 rather than slot 2. Getting that boundary wrong shifts every
-   * following field, so the shape comes from the tool table rather than from
-   * each call site.
+   * `AFTER_DRAWING_STATE` rather than `DRAWING_STATE_AT`. Getting that
+   * boundary wrong shifts every following field, so the shape comes from the
+   * tool table rather than from each call site, and the offsets from
+   * `pchFrames`, which is where the readers get them too.
    */
   pushRegion(
     verb: string,
@@ -129,20 +131,29 @@ export class ActionRecorder {
     mask: Mask = NO_MASK
   ): void {
     this.step();
-    if (carriesDrawingState) {
-      this.push(
-        verb,
-        layer,
-        color.r, color.g, color.b, color.a,
-        mask.r, mask.g, mask.b,
-        brushSize,
-        mask.type,
-        rect.x, rect.y, rect.width, rect.height,
-        ...trailing
+    const geometry = [rect.x, rect.y, rect.width, rect.height, ...trailing];
+    const frame: ActionItem[] = carriesDrawingState
+      ? [
+          verb,
+          layer,
+          color.r, color.g, color.b, color.a,
+          mask.r, mask.g, mask.b,
+          brushSize,
+          mask.type,
+          ...geometry,
+        ]
+      : [verb, layer, ...geometry];
+    // The geometry has to land where the readers look for it. One assertion
+    // beats discovering it from a file somebody drew a year ago.
+    const expected = carriesDrawingState
+      ? AFTER_DRAWING_STATE
+      : DRAWING_STATE_AT;
+    if (frame.length - geometry.length !== expected) {
+      throw new Error(
+        `${verb} frame puts its geometry at ${frame.length - geometry.length}, not ${expected}`
       );
-    } else {
-      this.push(verb, layer, rect.x, rect.y, rect.width, rect.height, ...trailing);
     }
+    this.push(...frame);
   }
 
   /**

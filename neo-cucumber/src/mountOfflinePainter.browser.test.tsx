@@ -152,17 +152,15 @@ describe("public painter lifecycle", () => {
     };
     await send("pointerdown", 10, 12);
     await send("pointermove", 30, 32);
-    expect(operations.map((entry) => entry.operation.kind)).toEqual([
-      "undo-boundary",
-      "stroke",
-      "stroke",
-    ]);
     expect(pointerUps).toBe(0);
     await send("pointerup", 30, 32);
 
+    // A gesture's segments are gathered and sent as one stroke rather than one
+    // message apiece; the release flushes whatever the chunk still holds. What
+    // the host must be able to rely on is that everything drawn is emitted by
+    // the time the pointer is up, and that the points are all there.
     expect(operations.map((entry) => entry.operation.kind)).toEqual([
       "undo-boundary",
-      "stroke",
       "stroke",
     ]);
     expect(pointerUps).toBe(1);
@@ -172,6 +170,13 @@ describe("public painter lifecycle", () => {
       kind: "stroke",
       layer: "background",
     });
+    const stroke = operations[1].operation as Extract<
+      import("./operations").PainterOperation,
+      { kind: "stroke" }
+    >;
+    // Both the press and the move it was dragged to are in the one message.
+    expect(stroke.points.length).toBeGreaterThanOrEqual(2);
+    expect(stroke.points[0]).not.toEqual(stroke.points[stroke.points.length - 1]);
     act(() => painter.unmount());
   });
 
