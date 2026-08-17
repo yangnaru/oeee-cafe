@@ -967,7 +967,12 @@ export class CanvasHistory {
     const strokes = cloneStrokes(sp.strokes);
     for (let i = sp.index; i < this.entries.length; i++) {
       const entry = this.entries[i];
-      if (entry.undo === "done") {
+      if (entry.undo !== "done") continue;
+      // Yield only for a message whose decode has not happened yet. A rollback
+      // between savepoints can span sixty-odd entries, and awaiting each one
+      // spent a turn of the event loop apiece to wait for values already in
+      // hand -- with the canvas showing the savepoint until the last resolved.
+      if (!this.applyMessageSync(entry.msg, this.liveSource, strokes)) {
         await this.applyMessage(entry.msg, this.liveSource, strokes);
       }
     }
@@ -1039,40 +1044,71 @@ export class CanvasHistory {
   }
 
   /** Applies a message to its author's layers (snapshot decode is async). */
+  /**
+   * Applies a message without yielding, or declines.
+   *
+   * Two message types need decoding -- a snapshot's PNG and a fill's coverage
+   * bitmap -- and both are cached against the message itself. A replay is
+   * re-applying messages that were applied once already, so the cache is warm
+   * and this answers for all of them; only a message being seen for the first
+   * time has to go the long way round.
+   *
+   * Drawpile batches messages when replaying for the same reason: replay is
+   * mostly the same handful of operations over and over, and paying a turn of
+   * the event loop for each one is the expensive part, not the drawing.
+   */
+  private applyMessageSync(
+    msg: HistoryOperation,
+    source: LayerSource,
+    strokes: StrokeStates
+  ): boolean {
+    if (msg.type === "snapshot") {
+      const data = this.snapshotCache.get(msg);
+      if (!data) return false;
+      source(actorKey(msg.targetOwner))[msg.layer].set(data);
+      return true;
+    }
+    if (msg.type === "fillRegion") {
+      const coverage = this.coverageCache.get(msg);
+      if (!coverage) return false;
+      this.engine.paintCoveredPixels(
+        source(actorKey(msg.targetOwner))[msg.layer],
+        msg.x, msg.y, msg.width, msg.height, msg.color, coverage,
+      );
+      return true;
+    }
+    if (msg.type === "undoPoint") {
+      strokes.set(actorKey(msg.userId), null);
+      return true;
+    }
+    this.applyDrawSync(msg, source, strokes);
+    return true;
+  }
+
   private async applyMessage(
     msg: HistoryOperation,
     source: LayerSource,
     strokes: StrokeStates
   ): Promise<void> {
+    if (this.applyMessageSync(msg, source, strokes)) return;
+
+    // Decode into the cache, then take the path above.
     if (msg.type === "snapshot") {
-      let data = this.snapshotCache.get(msg);
-      if (!data) {
-        data = await pngDataToLayer(
+      this.snapshotCache.set(
+        msg,
+        await pngDataToLayer(
           msg.pngData,
           this.engine.imageWidth,
           this.engine.imageHeight
-        );
-        this.snapshotCache.set(msg, data);
-      }
-      source(actorKey(msg.targetOwner))[msg.layer].set(data);
-      return;
-    }
-    if (msg.type === "fillRegion") {
-      const cached = this.coverageCache.get(msg);
-      const coverage =
-        cached ?? (await inflateCoverage(msg.coverage, msg.width, msg.height));
-      if (!cached) this.coverageCache.set(msg, coverage);
-      this.engine.paintCoveredPixels(
-        source(actorKey(msg.targetOwner))[msg.layer],
-        msg.x, msg.y, msg.width, msg.height, msg.color, coverage,
+        )
       );
-      return;
+    } else if (msg.type === "fillRegion") {
+      this.coverageCache.set(
+        msg,
+        await inflateCoverage(msg.coverage, msg.width, msg.height)
+      );
     }
-    if (msg.type === "undoPoint") {
-      strokes.set(actorKey(msg.userId), null);
-      return;
-    }
-    this.applyDrawSync(msg, source, strokes);
+    this.applyMessageSync(msg, source, strokes);
   }
 
   /** Points the engine at a mask, or at none. */
