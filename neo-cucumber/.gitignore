@@ -8,6 +8,13 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+
+# Vite's dependency-optimisation cache: a build artifact, not a lockfile.
+.vite
+# npm's lockfile. This package is managed with pnpm, and a second lockfile
+# only resolves differently and then goes stale.
+package-lock.json
+
 dist
 dist-example
 dist-ssr
