@@ -5,15 +5,23 @@ import {
   brushTypeFor,
   extentFor,
   fillToolTypeFor,
+  fontSizeForBrush,
   frameShapeFor,
   isRegionTool,
+  TEXT_FONT_FAMILY,
   type RegionTool,
 } from "./tools";
 import { extentContains } from "./extents";
 import { NeoPainter } from "./NeoPainter";
 import { BufferSurface } from "./PixelSurface";
 import { NeoReplay, decodePCH as decodeReplay } from "./NeoReplay";
-import { describeDifference, firstPixelDifference } from "../test/neoHarness";
+import {
+  createCanonicalPainter,
+  describeDifference,
+  firstPixelDifference,
+  readPixels,
+  replayWithNeo,
+} from "../test/neoHarness";
 import { CanvasHistory } from "../utils/canvasHistory";
 import { decodeMessage, encodeRegion } from "../../../frontend/collaborate/binaryProtocol";
 import { isHistoryOperation } from "../synchronization/historyOperations";
@@ -294,5 +302,187 @@ describe("eraseRect end to end", () => {
       firstPixelDifference(ours, neo),
       describeDifference(ours, neo, W)
     ).toBe(-1);
+  });
+});
+
+/**
+ * Every region tool and the text tool, recorded and then read back by
+ * canonical NEO.
+ *
+ * `frameShapeFor` decides the verb each tool is written as and whether its
+ * geometry sits at slot 2 or slot 11 -- the difference being the nine slots
+ * `pushCurrent` writes before it. Get that boundary wrong and every field
+ * after it shifts, producing a file that replays into something else
+ * entirely, quietly, for as long as the file exists. Only eraseRect was
+ * pinned; the rest were covered for rasterisation but not for the shape of
+ * what gets written down.
+ *
+ * Both sides here are canvas-backed -- canonical NEO against our own reader --
+ * so what is being compared is whether a frame we wrote means the same thing
+ * to NEO as it does to us, rather than how the painter stores pixels.
+ */
+describe("every recorded tool, replayed by canonical NEO", () => {
+  /** The seed strokes, as frames, so a replay starts from the same picture. */
+  function seedFrames(recorder: ActionRecorder) {
+    const strokes: [number, [number, number, number, number], number, [number, number][]][] = [
+      [0, [200, 60, 40, 255], 16, [[2, 8], [46, 40]]],
+      [0, [20, 20, 20, 255], 5, [[8, 42], [42, 6]]],
+      [1, [40, 90, 200, 220], 12, [[4, 40], [44, 6]]],
+    ];
+    for (const [layer, color, size, points] of strokes) {
+      const [r, g, b, a] = color;
+      const [x0, y0] = points[0];
+      recorder.step();
+      recorder.push("freeHand", layer, r, g, b, a, 0, 0, 0, size, 0, 1, x0, y0, x0, y0);
+      for (let i = 1; i < points.length; i++) {
+        recorder.push(points[i][0], points[i][1]);
+      }
+    }
+  }
+
+  /** Replays a recording through canonical NEO and through our own reader. */
+  async function bothReaders(recorder: ActionRecorder) {
+    const decoded = decodeReplay(
+      new Uint8Array(await recorder.getReplayBlob(W, H).arrayBuffer())
+    )!;
+
+    const cp = createCanonicalPainter(W, H);
+    replayWithNeo(cp, decoded.items);
+
+    const ours = new NeoReplay(W, H);
+    await ours.playAll(decoded.items);
+
+    return { decoded, cp, ours };
+  }
+
+  function expectSameLayers(
+    cp: ReturnType<typeof createCanonicalPainter>,
+    ours: NeoReplay,
+    tool: string
+  ) {
+    for (const layer of [0, 1]) {
+      const neo = zeroTransparent(readPixels(cp.contexts[layer], W, H));
+      const mine = zeroTransparent(ours.getLayerPixels(layer));
+      expect(
+        firstPixelDifference(mine, neo),
+        `${tool} layer ${layer}: ${describeDifference(mine, neo, W)}`
+      ).toBe(-1);
+    }
+  }
+
+  /**
+   * What each tool's frame has to look like, transcribed from NEO's
+   * `actions.js` rather than derived from our own tool table.
+   *
+   * Asking `frameShapeFor` where the geometry is and then checking it is there
+   * proves nothing -- and neither does comparing two readers, since both read
+   * the slot the writer used. The number has to come from outside.
+   */
+  const EXPECTED: Record<string, { verb: string; geometryAt: number }> = {
+    // pushes pushCurrent's nine slots first, so geometry starts at 11
+    eraseRect: { verb: "eraseRect2", geometryAt: 11 },
+    blurRect: { verb: "blurRect", geometryAt: 2 },
+    merge: { verb: "merge", geometryAt: 2 },
+    flipH: { verb: "flipH", geometryAt: 2 },
+    flipV: { verb: "flipV", geometryAt: 2 },
+    turn: { verb: "turn", geometryAt: 2 },
+    // the shape tools are all NEO's `fill`, told apart by a trailing TOOLTYPE
+    rect: { verb: "fill", geometryAt: 11 },
+    rectFill: { verb: "fill", geometryAt: 11 },
+    ellipse: { verb: "fill", geometryAt: 11 },
+    ellipseFill: { verb: "fill", geometryAt: 11 },
+  };
+
+  for (const tool of Object.keys(EXPECTED) as RegionTool[]) {
+    it(`writes ${tool} in a shape NEO reads back the same way`, async () => {
+      const recorder = new ActionRecorder();
+      seedFrames(recorder);
+
+      const shape = frameShapeFor(tool)!;
+      const toolType = fillToolTypeFor(tool);
+      recorder.pushRegion(
+        shape.verb,
+        shape.carriesDrawingState,
+        0,
+        RECT,
+        COLOR,
+        SIZE,
+        toolType === null ? [] : [toolType]
+      );
+
+      const { decoded, cp, ours } = await bothReaders(recorder);
+      const frame = decoded.items[decoded.items.length - 1];
+      const expected = EXPECTED[tool];
+      expect(frame[0]).toBe(expected.verb);
+      expect(frame.slice(expected.geometryAt, expected.geometryAt + 4)).toEqual([
+        RECT.x, RECT.y, RECT.width, RECT.height,
+      ]);
+      if (toolType !== null) {
+        expect(frame[expected.geometryAt + 4]).toBe(toolType);
+      }
+
+      expectSameLayers(cp, ours, tool);
+    });
+  }
+
+  /**
+   * copy fills a clipboard and writes nothing; paste writes what copy took,
+   * offset by the two trailing fields at the end of its frame. They only mean
+   * anything as a pair, so they are recorded and replayed as one.
+   */
+  it("writes copy and paste in a shape NEO reads back the same way", async () => {
+    const recorder = new ActionRecorder();
+    seedFrames(recorder);
+
+    const copy = frameShapeFor("copy")!;
+    recorder.pushRegion(copy.verb, copy.carriesDrawingState, 0, RECT, COLOR, SIZE);
+    const paste = frameShapeFor("paste")!;
+    const target = { x: RECT.x + 4, y: RECT.y + 6, width: RECT.width, height: RECT.height };
+    recorder.pushRegion(paste.verb, paste.carriesDrawingState, 0, target, COLOR, SIZE, [0, 0]);
+
+    const { decoded, cp, ours } = await bothReaders(recorder);
+    const pasteFrame = decoded.items[decoded.items.length - 1];
+    expect(pasteFrame[0]).toBe("paste");
+    expect(pasteFrame.slice(2, 8)).toEqual([
+      target.x, target.y, target.width, target.height, 0, 0,
+    ]);
+    expect(decoded.items[decoded.items.length - 2][0]).toBe("copy");
+
+    expectSameLayers(cp, ours, "copy+paste");
+  });
+
+  it("writes eraseAll in a shape NEO reads back the same way", async () => {
+    const recorder = new ActionRecorder();
+    seedFrames(recorder);
+    recorder.step();
+    recorder.push("eraseAll", 1);
+
+    const { cp, ours } = await bothReaders(recorder);
+    expectSameLayers(cp, ours, "eraseAll");
+  });
+
+  /**
+   * Text is the one frame whose alpha is 0..1 rather than 0..255, and whose
+   * colour is packed with red in the low byte. Both are easy to write the
+   * other way round and impossible to notice without reading it back.
+   */
+  it("writes text in a shape NEO reads back the same way", async () => {
+    const recorder = new ActionRecorder();
+    seedFrames(recorder);
+    recorder.step();
+    recorder.push(
+      "text", 0, 8, 30,
+      COLOR.r | (COLOR.g << 8) | (COLOR.b << 16),
+      COLOR.a / 255,
+      "Ag",
+      `${fontSizeForBrush(SIZE)}px`,
+      TEXT_FONT_FAMILY
+    );
+
+    const { decoded, cp, ours } = await bothReaders(recorder);
+    const frame = decoded.items[decoded.items.length - 1];
+    expect(frame[0]).toBe("text");
+    expect(frame[6]).toBe("Ag");
+    expectSameLayers(cp, ours, "text");
   });
 });
