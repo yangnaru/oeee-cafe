@@ -1,103 +1,113 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback } from "react";
+import {
+  restoreLayer,
+  retainedBytes,
+  snapshotLayer,
+  type LayerSnapshot,
+} from "../utils/layerSnapshots";
 
+/**
+ * One undoable state of both layers.
+ *
+ * The layers are tiled snapshots rather than copies: consecutive entries share
+ * the buffer for every tile the stroke between them did not touch, so a thirty
+ * deep stack costs a few strokes' worth of tiles instead of sixty canvases.
+ * The tiles are immutable and shared -- read them through `restoreInto`.
+ */
 export interface CanvasState {
-  foreground: Uint8ClampedArray;        // Complete foreground layer data
-  background: Uint8ClampedArray;        // Complete background layer data
-  modifiedLayer: "foreground" | "background" | "both"; // Which layer(s) were changed
+  foreground: LayerSnapshot;
+  background: LayerSnapshot;
   timestamp: number;
-  isContentSnapshot?: boolean; // True if this snapshot contains actual content (BG/FG layers)
-  isRemote?: boolean; // True if this came from a remote user (don't include in undo history)
+  /** True if this snapshot contains content received from collaboration. */
+  isContentSnapshot?: boolean;
 }
 
 export const useCanvasHistory = (maxHistorySize: number = 30) => {
   const historyRef = useRef<CanvasState[]>([]);
   const currentIndexRef = useRef(-1);
   const hasDrawingActionsRef = useRef(false);
-  
-  // Keep track of the current full state of both layers for reconstruction
-  const currentStateRef = useRef<{
-    foreground: Uint8ClampedArray | null;
-    background: Uint8ClampedArray | null;
-  }>({
-    foreground: null,
-    background: null,
-  });
 
-  const saveState = useCallback((
-    foreground: Uint8ClampedArray, 
-    background: Uint8ClampedArray, 
-    modifiedLayer: "foreground" | "background" | "both" = "both",
-    isDrawingAction: boolean = true, 
-    isContentSnapshot: boolean = false,
-    isRemote: boolean = false
-  ) => {
-    // Don't add remote snapshots to undo history
-    if (isRemote) {
-      console.log(`Skipping remote ${modifiedLayer} snapshot - not adding to undo history`);
-      return;
-    }
+  const saveState = useCallback(
+    (
+      foreground: Uint8ClampedArray,
+      background: Uint8ClampedArray,
+      width: number,
+      height: number,
+      isDrawingAction: boolean = true,
+      isContentSnapshot: boolean = false
+    ) => {
+      // Every stroke gets an entry, even one that changed no pixels. Canonical
+      // Neo registers an undo step unconditionally at stroke start (tools.js
+      // freeHandDownHandler), and the action recorder likewise emits one frame
+      // per stroke. Skipping "duplicate" states here desynchronised the two: the
+      // recorder's head advanced while the history index did not, so undoing
+      // back past an inert stroke left the replay one stroke ahead of the canvas
+      // and of the saved PNG.
 
-    // Every stroke gets an entry, even one that changed no pixels. Canonical
-    // Neo registers an undo step unconditionally at stroke start (tools.js
-    // freeHandDownHandler), and the action recorder likewise emits one frame
-    // per stroke. Skipping "duplicate" states here desynchronised the two: the
-    // recorder's head advanced while the history index did not, so undoing
-    // back past an inert stroke left the replay one stroke ahead of the canvas
-    // and of the saved PNG.
+      // Shared against the entry this one follows, which is the entry at the
+      // current index -- not the last in the list. After an undo those differ,
+      // and the tail is about to be discarded anyway.
+      const previous = historyRef.current[currentIndexRef.current] ?? null;
+      const newState: CanvasState = {
+        foreground: snapshotLayer(
+          foreground,
+          width,
+          height,
+          previous?.foreground ?? null
+        ),
+        background: snapshotLayer(
+          background,
+          width,
+          height,
+          previous?.background ?? null
+        ),
+        timestamp: Date.now(),
+        isContentSnapshot,
+      };
 
-    const newState: CanvasState = {
-      foreground: new Uint8ClampedArray(foreground),
-      background: new Uint8ClampedArray(background),
-      modifiedLayer,
-      timestamp: Date.now(),
-      isContentSnapshot,
-      isRemote
-    };
+      // Remove any states after current index (when user made new changes after undo)
+      if (currentIndexRef.current < historyRef.current.length - 1) {
+        historyRef.current = historyRef.current.slice(
+          0,
+          currentIndexRef.current + 1
+        );
+      }
 
-    // Update our current state tracking
-    currentStateRef.current.foreground = new Uint8ClampedArray(foreground);
-    currentStateRef.current.background = new Uint8ClampedArray(background);
+      historyRef.current.push(newState);
 
-    // Remove any states after current index (when user made new changes after undo)
-    if (currentIndexRef.current < historyRef.current.length - 1) {
-      historyRef.current = historyRef.current.slice(0, currentIndexRef.current + 1);
-    }
+      // Track if this is a drawing action
+      if (isDrawingAction) {
+        hasDrawingActionsRef.current = true;
+      }
 
-    // Add new state
-    historyRef.current.push(newState);
-    console.log(`Saved complete canvas state to history (index: ${historyRef.current.length - 1}, modified: ${modifiedLayer}, drawing action: ${isDrawingAction}, content snapshot: ${isContentSnapshot})`);
+      // Limit history size
+      if (historyRef.current.length > maxHistorySize) {
+        historyRef.current = historyRef.current.slice(-maxHistorySize);
+        currentIndexRef.current = maxHistorySize - 1;
+      } else {
+        currentIndexRef.current = historyRef.current.length - 1;
+      }
+    },
+    [maxHistorySize]
+  );
 
-    // Track if this is a drawing action
-    if (isDrawingAction) {
-      hasDrawingActionsRef.current = true;
-    }
-
-    // Limit history size
-    if (historyRef.current.length > maxHistorySize) {
-      historyRef.current = historyRef.current.slice(-maxHistorySize);
-      currentIndexRef.current = maxHistorySize - 1;
-    } else {
-      currentIndexRef.current = historyRef.current.length - 1;
-    }
-  }, [maxHistorySize]);
-
-  // Helper method to save both layers (for backward compatibility)
-  const saveBothLayers = useCallback((foreground: Uint8ClampedArray, background: Uint8ClampedArray, isDrawingAction: boolean = true, isContentSnapshot: boolean = false) => {
-    saveState(foreground, background, "both", isDrawingAction, isContentSnapshot, false);
-  }, [saveState]);
+  /** Writes a state's layers back over the live buffers. */
+  const restoreInto = useCallback(
+    (
+      state: CanvasState,
+      foreground: Uint8ClampedArray,
+      background: Uint8ClampedArray
+    ) => {
+      restoreLayer(state.foreground, foreground);
+      restoreLayer(state.background, background);
+    },
+    []
+  );
 
   const undo = useCallback((): CanvasState | null => {
     if (currentIndexRef.current > 0) {
       currentIndexRef.current--;
-      const previousState = historyRef.current[currentIndexRef.current];
-      
-      // Update our current state tracking with both layers
-      if (previousState) {
-        currentStateRef.current.foreground = new Uint8ClampedArray(previousState.foreground);
-        currentStateRef.current.background = new Uint8ClampedArray(previousState.background);
-      }
-      
-      return previousState;
+      return historyRef.current[currentIndexRef.current];
     }
     return null;
   }, []);
@@ -105,15 +115,7 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
   const redo = useCallback((): CanvasState | null => {
     if (currentIndexRef.current < historyRef.current.length - 1) {
       currentIndexRef.current++;
-      const nextState = historyRef.current[currentIndexRef.current];
-      
-      // Update our current state tracking with both layers
-      if (nextState) {
-        currentStateRef.current.foreground = new Uint8ClampedArray(nextState.foreground);
-        currentStateRef.current.background = new Uint8ClampedArray(nextState.background);
-      }
-      
-      return nextState;
+      return historyRef.current[currentIndexRef.current];
     }
     return null;
   }, []);
@@ -151,7 +153,14 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
       currentIndex: currentIndexRef.current,
       historyLength: historyRef.current.length,
       canUndo: canUndo(),
-      canRedo: canRedo()
+      canRedo: canRedo(),
+      /** What the stack actually holds, counting a shared tile once. */
+      retainedBytes: retainedBytes(
+        historyRef.current.flatMap((state) => [
+          state.foreground,
+          state.background,
+        ])
+      ),
     };
   }, [canUndo, canRedo]);
 
@@ -159,18 +168,16 @@ export const useCanvasHistory = (maxHistorySize: number = 30) => {
     historyRef.current = [];
     currentIndexRef.current = -1;
     hasDrawingActionsRef.current = false;
-    currentStateRef.current.foreground = null;
-    currentStateRef.current.background = null;
   }, []);
 
   return {
     saveState,
-    saveBothLayers, // Expose the helper for initial state
+    restoreInto,
     undo,
     redo,
     canUndo,
     canRedo,
     getHistoryInfo,
-    clearHistory
+    clearHistory,
   };
 };

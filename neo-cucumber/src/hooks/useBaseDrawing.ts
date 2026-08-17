@@ -164,7 +164,6 @@ export const useBaseDrawing = (
   const [, noticeEngine] = useState(0);
   const isInitializedRef = useRef(false);
   const onHistoryChangeRef = useRef(onHistoryChange);
-  const lastModifiedLayerRef = useRef<"foreground" | "background">("foreground");
   const isDrawingRef = useRef(false);
 
   const history = useCanvasHistory(30);
@@ -199,9 +198,11 @@ export const useBaseDrawing = (
       drawingEngineRef.current.layers.foreground &&
       drawingEngineRef.current.layers.background
     ) {
-      history.saveBothLayers(
+      history.saveState(
         drawingEngineRef.current.layers.foreground,
         drawingEngineRef.current.layers.background,
+        drawingEngineRef.current.imageWidth,
+        drawingEngineRef.current.imageHeight,
         false,
         false
       );
@@ -398,7 +399,6 @@ export const useBaseDrawing = (
       }
     }
 
-    lastModifiedLayerRef.current = currentDrawingStateRef.current.layerType;
     onDrawingChangeRef.current?.();
   }, [callbacks]);
 
@@ -412,9 +412,12 @@ export const useBaseDrawing = (
       history.saveState(
         drawingEngineRef.current.layers.foreground,
         drawingEngineRef.current.layers.background,
-        lastModifiedLayerRef.current,
+        // From the engine, not from the props: these are the dimensions the
+        // buffers actually have, and a snapshot measured against anything else
+        // reconstructs a canvas of the wrong shape.
+        drawingEngineRef.current.imageWidth,
+        drawingEngineRef.current.imageHeight,
         true,
-        false,
         false
       );
       onHistoryChangeRef.current?.(history.canUndo(), history.canRedo());
@@ -953,8 +956,11 @@ export const useBaseDrawing = (
   const handleUndo = useCallback(() => {
     const previousState = history.undo();
     if (previousState && contextRef.current && drawingEngineRef.current) {
-      drawingEngineRef.current.layers.foreground.set(previousState.foreground);
-      drawingEngineRef.current.layers.background.set(previousState.background);
+      history.restoreInto(
+        previousState,
+        drawingEngineRef.current.layers.foreground,
+        drawingEngineRef.current.layers.background
+      );
 
       drawingEngineRef.current.queueLayerUpdate("foreground");
       drawingEngineRef.current.queueLayerUpdate("background");
@@ -968,8 +974,11 @@ export const useBaseDrawing = (
   const handleRedo = useCallback(() => {
     const nextState = history.redo();
     if (nextState && contextRef.current && drawingEngineRef.current) {
-      drawingEngineRef.current.layers.foreground.set(nextState.foreground);
-      drawingEngineRef.current.layers.background.set(nextState.background);
+      history.restoreInto(
+        nextState,
+        drawingEngineRef.current.layers.foreground,
+        drawingEngineRef.current.layers.background
+      );
 
       drawingEngineRef.current.queueLayerUpdate("foreground");
       drawingEngineRef.current.queueLayerUpdate("background");

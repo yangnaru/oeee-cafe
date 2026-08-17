@@ -582,7 +582,8 @@ export const useOfflineDrawing = (
       history.saveState(
         engine.layers.foreground,
         engine.layers.background,
-        "both",
+        engine.imageWidth,
+        engine.imageHeight,
         true,
       );
 
@@ -601,20 +602,12 @@ export const useOfflineDrawing = (
 
   // Initialize two-tone canvas with background color fill
   const initializeTwoToneCanvas = useCallback((backgroundColor: string) => {
-    console.log("initializeTwoToneCanvas called with backgroundColor:", backgroundColor);
-
     // Guard against double initialization
-    if (hasInitializedTwoToneRef.current) {
-      console.log("Already initialized two-tone canvas, skipping");
-      return;
-    }
+    if (hasInitializedTwoToneRef.current) return;
 
     const engine = baseDrawing.drawingEngine;
     const history = baseDrawing.history;
-    if (!engine || !history) {
-      console.log("Engine or history not ready yet");
-      return;
-    }
+    if (!engine || !history) return;
 
     hasInitializedTwoToneRef.current = true;
 
@@ -622,30 +615,23 @@ export const useOfflineDrawing = (
     const r = parseInt(backgroundColor.slice(1, 3), 16);
     const g = parseInt(backgroundColor.slice(3, 5), 16);
     const b = parseInt(backgroundColor.slice(5, 7), 16);
-    console.log("Parsed RGB values:", { r, g, b });
 
     // Fill entire canvas with background color (floodFill at 0,0)
     // Opacity must be in 0-255 range, not 0-1
     engine.doFloodFill(bgLayer, 0, 0, r, g, b, 255);
-    console.log("After doFloodFill, checking bgLayer canvas:");
-    const bgCanvas = engine.getLayerCanvas("background");
-    if (bgCanvas) {
-      const ctx = bgCanvas.getContext("2d");
-      if (ctx) {
-        const pixelData = ctx.getImageData(10, 10, 1, 1).data;
-        console.log("Sample pixel at (10,10):", { r: pixelData[0], g: pixelData[1], b: pixelData[2], a: pixelData[3] });
-      }
-    }
-
     engine.updateAllDOMCanvasesImmediate();
-    console.log("Canvas filled and updated");
 
     // Save canvas state to history after fill
     // saveState takes (foreground, background) -- passing them the other way
     // round stored the fill under the foreground layer, so undoing back to this
     // entry left an opaque fill on top and hid every subsequent stroke.
-    history.saveState(engine.layers.foreground, engine.layers.background, "both", true);
-    console.log("Saved canvas state to history after fill");
+    history.saveState(
+      engine.layers.foreground,
+      engine.layers.background,
+      engine.imageWidth,
+      engine.imageHeight,
+      true,
+    );
 
     // Record in replay - ABGR format
     const color = (255 << 24) | (b << 16) | (g << 8) | r;
