@@ -154,6 +154,25 @@ interface OpenBatch {
 const SAVEPOINT_INTERVAL = 64;
 const MAX_SAVEPOINTS = 8;
 
+/**
+ * How far the optimistic fork may fall behind canonical order before it is
+ * given up on.
+ *
+ * Drawpile's `MAX_FALLBEHIND`. Every canonical message that arrives while our
+ * own are still unconfirmed counts once, and the count resets the moment the
+ * fork empties. Past this the echoes are evidently not coming, and holding
+ * optimistic pixels for them means showing a canvas nobody else has -- so the
+ * fork is dropped and history rebuilt from what the server actually said. Any
+ * message that was merely late comes back as an ordinary echo.
+ *
+ * Drawpile also declines to drop the fork mid-stroke, to keep a rollback from
+ * pulling ink out from under the pen and the next segment rebuilding a fork to
+ * drop again. Its non-concurrent rollback needs that guard because it clears
+ * the fork by default; the equivalent branch here never clears it -- a replay
+ * re-applies the pending work on top -- so only this bound was missing.
+ */
+export const MAX_FORK_FALLBEHIND = 10000;
+
 function transportId(bytes: Uint8Array): string {
   let result = "";
   for (const byte of bytes) result += byte.toString(16).padStart(2, "0");
@@ -304,6 +323,11 @@ export class CanvasHistory {
   /** Who has drawn since the last savepoint, so the rest can share its arrays. */
   private releaseRenames?: () => void;
   private fork: ForkEntry[] = [];
+  /**
+   * Canonical messages seen while the fork has been waiting for its echoes,
+   * against `MAX_FORK_FALLBEHIND`. Reset whenever the fork empties.
+   */
+  private forkFallbehind = 0;
   private canonicalLog: CanonicalPainterOperation[] = [];
   private openBatch: OpenBatch | null = null;
   // Per-user stroke continuation state of the currently rendered canvas
@@ -700,6 +724,8 @@ export class CanvasHistory {
     // which take effect now)
     if (this.fork.length > 0 && this.fork[0].id === id) {
       this.fork.shift();
+      // Caught up with itself: the fork is keeping pace again.
+      if (this.fork.length === 0) this.forkFallbehind = 0;
       if (msg.type === "undo") {
         await this.processUndo(msg.userId, msg.redo);
       } else if (msg.type === "undoPoint") {
@@ -726,6 +752,7 @@ export class CanvasHistory {
       );
       this.fork = [];
       this.openBatch = null;
+      this.forkFallbehind = 0;
       let first = -1;
       if (msg.type === "undo") {
         first = this.markUndo(msg.userId, msg.redo);
@@ -746,6 +773,20 @@ export class CanvasHistory {
     // if it can't touch any pending area (Drawpile's concurrency check);
     // otherwise rebuild and re-apply the pending local state on top.
     if (this.hasPendingLocal) {
+      // Somebody else's message arrived while ours are still unconfirmed. Past
+      // the bound the echoes are not coming, and continuing to show pixels
+      // only we have is worse than losing them.
+      if (++this.forkFallbehind >= MAX_FORK_FALLBEHIND) {
+        console.warn(
+          `Canvas history rollback: local fork fell ${this.forkFallbehind} messages behind`
+        );
+        this.fork = [];
+        this.openBatch = null;
+        this.forkFallbehind = 0;
+        await this.applyCanonical(msg, seq, { replay: true });
+        return;
+      }
+
       const area = affectedArea(msg);
       const pendingAreas: Area[] = this.fork.map((f) => f.area);
       if (this.openBatch && this.openBatch.points.length > 0) {
@@ -755,6 +796,8 @@ export class CanvasHistory {
       await this.applyCanonical(msg, seq, { replay: !concurrent });
       return;
     }
+
+    this.forkFallbehind = 0;
 
     await this.applyCanonical(msg, seq, { replay: false });
   }

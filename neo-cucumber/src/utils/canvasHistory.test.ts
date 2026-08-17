@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CanvasHistory } from "./canvasHistory";
+import { CanvasHistory, MAX_FORK_FALLBEHIND } from "./canvasHistory";
 import {
   BRUSH_TYPE,
   decodeMessage,
@@ -331,6 +331,80 @@ function localStroke(
 async function remote(history: CanvasHistory, bytes: ArrayBuffer, seq?: number) {
   await history.handleRemote(new Uint8Array(bytes), historyOperation(bytes), seq);
 }
+
+describe("the optimistic fork's patience", () => {
+  /**
+   * The fork holds pixels only its author can see, waiting for the server to
+   * echo them back. If the echoes stop coming it must not wait forever:
+   * Drawpile counts how far behind the fork has fallen and gives up at
+   * `MAX_FALLBEHIND`, because showing a canvas nobody else has is worse than
+   * losing the work that was never acknowledged.
+   */
+  it("gives up on a fork whose echoes never arrive", async () => {
+    const { engine, history } = setup();
+    history.handleLocalOperation({
+      id: "never-echoed",
+      actorId: String(LOCAL),
+      operation: {
+        kind: "stroke",
+        layer: "foreground",
+        brushSize: 1,
+        brush: "solid",
+        color: { r: 200, g: 0, b: 0, a: 255 },
+        points: [{ x: 2, y: 2 }],
+        mask: { type: 0, r: 0, g: 0, b: 0 },
+      },
+    });
+    expect(history.hasPendingLocal).toBe(true);
+    expect(redFor(engine, String(LOCAL), 2, 2)).toBe(200);
+
+    // Somebody else keeps drawing, far away, so nothing forces a rollback on
+    // its own account.
+    for (let i = 0; i < MAX_FORK_FALLBEHIND - 1; i++) {
+      await remote(history, stroke(REMOTE, 40, 40, 10), i + 1);
+    }
+    expect(history.hasPendingLocal).toBe(true);
+
+    await remote(history, stroke(REMOTE, 40, 40, 10), MAX_FORK_FALLBEHIND);
+    expect(history.hasPendingLocal).toBe(false);
+    // The unacknowledged pixels went with it, which is the point: the canvas
+    // now shows what the server actually said.
+    expect(redFor(engine, String(LOCAL), 2, 2)).not.toBe(200);
+  });
+
+  it("forgets how far behind it was once the fork is confirmed", async () => {
+    const { history } = setup();
+    const operation = {
+      kind: "stroke" as const,
+      layer: "foreground" as const,
+      brushSize: 1,
+      brush: "solid" as const,
+      color: { r: 90, g: 0, b: 0, a: 255 },
+      points: [{ x: 5, y: 5 }],
+      mask: { type: 0, r: 0, g: 0, b: 0 },
+    };
+
+    for (let round = 0; round < 3; round++) {
+      history.handleLocalOperation({
+        id: `op-${round}`,
+        actorId: String(LOCAL),
+        operation,
+      });
+      for (let i = 0; i < MAX_FORK_FALLBEHIND - 1; i++) {
+        await remote(history, stroke(REMOTE, 40, 40, 10));
+      }
+      // The echo arrives, so the count starts again rather than carrying over
+      // into the next stroke and tripping the bound on a healthy connection.
+      await history.handleCanonicalOperation({
+        id: `op-${round}`,
+        actorId: String(LOCAL),
+        operation,
+        sequence: 1000 + round,
+      });
+      expect(history.hasPendingLocal).toBe(false);
+    }
+  });
+});
 
 describe("canonical application", () => {
   it("reconciles public operation envelopes by operation id", async () => {
