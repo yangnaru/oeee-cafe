@@ -40,6 +40,24 @@ export const lineTypeForBrush = (brushType: BrushType): number => {
   }
 };
 
+/**
+ * How many points a broadcast stroke may gather before it is sent.
+ *
+ * A ceiling rather than a target: the interval below usually reaches first.
+ * It exists so a very fast pointer cannot build an unbounded message.
+ */
+const STROKE_CHUNK_POINTS = 32;
+
+/**
+ * How long a broadcast stroke may gather for.
+ *
+ * This is the delay before the rest of the room sees ink that is already on
+ * the author's own canvas. Short enough to read as live, long enough to turn
+ * a stroke's worth of samples into a handful of messages instead of one per
+ * sample.
+ */
+const STROKE_CHUNK_MS = 50;
+
 export const useOfflineDrawing = (
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
   appRef: React.RefObject<HTMLDivElement | null>,
@@ -99,6 +117,22 @@ export const useOfflineDrawing = (
     Extract<PainterOperation, { kind: "stroke" }> | null
   >(null);
   const strokeBoundaryEmittedRef = useRef(false);
+  /**
+   * Segments of the stroke in progress that have been drawn locally but not
+   * yet broadcast, and when the chunk they belong to was opened.
+   */
+  const strokeChunkRef = useRef<
+    | (Extract<PainterOperation, { kind: "stroke" }> & {
+        openedAt: number;
+        /**
+         * True when `points[0]` has already been broadcast and is only here so
+         * the next message joins onto it. Without this a dot -- one point,
+         * never sent -- looks the same as a chunk holding nothing new.
+         */
+        carried: boolean;
+      })
+    | null
+  >(null);
 
   /**
    * The engine, reachable from the callbacks that are handed to the hook that
@@ -115,16 +149,80 @@ export const useOfflineDrawing = (
     onOperation(operation);
   }, [onOperation]);
 
-  const emitStrokeOperation = useCallback((
-    operation: Extract<PainterOperation, { kind: "stroke" }>,
-  ) => {
-    if (!onOperation) return;
+  /**
+   * Sends the segments accumulated so far as one stroke, and leaves the chunk
+   * open at the point they ended on.
+   *
+   * The next chunk starts from that same point so the line joins across the
+   * boundary, which is how consecutive stroke messages have always met.
+   */
+  const flushStrokeChunk = useCallback(() => {
+    const chunk = strokeChunkRef.current;
+    if (!onOperation || !chunk) return;
+    if (chunk.points.length <= (chunk.carried ? 1 : 0)) return;
     if (!strokeBoundaryEmittedRef.current) {
       onOperation({ kind: "undo-boundary" });
       strokeBoundaryEmittedRef.current = true;
     }
-    onOperation(operation);
+    onOperation({
+      kind: "stroke",
+      layer: chunk.layer,
+      brushSize: chunk.brushSize,
+      brush: chunk.brush,
+      color: chunk.color,
+      mask: chunk.mask,
+      points: chunk.points.slice(),
+      ...(chunk.targetActorId === undefined
+        ? {}
+        : { targetActorId: chunk.targetActorId }),
+    });
+    const last = chunk.points[chunk.points.length - 1];
+    chunk.points = [last];
+    chunk.carried = true;
+    chunk.openedAt = performance.now();
   }, [onOperation]);
+
+  /**
+   * Adds one drawn segment to the stroke being broadcast, flushing when the
+   * chunk is big enough or old enough.
+   *
+   * Every segment used to go out on its own, so a six-second stroke became
+   * some hundreds of canonical messages -- hundreds of sequence numbers,
+   * history entries and fork entries for one gesture, and the cost of that
+   * lands on the whole room's catch-up and on how often the server has to ask
+   * for a checkpoint. Drawpile packs thousands of dabs into a message for
+   * exactly this reason.
+   *
+   * The local canvas is painted by the interactive path as the pointer moves,
+   * so nothing here delays what the person drawing sees; the wait is only
+   * before other people see it, which is what the flush interval bounds.
+   */
+  const emitStrokeOperation = useCallback((
+    operation: Extract<PainterOperation, { kind: "stroke" }>,
+  ) => {
+    if (!onOperation) return;
+    const chunk = strokeChunkRef.current;
+    if (!chunk) {
+      strokeChunkRef.current = {
+        ...operation,
+        points: operation.points.slice(),
+        openedAt: performance.now(),
+        carried: false,
+      };
+    } else {
+      // The segment starts where the last one ended, so only its far end is
+      // new to the chunk.
+      chunk.points.push(operation.points[operation.points.length - 1]);
+    }
+    const open = strokeChunkRef.current;
+    if (
+      open !== null &&
+      (open.points.length >= STROKE_CHUNK_POINTS ||
+        performance.now() - open.openedAt >= STROKE_CHUNK_MS)
+    ) {
+      flushStrokeChunk();
+    }
+  }, [onOperation, flushStrokeChunk]);
 
   // Callbacks for recording drawing operations
   const callbacks = {
@@ -137,6 +235,7 @@ export const useOfflineDrawing = (
         drawingState.layerType === "foreground" ? 1 : 0;
       strokeMaskRef.current = maskFrom(drawingState);
       pendingStrokeRef.current = null;
+      strokeChunkRef.current = null;
       strokeBoundaryEmittedRef.current = false;
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawingState.layerType, drawingState.maskType, drawingState.maskColor]),
@@ -476,12 +575,16 @@ export const useOfflineDrawing = (
       if (pendingStrokeRef.current && !onOperation) {
         emitOperation(pendingStrokeRef.current);
       }
+      // Whatever the last chunk did not reach a threshold with still has to go
+      // out, or the tail of every stroke would be visible only to its author.
+      flushStrokeChunk();
+      strokeChunkRef.current = null;
       pendingStrokeRef.current = null;
       isFirstPointRef.current = false;
       hasCreatedStepRef.current = false;
       strokeLayerRef.current = null;
       onPointerRelease?.();
-    }, [emitOperation, onOperation, onPointerRelease]),
+    }, [emitOperation, onOperation, onPointerRelease, flushStrokeChunk]),
   };
 
   // Get base drawing functionality

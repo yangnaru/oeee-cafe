@@ -120,6 +120,69 @@ function onScreen(element: HTMLElement) {
 }
 
 describe("two clients and the wire between them", () => {
+  /**
+   * A stroke used to put one message on the wire per pointer sample, so a
+   * gesture of a few seconds became hundreds of canonical messages -- and
+   * every one of them is a sequence number, a history entry and a fork entry
+   * for the whole room. Drawpile packs thousands of dabs into a message
+   * instead.
+   *
+   * What must survive the packing is the join: consecutive stroke messages
+   * meet at a shared point, and a chunk that dropped its last point would
+   * leave a gap in the line for everyone but its author.
+   */
+  it("sends a long stroke as a few messages, and the line still joins", async () => {
+    const room = twoClients();
+    const alice = room.open("1");
+    const bob = room.open("2");
+    await act(async () => {
+      await alice.painter.ready;
+      await bob.painter.ready;
+    });
+    act(() => {
+      alice.painter.setLocalActorId("1");
+      bob.painter.setLocalActorId("2");
+    });
+
+    const canvas = alice.element.querySelector("#canvas") as HTMLCanvasElement;
+    const box = canvas.getBoundingClientRect();
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+
+    const at = (type: string, x: number, y: number) =>
+      canvas.dispatchEvent(
+        new PointerEvent(type, {
+          pointerId: 1, pointerType: "mouse", button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          clientX: box.left + x, clientY: box.top + y,
+          bubbles: true,
+        }),
+      );
+
+    const SAMPLES = 40;
+    await act(async () => {
+      at("pointerdown", 4, 4);
+      for (let i = 1; i <= SAMPLES; i++) at("pointermove", 4 + i, 4 + i);
+      at("pointerup", 4 + SAMPLES, 4 + SAMPLES);
+      await room.settle();
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
+
+    const strokes = room.relayed.filter((kind) => kind === "stroke").length;
+    expect(strokes).toBeGreaterThan(0);
+    expect(strokes).toBeLessThan(SAMPLES / 2);
+
+    // And the whole line reached him, joins and all.
+    expect(onScreen(bob.element)).toEqual(onScreen(alice.element));
+
+    act(() => {
+      alice.painter.unmount();
+      bob.painter.unmount();
+    });
+  });
+
   it("agree on a stroke one of them made", async () => {
     const room = twoClients();
     const alice = room.open("1");
