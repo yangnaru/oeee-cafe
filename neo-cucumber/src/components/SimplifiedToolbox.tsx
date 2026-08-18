@@ -95,7 +95,7 @@ export const SimplifiedToolbox = ({
   return (
     <NeoWindow
       initialPosition={opensAt ?? { x: 0, y: ceiling }}
-      className="z-40 w-[200px] overflow-hidden select-text"
+      className="z-40 w-[200px] overflow-hidden"
       minimumY={ceiling}
       constrainToViewport
     >

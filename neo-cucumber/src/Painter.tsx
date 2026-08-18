@@ -1069,7 +1069,10 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
                 onClick={() => setShowShortcuts(true)}
                 title="Keyboard shortcuts (?)"
                 aria-label="Keyboard shortcuts"
-                className={`${NEO_BUTTON} fixed bottom-3 right-3 z-40 h-7 w-7 text-sm`}
+                // `touch-none` for the same reason the panels have it: this
+                // acts on `click`, and a stylus press that slides is taken for
+                // a scroll and never produces one.
+                className={`${NEO_BUTTON} fixed bottom-3 right-3 z-40 h-7 w-7 touch-none text-sm`}
               >
                 ?
               </button>

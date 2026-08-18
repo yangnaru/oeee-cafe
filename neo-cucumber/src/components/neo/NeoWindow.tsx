@@ -146,14 +146,44 @@ export function NeoWindow({
     };
   }, [minimumY]);
 
+  /*
+   * The whole window is something you press, never something you scroll.
+   *
+   * `touch-action` is why that has to be said out loud. A pen or a finger is
+   * handled by the browser's gesture recognizer first, and on a surface that
+   * has not refused it, a press that slides even slightly is taken for the
+   * start of a scroll: the tap is cancelled, the button never paints its
+   * pressed bevel, and -- the part that is actually fatal -- no `click` is
+   * ever fired. NEO's own column survived that because every one of its
+   * controls acts on `pointerdown`; our extras column, which acts on `click`
+   * like the buttons a host appends to it, simply stopped responding to a
+   * stylus, both in the painter and on the pages that embed it.
+   *
+   * So it is refused here, for the frame, rather than on each control that
+   * remembers to -- the title bar and the zoom buttons each used to carry
+   * their own copy, and the eight controls between them did not. A window
+   * that can scroll keeps `pan-y`, since scrolling it is the one gesture it
+   * does owe the browser.
+   *
+   * Selecting is refused for the same reason, and it is the half you can
+   * reproduce on a desktop: these panels were made selectable, so a drag that
+   * crosses the zoom readout and the theme label selects them both. A
+   * selection is a mode, not an accident -- while one is up, the browser
+   * spends the next press dismissing it, and on a touch screen it spends it
+   * on the handles and the menu it has drawn as well. Every press after the
+   * drag went there instead of to a button, which is the toolbox "stopping
+   * working" partway through a drawing, and it stayed stopped because nothing
+   * in a panel of buttons ever clears a selection. There is nothing in these
+   * windows to read: they are buttons, a colour well and a list of names.
+   */
   return (
     <div
       ref={frameRef}
-      className={`${NEO_PANEL} fixed flex flex-col shadow-lg ${
+      className={`${NEO_PANEL} fixed flex flex-col shadow-lg select-none ${
         resizable ? "min-h-[140px] min-w-[180px] overflow-hidden" : ""
-      } ${constrainToViewport ? "overflow-y-auto" : ""} ${
-        className
-      }`}
+      } ${
+        constrainToViewport ? "touch-pan-y overflow-y-auto" : "touch-none"
+      } ${className}`}
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,

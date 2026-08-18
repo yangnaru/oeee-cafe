@@ -131,7 +131,7 @@ export const ToolboxPanel = ({
       // NEO's own labels overflow their buttons -- its English toolbox reads
       // "Halftone" spilling past the edge -- and that spill has to stop at the
       // panel rather than land on the canvas.
-      className={`w-max overflow-hidden select-text toolbox-${section}`}
+      className={`w-max overflow-hidden toolbox-${section}`}
       minimumY={minimumY}
     >
       <div className="flex flex-col gap-[2px] p-[2px]">
@@ -194,7 +194,7 @@ export const ToolboxPanel = ({
                 type="button"
                 {...zoomOutPress}
                 title={t`Zoom out`}
-                className={`${NEO_ICON_BUTTON} flex touch-none select-none items-center justify-center`}
+                className={`${NEO_ICON_BUTTON} flex items-center justify-center`}
               >
                 <Icon icon="material-symbols:zoom-out" width={14} height={14} />
               </button>
@@ -202,7 +202,7 @@ export const ToolboxPanel = ({
                 type="button"
                 {...zoomInPress}
                 title={t`Zoom in`}
-                className={`${NEO_ICON_BUTTON} flex touch-none select-none items-center justify-center`}
+                className={`${NEO_ICON_BUTTON} flex items-center justify-center`}
               >
                 <Icon icon="material-symbols:zoom-in" width={14} height={14} />
               </button>

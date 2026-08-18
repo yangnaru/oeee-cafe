@@ -40,7 +40,7 @@ export function NeoLayersPanel({
   return (
     <NeoWindow
       initialPosition={initialPosition}
-      className="w-max overflow-hidden select-text toolbox-layers"
+      className="w-max overflow-hidden toolbox-layers"
       minimumY={minimumY}
     >
       <div className="p-[2px]">
