@@ -6,3 +6,6 @@
 *.cer
 /proxy/upstream.caddy
 /.deploy.lock/
+
+# Vitest browser failure screenshots, as neo-cucumber already ignores.
+**/__screenshots__/
