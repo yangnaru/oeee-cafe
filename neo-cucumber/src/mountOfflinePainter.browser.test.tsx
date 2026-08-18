@@ -5,6 +5,27 @@ import { participantZIndex } from "./neo/canvasStack";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+/**
+ * Pixels the drawing itself holds, read from the exported PNG.
+ *
+ * Counting the mounted canvases instead would count the cursor and the
+ * preview overlays with them, and those do not follow undo.
+ */
+const inkPixels = async (png: Blob, width: number, height: number) => {
+  const bitmap = await createImageBitmap(png);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d")!;
+  context.drawImage(bitmap, 0, 0);
+  const data = context.getImageData(0, 0, width, height).data;
+  let ink = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i] < 200 || data[i + 1] < 200 || data[i + 2] < 200) ink += 1;
+  }
+  return ink;
+};
+
 describe("public painter lifecycle", () => {
   it("rejects invalid dimensions with a stable error code", () => {
     const element = document.createElement("div");
@@ -111,6 +132,75 @@ describe("public painter lifecycle", () => {
       replay = await painter.exportReplay();
     });
     expect(replay.size).toBeGreaterThan(12);
+    act(() => painter.unmount());
+  });
+
+  /**
+   * Undo in a painter with no session reverts the canvas.
+   *
+   * The drawing hook decides which of the two histories owns undo by whether
+   * it was given somewhere to send operations. A painter mounted without a
+   * `synchronization` has no canonical stream and must fall back to its own
+   * snapshot stack; when it was handed a sink that silently dropped
+   * everything, undo sent a message nobody received and the stroke stayed on
+   * the canvas.
+   */
+  it("undoes a stroke when there is no session to send undo to", async () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    let painter!: ReturnType<typeof mount>;
+    act(() => {
+      painter = mount(element, {
+        width: 64,
+        height: 48,
+        mode: { kind: "standard" },
+        controls: { kind: "none" },
+      });
+    });
+    await act(async () => painter.ready);
+
+    const canvas = element.querySelector("#canvas") as HTMLCanvasElement;
+    // Where the canvas actually is on the page, since the painter lays itself
+    // out and a press at a fixed client point can land beside it.
+    const box = canvas.getBoundingClientRect();
+    const send = async (type: string, x: number, y: number) => {
+      await act(async () => {
+        canvas.dispatchEvent(new PointerEvent(type, {
+          pointerId: 1,
+          pointerType: "mouse",
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          clientX: box.left + x,
+          clientY: box.top + y,
+          bubbles: true,
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    };
+    await send("pointerdown", 10, 12);
+    await send("pointermove", 40, 30);
+    await send("pointerup", 40, 30);
+
+    let drawn = 0;
+    await act(async () => {
+      drawn = await inkPixels(await painter.exportPng(), 64, 48);
+    });
+    expect(drawn).toBeGreaterThan(0);
+
+    let afterUndo = -1;
+    await act(async () => {
+      painter.undo();
+      afterUndo = await inkPixels(await painter.exportPng(), 64, 48);
+    });
+    expect(afterUndo).toBe(0);
+
+    let afterRedo = -1;
+    await act(async () => {
+      painter.redo();
+      afterRedo = await inkPixels(await painter.exportPng(), 64, 48);
+    });
+    expect(afterRedo).toBe(drawn);
+
     act(() => painter.unmount());
   });
 

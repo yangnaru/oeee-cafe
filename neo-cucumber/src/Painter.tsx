@@ -227,9 +227,19 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     // drawing into, and a second one the canonical stream addresses.
     drawingEngineRef.current?.setLocalOwner(actorId);
   }, []);
-  const emitLocalOperation = useCallback(
-    (operation: import("./operations").PainterOperation) => {
-      if (!synchronization) return;
+  /**
+   * Sends a local mark to the canonical stream, or is absent when there is no
+   * stream to send to.
+   *
+   * Absent, rather than a callback that quietly drops what it is given: the
+   * drawing hook reads this as "somebody else owns undo" -- in a session undo
+   * is a message every client replays, offline it is the snapshot stack. A
+   * do-nothing callback claimed a stream that was not there, so undo in a
+   * plain painter sent an operation into the void instead of reverting.
+   */
+  const emitLocalOperation = useMemo(() => {
+    if (!synchronization) return undefined;
+    return (operation: import("./operations").PainterOperation) => {
       operationCounterRef.current += 1;
       // A mark aimed at somebody else's pair has to say so, or every other
       // client will put it in ours -- where it did not happen.
@@ -246,9 +256,8 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
       };
       synchronizationHistoryRef.current?.registerOptimisticOperation(entry);
       synchronization.onOperation(entry);
-    },
-    [synchronization],
-  );
+    };
+  }, [synchronization]);
   const targetOwnerRef = useRef<string | null>(null);
 
   /**
