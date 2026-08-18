@@ -74,7 +74,13 @@ export default defineConfig({
         },
         test: {
           name: "browser",
-          include: ["src/**/*.browser.test.{ts,tsx}"],
+          // The hosts under ../frontend are tested from here too, the way the
+          // node project already tests them: what a drawing page's stylesheet
+          // does to the painter is a claim about the page, not the package.
+          include: [
+            "src/**/*.browser.test.{ts,tsx}",
+            "../frontend/**/*.browser.test.{ts,tsx}",
+          ],
           /*
            * One file at a time.
            *

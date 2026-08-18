@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { act } from "react";
 import { userEvent } from "vitest/browser";
-import { mount } from "./public";
-// The stylesheet the drawing pages actually load: /draw, both banner pages and
-// the two-tone painter all serve what this compiles to. The collaborative page
-// carries the same rules in its own.
-import "../../frontend/painter/painter.css";
+import { mount } from "neo-cucumber";
+// This page's own stylesheet: /draw, both banner pages and the two-tone
+// painter all serve what it compiles to. The collaborative page carries the
+// same rules in its own.
+import "./painter.css";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
