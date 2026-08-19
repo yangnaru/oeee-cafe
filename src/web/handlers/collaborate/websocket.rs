@@ -982,7 +982,14 @@ async fn handle_incoming_messages(
             )
             .await
             {
-                Ok(redis_messages::Sequenced::Stored { .. }) => {}
+                Ok(redis_messages::Sequenced::Stored { size, .. }) => {
+                    // The activity stamp and both auto-reset meters came back
+                    // with the sequence number, inside the same script. They
+                    // used to be three more round trips, taken on every
+                    // drawing message before this loop would read the next one
+                    // from the same client.
+                    maybe_request_reset(&ctx, size).await;
+                }
                 Ok(redis_messages::Sequenced::HistoryFull { .. }) => {
                     // The room is out of room. The message is gone -- its
                     // sender will notice, because the echo it is waiting on to
@@ -1000,12 +1007,6 @@ async fn handle_incoming_messages(
                     continue;
                 }
             }
-
-            if let Err(e) = ctx.state.redis_state.update_room_activity(ctx.room_uuid).await {
-                error!("Failed to update room activity in Redis: {}", e);
-            }
-
-            maybe_request_reset(&ctx).await;
         } else {
             // Ephemeral messages (chat, join, leave) bypass the sequencer
             if let Message::Binary(data) = &msg {
@@ -1228,16 +1229,12 @@ pub(super) fn valid_reset_payloads(payloads: &[Vec<u8>]) -> bool {
 
 /// Asks the room for a checkpoint once it has drawn enough on top of the last
 /// one to be worth replacing.
-async fn maybe_request_reset(ctx: &SessionContext<'_>) {
-    let redis_store = redis_messages::RedisMessageStore::new(ctx.state.redis_pool.clone());
-    let size = match redis_store.history_size(ctx.room_uuid).await {
-        Ok(size) => size,
-        Err(e) => {
-            error!("Failed to measure history for room {}: {}", ctx.room_uuid, e);
-            return;
-        }
-    };
-
+///
+/// `size` is measured by the sequencer, in the same script that stored the
+/// message it describes -- this is on the path of every drawing message, and a
+/// separate read to answer a question that is almost always "no" cost the room
+/// a round trip per mark.
+async fn maybe_request_reset(ctx: &SessionContext<'_>, size: redis_messages::HistorySize) {
     // Two meters, both counted from the last checkpoint rather than from
     // nothing, because a checkpoint is most of what a busy room's history
     // weighs and an absolute threshold would be over the moment one landed.

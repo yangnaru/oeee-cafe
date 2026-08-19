@@ -1,6 +1,7 @@
 use axum::extract::ws::Message;
 use redis::AsyncCommands;
 use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error};
 use uuid::Uuid;
 
@@ -102,7 +103,10 @@ const SEQUENCE_AND_PUBLISH_SCRIPT: &str = r#"
 local bytes = tonumber(redis.call('GET', KEYS[6]) or '0')
 local grown = bytes + #ARGV[1]
 if grown > tonumber(ARGV[3]) then
-    return {-1, '', bytes}
+    -- Same arity as the success path: the caller decodes one shape, and a
+    -- refusal that came back shorter would fail to parse instead of being read
+    -- as the refusal it is.
+    return {-1, '', bytes, 0, ''}
 end
 local seq = redis.call('INCR', KEYS[1])
 local history_id = redis.call('GET', KEYS[5])
@@ -110,7 +114,7 @@ if not history_id then
     history_id = ARGV[5]
     redis.call('SET', KEYS[5], history_id)
 end
-redis.call('RPUSH', KEYS[2], tostring(seq) .. ':' .. ARGV[1])
+local messages = redis.call('RPUSH', KEYS[2], tostring(seq) .. ':' .. ARGV[1])
 redis.call('SET', KEYS[6], grown)
 redis.call('EXPIRE', KEYS[1], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[4]))
@@ -118,12 +122,19 @@ redis.call('EXPIRE', KEYS[4], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[5], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[6], tonumber(ARGV[4]))
 redis.call('EXPIRE', KEYS[7], tonumber(ARGV[4]))
+-- The room is active because a message just landed in it, so the activity
+-- stamp is this call's business rather than a round trip of its own.
+redis.call('SET', KEYS[8], ARGV[6])
+redis.call('EXPIRE', KEYS[8], tonumber(ARGV[7]))
 -- RoomBroadcast framing, written by hand because the payload must stay the
 -- bytes the client sent: header, newline, payload. The empty field is
 -- target_connection -- history messages go to the whole room.
 redis.call('PUBLISH', KEYS[3],
     '1|' .. ARGV[2] .. '||' .. seq .. '|' .. history_id .. '\n' .. ARGV[1])
-return {seq, history_id, grown}
+-- Both auto-reset meters, read here because the write already had to touch
+-- every key they are computed from. The caller decides on them without asking
+-- again.
+return {seq, history_id, grown, messages, redis.call('GET', KEYS[7]) or ''}
 "#;
 
 /// Compiled once: `Script::new` hashes the source, and this runs on every
@@ -195,7 +206,15 @@ pub fn effective_auto_reset_bytes(base_bytes: u64) -> u64 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sequenced {
     /// Given this canonical position, with the history weighing `bytes` after.
-    Stored { seq: u64, bytes: u64 },
+    ///
+    /// `size` is both auto-reset meters as of this write, read inside the same
+    /// script rather than by a follow-up round trip: the caller checks them on
+    /// every message, and they are only interesting the moment one lands.
+    Stored {
+        seq: u64,
+        bytes: u64,
+        size: HistorySize,
+    },
     /// Refused. The history is at `MAX_HISTORY_BYTES` and nothing was stored,
     /// sequenced or broadcast.
     HistoryFull { bytes: u64 },
@@ -259,29 +278,42 @@ impl RedisMessageStore {
             e
         })?;
 
-        let (seq, _history_id, bytes): (i64, String, u64) = sequence_and_publish_script()
-            .key(seq_key(room_uuid))
-            .key(history_key(room_uuid))
-            .key(channel)
-            .key(format!(
-                "{}{}",
-                super::redis_state::USER_ID_PREFIX,
-                room_uuid
-            ))
-            .key(history_id_key(room_uuid))
-            .key(bytes_key(room_uuid))
-            .key(reset_base_key(room_uuid))
-            .arg(payload)
-            .arg(from_connection)
-            .arg(MAX_HISTORY_BYTES)
-            .arg(MESSAGE_HISTORY_TTL)
-            .arg(Uuid::new_v4().to_string())
-            .invoke_async(&mut *conn)
-            .await
-            .map_err(|e| {
-                error!("Failed to sequence message for room {}: {}", room_uuid, e);
-                e
-            })?;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|since| since.as_secs())
+            .unwrap_or(0);
+
+        let (seq, _history_id, bytes, messages, base): (i64, String, u64, usize, String) =
+            sequence_and_publish_script()
+                .key(seq_key(room_uuid))
+                .key(history_key(room_uuid))
+                .key(channel)
+                .key(format!(
+                    "{}{}",
+                    super::redis_state::USER_ID_PREFIX,
+                    room_uuid
+                ))
+                .key(history_id_key(room_uuid))
+                .key(bytes_key(room_uuid))
+                .key(reset_base_key(room_uuid))
+                .key(format!(
+                    "{}{}",
+                    super::redis_state::ACTIVITY_PREFIX,
+                    room_uuid
+                ))
+                .arg(payload)
+                .arg(from_connection)
+                .arg(MAX_HISTORY_BYTES)
+                .arg(MESSAGE_HISTORY_TTL)
+                .arg(Uuid::new_v4().to_string())
+                .arg(now)
+                .arg(super::redis_state::ACTIVITY_TTL)
+                .invoke_async(&mut *conn)
+                .await
+                .map_err(|e| {
+                    error!("Failed to sequence message for room {}: {}", room_uuid, e);
+                    e
+                })?;
 
         if seq < 0 {
             return Ok(Sequenced::HistoryFull { bytes });
@@ -295,7 +327,17 @@ impl RedisMessageStore {
             payload.len(),
             bytes
         );
-        Ok(Sequenced::Stored { seq, bytes })
+        let (base_messages, base_bytes) = decode_reset_base(&base).unwrap_or((0, 0));
+        Ok(Sequenced::Stored {
+            seq,
+            bytes,
+            size: HistorySize {
+                messages,
+                bytes,
+                base_messages,
+                base_bytes,
+            },
+        })
     }
 
     /// Both meters at once, and the checkpoint they are measured from.

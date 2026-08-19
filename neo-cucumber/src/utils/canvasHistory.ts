@@ -1395,6 +1395,11 @@ export class CanvasHistory {
   }
 
   private notify(): void {
-    this.onChange?.(this.canUndo(), this.canRedo());
+    if (!this.onChange) return;
+    // One scan, not two: `canUndo` and `canRedo` are the same walk over every
+    // entry since the last checkpoint, and this runs on every message the
+    // canonical stream delivers.
+    const { done, undone } = this.projectedUndoCounts();
+    this.onChange(done > 0, undone > 0);
   }
 }

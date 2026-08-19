@@ -48,6 +48,59 @@ import type { CollaborationMeta, Participant } from "./types";
  * before going to the saved post anyway. */
 const SAVE_CONFIRMATION_TIMEOUT_MS = 5000;
 
+/**
+ * The shortest gap between two cursor positions going out.
+ *
+ * Every one of these is sequenced by nobody but still fans out to the whole
+ * room, where it costs a decode and a repaint of one small element. Thirty a
+ * second reads as continuous motion; the display's refresh rate, which is what
+ * a bare `requestAnimationFrame` gives, is up to four times that on a modern
+ * screen and looks no different to anybody watching.
+ */
+const POINTER_BROADCAST_MS = 33;
+
+/**
+ * How long the canonical stream may hold the main thread before it has to let
+ * go of it.
+ *
+ * There is one thread here, and applying somebody else's marks runs on the
+ * same one that is meant to be following this user's pen. A burst -- three
+ * people drawing, or the tail of a catch-up -- used to be applied to
+ * exhaustion, because every `await` inside it is a microtask and microtasks
+ * are not a yield: the queue drains completely before the browser is allowed
+ * to deliver the next pointer event.
+ *
+ * Drawpile bounds the same work at about 0.2ms per batch, which it can afford
+ * because its paint engine has a thread to itself and is emptied again on the
+ * next tick. Ours has to share, so the budget is most of a frame rather than a
+ * fraction of one, and what follows it is a real yield.
+ */
+const CANONICAL_BUDGET_MS = 6;
+
+/**
+ * Hands the thread back long enough for input to be delivered.
+ *
+ * `scheduler.yield` resumes at a priority above an ordinary task, so the drain
+ * picks up again ahead of anything incidental; without it a message channel is
+ * the cheapest macrotask that still lets the browser run pending input first.
+ * A `setTimeout` is not a substitute -- nested timeouts are clamped to 4ms,
+ * which would cost more than the work being interrupted.
+ */
+const yieldToInput = (): Promise<void> => {
+  const { scheduler } = globalThis as unknown as {
+    scheduler?: { yield?: () => Promise<void> };
+  };
+  if (typeof scheduler?.yield === "function") return scheduler.yield();
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      resolve();
+    };
+    channel.port2.postMessage(null);
+  });
+};
+
 const getSessionId = (): string => {
   const id = window.location.pathname.split("/")[2];
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id ?? "")) {
@@ -149,6 +202,9 @@ export default function App() {
   const pendingIdsRef = useRef(new Map<string, string[]>());
   const pointerFrameRef = useRef<number | null>(null);
   const pendingPointerRef = useRef<{ x: number; y: number } | null>(null);
+  /** When the last cursor position went out, and where it was. */
+  const pointerSentAtRef = useRef(0);
+  const lastSentPointerRef = useRef<{ x: number; y: number } | null>(null);
   const expectedSequenceRef = useRef(1);
   const appliedSequenceRef = useRef(0);
   const canonicalOperationsRef = useRef(new Map<number, CanonicalPainterOperation>());
@@ -228,6 +284,7 @@ export default function App() {
   const onLocalPointerMove = useCallback((position: { x: number; y: number } | null) => {
     if (!position) {
       pendingPointerRef.current = null;
+      lastSentPointerRef.current = null;
       if (pointerFrameRef.current !== null) cancelAnimationFrame(pointerFrameRef.current);
       pointerFrameRef.current = null;
       onLocalPointerUp();
@@ -235,15 +292,34 @@ export default function App() {
     }
     pendingPointerRef.current = position;
     if (pointerFrameRef.current !== null) return;
-    pointerFrameRef.current = requestAnimationFrame(() => {
+    const sendPending = () => {
       pointerFrameRef.current = null;
       const point = pendingPointerRef.current;
       const ws = wsRef.current;
       const localId = localIdRef.current;
-      if (point && ws?.readyState === WebSocket.OPEN && localId !== null) {
-        ws.send(encodeMovePointer(localId, point.x, point.y));
+      if (!point || ws?.readyState !== WebSocket.OPEN || localId === null) return;
+      // A frame is the display's rate, not a useful rate for somebody else's
+      // cursor: on a 120Hz screen this fired twice as often as on a 60Hz one,
+      // and every one of those is a message the whole room decodes. This
+      // handler also runs on plain hover, so an idle pointer resting over the
+      // canvas was costing everybody else the same as one that was drawing.
+      //
+      // Too soon means wait for the next frame, not drop it: a flick that ends
+      // inside the interval must still deliver where it ended, or the cursor
+      // stops short of where its owner is.
+      if (performance.now() - pointerSentAtRef.current < POINTER_BROADCAST_MS) {
+        pointerFrameRef.current = requestAnimationFrame(sendPending);
+        return;
       }
-    });
+      // Canvas coordinates, so at a zoomed-out view several screen pixels of
+      // travel land on the pixel already sent.
+      const last = lastSentPointerRef.current;
+      if (last && last.x === point.x && last.y === point.y) return;
+      pointerSentAtRef.current = performance.now();
+      lastSentPointerRef.current = { x: point.x, y: point.y };
+      ws.send(encodeMovePointer(localId, point.x, point.y));
+    };
+    pointerFrameRef.current = requestAnimationFrame(sendPending);
   // wsRef is created by the WebSocket hook below and is stable for its lifetime.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onLocalPointerUp]);
@@ -351,6 +427,7 @@ export default function App() {
     canonicalDrainRef.current = canonicalDrainRef.current.then(async () => {
       const painter = painterRef.current;
       if (!painter || !canvasMeta) return;
+      let deadline = performance.now() + CANONICAL_BUDGET_MS;
       while (true) {
         const expected = expectedSequenceRef.current;
         const operation = canonicalOperationsRef.current.get(expected);
@@ -359,6 +436,13 @@ export default function App() {
           await painter.applyCanonicalOperation(operation);
           appliedSequenceRef.current = expected;
           expectedSequenceRef.current = expected + 1;
+          // Not while catching up: the painter takes no input until the replay
+          // is done, so there is nothing to be responsive to and yielding
+          // would only make the wait longer.
+          if (!isCatchingUpRef.current && performance.now() >= deadline) {
+            await yieldToInput();
+            deadline = performance.now() + CANONICAL_BUDGET_MS;
+          }
           continue;
         }
 

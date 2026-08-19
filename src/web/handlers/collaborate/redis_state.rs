@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::redis::RedisPool;
 
 // Redis key prefixes
-const ACTIVITY_PREFIX: &str = "oeee:activity:";
+pub(crate) const ACTIVITY_PREFIX: &str = "oeee:activity:";
 const RESET_PENDING_PREFIX: &str = "oeee:reset_pending:";
 const CONNECTION_PREFIX: &str = "oeee:connection:";
 const ROOM_PREFIX: &str = "oeee:room:";
@@ -16,7 +16,7 @@ pub(crate) const USER_ID_PREFIX: &str = "oeee:user_ids:";
 const USER_ID_TTL: u64 = 3600; // matches (and is refreshed with) message history
 
 // TTL constants
-const ACTIVITY_TTL: u64 = 3600; // 1 hour
+pub(crate) const ACTIVITY_TTL: u64 = 3600; // 1 hour
 // How long a room waits for somebody to volunteer for a checkpoint before it
 // asks again. Answering is one message and costs a willing client nothing, so
 // a room where nobody answers is a room where nobody *can*, and asking again

@@ -321,6 +321,12 @@ export const useWebSocket = ({
       const wsUrl = getWebSocketUrl();
       console.log("Creating WebSocket connection to:", wsUrl);
       const ws = new WebSocket(wsUrl);
+      // Frames arrive as buffers, not Blobs. Every message this room produces
+      // is binary, and the default would make each one a Blob that has to be
+      // read back asynchronously -- on `processingChainRef`, which is strictly
+      // serial, so that read sits on the critical path of every message from
+      // everybody. Nothing here ever wanted a Blob.
+      ws.binaryType = "arraybuffer";
       wsRef.current = ws;
     } catch (error) {
       console.error("Failed to create WebSocket:", error);

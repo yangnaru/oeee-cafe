@@ -364,9 +364,26 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
   const [handleHoverMove, setHoverHandler] = useDeferredHandler<
     { x: number; y: number } | null
   >();
+  /**
+   * Whether a stroke is in progress, from the drawing hook below -- pointed at
+   * its flag once that exists, the same way the cursor painter above is.
+   */
+  const strokeActiveRef = useRef<{ current: boolean } | null>(null);
   const handleSynchronizedHover = useCallback(
     (at: { x: number; y: number } | null) => {
+      // The local cursor is painted from every move, always: it is this
+      // screen's own pointer and it has to keep up with the pen.
       handleHoverMove(at);
+      // The room is told only while the pen is up. A stroke already says where
+      // the pen is -- each chunk carries the points it drew, and that is what
+      // moves this user's cursor on everybody else's screen -- so a pointer
+      // message sent during one is the same position again, at a second rate,
+      // fanned out to every participant and decoded by all of them. Drawpile
+      // draws the same line: its canvas view emits `pointerMoved` only in the
+      // branch where the pen is not down.
+      // `null` is "the pointer is gone", not a position, and always goes out:
+      // it is what retires this user's cursor on the other screens.
+      if (at !== null && strokeActiveRef.current?.current) return;
       synchronization?.onPointerMove?.(at);
     },
     [handleHoverMove, synchronization],
@@ -375,10 +392,25 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
   const tempCanvasContainerRef = useRef<HTMLDivElement>(null);
   const tempLocalUserCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // History change callback
+  /**
+   * Publishes the undo/redo flags, and only when they have actually moved.
+   *
+   * The history calls this after every operation it sees -- ours, and every
+   * message the canonical stream delivers. A room of three sends some eighty
+   * of those a second, and a fresh `{ canUndo, canRedo }` for each one is
+   * eighty re-renders of the whole painter: both toolbox columns, every tool
+   * button, the sliders, the participant list. The flags themselves change a
+   * handful of times in a session. Returning the previous object when nothing
+   * moved lets React drop the update at the dispatch, so the canonical stream
+   * costs a canvas write and nothing else.
+   */
   const handleHistoryChange = useCallback(
     (canUndo: boolean, canRedo: boolean) => {
-      setHistoryState({ canUndo, canRedo });
+      setHistoryState((previous) =>
+        previous.canUndo === canUndo && previous.canRedo === canRedo
+          ? previous
+          : { canUndo, canRedo }
+      );
     },
     []
   );
@@ -400,9 +432,9 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
   const handleOfflineHistoryChange = useCallback(
     (canUndo: boolean, canRedo: boolean) => {
       if (controlledRef.current) return;
-      setHistoryState({ canUndo, canRedo });
+      handleHistoryChange(canUndo, canRedo);
     },
-    []
+    [handleHistoryChange]
   );
 
   // Create a ref to hold the DOM canvas update function
@@ -451,6 +483,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     config.recordReplay ?? true,
   );
   previewEngineRef.current = drawingEngine ?? null;
+  strokeActiveRef.current = isDrawingRef;
 
   useEffect(() => {
     if (!drawingEngine || !synchronization) {
