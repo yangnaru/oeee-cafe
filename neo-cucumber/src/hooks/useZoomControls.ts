@@ -38,6 +38,67 @@ const getZoomLevels = (): number[] => {
   return cachedZoomLevels;
 };
 
+/**
+ * The rung of the ladder closest to a continuous scale.
+ *
+ * Closest by ratio, not by difference: zoom reads multiplicatively, so 0.9x
+ * and 1.11x are the same distance from 1x, while `Math.abs` would call the
+ * first one nearer and make a pinch snap down more readily than up.
+ */
+export const nearestZoomIndex = (levels: number[], scale: number): number => {
+  let best = 0;
+  let bestDistance = Infinity;
+  for (let i = 0; i < levels.length; i++) {
+    const distance = Math.abs(Math.log(levels[i] / scale));
+    if (distance < bestDistance) {
+      best = i;
+      bestDistance = distance;
+    }
+  }
+  return best;
+};
+
+/**
+ * How far to shift the canvas so the point under (`pointerX`, `pointerY`)
+ * stays under it across a zoom change.
+ *
+ * Shared by the buttons, the wheel and the pinch. It was written out twice
+ * before -- once for zoom in and once for zoom out, identically -- which is
+ * two chances for the anchor point to drift apart between the directions.
+ */
+const panDeltaForZoom = (
+  canvas: HTMLDivElement | null,
+  oldZoom: number,
+  newZoom: number,
+  pointerX?: number,
+  pointerY?: number
+): { x: number; y: number } => {
+  if (pointerX === undefined || pointerY === undefined || !canvas) {
+    return { x: 0, y: 0 };
+  }
+
+  const rect = canvas.getBoundingClientRect();
+
+  // Get current pan offset from transform
+  const transform = window.getComputedStyle(canvas).transform;
+  let currentPanX = 0;
+  let currentPanY = 0;
+  if (transform && transform !== "none") {
+    const matrix = new DOMMatrix(transform);
+    currentPanX = matrix.m41;
+    currentPanY = matrix.m42;
+  }
+
+  // Where the pointer is over the canvas, with the pan already taken out
+  const canvasX = pointerX - rect.left - currentPanX;
+  const canvasY = pointerY - rect.top - currentPanY;
+
+  // How far that point would travel under the zoom, and so how far back the
+  // canvas has to be moved to leave it where it was
+  const zoomScale = newZoom / oldZoom;
+  return { x: canvasX * (1 - zoomScale), y: canvasY * (1 - zoomScale) };
+};
+
 interface UseZoomControlsProps {
   canvasContainerRef: React.RefObject<HTMLDivElement | null>;
   appRef: React.RefObject<HTMLDivElement | null>;
@@ -60,118 +121,71 @@ export const useZoomControls = ({
   );
   const currentZoom = zoomLevels[currentZoomIndex];
 
-  const handleZoomIn = useCallback(
-    (pointerX?: number, pointerY?: number) => {
-      if (currentZoomIndex < zoomLevels.length - 1) {
-        const oldZoom = zoomLevels[currentZoomIndex];
-        const newIndex = currentZoomIndex + 1;
-        const newZoom = zoomLevels[newIndex];
+  /**
+   * Move to a rung of the ladder, keeping the point under the pointer still.
+   *
+   * The pan the zoom needs is left in `pendingPanDelta*` for `useCanvasView`
+   * to apply on the next frame, so the scale and the shift that compensates
+   * for it land together rather than a frame apart.
+   */
+  const applyZoomIndex = useCallback(
+    (newIndex: number, pointerX?: number, pointerY?: number) => {
+      if (newIndex < 0 || newIndex >= zoomLevels.length) return;
+      if (newIndex === currentZoomIndex) return;
 
-        // Calculate pan offset before state updates if coordinates provided
-        let deltaX = 0;
-        let deltaY = 0;
-        if (
-          pointerX !== undefined &&
-          pointerY !== undefined &&
-          canvasContainerRef.current
-        ) {
-          const canvas = canvasContainerRef.current;
-          const rect = canvas.getBoundingClientRect();
+      const newZoom = zoomLevels[newIndex];
+      const delta = panDeltaForZoom(
+        canvasContainerRef.current,
+        zoomLevels[currentZoomIndex],
+        newZoom,
+        pointerX,
+        pointerY
+      );
 
-          // Get current pan offset from transform
-          const computedStyle = window.getComputedStyle(canvas);
-          const transform = computedStyle.transform;
-          let currentPanX = 0;
-          let currentPanY = 0;
-
-          if (transform && transform !== "none") {
-            const matrix = new DOMMatrix(transform);
-            currentPanX = matrix.m41;
-            currentPanY = matrix.m42;
-          }
-
-          // Convert screen coordinates to canvas-relative coordinates (accounting for current pan)
-          const canvasX = pointerX - rect.left - currentPanX;
-          const canvasY = pointerY - rect.top - currentPanY;
-
-          // Calculate the zoom scale factor
-          const zoomScale = newZoom / oldZoom;
-
-          // Calculate how much the point should move due to zoom
-          deltaX = canvasX * (1 - zoomScale);
-          deltaY = canvasY * (1 - zoomScale);
-        }
-
-        // Batch state updates to prevent flicker
-        startTransition(() => {
-          setCurrentZoomIndex(newIndex);
-          setDrawingState((prev: DrawingState) => ({
-            ...prev,
-            zoomLevel: Math.round(newZoom * 100),
-            pendingPanDeltaX: deltaX !== 0 ? deltaX : undefined,
-            pendingPanDeltaY: deltaY !== 0 ? deltaY : undefined,
-          }));
-        });
-      }
+      // Batch state updates to prevent flicker
+      startTransition(() => {
+        setCurrentZoomIndex(newIndex);
+        setDrawingState((prev: DrawingState) => ({
+          ...prev,
+          zoomLevel: Math.round(newZoom * 100),
+          pendingPanDeltaX: delta.x !== 0 ? delta.x : undefined,
+          pendingPanDeltaY: delta.y !== 0 ? delta.y : undefined,
+        }));
+      });
     },
     [currentZoomIndex, zoomLevels, canvasContainerRef, setDrawingState]
   );
 
+  const handleZoomIn = useCallback(
+    (pointerX?: number, pointerY?: number) =>
+      applyZoomIndex(currentZoomIndex + 1, pointerX, pointerY),
+    [applyZoomIndex, currentZoomIndex]
+  );
+
   const handleZoomOut = useCallback(
-    (pointerX?: number, pointerY?: number) => {
-      if (currentZoomIndex > 0) {
-        const oldZoom = zoomLevels[currentZoomIndex];
-        const newIndex = currentZoomIndex - 1;
-        const newZoom = zoomLevels[newIndex];
+    (pointerX?: number, pointerY?: number) =>
+      applyZoomIndex(currentZoomIndex - 1, pointerX, pointerY),
+    [applyZoomIndex, currentZoomIndex]
+  );
 
-        // Calculate pan offset before state updates if coordinates provided
-        let deltaX = 0;
-        let deltaY = 0;
-        if (
-          pointerX !== undefined &&
-          pointerY !== undefined &&
-          canvasContainerRef.current
-        ) {
-          const canvas = canvasContainerRef.current;
-          const rect = canvas.getBoundingClientRect();
-
-          // Get current pan offset from transform
-          const computedStyle = window.getComputedStyle(canvas);
-          const transform = computedStyle.transform;
-          let currentPanX = 0;
-          let currentPanY = 0;
-
-          if (transform && transform !== "none") {
-            const matrix = new DOMMatrix(transform);
-            currentPanX = matrix.m41;
-            currentPanY = matrix.m42;
-          }
-
-          // Convert screen coordinates to canvas-relative coordinates (accounting for current pan)
-          const canvasX = pointerX - rect.left - currentPanX;
-          const canvasY = pointerY - rect.top - currentPanY;
-
-          // Calculate the zoom scale factor
-          const zoomScale = newZoom / oldZoom;
-
-          // Calculate how much the point should move due to zoom
-          deltaX = canvasX * (1 - zoomScale);
-          deltaY = canvasY * (1 - zoomScale);
-        }
-
-        // Batch state updates to prevent flicker
-        startTransition(() => {
-          setCurrentZoomIndex(newIndex);
-          setDrawingState((prev: DrawingState) => ({
-            ...prev,
-            zoomLevel: Math.round(newZoom * 100),
-            pendingPanDeltaX: deltaX !== 0 ? deltaX : undefined,
-            pendingPanDeltaY: deltaY !== 0 ? deltaY : undefined,
-          }));
-        });
-      }
+  /**
+   * Zoom to whatever rung is nearest a continuous scale, for a pinch.
+   *
+   * A pinch asks for any scale at all, and the answer is still one of the
+   * ladder's steps: the overlays are sized in whole zoomed pixels and the
+   * brush cursor is rasterised at the zoom, so a truly continuous scale would
+   * mean reallocating both on every touch sample. Eight steps to a doubling
+   * is fine enough that a pinch reads as smooth.
+   */
+  const zoomToScale = useCallback(
+    (scale: number, pointerX?: number, pointerY?: number) => {
+      const clamped = Math.min(
+        Math.max(scale, zoomLevels[0]),
+        zoomLevels[zoomLevels.length - 1]
+      );
+      applyZoomIndex(nearestZoomIndex(zoomLevels, clamped), pointerX, pointerY);
     },
-    [currentZoomIndex, zoomLevels, canvasContainerRef, setDrawingState]
+    [applyZoomIndex, zoomLevels]
   );
 
   const handleZoomReset = useCallback(() => {
@@ -268,5 +282,6 @@ export const useZoomControls = ({
     handleZoomReset,
     handleZoomFit,
     zoomToFit,
+    zoomToScale,
   };
 };

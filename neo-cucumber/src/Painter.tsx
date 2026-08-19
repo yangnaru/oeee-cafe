@@ -25,6 +25,7 @@ import { ShortcutHelp } from "./components/ShortcutHelp";
 import type { ShortcutAction } from "./constants/shortcuts";
 import { MAX_BRUSH_SIZE, MIN_BRUSH_SIZE } from "./constants/drawing";
 import { useZoomControls } from "./hooks/useZoomControls";
+import { usePinchZoom } from "./hooks/usePinchZoom";
 import { useOfflineCanvas } from "./hooks/useOfflineCanvas";
 import { compositeLayersToCanvas } from "./utils/canvasExport";
 import {
@@ -459,6 +460,7 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     recordText,
     emitOperation,
     isDrawingRef,
+    setInteractionSuspended,
   } = useOfflineDrawing(
     tempLocalUserCanvasRef,
     appRef,
@@ -615,11 +617,22 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
     handleZoomReset,
     handleZoomFit,
     zoomToFit,
+    zoomToScale,
   } = useZoomControls({
     canvasContainerRef: tempCanvasContainerRef,
     appRef,
     drawingEngine,
     setDrawingState,
+  });
+
+  // Two fingers on the drawing are a way of looking at it, not of marking it
+  usePinchZoom({
+    appRef,
+    canvasContainerRef: tempCanvasContainerRef,
+    drawingEngine,
+    currentZoom,
+    zoomToScale,
+    setInteractionSuspended,
   });
 
   // Canvas management

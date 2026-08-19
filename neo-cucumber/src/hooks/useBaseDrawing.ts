@@ -240,6 +240,41 @@ export const useBaseDrawing = (
   const MIN_MOVE_DISTANCE = 1.5;
 
   /**
+   * How long a finger's press is held before it is allowed to become a stroke.
+   *
+   * The two fingers of a pinch do not land together -- thirty to eighty
+   * milliseconds apart is ordinary -- so a press acted on the instant it
+   * arrives leaves a mark at the start of every zoom. Waiting gives the second
+   * finger time to arrive and take the press back.
+   *
+   * Undoing the mark afterwards is not an option in its place: by the time
+   * anyone knows the gesture was a pinch it has already been broadcast to the
+   * room and written into the replay, and reaching back for it locally would
+   * leave this client disagreeing with every other one about the drawing.
+   *
+   * Touch only. A pen or a mouse cannot be half of a pinch, and drawing with
+   * either stays immediate.
+   */
+  const TOUCH_PRESS_HOLD_MS = 70;
+
+  /** A touch press waiting to see whether a second finger joins it. */
+  const pendingTouchPressRef = useRef<{
+    pointerId: number;
+    begin: () => void;
+    moves: PointerEvent[];
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+
+  /** True while a pinch owns the fingers and the painter must not read them. */
+  const interactionSuspendedRef = useRef(false);
+
+  /**
+   * Set by `setupDrawingEvents`, because the state it has to unwind lives in
+   * that closure and nothing outside it can reach the pointer handlers.
+   */
+  const abortGestureRef = useRef<() => void>(() => {});
+
+  /**
    * Averages the pen's tremor out of the stroke in progress
    * (Drawpile's smoother; see `strokeSmoother.ts`). Sized per stroke from the
    * kind of pointer that started it, and drained at pointer-up so the stroke
@@ -446,6 +481,42 @@ export const useBaseDrawing = (
     const app = appRef.current;
     if (!app) return;
 
+    const discardPendingTouchPress = () => {
+      const pending = pendingTouchPressRef.current;
+      if (!pending) return;
+      pendingTouchPressRef.current = null;
+      clearTimeout(pending.timer);
+    };
+
+    /**
+     * Holds a touch press for long enough to tell a stroke from a pinch.
+     *
+     * Samples arriving meanwhile are kept rather than dropped, so when the
+     * press does turn into a stroke it starts where the finger landed and
+     * follows where it has since gone -- a fast flick keeps its shape instead
+     * of beginning at the point it had reached when the wait ran out.
+     */
+    const holdTouchPress = (pointerId: number, begin: () => void) => {
+      discardPendingTouchPress();
+      pendingTouchPressRef.current = {
+        pointerId,
+        begin,
+        moves: [],
+        timer: setTimeout(() => flushPendingTouchPress(), TOUCH_PRESS_HOLD_MS),
+      };
+    };
+
+    const flushPendingTouchPress = () => {
+      const pending = pendingTouchPressRef.current;
+      if (!pending) return;
+      pendingTouchPressRef.current = null;
+      clearTimeout(pending.timer);
+      // The press may have been released or taken over while it waited.
+      if (drawingStateRef.current.activePointerId !== pending.pointerId) return;
+      pending.begin();
+      for (const move of pending.moves) handlePointerMove(move);
+    };
+
     const handlePointerDown = (e: PointerEvent) => {
       const target = e.target as Element;
       const controlsElement = document.getElementById("controls");
@@ -465,6 +536,8 @@ export const useBaseDrawing = (
       }
 
       e.preventDefault();
+
+      if (interactionSuspendedRef.current) return;
 
       if (
         drawingStateRef.current.activePointerId !== null &&
@@ -515,106 +588,118 @@ export const useBaseDrawing = (
         (e.button === 0 || e.pointerType === "touch" || e.pointerType === "pen") &&
         currentDrawingStateRef.current.brushType !== "pan"
       ) {
-        const coords = getCanvasCoordinates(e.clientX, e.clientY);
-        isDrawingRef.current = true;
+        const beginPress = () => {
+          const coords = getCanvasCoordinates(e.clientX, e.clientY);
+          isDrawingRef.current = true;
 
-        // Freeze the settings this stroke will be drawn and recorded with
-        strokeParamsRef.current = { ...currentDrawingStateRef.current };
+          // Freeze the settings this stroke will be drawn and recorded with
+          strokeParamsRef.current = { ...currentDrawingStateRef.current };
 
-        // Opens an editor at the click and commits on Enter, so the pointer
-        // does nothing else here.
-        if (isTextTool(strokeParamsRef.current.brushType)) {
-          callbacks?.onTextPlace?.(coords.x, coords.y);
-          cleanupPointerState(e.pointerId);
-          return;
-        }
-
-        // Acts on the press itself, with nothing to drag out
-        if (isImmediateTool(strokeParamsRef.current.brushType)) {
-          const layer = strokeParamsRef.current.layerType;
-          if (!remoteSyncRef.current) {
-            drawingEngineRef.current?.eraseAll(layer);
-            saveToHistory();
+          // Opens an editor at the click and commits on Enter, so the pointer
+          // does nothing else here.
+          if (isTextTool(strokeParamsRef.current.brushType)) {
+            callbacks?.onTextPlace?.(coords.x, coords.y);
+            cleanupPointerState(e.pointerId);
+            return;
           }
-          callbacks?.onEraseAll?.(layer);
-          onDrawingChangeRef.current?.();
-          cleanupPointerState(e.pointerId);
-          return;
-        }
 
-        // Bezier spans three gestures. Only the first press seeds the curve
-        // and freezes the settings; the two that follow are handled entirely
-        // on release, so they must not disturb what is already in flight.
-        if (
-          strokeParamsRef.current.drawType === "bezier" &&
-          !isRegionTool(strokeParamsRef.current.brushType)
-        ) {
-          const bezier = bezierRef.current;
-          if (bezier.step === 0) {
-            bezier.points = [coords.x, coords.y];
-            bezier.params = strokeParamsRef.current;
-            emitBezierPreview(
-              [coords.x, coords.y, coords.x, coords.y],
-              0,
-              bezier.params
+          // Acts on the press itself, with nothing to drag out
+          if (isImmediateTool(strokeParamsRef.current.brushType)) {
+            const layer = strokeParamsRef.current.layerType;
+            if (!remoteSyncRef.current) {
+              drawingEngineRef.current?.eraseAll(layer);
+              saveToHistory();
+            }
+            callbacks?.onEraseAll?.(layer);
+            onDrawingChangeRef.current?.();
+            cleanupPointerState(e.pointerId);
+            return;
+          }
+
+          // Bezier spans three gestures. Only the first press seeds the curve
+          // and freezes the settings; the two that follow are handled entirely
+          // on release, so they must not disturb what is already in flight.
+          if (
+            strokeParamsRef.current.drawType === "bezier" &&
+            !isRegionTool(strokeParamsRef.current.brushType)
+          ) {
+            const bezier = bezierRef.current;
+            if (bezier.step === 0) {
+              bezier.points = [coords.x, coords.y];
+              bezier.params = strokeParamsRef.current;
+              emitBezierPreview(
+                [coords.x, coords.y, coords.x, coords.y],
+                0,
+                bezier.params
+              );
+            }
+            return;
+          }
+
+          // A drawing tool in line mode takes two points and commits on
+          // release, so it also skips the freehand path.
+          if (
+            strokeParamsRef.current.drawType === "line" &&
+            !isRegionTool(strokeParamsRef.current.brushType)
+          ) {
+            lineStartRef.current = coords;
+            callbacks?.onLinePreview?.(coords, coords);
+            return;
+          }
+
+          // Region tools drag out a rectangle and act on release, so they take
+          // none of the stroke path below.
+          if (isRegionTool(strokeParamsRef.current.brushType)) {
+            const drag = new RegionDrag(
+              drawingEngineRef.current?.imageWidth ?? 0,
+              drawingEngineRef.current?.imageHeight ?? 0
             );
+            drag.begin(coords);
+            regionDragRef.current = drag;
+            callbacks?.onRegionPreview?.(drag.current());
+            return;
           }
-          return;
-        }
 
-        // A drawing tool in line mode takes two points and commits on
-        // release, so it also skips the freehand path.
-        if (
-          strokeParamsRef.current.drawType === "line" &&
-          !isRegionTool(strokeParamsRef.current.brushType)
-        ) {
-          lineStartRef.current = coords;
-          callbacks?.onLinePreview?.(coords, coords);
-          return;
-        }
+          // Notify callback that drawing started
+          callbacks?.onPointerDown?.();
 
-        // Region tools drag out a rectangle and act on release, so they take
-        // none of the stroke path below.
-        if (isRegionTool(strokeParamsRef.current.brushType)) {
-          const drag = new RegionDrag(
-            drawingEngineRef.current?.imageWidth ?? 0,
-            drawingEngineRef.current?.imageHeight ?? 0
-          );
-          drag.begin(coords);
-          regionDragRef.current = drag;
-          callbacks?.onRegionPreview?.(drag.current());
-          return;
-        }
+          if (currentDrawingStateRef.current.brushType === "fill") {
+            performDrawing("fill", coords);
+            if (!remoteSyncRef.current) {
+              saveToHistory();
+            }
+            isDrawingRef.current = false;
+          } else {
+            // A pen's samples get averaged; a touch digitiser's are smooth
+            // already and averaging them twice only adds lag.
+            smootherRef.current = new StrokeSmoother(
+              strokeSmootherSizeFor(e.pointerType)
+            );
+            const first = smootherRef.current.push(coords.x, coords.y);
+            lastDrawnRef.current = { x: first.x, y: first.y };
 
-        // Notify callback that drawing started
-        callbacks?.onPointerDown?.();
-
-        if (currentDrawingStateRef.current.brushType === "fill") {
-          performDrawing("fill", coords);
-          if (!remoteSyncRef.current) {
-            saveToHistory();
+            performDrawing("point", first);
+            drawingStateRef.current.isDrawing = true;
+            drawingStateRef.current.currentX = first.x;
+            drawingStateRef.current.currentY = first.y;
+            drawingStateRef.current.prevX = drawingStateRef.current.currentX;
+            drawingStateRef.current.prevY = drawingStateRef.current.currentY;
           }
-          isDrawingRef.current = false;
-        } else {
-          // A pen's samples get averaged; a touch digitiser's are smooth
-          // already and averaging them twice only adds lag.
-          smootherRef.current = new StrokeSmoother(
-            strokeSmootherSizeFor(e.pointerType)
-          );
-          const first = smootherRef.current.push(coords.x, coords.y);
-          lastDrawnRef.current = { x: first.x, y: first.y };
+        };
 
-          performDrawing("point", first);
-          drawingStateRef.current.isDrawing = true;
-          drawingStateRef.current.currentX = first.x;
-          drawingStateRef.current.currentY = first.y;
-          drawingStateRef.current.prevX = drawingStateRef.current.currentX;
-          drawingStateRef.current.prevY = drawingStateRef.current.currentY;
+        if (e.pointerType === "touch") {
+          holdTouchPress(e.pointerId, beginPress);
+          return;
         }
+        beginPress();
       }
     };
 
     const cleanupPointerState = (pointerId: number) => {
+      if (pendingTouchPressRef.current?.pointerId === pointerId) {
+        discardPendingTouchPress();
+      }
+
       if (app.hasPointerCapture(pointerId)) {
         try {
           app.releasePointerCapture(pointerId);
@@ -652,6 +737,13 @@ export const useBaseDrawing = (
     };
 
     const handlePointerUp = (e: PointerEvent) => {
+      // A press let go inside the hold window was a tap, not half a pinch,
+      // and a tap draws a dot: start it now so this release has a stroke to
+      // finish.
+      if (pendingTouchPressRef.current?.pointerId === e.pointerId) {
+        flushPendingTouchPress();
+      }
+
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
       if (isDrawingDisabledRef.current && !drawingStateRef.current.isPanning) return;
@@ -791,13 +883,7 @@ export const useBaseDrawing = (
           (e.button === 0 || e.pointerType === "touch" || e.pointerType === "pen") &&
           isDrawingRef.current
         ) {
-          // Before the history entry and before the stroke is closed: these
-          // segments belong to the stroke that is ending.
-          if (drawingStateRef.current.isDrawing) finishSmoothedStroke();
-          if (!remoteSyncRef.current) {
-            saveToHistory();
-          }
-          callbacks?.onPointerUp?.();
+          finishActiveStroke();
         }
         isDrawingRef.current = false;
       }
@@ -856,6 +942,25 @@ export const useBaseDrawing = (
      * stroke would end a few pixels short of where it was released --
      * Drawpile's `smoother_drain`.
      */
+    /**
+     * Closes the stroke in progress the way a release would.
+     *
+     * Used by the release itself, and by a pinch taking the fingers away in
+     * the middle of one: what has been drawn by then is already on the other
+     * clients' canvases and in the replay, so the stroke has to be finished
+     * rather than abandoned half-recorded.
+     */
+    const finishActiveStroke = () => {
+      // Before the history entry and before the stroke is closed: these
+      // segments belong to the stroke that is ending.
+      if (drawingStateRef.current.isDrawing) finishSmoothedStroke();
+      if (!remoteSyncRef.current) {
+        saveToHistory();
+      }
+      callbacks?.onPointerUp?.();
+      isDrawingRef.current = false;
+    };
+
     const finishSmoothedStroke = () => {
       for (const point of smootherRef.current.drain()) {
         const last = lastDrawnRef.current;
@@ -876,9 +981,17 @@ export const useBaseDrawing = (
     };
 
     const handlePointerMove = (e: PointerEvent) => {
+      if (interactionSuspendedRef.current) return;
+
       // Before the active-pointer guard: a hovering pointer has no stroke to
       // belong to, and that is exactly when the cursor matters most.
       callbacks?.onHoverMove?.(getCanvasCoordinates(e.clientX, e.clientY));
+
+      const pending = pendingTouchPressRef.current;
+      if (pending?.pointerId === e.pointerId) {
+        pending.moves.push(e);
+        return;
+      }
 
       if (drawingStateRef.current.activePointerId !== e.pointerId) return;
 
@@ -955,6 +1068,14 @@ export const useBaseDrawing = (
       for (const sample of samples.length > 0 ? samples : [e]) {
         drawSmoothedTo(getCanvasCoordinates(sample.clientX, sample.clientY));
       }
+    };
+
+    abortGestureRef.current = () => {
+      discardPendingTouchPress();
+      if (isDrawingRef.current) finishActiveStroke();
+      const active = drawingStateRef.current.activePointerId;
+      if (active !== null) cleanupPointerState(active);
+      callbacks?.onHoverMove?.(null);
     };
 
     app.addEventListener("pointerdown", handlePointerDown);
@@ -1071,8 +1192,23 @@ export const useBaseDrawing = (
     };
   }, []);
 
+  /**
+   * Hands the fingers over to something that is not drawing, and takes them
+   * back when it is done.
+   *
+   * Suspending unwinds whatever the pointers had started -- a press still
+   * waiting out its hold, a stroke already under way -- so the gesture that
+   * took over does not leave one half-open behind it.
+   */
+  const setInteractionSuspended = useCallback((suspended: boolean) => {
+    if (interactionSuspendedRef.current === suspended) return;
+    interactionSuspendedRef.current = suspended;
+    if (suspended) abortGestureRef.current();
+  }, []);
+
   return {
     context: contextRef.current,
+    setInteractionSuspended,
     drawingEngine: drawingEngineRef.current,
     initializeDrawing,
     undo: handleUndo,
