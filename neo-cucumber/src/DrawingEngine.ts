@@ -986,12 +986,20 @@ export class DrawingEngine {
     this.neo._currentMaskType = this.maskType;
     this.neo._currentMask = this.maskColor;
 
+    // Whole pixels, always. NEO's Bresenham walks from one endpoint to the
+    // other by steps of one and stops on `x0 === x1 && y0 === y1`, so an
+    // endpoint with a fraction is an endpoint the walk steps straight past:
+    // the equality never holds and the loop does not end. Every caller here
+    // already rounds -- `screenToArtwork` and the stroke smoother both do, and
+    // wire coordinates are integers -- so this changes no drawing that has
+    // ever happened, and is the difference between a bug and a frozen tab for
+    // one that has not.
     this.neo.drawLine(
       this.surfaceFor(ctx),
-      x0,
-      y0,
-      x1,
-      y1,
+      Math.round(x0),
+      Math.round(y0),
+      Math.round(x1),
+      Math.round(y1),
       DrawingEngine.lineTypeFor(brushType)
     );
 

@@ -19,9 +19,10 @@ export function previewBackdrop(
   const pixels = (layer: "background" | "foreground") => {
     const context = engine.domContextFor(layer);
     if (context) {
-      return new Uint8ClampedArray(
-        context.getImageData(0, 0, width, height).data
-      );
+      // `getImageData` hands back a buffer nobody else holds, and this only
+      // ever reads it, so copying it again was a second full-canvas
+      // allocation per pointer move of every region, line and bezier drag.
+      return context.getImageData(0, 0, width, height).data;
     }
     return engine.layers[layer];
   };
