@@ -36,6 +36,13 @@ const WS_CLOSE_POLICY = 1008;
 // owner's answer wins a same-tick race, short enough that nobody notices when
 // the owner is not there to take it.
 const NON_OWNER_RESET_OFFER_DELAY_MS = 300;
+/**
+ * How often the catch-up readout may publish a new position.
+ *
+ * It is a progress number on a modal, and publishing it re-renders the whole
+ * session view. Ten times a second is faster than anybody reads.
+ */
+const PROGRESS_PUBLISH_MS = 100;
 
 interface Participant {
   userId: string;
@@ -534,6 +541,8 @@ export const useWebSocket = ({
 
       processingMessageRef.current = true;
       const totalMessages = messageQueueRef.current.length;
+      let publishedAt = 0;
+      let lastAppliedSeq = lastSeqRef.current;
 
       // Process all messages immediately without artificial delays
       while (messageQueueRef.current.length > 0) {
@@ -543,14 +552,33 @@ export const useWebSocket = ({
 
         if (seq !== undefined) {
           lastSeqRef.current = Math.max(lastSeqRef.current, seq);
-          setSyncProgress({
-            phase: "applying",
-            receivedSequence: lastSeqRef.current,
-            appliedSequence: seq,
-            targetSequence: replayTargetRef.current,
-          });
+          lastAppliedSeq = seq;
+          // A number on a progress readout, published at the rate a history
+          // replays. This is a state update on the session view -- the header,
+          // the chat, the modal -- and a join replaying five hundred messages
+          // was five hundred renders of all of it, for a counter nobody can
+          // read faster than it moves.
+          const now = performance.now();
+          if (now - publishedAt >= PROGRESS_PUBLISH_MS) {
+            publishedAt = now;
+            setSyncProgress({
+              phase: "applying",
+              receivedSequence: lastSeqRef.current,
+              appliedSequence: seq,
+              targetSequence: replayTargetRef.current,
+            });
+          }
         }
       }
+
+      // The last one always lands, whatever the throttle did with it: this is
+      // the number the readout finishes on.
+      setSyncProgress({
+        phase: "applying",
+        receivedSequence: lastSeqRef.current,
+        appliedSequence: lastAppliedSeq,
+        targetSequence: replayTargetRef.current,
+      });
 
       processingMessageRef.current = false;
       console.log(`✅ Processed ${totalMessages} messages from catch-up queue`);

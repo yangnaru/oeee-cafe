@@ -229,6 +229,21 @@ export default function App() {
     id: string; type: "join" | "leave" | "user"; userId: string;
     username: string; message: string; timestamp: number;
   }) => void) | null>(null);
+  /**
+   * Stable identities for the chat's two callbacks.
+   *
+   * Written inline they were new functions on every render of this component,
+   * and the chat re-runs an effect on the one it is handed -- so a render
+   * caused by anything at all, a progress counter most of all, re-ran it. They
+   * close over nothing that changes.
+   */
+  const holdChatAddMessage = useCallback(
+    (add: NonNullable<typeof chatAddMessageRef.current>) => {
+      chatAddMessageRef.current = add;
+    },
+    [],
+  );
+  const noopChatMessage = useCallback(() => {}, []);
 
   useEffect(() => { participantsRef.current = participants; }, [participants]);
   /**
@@ -880,7 +895,7 @@ export default function App() {
             <span className={NEO_TITLEBAR_DOT} />
             <span className={NEO_TITLEBAR_DOT} />
           </div>
-          <Chat wsRef={wsRef} userId={userIdRef.current} participants={participants} connectionState={connectionState} onChatMessage={() => {}} onAddMessage={(add) => { chatAddMessageRef.current = add; }} />
+          <Chat wsRef={wsRef} userId={userIdRef.current} participants={participants} connectionState={connectionState} onChatMessage={noopChatMessage} onAddMessage={holdChatAddMessage} />
           <div ref={chatResizeRef} aria-hidden="true" className={NEO_RESIZE_HANDLE}>
             <span className={NEO_RESIZE_GRIP} />
           </div>

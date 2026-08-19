@@ -821,7 +821,11 @@ async fn send_history_to_new_connection(
                     _ => continue,
                 };
                 let wrapped = Message::Binary(wrap_sequenced(history_id, *seq, payload));
-                if sender.send(wrapped).await.is_err() {
+                // `feed` rather than `send`: a replay is up to the whole
+                // auto-reset threshold of messages, and `send` flushes each one
+                // on its own. The flush below covers all of them, so a join
+                // costs a few writes instead of one per stored operation.
+                if sender.feed(wrapped).await.is_err() {
                     warn!(
                         "Failed to send stored message to new connection {}",
                         connection_id
@@ -829,6 +833,10 @@ async fn send_history_to_new_connection(
                     break;
                 }
                 max_seq = max_seq.max(*seq);
+            }
+            if sender.flush().await.is_err() {
+                warn!("Failed to flush replayed history to {}", connection_id);
+                return (history_id, max_seq);
             }
             debug!(
                 "Sent {} stored messages from Redis to new connection {} (max seq {})",
