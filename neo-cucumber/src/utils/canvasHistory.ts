@@ -155,6 +155,23 @@ const SAVEPOINT_INTERVAL = 64;
 const MAX_SAVEPOINTS = 8;
 
 /**
+ * How much a session's savepoints may weigh between them.
+ *
+ * A savepoint holds every participant's layer pair, so what eight of them cost
+ * depends on who is in the room and how big the canvas is -- at the largest
+ * session on the largest canvas, a count of eight is most of half a gigabyte
+ * of a tab that also has to draw. A count alone cannot bound that, because the
+ * count says nothing about what a copy weighs.
+ *
+ * So they are bounded by both. Dropping one costs nothing but a longer replay
+ * on the paths that reach for an older position -- a diverged fork, a
+ * checkpoint's cut -- and never the common one, which always starts from the
+ * newest savepoint. Trading replay length for memory is the right way round
+ * when memory is what has run out.
+ */
+const MAX_SAVEPOINT_BYTES = 64 * 1024 * 1024;
+
+/**
  * How far the optimistic fork may fall behind canonical order before it is
  * given up on.
  *
@@ -388,12 +405,24 @@ export class CanvasHistory {
    */
   private coverageCache = new WeakMap<HistoryFillRegion, Uint8Array>();
 
+  /** What this history's savepoints may weigh; see `MAX_SAVEPOINT_BYTES`. */
+  private readonly maxSavepointBytes: number;
+
   constructor(
     engine: DrawingEngine,
-    onChange?: (canUndo: boolean, canRedo: boolean) => void
+    onChange?: (canUndo: boolean, canRedo: boolean) => void,
+    options?: {
+      /**
+       * Overrides the savepoint memory budget. A host that knows it is on a
+       * device with less to spare can lower it; the cost is a longer replay
+       * when history is rebuilt from an older position.
+       */
+      maxSavepointBytes?: number;
+    }
   ) {
     this.engine = engine;
     this.onChange = onChange;
+    this.maxSavepointBytes = options?.maxSavepointBytes ?? MAX_SAVEPOINT_BYTES;
     // Savepoints hold a participant's layers under their name, and that name
     // changes when the server names them. Following the rename is what stops a
     // restore from conjuring the old name back into existence as a
@@ -1138,6 +1167,16 @@ export class CanvasHistory {
     return this.savepoints[this.savepoints.length - 1];
   }
 
+  /** How many savepoints are being kept. */
+  savepointCountForTest(): number {
+    return this.savepoints.length;
+  }
+
+  /** What they weigh between them, shared arrays counted once. */
+  savepointBytesForTest(): number {
+    return this.savepointBytes();
+  }
+
   /** Forces the savepoint that would otherwise wait for the interval. */
   takeSavepointForTest(): void {
     const captured = this.captureLayers();
@@ -1147,6 +1186,47 @@ export class CanvasHistory {
       generations: captured.generations,
       strokes: cloneStrokes(this.liveStrokes),
     });
+    // Including what a real one does about the ones it displaces.
+    this.evictSavepoints();
+  }
+
+  /**
+   * Drops savepoints until both bounds hold.
+   *
+   * The base is kept because every entry replays from it, and the newest
+   * because every ordinary rollback starts there; between them the
+   * second-oldest is always the one worth least.
+   */
+  private evictSavepoints(): void {
+    while (
+      this.savepoints.length > 2 &&
+      (this.savepoints.length > MAX_SAVEPOINTS ||
+        this.savepointBytes() > this.maxSavepointBytes)
+    ) {
+      this.savepoints.splice(1, 1);
+    }
+  }
+
+  /**
+   * What the savepoints weigh, counting a shared array once.
+   *
+   * Savepoints hand each other the arrays of participants who have not drawn
+   * since the last one, so adding up their layers naively would count the same
+   * buffer many times over and evict savepoints that cost nothing to keep.
+   */
+  private savepointBytes(): number {
+    const counted = new Set<Uint8ClampedArray>();
+    let bytes = 0;
+    for (const savepoint of this.savepoints) {
+      for (const pair of savepoint.layers.values()) {
+        for (const layer of [pair.background, pair.foreground]) {
+          if (counted.has(layer)) continue;
+          counted.add(layer);
+          bytes += layer.byteLength;
+        }
+      }
+    }
+    return bytes;
   }
 
   private maybeSavepoint(): void {
@@ -1161,11 +1241,7 @@ export class CanvasHistory {
       generations: captured.generations,
       strokes: cloneStrokes(this.liveStrokes),
     });
-    if (this.savepoints.length > MAX_SAVEPOINTS) {
-      // Keep the base savepoint (needed to replay any entry) and the most
-      // recent ones; drop the second-oldest
-      this.savepoints.splice(1, 1);
-    }
+    this.evictSavepoints();
   }
 
   /** Applies a message to its author's layers (snapshot decode is async). */

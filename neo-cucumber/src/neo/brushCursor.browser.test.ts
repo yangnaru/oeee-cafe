@@ -163,3 +163,78 @@ describe("the brush cursor against NEO's own", () => {
     expect(differingPixels(one, two)).toEqual([]);
   });
 });
+
+/**
+ * The overlay is cleared where the cursor was, not everywhere.
+ *
+ * Clearing the whole canvas was three million pixels on a large canvas at 2x,
+ * on every pointer move, to move a ring of a few hundred -- so the clear now
+ * covers only where the ring actually was. That is only correct if it really
+ * covers it: a clear that missed would leave a trail of rings behind the pen,
+ * and a stroke would end up drawing over its own cursor.
+ */
+describe("the brush cursor overlay", () => {
+  const blank = (data: Uint8ClampedArray, at: { x: number; y: number }) => {
+    const i = (at.y * W + at.x) * 4;
+    return data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 0 && data[i + 3] === 0;
+  };
+  const painted = (data: Uint8ClampedArray) => {
+    let count = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) count++;
+    return count;
+  };
+  const flatBackdrop = (): Backdrop => {
+    const layer = new Uint8ClampedArray(W * H * 4);
+    for (let i = 0; i < layer.length; i += 4) {
+      layer[i] = 255;
+      layer[i + 1] = 255;
+      layer[i + 2] = 255;
+      layer[i + 3] = 255;
+    }
+    return { width: W, height: H, layers: [layer] };
+  };
+
+  it("leaves nothing behind when the cursor moves away", () => {
+    const overlay = canvas();
+    const back = flatBackdrop();
+
+    drawBrushCursor(overlay, { x: 16, y: 16 }, 8, "solid", back);
+    const afterFirst = painted(overlay.getImageData(0, 0, W, H).data);
+    expect(afterFirst).toBeGreaterThan(0);
+
+    drawBrushCursor(overlay, { x: 48, y: 48 }, 8, "solid", back);
+    const data = overlay.getImageData(0, 0, W, H).data;
+
+    // The old ring is gone entirely...
+    for (let y = 8; y < 25; y++) {
+      for (let x = 8; x < 25; x++) {
+        expect(blank(data, { x, y }), `stale pixel at ${x},${y}`).toBe(true);
+      }
+    }
+    // ...and exactly one ring is on the overlay, the new one.
+    expect(painted(data)).toBe(afterFirst);
+  });
+
+  it("clears the last cursor when the pointer leaves the canvas", () => {
+    const overlay = canvas();
+    const back = flatBackdrop();
+
+    drawBrushCursor(overlay, { x: 32, y: 32 }, 8, "solid", back);
+    expect(painted(overlay.getImageData(0, 0, W, H).data)).toBeGreaterThan(0);
+
+    drawBrushCursor(overlay, null, 8, "solid", back);
+    expect(painted(overlay.getImageData(0, 0, W, H).data)).toBe(0);
+  });
+
+  it("clears the last cursor when the tool stops having one", () => {
+    const overlay = canvas();
+    const back = flatBackdrop();
+
+    drawBrushCursor(overlay, { x: 32, y: 32 }, 8, "solid", back);
+    expect(painted(overlay.getImageData(0, 0, W, H).data)).toBeGreaterThan(0);
+
+    // Fill has no brush footprint, so its cursor is nothing at all.
+    drawBrushCursor(overlay, { x: 32, y: 32 }, 8, "fill", back);
+    expect(painted(overlay.getImageData(0, 0, W, H).data)).toBe(0);
+  });
+});

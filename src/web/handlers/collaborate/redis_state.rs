@@ -510,26 +510,6 @@ return 0
         Ok(subscriber_count)
     }
 
-    // Create a dedicated Redis Pub/Sub connection for a specific room
-    pub async fn create_room_subscriber(
-        &self,
-        room_uuid: Uuid,
-        redis_url: &str,
-    ) -> Result<redis::aio::PubSub, Box<dyn std::error::Error + Send + Sync>> {
-        // Create a new dedicated connection for Pub/Sub (can't use pooled connections)
-        let client = redis::Client::open(redis_url)?;
-        let mut pubsub = client.get_async_pubsub().await?;
-
-        let channel = self.get_room_channel(room_uuid);
-        pubsub.subscribe(&channel).await?;
-
-        debug!(
-            "Created Redis subscriber for room {} on channel {}",
-            room_uuid, channel
-        );
-        Ok(pubsub)
-    }
-
     pub fn get_room_channel(&self, room_uuid: Uuid) -> String {
         format!("{}{}", PUBSUB_PREFIX, room_uuid)
     }

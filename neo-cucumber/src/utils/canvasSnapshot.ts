@@ -1,5 +1,11 @@
 /**
- * Utility functions for compressing and decompressing canvas layers using PNG blobs
+ * Turning a layer into a PNG and back.
+ *
+ * This is what a checkpoint is made of, and a checkpoint covers a layer pair
+ * per participant -- sixteen of these at the largest session size, in one go,
+ * on whoever the room asked. So the copies matter: the PNG itself is encoded
+ * and decoded off the main thread by the browser, and what is left here is
+ * pixel shuffling that has to be worth doing.
  */
 
 /**
@@ -20,8 +26,16 @@ export async function layerToPngBlob(
     throw new Error("Failed to get canvas context");
   }
 
-  // Create ImageData from the layer
-  const imageData = new ImageData(new Uint8ClampedArray(layer), width, height);
+  // The layer buffer itself: `ImageData` wraps what it is handed, and
+  // `putImageData` has read it by the time it returns, so copying the layer
+  // first only moved a few megabytes for the sake of it.
+  // The cast is the `SharedArrayBuffer` case `ImageDataArray` excludes; layers
+  // are allocated as plain `new Uint8ClampedArray(n)` and never shared.
+  const imageData = new ImageData(
+    layer as Uint8ClampedArray<ArrayBuffer>,
+    width,
+    height,
+  );
   ctx.putImageData(imageData, 0, 0);
 
   // Convert to PNG blob
@@ -44,59 +58,29 @@ export async function pngDataToLayer(
   width: number,
   height: number
 ): Promise<Uint8ClampedArray> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
+  const blob = new Blob([pngData as unknown as BlobPart], { type: "image/png" });
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Failed to load image from PNG data"));
+      img.src = url;
+    });
 
-    img.onload = () => {
-      // Create a temporary canvas to extract pixel data
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) {
+      throw new Error("Failed to get canvas context");
+    }
 
-      if (!ctx) {
-        reject(new Error("Failed to get canvas context"));
-        return;
-      }
-
-      // Disable image smoothing to preserve pixel-perfect data
-      ctx.imageSmoothingEnabled = false;
-
-      // Draw the image onto the canvas
-      ctx.drawImage(img, 0, 0);
-
-      // Extract the pixel data
-      const imageData = ctx.getImageData(0, 0, width, height);
-      resolve(imageData.data);
-    };
-
-    img.onerror = () => {
-      reject(new Error("Failed to load image from PNG data"));
-    };
-
-    // Create blob URL from PNG data
-    const blob = new Blob([new Uint8Array(pngData)], { type: "image/png" });
-    const url = URL.createObjectURL(blob);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url); // Clean up
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-
-      if (!ctx) {
-        reject(new Error("Failed to get canvas context"));
-        return;
-      }
-
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, 0, 0);
-
-      const imageData = ctx.getImageData(0, 0, width, height);
-      resolve(imageData.data);
-    };
-
-    img.src = url;
-  });
+    // Disable image smoothing to preserve pixel-perfect data
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, 0, 0);
+    return ctx.getImageData(0, 0, width, height).data;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }

@@ -10,7 +10,7 @@ use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::borrow::Cow;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -204,18 +204,18 @@ pub async fn handle_socket(
         }
     }
 
-    // Subscribe to the room channel BEFORE replaying history so no message can
-    // fall into the gap between history replay and the live stream. Messages
-    // covered by both are deduplicated below via their sequence numbers.
-    let mut pubsub = match state
-        .redis_state
-        .create_room_subscriber(room_uuid, &state.config.redis_url)
-        .await
-    {
-        Ok(pubsub) => pubsub,
+    // Join the room's stream BEFORE replaying history so no message can fall
+    // into the gap between history replay and the live stream. Messages
+    // covered by both are deduplicated below via their sequence numbers. The
+    // subscription belongs to the room rather than to this connection, so the
+    // eighth person to join costs a receiver rather than a Redis connection
+    // and a seventh redundant decode of every stroke.
+    let room_channel = state.redis_state.get_room_channel(room_uuid);
+    let mut room_listener = match state.room_fanout.subscribe(room_uuid, &room_channel).await {
+        Ok(listener) => listener,
         Err(e) => {
             error!(
-                "Failed to create Redis subscriber for connection {}: {}",
+                "Failed to join the room stream for connection {}: {}",
                 connection_id, e
             );
             return;
@@ -223,7 +223,7 @@ pub async fn handle_socket(
     };
 
     let (redis_tx, mut redis_rx) =
-        mpsc::channel::<(Option<(Uuid, u64)>, Vec<u8>)>(OUTGOING_QUEUE_LIMIT);
+        mpsc::channel::<std::sync::Arc<super::redis_state::RoomBroadcast>>(OUTGOING_QUEUE_LIMIT);
     let (close_tx, close_rx) = tokio::sync::oneshot::channel::<Goodbye>();
     // Two paths can decide this connection is over -- a client that has stopped
     // draining, and a client that sent a frame this protocol does not have --
@@ -234,57 +234,49 @@ pub async fn handle_socket(
     let overflow_close_tx = close_tx.clone();
     let redis_task = tokio::spawn(async move {
         loop {
-            match pubsub.on_message().next().await {
-                Some(msg) => {
-                    let payload: Vec<u8> = msg.get_payload().unwrap_or_default();
-                    match super::redis_state::RoomBroadcast::decode(&payload) {
-                        Some(room_msg) => {
-                            if should_forward_to_connection(&room_msg, &connection_id_clone) {
-                                let position = room_msg.history_id.zip(room_msg.seq);
-                                match redis_tx.try_send((position, room_msg.payload)) {
-                                    Ok(()) => {}
-                                    Err(mpsc::error::TrySendError::Full(_)) => {
-                                        // Do not wait for room: blocking here
-                                        // backs the stall up into the Redis
-                                        // subscriber, and the room's other
-                                        // members are not the ones with the
-                                        // problem. Close, and let this client
-                                        // resume from the position it last
-                                        // acknowledged.
-                                        warn!(
-                                            "Connection {} is {} messages behind - closing so it can resume",
-                                            connection_id_clone, OUTGOING_QUEUE_LIMIT
-                                        );
-                                        send_goodbye(
-                                            &overflow_close_tx,
-                                            close_code::AGAIN,
-                                            "too far behind",
-                                        );
-                                        break;
-                                    }
-                                    Err(mpsc::error::TrySendError::Closed(_)) => {
-                                        debug!(
-                                            "Redis message channel closed for connection {}",
-                                            connection_id_clone
-                                        );
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        None => {
-                            error!(
-                                "Dropping unrecognised Redis broadcast ({} bytes)",
-                                payload.len()
+            match room_listener.receiver.recv().await {
+                Ok(room_msg) => {
+                    if !should_forward_to_connection(&room_msg, &connection_id_clone) {
+                        continue;
+                    }
+                    match redis_tx.try_send(room_msg) {
+                        Ok(()) => {}
+                        Err(mpsc::error::TrySendError::Full(_)) => {
+                            // Do not wait for room: blocking here backs the
+                            // stall up into the room's shared subscriber, and
+                            // the room's other members are not the ones with
+                            // the problem. Close, and let this client resume
+                            // from the position it last acknowledged.
+                            warn!(
+                                "Connection {} is {} messages behind - closing so it can resume",
+                                connection_id_clone, OUTGOING_QUEUE_LIMIT
                             );
+                            send_goodbye(&overflow_close_tx, close_code::AGAIN, "too far behind");
+                            break;
+                        }
+                        Err(mpsc::error::TrySendError::Closed(_)) => {
+                            debug!(
+                                "Redis message channel closed for connection {}",
+                                connection_id_clone
+                            );
+                            break;
                         }
                     }
                 }
-                None => {
-                    debug!(
-                        "Redis Pub/Sub stream ended for connection {}",
-                        connection_id_clone
+                // This connection did not read its share of the room's stream
+                // in time. Same answer as its own queue overflowing: the
+                // canonical history is what it is missing, and a reconnect
+                // replays exactly that.
+                Err(broadcast::error::RecvError::Lagged(missed)) => {
+                    warn!(
+                        "Connection {} missed {} broadcasts - closing so it can resume",
+                        connection_id_clone, missed
                     );
+                    send_goodbye(&overflow_close_tx, close_code::AGAIN, "too far behind");
+                    break;
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    debug!("Room stream ended for connection {}", connection_id_clone);
                     break;
                 }
             }
@@ -350,14 +342,17 @@ pub async fn handle_socket(
                     break;
                 }
                 next = redis_rx.recv() => {
-                    let Some((position, payload)) = next else {
+                    let Some(room_msg) = next else {
                         break;
                     };
-                    let msg = match position {
+                    let msg = match room_msg.history_id.zip(room_msg.seq) {
                         // Skip sequenced messages already delivered via history replay
                         Some((history_id, s)) if history_id == history_identity && s <= max_history_seq => continue,
-                        Some((history_id, s)) => Message::Binary(wrap_sequenced(history_id, s, &payload)),
-                        None => Message::Binary(payload),
+                        // `wrap_sequenced` builds its own buffer, so the shared
+                        // payload is only read here; the clone below is the
+                        // ephemeral path, which is a pointer position at most.
+                        Some((history_id, s)) => Message::Binary(wrap_sequenced(history_id, s, &room_msg.payload)),
+                        None => Message::Binary(room_msg.payload.clone()),
                     };
                     if sender.send(msg).await.is_err() {
                         debug!("WebSocket send failed");
@@ -405,6 +400,11 @@ pub async fn handle_socket(
     .await;
 
     redis_task.abort();
+    // Gives up this connection's share of the room's subscription. The task
+    // above owned the receiver, so aborting it is what makes this the last
+    // reference; when it is also the room's last, the Redis subscription goes
+    // with it.
+    state.room_fanout.release(room_uuid).await;
 
     // A goodbye is only a goodbye if it reaches the wire. When one has been
     // handed over, give the outgoing task a moment to send it before the abort

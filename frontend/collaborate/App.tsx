@@ -109,8 +109,27 @@ const getSessionId = (): string => {
   return id;
 };
 
-const bytesId = (bytes: Uint8Array): string =>
-  Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+/** Two hex digits for every byte value, so the loop below never formats one. */
+const HEX_OCTETS = Array.from({ length: 256 }, (_, value) =>
+  value.toString(16).padStart(2, "0"),
+);
+
+/**
+ * The bytes of a message, as the string used to recognise its echo.
+ *
+ * Runs on every operation this client sends and every canvas message it
+ * receives. Built through `Array.from(...).join("")` it allocated an array and
+ * two short-lived strings per byte -- some hundreds of allocations for one
+ * stroke chunk, at the rate a busy room produces them. The output is the same
+ * hex string; only the garbage is gone.
+ */
+const bytesId = (bytes: Uint8Array): string => {
+  let id = "";
+  for (let index = 0; index < bytes.length; index++) {
+    id += HEX_OCTETS[bytes[index]];
+  }
+  return id;
+};
 
 const downloadBlob = (blob: Blob, name: string) => {
   const url = URL.createObjectURL(blob);

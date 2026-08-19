@@ -171,11 +171,21 @@ const Painter = forwardRef<PainterHandle, PainterProps>(function Painter(
    * already what is on screen, and reading the buffers would mean copying a
    * whole layer into an ImageData for every participant on every refresh.
    */
+  const thumbnailGenerations = useRef(new Map<string, string>());
   const drawThumbnail = useCallback(
     (actorId: string, target: HTMLCanvasElement) => {
       const engine = drawingEngineRef.current;
       const context = target.getContext("2d");
       if (!engine || !context) return;
+      // Nothing to redraw for somebody who has stopped drawing. Scaling two
+      // full-size canvases down is real work, it runs for every participant on
+      // a timer, and in a room where one person is drawing it was redrawing
+      // everybody else's unchanged picture alongside theirs. The engine counts
+      // every write to a participant's layers, so it can say.
+      const generation = engine.layerGeneration(actorId);
+      const painted = `${target.width}x${target.height}:${generation}`;
+      if (thumbnailGenerations.current.get(actorId) === painted) return;
+      thumbnailGenerations.current.set(actorId, painted);
       context.clearRect(0, 0, target.width, target.height);
       for (const layer of ["background", "foreground"] as const) {
         const source = engine.domCanvasFor(layer, actorId);

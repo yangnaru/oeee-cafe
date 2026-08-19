@@ -1286,3 +1286,52 @@ describe("savepoints and the marks the canvas already carries", () => {
     expect(redFor(engine, 2, 5, 5)).toBe(88);
   });
 });
+
+describe("savepoint memory", () => {
+  /**
+   * Savepoints are bounded by what they weigh, not only by how many there are.
+   *
+   * The count says nothing about the cost: one savepoint holds a layer pair per
+   * participant, so eight of them in a full room on a large canvas is most of
+   * half a gigabyte. The budget is what keeps that from being unbounded in the
+   * dimension that actually runs out.
+   */
+  it("drops old savepoints once they weigh more than the budget allows", () => {
+    const engine = new FakeEngine();
+    const layerBytes = SIZE * SIZE * 4;
+    // Room for two savepoints' worth of one participant's pair, and no more.
+    const budget = layerBytes * 4;
+    const history = new CanvasHistory(
+      engine as unknown as DrawingEngine,
+      undefined,
+      { maxSavepointBytes: budget },
+    );
+    history.setLocalUserId(LOCAL);
+
+    for (let round = 0; round < 8; round++) {
+      // A write between savepoints, or the next one shares these arrays and
+      // costs nothing -- which is the case the budget must *not* punish.
+      engine.noteWrite(String(LOCAL));
+      history.takeSavepointForTest();
+      expect(history.savepointBytesForTest()).toBeLessThanOrEqual(budget);
+    }
+
+    // The base and the newest are always kept: every rollback starts from one
+    // of the two, so evicting down to nothing would trade memory for a replay
+    // that cannot happen.
+    expect(history.savepointCountForTest()).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps a full set when the participants have not drawn between them", () => {
+    const engine = new FakeEngine();
+    const history = new CanvasHistory(engine as unknown as DrawingEngine);
+    history.setLocalUserId(LOCAL);
+
+    // No writes, so every savepoint shares the previous one's arrays. Weighing
+    // them naively would count the same buffer over and over and evict
+    // savepoints that cost nothing to hold.
+    for (let round = 0; round < 8; round++) history.takeSavepointForTest();
+
+    expect(history.savepointBytesForTest()).toBe(SIZE * SIZE * 4 * 2);
+  });
+});

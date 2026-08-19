@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::watch;
 
 use super::handlers::collaborate::redis_state::RedisStateManager;
+use super::handlers::collaborate::room_fanout::RoomFanout;
 use crate::push::PushService;
 use crate::redis::RedisPool;
 use crate::AppConfig;
@@ -16,6 +17,8 @@ pub struct AppState {
     pub db_pool: PgPool,
     pub redis_pool: RedisPool,
     pub redis_state: RedisStateManager,
+    /// One Redis subscription per room, shared by that room's connections.
+    pub room_fanout: RoomFanout,
     pub push_service: Arc<PushService>,
     pub shutdown: Shutdown,
 }

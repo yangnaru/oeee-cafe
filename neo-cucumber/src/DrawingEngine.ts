@@ -528,8 +528,19 @@ export class DrawingEngine {
     this.pendingUpdates.delete(key);
 
     if (region === "all") {
+      // The buffer itself, not a copy of it. `ImageData` wraps what it is
+      // given and `putImageData` reads it before returning, so the copy bought
+      // nothing -- and this is the path a checkpoint takes, where it bought
+      // nothing once per layer per participant.
       domCtx.putImageData(
-        new ImageData(new Uint8ClampedArray(layerData), this.imageWidth, this.imageHeight),
+        // The cast is the `SharedArrayBuffer` case `ImageDataArray` excludes.
+        // Every layer here is allocated as a plain `new Uint8ClampedArray(n)`,
+        // and nothing in this engine can produce a shared one.
+        new ImageData(
+          layerData as Uint8ClampedArray<ArrayBuffer>,
+          this.imageWidth,
+          this.imageHeight
+        ),
         0,
         0
       );

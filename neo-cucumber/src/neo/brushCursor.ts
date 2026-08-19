@@ -105,6 +105,29 @@ function plotEllipse(
 }
 
 /**
+ * Where each overlay was last painted, so the next paint clears that and not
+ * the whole canvas.
+ *
+ * The overlay is the canvas at its displayed size -- width and height times
+ * the zoom -- and this runs on every pointer move, drawing or hovering. On a
+ * large canvas at 2x that was three million pixels cleared to put a ring of a
+ * few hundred somewhere else, tens of times a second, on the thread following
+ * the pen. Weak so an unmounted painter's canvas is not held here.
+ */
+const paintedRegions = new WeakMap<
+  CanvasRenderingContext2D,
+  { x: number; y: number; width: number; height: number }
+>();
+
+/** Erases the previous cursor, wherever it was. */
+function clearPreviousCursor(ctx: CanvasRenderingContext2D): void {
+  const previous = paintedRegions.get(ctx);
+  if (!previous) return;
+  ctx.clearRect(previous.x, previous.y, previous.width, previous.height);
+  paintedRegions.delete(ctx);
+}
+
+/**
  * Paints the cursor onto its own overlay.
  *
  * The overlay is opaque where the circle is and clear everywhere else: the
@@ -119,7 +142,7 @@ export function drawBrushCursor(
   backdrop: Backdrop | null
 ): void {
   const { width, height } = ctx.canvas;
-  ctx.clearRect(0, 0, width, height);
+  clearPreviousCursor(ctx);
   if (!at || !backdrop || !hasBrushCursor(tool)) return;
 
   // NEO: "1pxの時は2px相当の円カーソルを表示"
@@ -157,4 +180,5 @@ export function drawBrushCursor(
   });
 
   ctx.putImageData(image, x0, y0);
+  paintedRegions.set(ctx, { x: x0, y: y0, width: x1 - x0, height: y1 - y0 });
 }

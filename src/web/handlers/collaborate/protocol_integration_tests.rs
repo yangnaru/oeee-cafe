@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use super::redis_messages::{self, RedisMessageStore, Sequenced};
 use super::redis_state::{RedisStateManager, RoomBroadcast};
+use super::room_fanout::RoomFanout;
 use super::websocket::{valid_reset_payloads, wrap_sequenced};
 use crate::redis::RedisPool;
 
@@ -951,4 +952,72 @@ async fn touching_live_history_refreshes_every_canonical_key_lifetime() {
         let ttl: i64 = connection.ttl(key).await.expect("read refreshed TTL");
         assert!(ttl > 3500, "{key} was only refreshed to {ttl} seconds");
     }
+}
+
+/// One Redis subscription serves everybody in the room.
+///
+/// The property that matters is not just that it is shared -- it is that
+/// sharing it costs no listener a message. A connection joining late must not
+/// take delivery away from the one already there, and the room's subscription
+/// must go when the last of them leaves, or a process slowly accumulates a
+/// Redis connection per room it has ever seen.
+#[tokio::test]
+async fn one_room_subscription_feeds_every_connection_in_it() {
+    let (_redis, redis_url) = start_redis().await;
+    let pool = redis_pool(&redis_url).await;
+    let room = Uuid::new_v4();
+    let channel = RedisStateManager::new(pool.clone()).get_room_channel(room);
+
+    let fanout = RoomFanout::new(&redis_url);
+    let mut first = fanout
+        .subscribe(room, &channel)
+        .await
+        .expect("first connection joins the room");
+    let mut second = fanout
+        .subscribe(room, &channel)
+        .await
+        .expect("second connection joins the same room");
+
+    assert_eq!(fanout.subscribed_rooms().await, 1, "one subscription, not two");
+    assert_eq!(fanout.listeners_in(room).await, 2);
+
+    let sent = RoomBroadcast {
+        from_connection: "alice".to_string(),
+        target_connection: None,
+        seq: Some(7),
+        history_id: Some(Uuid::new_v4()),
+        payload: vec![0x12, 1, 0x55, 0x66],
+    };
+    let mut conn = pool.get().await.expect("Redis connection");
+    let _: () = conn
+        .publish(&channel, sent.encode())
+        .await
+        .expect("publish to the room");
+
+    for listener in [&mut first, &mut second] {
+        let received = tokio::time::timeout(Duration::from_secs(5), listener.receiver.recv())
+            .await
+            .expect("a broadcast arrives")
+            .expect("the stream is live");
+        assert_eq!(received.payload, sent.payload);
+        assert_eq!(received.seq, sent.seq);
+        assert_eq!(received.history_id, sent.history_id);
+        assert_eq!(received.from_connection, sent.from_connection);
+    }
+
+    // Decoded once for the whole room: both listeners hold the same value.
+    fanout.release(room).await;
+    assert_eq!(
+        fanout.subscribed_rooms().await,
+        1,
+        "somebody is still in the room"
+    );
+    assert_eq!(fanout.listeners_in(room).await, 1);
+
+    fanout.release(room).await;
+    assert_eq!(
+        fanout.subscribed_rooms().await,
+        0,
+        "the last one out takes the subscription with them"
+    );
 }

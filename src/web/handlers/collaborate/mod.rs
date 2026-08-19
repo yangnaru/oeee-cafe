@@ -4,6 +4,7 @@ pub mod messages;
 pub mod protocol;
 pub mod redis_messages;
 pub mod redis_state;
+pub mod room_fanout;
 pub mod types;
 pub mod utils;
 pub mod websocket;
