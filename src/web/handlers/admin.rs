@@ -17,7 +17,8 @@ use crate::web::context::CommonContext;
 use crate::web::handlers::{AdminUser, ExtractFtlLang};
 use crate::web::state::AppState;
 use axum::extract::{Path, Query, State};
-use axum::response::Html;
+use axum::http::header;
+use axum::response::{Html, IntoResponse, Response};
 use axum::Form;
 use minijinja::context;
 use serde::Deserialize;
@@ -557,6 +558,37 @@ pub async fn admin_collaborative_sessions(
     Ok(Html(rendered))
 }
 
+/// GET /admin/collaborative-sessions/:uuid/archive — the whole recording of
+/// one session, as one file.
+///
+/// The point of holding it is to run it back through the client and watch
+/// where the canvas goes wrong, which is what a post-mortem of a desync
+/// actually needs -- reconstructing one out of whatever survived in Redis an
+/// hour later is how the last one had to be done.
+pub async fn download_collaborative_archive(
+    _admin: AdminUser,
+    Path(room_uuid): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Response, AppError> {
+    let log = crate::web::handlers::collaborate::archive::download_session(&state, room_uuid)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to read the archive: {}", e))?;
+    if log.is_empty() {
+        return Err(AppError::NotFound("No archive for this session".to_string()));
+    }
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/octet-stream".to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{room_uuid}.oeeelog\""),
+            ),
+        ],
+        log,
+    )
+        .into_response())
+}
+
 #[cfg(test)]
 mod tests {
     //! `cargo check` validates the handlers but not the Jinja, so render every
@@ -997,6 +1029,27 @@ mod tests {
         ));
         // Nor is there a live room left to open.
         assert!(!rendered.contains("/collaborate/00000000-0000-0000-0000-000000000009\""));
+    }
+
+    /// The recording is offered for every row, ended ones included -- an
+    /// ended session is exactly the one worth examining, and the archive
+    /// outlives the room it came from.
+    #[test]
+    fn session_rows_link_to_their_recording() {
+        let rendered = render_sessions(vec![
+            sample_session(json!({})),
+            sample_session(json!({
+                "id": "00000000-0000-0000-0000-00000000000c",
+                "ended_at": "2026-01-03T00:00:00Z",
+                "preview_version": null,
+            })),
+        ]);
+        assert!(rendered.contains(
+            "/admin/collaborative-sessions/00000000-0000-0000-0000-000000000009/archive"
+        ));
+        assert!(rendered.contains(
+            "/admin/collaborative-sessions/00000000-0000-0000-0000-00000000000c/archive"
+        ));
     }
 
     /// Sorting and filtering have to survive each other: a status link that

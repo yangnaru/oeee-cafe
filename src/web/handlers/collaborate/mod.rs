@@ -1,3 +1,4 @@
+pub mod archive;
 pub mod db;
 pub mod http_handlers;
 pub mod messages;

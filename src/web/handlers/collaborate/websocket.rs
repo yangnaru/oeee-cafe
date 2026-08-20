@@ -990,13 +990,18 @@ async fn handle_incoming_messages(
             )
             .await
             {
-                Ok(redis_messages::Sequenced::Stored { size, .. }) => {
+                Ok(redis_messages::Sequenced::Stored { seq, size, .. }) => {
                     // The activity stamp and both auto-reset meters came back
                     // with the sequence number, inside the same script. They
                     // used to be three more round trips, taken on every
                     // drawing message before this loop would read the next one
                     // from the same client.
                     maybe_request_reset(&ctx, size).await;
+                    // The message is already in the archive buffer; this is
+                    // only the nudge that moves a batch of them into storage,
+                    // and it is spawned because this task is in the middle of
+                    // somebody's stroke.
+                    super::archive::maybe_flush(ctx.state, ctx.room_uuid, seq);
                 }
                 Ok(redis_messages::Sequenced::HistoryFull { .. }) => {
                     // The room is out of room. The message is gone -- its

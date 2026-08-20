@@ -129,8 +129,15 @@ redis.call('EXPIRE', KEYS[8], tonumber(ARGV[7]))
 -- RoomBroadcast framing, written by hand because the payload must stay the
 -- bytes the client sent: header, newline, payload. The empty field is
 -- target_connection -- history messages go to the whole room.
-redis.call('PUBLISH', KEYS[3],
-    '1|' .. ARGV[2] .. '||' .. seq .. '|' .. history_id .. '\n' .. ARGV[1])
+local frame = '1|' .. ARGV[2] .. '||' .. seq .. '|' .. history_id .. '\n' .. ARGV[1]
+redis.call('PUBLISH', KEYS[3], frame)
+-- The same bytes into the archive buffer, prefixed with the moment they were
+-- sequenced. Here rather than in the caller so that a message which got a
+-- position is recorded with it, once and in that order: recording afterwards
+-- leaves a window in which a message is canonical and unrecorded, which is
+-- exactly the message a post-mortem wants. See collaborate::archive.
+redis.call('RPUSH', KEYS[9], ARGV[8] .. ':' .. frame)
+redis.call('EXPIRE', KEYS[9], tonumber(ARGV[9]))
 -- Both auto-reset meters, read here because the write already had to touch
 -- every key they are computed from. The caller decides on them without asking
 -- again.
@@ -278,10 +285,13 @@ impl RedisMessageStore {
             e
         })?;
 
-        let now = SystemTime::now()
+        let since_epoch = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|since| since.as_secs())
-            .unwrap_or(0);
+            .unwrap_or_default();
+        let now = since_epoch.as_secs();
+        // The archive stamps in milliseconds: drawing messages carry no time of
+        // their own, and seconds are too coarse to pace a replay by.
+        let now_millis = since_epoch.as_millis() as u64;
 
         let (seq, _history_id, bytes, messages, base): (i64, String, u64, usize, String) =
             sequence_and_publish_script()
@@ -301,6 +311,7 @@ impl RedisMessageStore {
                     super::redis_state::ACTIVITY_PREFIX,
                     room_uuid
                 ))
+                .key(super::archive::buffer_key(room_uuid))
                 .arg(payload)
                 .arg(from_connection)
                 .arg(MAX_HISTORY_BYTES)
@@ -308,6 +319,8 @@ impl RedisMessageStore {
                 .arg(Uuid::new_v4().to_string())
                 .arg(now)
                 .arg(super::redis_state::ACTIVITY_TTL)
+                .arg(now_millis)
+                .arg(super::archive::ARCHIVE_BUFFER_TTL)
                 .invoke_async(&mut *conn)
                 .await
                 .map_err(|e| {
@@ -338,6 +351,15 @@ impl RedisMessageStore {
                 base_bytes,
             },
         })
+    }
+
+    /// The newest position a room has reached, or None if it has none yet.
+    pub async fn current_sequence(
+        &self,
+        room_uuid: Uuid,
+    ) -> Result<Option<u64>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut conn = self.pool.get().await?;
+        Ok(conn.get::<_, Option<u64>>(seq_key(room_uuid)).await?)
     }
 
     /// Both meters at once, and the checkpoint they are measured from.

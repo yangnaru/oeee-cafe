@@ -10,6 +10,7 @@ use tokio::task::JoinHandle;
 use tokio_tungstenite::{accept_async, connect_async, tungstenite::Message};
 use uuid::Uuid;
 
+use super::archive::ArchiveBuffer;
 use super::preview::{ImageKind, PreviewStore};
 use super::redis_messages::{self, RedisMessageStore, Sequenced};
 use super::redis_state::{RedisStateManager, RoomBroadcast};
@@ -592,6 +593,160 @@ async fn preview_versions_come_back_per_room_in_the_order_asked() {
     })
     .await
     .expect("preview versions scenario timed out");
+}
+
+/// The recording is written by the sequencer, in the step that assigns the
+/// position -- so a message that is canonical is recorded, once, in that
+/// order. Anything less would leave the one message a post-mortem wants
+/// missing: the one that was accepted just before things went wrong.
+#[tokio::test]
+async fn every_sequenced_message_lands_in_the_archive_in_order() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let harness = start_harness().await;
+        let store = RedisMessageStore::new(harness.pool.clone());
+        let buffer = ArchiveBuffer::new(harness.pool.clone());
+        let channel = format!("oeee:pubsub:{}", harness.room);
+
+        for index in 0..8u8 {
+            store
+                .sequence_and_publish(harness.room, &[0x16, index], "conn-a", &channel)
+                .await
+                .expect("sequence");
+        }
+
+        assert_eq!(buffer.pending(harness.room).await.expect("pending"), 8);
+        let entries = buffer.peek(harness.room, 100).await.expect("peek");
+        assert_eq!(entries.len(), 8);
+        for (index, entry) in entries.iter().enumerate() {
+            assert_eq!(entry.broadcast.seq, Some(index as u64 + 1));
+            assert_eq!(entry.broadcast.payload, vec![0x16, index as u8]);
+            // Which connection sent it, which is the attribution the live
+            // history does not keep.
+            assert_eq!(entry.broadcast.from_connection, "conn-a");
+            assert!(entry.at > 0, "a recorded message is stamped");
+        }
+        // Non-decreasing, so a replay can pace itself by them.
+        for pair in entries.windows(2) {
+            assert!(pair[1].at >= pair[0].at);
+        }
+    })
+    .await
+    .expect("archive ordering scenario timed out");
+}
+
+/// A refused message never became canonical, so it must not appear to have
+/// been. The archive is evidence, and evidence of a message the room never
+/// saw is worse than no evidence.
+#[tokio::test]
+async fn a_message_the_history_refused_is_not_recorded() {
+    tokio::time::timeout(Duration::from_secs(20), async {
+        let harness = start_harness().await;
+        let store = RedisMessageStore::new(harness.pool.clone());
+        let buffer = ArchiveBuffer::new(harness.pool.clone());
+        let channel = format!("oeee:pubsub:{}", harness.room);
+
+        let payload = vec![0x16; 1024 * 1024];
+        let mut refused = false;
+        for _ in 0..(redis_messages::MAX_HISTORY_BYTES / payload.len() as u64) + 2 {
+            match store
+                .sequence_and_publish(harness.room, &payload, "conn-a", &channel)
+                .await
+                .expect("sequence")
+            {
+                Sequenced::HistoryFull { .. } => {
+                    refused = true;
+                    break;
+                }
+                Sequenced::Stored { .. } => continue,
+            }
+        }
+        assert!(refused, "the history reached its ceiling");
+
+        // One entry per accepted message and none for the refusal.
+        let recorded = buffer.pending(harness.room).await.expect("pending");
+        let sequence = store
+            .current_sequence(harness.room)
+            .await
+            .expect("sequence")
+            .expect("a position");
+        assert_eq!(recorded as u64, sequence);
+    })
+    .await
+    .expect("archive refusal scenario timed out");
+}
+
+/// Entries are read before they are written out and dropped only once they
+/// are stored, so a flush that dies in between repeats a chunk rather than
+/// losing one -- and only one flusher gets to do it at a time.
+#[tokio::test]
+async fn the_archive_buffer_is_drained_only_by_the_flusher_that_claimed_it() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let harness = start_harness().await;
+        let store = RedisMessageStore::new(harness.pool.clone());
+        let buffer = ArchiveBuffer::new(harness.pool.clone());
+        let channel = format!("oeee:pubsub:{}", harness.room);
+
+        for index in 0..5u8 {
+            store
+                .sequence_and_publish(harness.room, &[0x16, index], "conn-a", &channel)
+                .await
+                .expect("sequence");
+        }
+
+        assert!(buffer.claim(harness.room).await.expect("claim"));
+        assert!(!buffer.claim(harness.room).await.expect("claim again"));
+
+        // Peeking leaves everything where it is: nothing is lost if the write
+        // that follows never happens.
+        let entries = buffer.peek(harness.room, 3).await.expect("peek");
+        assert_eq!(entries.len(), 3);
+        assert_eq!(buffer.pending(harness.room).await.expect("pending"), 5);
+
+        buffer.drop_front(harness.room, 3).await.expect("drop");
+        let rest = buffer.peek(harness.room, 100).await.expect("peek");
+        assert_eq!(rest.len(), 2);
+        assert_eq!(rest[0].broadcast.seq, Some(4));
+
+        buffer.release(harness.room).await.expect("release");
+        assert!(buffer.claim(harness.room).await.expect("claim after release"));
+    })
+    .await
+    .expect("archive flush claim scenario timed out");
+}
+
+/// The recording outlives the working set. A checkpoint squashes history at
+/// its base and the room keeps drawing; the archive still holds every message
+/// from before it, which is the whole reason it exists.
+#[tokio::test]
+async fn a_checkpoint_compacts_history_and_leaves_the_archive_whole() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let harness = start_harness().await;
+        let store = RedisMessageStore::new(harness.pool.clone());
+        let buffer = ArchiveBuffer::new(harness.pool.clone());
+        let channel = format!("oeee:pubsub:{}", harness.room);
+
+        for index in 0..6u8 {
+            store
+                .sequence_and_publish(harness.room, &[0x16, index], "conn-a", &channel)
+                .await
+                .expect("sequence");
+        }
+        store
+            .apply_reset(harness.room, 4, &[vec![0x02, 1, 1, 0]])
+            .await
+            .expect("apply reset");
+
+        // History has given up everything at or below the base.
+        let history = store.get_history(harness.room).await.expect("history");
+        assert!(history.len() < 6, "the checkpoint compacted the history");
+
+        // The recording has not.
+        let entries = buffer.peek(harness.room, 100).await.expect("peek");
+        let recorded: Vec<u64> = entries.iter().filter_map(|entry| entry.broadcast.seq).collect();
+        assert_eq!(recorded, vec![1, 2, 3, 4, 5, 6]);
+    })
+    .await
+    .expect("archive survives compaction scenario timed out");
 }
 
 #[tokio::test]

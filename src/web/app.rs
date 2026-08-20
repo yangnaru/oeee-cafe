@@ -14,7 +14,7 @@ use crate::web::handlers::activitypub::{
 use crate::web::handlers::admin::{
     admin_banners, admin_banners_fragment, admin_collaborative_sessions, admin_communities,
     admin_community_posts, admin_flag_banner, admin_flag_post, admin_post_detail, admin_posts,
-    admin_posts_fragment, admin_user_posts, admin_users,
+    admin_posts_fragment, admin_user_posts, admin_users, download_collaborative_archive,
 };
 use crate::web::handlers::auth::{
     api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup,
@@ -286,6 +286,10 @@ impl App {
             .route(
                 "/admin/collaborative-sessions",
                 get(admin_collaborative_sessions),
+            )
+            .route(
+                "/admin/collaborative-sessions/:uuid/archive",
+                get(download_collaborative_archive),
             )
             .route("/admin/banners", get(admin_banners))
             .route("/admin/banners-fragment", get(admin_banners_fragment))

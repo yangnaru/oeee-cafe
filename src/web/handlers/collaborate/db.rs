@@ -325,23 +325,7 @@ pub async fn save_session_to_post(
 
     let image_sha256 = sha256::digest(&png_data);
 
-    let credentials = aws_sdk_s3::config::Credentials::new(
-        state.config.aws_access_key_id.clone(),
-        state.config.aws_secret_access_key.clone(),
-        None,
-        None,
-        "",
-    );
-    let credentials_provider = aws_sdk_s3::config::SharedCredentialsProvider::new(credentials);
-    let s3_config = aws_sdk_s3::Config::builder()
-        .endpoint_url(state.config.r2_endpoint_url.clone())
-        .region(aws_sdk_s3::config::Region::new(
-            state.config.aws_region.clone(),
-        ))
-        .credentials_provider(credentials_provider)
-        .behavior_version_latest()
-        .build();
-    let s3_client = aws_sdk_s3::Client::from_conf(s3_config);
+    let s3_client = super::archive::s3_client(&state.config);
 
     // SHA256 is always 64 hex characters, but let's be safe about accessing them
     let s3_key = if image_sha256.len() >= 2 {
