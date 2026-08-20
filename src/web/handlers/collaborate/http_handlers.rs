@@ -8,11 +8,10 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Json, Response};
 use minijinja::context;
-use tracing::warn;
 use uuid::Uuid;
 
 use super::db;
-use super::preview::PreviewStore;
+use super::preview::preview_versions;
 use super::types::*;
 use super::utils::get_preferred_locale;
 
@@ -263,18 +262,10 @@ async fn find_viewer_sessions(
 /// none, and a Redis that is unwell should cost the lobby its pictures rather
 /// than the page.
 async fn attach_preview_versions(state: &AppState, sessions: &mut [&mut SessionWithCounts]) {
-    if sessions.is_empty() {
-        return;
-    }
     let room_uuids: Vec<Uuid> = sessions.iter().map(|session| session.id).collect();
-    let store = PreviewStore::new(state.redis_pool.clone());
-    match store.versions(&room_uuids).await {
-        Ok(versions) => {
-            for (session, version) in sessions.iter_mut().zip(versions) {
-                session.preview_version = version;
-            }
-        }
-        Err(e) => warn!("Failed to read lobby preview versions: {}", e),
+    let versions = preview_versions(state, &room_uuids).await;
+    for (session, version) in sessions.iter_mut().zip(versions) {
+        session.preview_version = version;
     }
 }
 

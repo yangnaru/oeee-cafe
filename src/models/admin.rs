@@ -229,7 +229,7 @@ pub async fn set_post_explicit(
     Ok(())
 }
 
-/// Ordering for the user and community lists.
+/// Ordering for the user, community and collaborative-session lists.
 ///
 /// Passed into SQL as a string and matched inside `CASE` expressions rather
 /// than interpolated, so the ORDER BY stays compile-time checked.
@@ -366,6 +366,137 @@ pub async fn find_all_communities_with_activity(
         sort.as_sql(),
     );
     Ok(rows.fetch_all(&mut **tx).await?)
+}
+
+/// Which slice of the session list to show.
+///
+/// A live session is one nobody has ended: the lobby's own listing turns on
+/// exactly the same `ended_at IS NULL`, so "live" here means the same thing it
+/// means to a person looking at the lobby.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AdminSessionStatus {
+    #[default]
+    All,
+    Live,
+    Ended,
+}
+
+impl AdminSessionStatus {
+    fn as_sql(self) -> &'static str {
+        match self {
+            AdminSessionStatus::All => "all",
+            AdminSessionStatus::Live => "live",
+            AdminSessionStatus::Ended => "ended",
+        }
+    }
+}
+
+/// A collaborative session as the admin list renders it.
+///
+/// Link-only and private-community sessions included -- the lobby shows a
+/// person their own sessions and the public ones, which leaves nowhere to see
+/// a room that is filling up out of sight.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AdminCollaborativeSession {
+    pub id: Uuid,
+    pub title: Option<String>,
+    pub owner_login_name: String,
+    pub width: i32,
+    pub height: i32,
+    pub max_participants: i32,
+    /// Seats currently held. This is the number the lobby shows.
+    pub active_participant_count: i64,
+    /// Everyone who has ever joined, which is the one that says whether a quiet
+    /// room was quiet all along or emptied out.
+    pub total_participant_count: i64,
+    /// False means link-only: it never appears in the public lobby.
+    pub is_public: bool,
+    pub community_slug: Option<String>,
+    pub community_name: Option<String>,
+    pub community_visibility: Option<CommunityVisibility>,
+    pub created_at: chrono::NaiveDateTime,
+    pub last_activity: chrono::NaiveDateTime,
+    pub ended_at: Option<DateTime<Utc>>,
+    /// Set once the owner saved the canvas as a post.
+    pub saved_post_id: Option<Uuid>,
+    /// Filled in from Redis after the query, the way the lobby fills it: the
+    /// previews do not live in this table. See
+    /// `web::handlers::collaborate::preview`.
+    pub preview_version: Option<u64>,
+}
+
+/// Every session, in any state, with no visibility rule applied.
+pub async fn find_all_collaborative_sessions(
+    tx: &mut Transaction<'_, Postgres>,
+    sort: AdminSort,
+    status: AdminSessionStatus,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<AdminCollaborativeSession>> {
+    let rows = query!(
+        r#"
+        SELECT
+            cs.id,
+            cs.title,
+            u.login_name AS owner_login_name,
+            cs.width,
+            cs.height,
+            cs.max_participants,
+            cs.is_public,
+            c.slug AS "community_slug?",
+            c.name AS "community_name?",
+            c.visibility AS "community_visibility?: CommunityVisibility",
+            cs.created_at,
+            cs.last_activity,
+            cs.ended_at,
+            cs.saved_post_id,
+            COUNT(csp.user_id) FILTER (WHERE csp.is_active) AS "active_participant_count!",
+            COUNT(csp.user_id) AS "total_participant_count!"
+        FROM collaborative_sessions cs
+        JOIN users u ON cs.owner_id = u.id
+        LEFT JOIN communities c ON cs.community_id = c.id
+        LEFT JOIN collaborative_sessions_participants csp ON cs.id = csp.session_id
+        WHERE $1 = 'all'
+           OR ($1 = 'live' AND cs.ended_at IS NULL)
+           OR ($1 = 'ended' AND cs.ended_at IS NOT NULL)
+        GROUP BY cs.id, u.login_name, c.slug, c.name, c.visibility
+        ORDER BY
+            CASE WHEN $2 = 'created' THEN cs.created_at END DESC,
+            CASE WHEN $2 = 'name' THEN cs.title END ASC NULLS LAST,
+            cs.last_activity DESC
+        LIMIT $3 OFFSET $4
+        "#,
+        status.as_sql(),
+        sort.as_sql(),
+        limit,
+        offset,
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| AdminCollaborativeSession {
+            id: row.id,
+            title: row.title,
+            owner_login_name: row.owner_login_name,
+            width: row.width,
+            height: row.height,
+            max_participants: row.max_participants,
+            active_participant_count: row.active_participant_count,
+            total_participant_count: row.total_participant_count,
+            is_public: row.is_public,
+            community_slug: row.community_slug,
+            community_name: row.community_name,
+            community_visibility: row.community_visibility,
+            created_at: row.created_at,
+            last_activity: row.last_activity,
+            ended_at: row.ended_at,
+            saved_post_id: row.saved_post_id,
+            preview_version: None,
+        })
+        .collect())
 }
 
 /// A banner as the review queue shows it.

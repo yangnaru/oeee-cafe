@@ -12,9 +12,9 @@ use crate::web::handlers::activitypub::{
     activitypub_post_user_followers, activitypub_post_user_inbox, activitypub_webfinger,
 };
 use crate::web::handlers::admin::{
-    admin_banners, admin_banners_fragment, admin_communities, admin_community_posts,
-    admin_flag_banner, admin_flag_post, admin_post_detail, admin_posts, admin_posts_fragment,
-    admin_user_posts, admin_users,
+    admin_banners, admin_banners_fragment, admin_collaborative_sessions, admin_communities,
+    admin_community_posts, admin_flag_banner, admin_flag_post, admin_post_detail, admin_posts,
+    admin_posts_fragment, admin_user_posts, admin_users,
 };
 use crate::web::handlers::auth::{
     api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup,
@@ -283,6 +283,10 @@ impl App {
             .route("/admin/users/:login_name/posts", get(admin_user_posts))
             .route("/admin/communities", get(admin_communities))
             .route("/admin/communities/:slug/posts", get(admin_community_posts))
+            .route(
+                "/admin/collaborative-sessions",
+                get(admin_collaborative_sessions),
+            )
             .route("/admin/banners", get(admin_banners))
             .route("/admin/banners-fragment", get(admin_banners_fragment))
             .route(

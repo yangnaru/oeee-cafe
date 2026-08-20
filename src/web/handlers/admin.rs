@@ -6,10 +6,12 @@
 
 use crate::app_error::AppError;
 use crate::models::admin::{
-    count_all_posts, find_all_banners, find_all_communities, find_all_communities_with_activity,
-    find_all_posts, find_all_users, find_banner_by_id, find_community_by_slug, find_post_by_id,
-    set_banner_explicit, set_post_explicit, AdminCommunity, AdminPostFilter, AdminSort,
+    count_all_posts, find_all_banners, find_all_collaborative_sessions, find_all_communities,
+    find_all_communities_with_activity, find_all_posts, find_all_users, find_banner_by_id,
+    find_community_by_slug, find_post_by_id, set_banner_explicit, set_post_explicit,
+    AdminCommunity, AdminPostFilter, AdminSessionStatus, AdminSort,
 };
+use crate::web::handlers::collaborate::preview::preview_versions;
 use crate::models::user::find_user_by_login_name;
 use crate::web::context::CommonContext;
 use crate::web::handlers::{AdminUser, ExtractFtlLang};
@@ -25,6 +27,7 @@ use uuid::Uuid;
 const POSTS_PER_PAGE: i64 = 60;
 const USERS_PER_PAGE: i64 = 100;
 const BANNERS_PER_PAGE: i64 = 60;
+const SESSIONS_PER_PAGE: i64 = 100;
 
 /// Filters for the global post list. `author` and `community` are the
 /// human-readable identifiers so the URLs stay hand-editable.
@@ -482,6 +485,75 @@ pub async fn admin_communities(
     Ok(Html(rendered))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AdminSessionsQuery {
+    pub page: Option<i64>,
+    #[serde(default)]
+    pub sort: AdminSort,
+    /// Missing or unrecognised statuses show everything.
+    #[serde(default)]
+    pub status: AdminSessionStatus,
+}
+
+/// GET /admin/collaborative-sessions — every session, link-only and
+/// private-community ones included, live or ended.
+///
+/// The lobby can only ever show a person their own sessions and the public
+/// ones, which leaves no way at all to see a room that is filling up out of
+/// sight. Each live one carries the same participant-rendered preview the
+/// lobby cards use, so what is being drawn is visible without joining and
+/// taking a seat.
+pub async fn admin_collaborative_sessions(
+    admin: AdminUser,
+    ExtractFtlLang(ftl_lang): ExtractFtlLang,
+    State(state): State<AppState>,
+    Query(query): Query<AdminSessionsQuery>,
+) -> Result<Html<String>, AppError> {
+    let page = query.page.unwrap_or(1).max(1);
+    let offset = (page - 1) * SESSIONS_PER_PAGE;
+
+    let mut tx = state.db_pool.begin().await?;
+    let mut sessions = find_all_collaborative_sessions(
+        &mut tx,
+        query.sort,
+        query.status,
+        SESSIONS_PER_PAGE,
+        offset,
+    )
+    .await?;
+    let common_ctx = CommonContext::build(&mut tx, Some(admin.0.id)).await?;
+    tx.commit().await?;
+
+    // After the transaction, never inside it: this is a round trip to Redis,
+    // and holding a database connection across it would be paying for one pool
+    // out of another.
+    let room_uuids: Vec<Uuid> = sessions.iter().map(|session| session.id).collect();
+    for (session, version) in sessions
+        .iter_mut()
+        .zip(preview_versions(&state, &room_uuids).await)
+    {
+        session.preview_version = version;
+    }
+
+    let has_next = sessions.len() as i64 == SESSIONS_PER_PAGE;
+    let template = state
+        .env
+        .get_template("admin/collaborative_sessions.jinja")?;
+    let rendered = template.render(context! {
+        current_user => admin.0,
+        sessions => sessions,
+        page => page,
+        sort => query.sort,
+        status => query.status,
+        has_next => has_next,
+        draft_post_count => common_ctx.draft_post_count,
+        unread_notification_count => common_ctx.unread_notification_count,
+        ftl_lang,
+    })?;
+
+    Ok(Html(rendered))
+}
+
 #[cfg(test)]
 mod tests {
     //! `cargo check` validates the handlers but not the Jinja, so render every
@@ -825,6 +897,112 @@ mod tests {
         assert!(rendered.contains("hidden from /about"));
         // Flipping back must post the opposite state, not a blind toggle.
         assert!(rendered.contains("value=\"false\""));
+    }
+
+    /// A session card's admin context. Defaults describe a live, link-only,
+    /// personal session with a preview; tests override the field under test.
+    fn sample_session(overrides: serde_json::Value) -> serde_json::Value {
+        let mut session = json!({
+            "id": "00000000-0000-0000-0000-000000000009",
+            "title": "Doodle",
+            "owner_login_name": "someone",
+            "width": 1024,
+            "height": 768,
+            "max_participants": 4,
+            "active_participant_count": 2,
+            "total_participant_count": 5,
+            "is_public": false,
+            "community_slug": null,
+            "community_name": null,
+            "community_visibility": null,
+            "created_at": "2026-01-02T03:04:05",
+            "last_activity": "2026-01-02T05:06:07",
+            "ended_at": null,
+            "saved_post_id": null,
+            "preview_version": 1_700_000_000_123u64,
+        });
+        for (key, value) in overrides.as_object().expect("object") {
+            session[key] = value.clone();
+        }
+        session
+    }
+
+    fn sessions_context(sessions: Vec<serde_json::Value>) -> minijinja::Value {
+        context! {
+            current_user => current_user(),
+            sessions => sessions,
+            page => 1,
+            sort => "active",
+            status => "all",
+            has_next => false,
+            draft_post_count => 0,
+            unread_notification_count => 0,
+            ftl_lang => "en",
+        }
+    }
+
+    fn render_sessions(sessions: Vec<serde_json::Value>) -> String {
+        let env = test_env();
+        env.get_template("admin/collaborative_sessions.jinja")
+            .expect("template loads")
+            .render(sessions_context(sessions))
+            .expect("collaborative_sessions.jinja renders")
+    }
+
+    /// The reason this page exists: a room the lobby will not list for
+    /// anyone who is not already in it.
+    #[test]
+    fn session_list_marks_the_ones_the_lobby_hides() {
+        let rendered = render_sessions(vec![
+            sample_session(json!({})),
+            sample_session(json!({
+                "id": "00000000-0000-0000-0000-00000000000a",
+                "is_public": true,
+                "community_slug": "secret",
+                "community_name": "Back Room",
+                "community_visibility": "private",
+            })),
+        ]);
+        assert!(rendered.contains("link only"));
+        assert!(rendered.contains("admin-tag private"));
+        assert!(rendered.contains("Back Room"));
+    }
+
+    /// The canvas itself, which is the thing an admin cannot otherwise see
+    /// without taking a seat in the room.
+    #[test]
+    fn session_list_shows_the_live_canvas() {
+        let rendered = render_sessions(vec![sample_session(json!({}))]);
+        assert!(rendered.contains(
+            "/collaborate/00000000-0000-0000-0000-000000000009/preview?v=1700000000123"
+        ));
+    }
+
+    /// An ended session's Redis state is deleted with it, so there is nothing
+    /// to point an `<img>` at and a row must not try.
+    #[test]
+    fn session_list_omits_the_canvas_once_a_session_is_over() {
+        let rendered = render_sessions(vec![sample_session(json!({
+            "ended_at": "2026-01-03T00:00:00Z",
+            "preview_version": null,
+            "saved_post_id": "00000000-0000-0000-0000-00000000000b",
+        }))]);
+        assert!(!rendered.contains("/preview?v="));
+        // The canvas is a post by then, and that is where it is reachable.
+        assert!(rendered.contains(
+            "/@someone/00000000-0000-0000-0000-00000000000b"
+        ));
+        // Nor is there a live room left to open.
+        assert!(!rendered.contains("/collaborate/00000000-0000-0000-0000-000000000009\""));
+    }
+
+    /// Sorting and filtering have to survive each other: a status link that
+    /// dropped the sort would silently reset the page under the admin.
+    #[test]
+    fn session_list_filters_keep_the_current_sort() {
+        let rendered = render_sessions(vec![sample_session(json!({}))]);
+        assert!(rendered.contains("?sort=active&status=live"));
+        assert!(rendered.contains("?status=all&sort=created"));
     }
 
     #[test]

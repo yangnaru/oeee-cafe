@@ -63,6 +63,10 @@
 .admin-tag.unlisted { color: #2a5a7a; }
 .admin-tag.sensitive { color: #7a1020; }
 .admin-pager { margin-top: 1rem; display: flex; gap: 1rem; }
+.admin-filters { display: flex; gap: 1rem; margin: .5rem 0; }
+/* Small enough that a hundred rows stay a table rather than a gallery, and
+   sized from the canvas's own aspect so a row does not jump when one lands. */
+.admin-session-preview { display: block; width: 96px; height: auto; border: 1px solid #ddd; }
 .admin-sort-active { font-weight: bold; }
 /* Full-width so it always enters the viewport and fires hx-trigger="revealed",
    even when the last row of cards does not fill the grid. */

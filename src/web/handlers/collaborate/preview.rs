@@ -370,16 +370,45 @@ fn parse_meta(meta: &str) -> Option<(u64, String)> {
     Some((version.parse().ok()?, content_type.to_string()))
 }
 
+/// Preview versions for a batch of rooms, in the order asked for, for any page
+/// that lists sessions.
+///
+/// Never fails: a missing preview is ordinary -- a session nobody has drawn in
+/// has none -- and a Redis that is unwell should cost a page its pictures
+/// rather than the page.
+pub async fn preview_versions(state: &AppState, room_uuids: &[Uuid]) -> Vec<Option<u64>> {
+    if room_uuids.is_empty() {
+        return Vec::new();
+    }
+    let store = PreviewStore::new(state.redis_pool.clone());
+    match store.versions(room_uuids).await {
+        Ok(versions) => versions,
+        Err(e) => {
+            warn!("Failed to read preview versions: {}", e);
+            vec![None; room_uuids.len()]
+        }
+    }
+}
+
 /// Whether this viewer is allowed to see the session's canvas at all.
 ///
 /// The same rule the lobby lists by, because the lobby is what displays this:
 /// a public session in a public place is public, and anything else is for the
 /// people already in it. A session that has ended has no live canvas to show.
+///
+/// Except for staff, who get the same exemption here that every other admin
+/// listing has: `/admin/collaborative-sessions` exists to show the rooms
+/// nobody else can see, and a page of them with the pictures missing would
+/// show the least about exactly the sessions it is there for.
 async fn viewer_may_watch(
     db: &sqlx::Pool<sqlx::Postgres>,
     room_uuid: Uuid,
     viewer_user_id: Option<Uuid>,
+    viewer_is_admin: bool,
 ) -> Result<bool, sqlx::Error> {
+    if viewer_is_admin {
+        return session_is_live(db, room_uuid).await;
+    }
     sqlx::query_scalar!(
         r#"
         SELECT EXISTS(
@@ -400,6 +429,27 @@ async fn viewer_may_watch(
         "#,
         room_uuid,
         viewer_user_id,
+    )
+    .fetch_one(db)
+    .await
+}
+
+/// A session with a canvas still in it. What an admin's exemption is an
+/// exemption *from* is the visibility rule, not from the session being over:
+/// an ended room's Redis state is deleted with it, so there is nothing to
+/// serve either way.
+async fn session_is_live(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    room_uuid: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM collaborative_sessions
+            WHERE id = $1 AND ended_at IS NULL
+        ) AS "exists!"
+        "#,
+        room_uuid,
     )
     .fetch_one(db)
     .await
@@ -581,7 +631,11 @@ pub async fn serve_session_preview(
     headers: HeaderMap,
 ) -> Result<Response, AppError> {
     let viewer_user_id = auth_session.user.as_ref().map(|user| user.id);
-    if !viewer_may_watch(&state.db_pool, room_uuid, viewer_user_id).await? {
+    let viewer_is_admin = auth_session
+        .user
+        .as_ref()
+        .is_some_and(|user| user.is_admin());
+    if !viewer_may_watch(&state.db_pool, room_uuid, viewer_user_id, viewer_is_admin).await? {
         return Err(AppError::NotFound("Session not found".to_string()));
     }
 
