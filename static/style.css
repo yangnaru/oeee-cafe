@@ -2534,6 +2534,21 @@ legend {
   color: var(--main-text-muted-color);
 }
 
+/* The live canvas on a lobby card. The intrinsic width/height attributes are
+   the canvas's own, so the box is reserved at the right shape before the image
+   arrives and the card never jumps; this only has to scale it into the
+   column. */
+.session-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: var(--space-2) 0 0 0;
+  border: 1px solid var(--main-border-color);
+  background-color: var(--main-bg-color);
+  object-fit: contain;
+  image-rendering: auto;
+}
+
 .session-info {
   margin: var(--space-2) 0;
 }

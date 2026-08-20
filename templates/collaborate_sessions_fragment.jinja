@@ -19,6 +19,25 @@
           <a href="/@{{ session.owner_login_name }}">@{{ session.owner_login_name }}</a>
         </small>
       </div>
+      {# What the canvas looks like right now, uploaded by whoever is drawing
+         in it -- the server cannot render one. Omitted rather than shown
+         broken while a session has no preview yet: an empty room has nothing
+         to show, and the first stroke brings one within a poll or two. The
+         version is what gets a refreshed preview past the browser cache; the
+         canvas dimensions are here for the aspect ratio, so the card does not
+         jump when the image lands. #}
+      {# Not wrapped in a link: the card already has one to the same session,
+         and a second would announce itself twice to anyone reading the page
+         rather than looking at it. #}
+      {% if session.preview_version %}
+        <img class="session-preview"
+             src="/collaborate/{{ session.id }}/preview?v={{ session.preview_version }}"
+             width="{{ session.width }}"
+             height="{{ session.height }}"
+             loading="lazy"
+             decoding="async"
+             alt="{{ ftl_get_message("collaborate-session-preview-alt") }}">
+      {% endif %}
       <div class="session-info">
         <div class="session-meta">
           <span class="canvas-size">{{ session.width }}×{{ session.height }}</span>

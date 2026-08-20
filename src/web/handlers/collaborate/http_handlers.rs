@@ -8,9 +8,11 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Json, Response};
 use minijinja::context;
+use tracing::warn;
 use uuid::Uuid;
 
 use super::db;
+use super::preview::PreviewStore;
 use super::types::*;
 use super::utils::get_preferred_locale;
 
@@ -186,6 +188,7 @@ async fn find_public_sessions(
             community_slug: row.community_slug,
             is_owner: row.is_owner,
             viewer_is_participant: row.viewer_is_participant,
+            preview_version: None,
         })
         .collect())
 }
@@ -249,8 +252,30 @@ async fn find_viewer_sessions(
             community_slug: row.community_slug,
             is_owner: row.is_owner,
             viewer_is_participant: row.viewer_is_participant,
+            preview_version: None,
         })
         .collect())
+}
+
+/// Fills in `preview_version` for a batch of cards, in one round trip.
+///
+/// A missing preview is not an error: a session nobody has drawn in yet has
+/// none, and a Redis that is unwell should cost the lobby its pictures rather
+/// than the page.
+async fn attach_preview_versions(state: &AppState, sessions: &mut [&mut SessionWithCounts]) {
+    if sessions.is_empty() {
+        return;
+    }
+    let room_uuids: Vec<Uuid> = sessions.iter().map(|session| session.id).collect();
+    let store = PreviewStore::new(state.redis_pool.clone());
+    match store.versions(&room_uuids).await {
+        Ok(versions) => {
+            for (session, version) in sessions.iter_mut().zip(versions) {
+                session.preview_version = version;
+            }
+        }
+        Err(e) => warn!("Failed to read lobby preview versions: {}", e),
+    }
 }
 
 /// The two lists the lobby shows: the viewer's own sessions, then the public
@@ -268,6 +293,24 @@ async fn lobby_sessions(
     Ok((viewer_sessions, active_sessions))
 }
 
+/// Both lobby lists' previews in one lookup. They are two sections of one
+/// page, and a session cannot be in both.
+///
+/// Called after the transaction is done with, never inside it: this is a round
+/// trip to Redis, and holding a database connection across it would be paying
+/// for one pool out of another.
+async fn attach_lobby_previews(
+    state: &AppState,
+    viewer_sessions: &mut [SessionWithCounts],
+    active_sessions: &mut [SessionWithCounts],
+) {
+    let mut all: Vec<&mut SessionWithCounts> = viewer_sessions
+        .iter_mut()
+        .chain(active_sessions.iter_mut())
+        .collect();
+    attach_preview_versions(state, &mut all).await;
+}
+
 /// GET /collaborate/sessions — both session lists on their own, so the lobby
 /// can poll them. A session filling up or ending is the one thing on this page
 /// that goes stale in seconds.
@@ -279,8 +322,9 @@ pub async fn collaborate_sessions_fragment(
     let viewer_user_id = auth_session.user.as_ref().map(|u| u.id);
 
     let mut tx = state.db_pool.begin().await?;
-    let (viewer_sessions, active_sessions) = lobby_sessions(&mut tx, viewer_user_id).await?;
+    let (mut viewer_sessions, mut active_sessions) = lobby_sessions(&mut tx, viewer_user_id).await?;
     tx.commit().await?;
+    attach_lobby_previews(&state, &mut viewer_sessions, &mut active_sessions).await;
 
     let template = state
         .env
@@ -349,7 +393,7 @@ pub async fn collaborate_lobby(
 
     let common_ctx = CommonContext::build(&mut tx, viewer_user_id).await?;
 
-    let (viewer_sessions, active_sessions) = lobby_sessions(&mut tx, viewer_user_id).await?;
+    let (mut viewer_sessions, mut active_sessions) = lobby_sessions(&mut tx, viewer_user_id).await?;
 
     // Finished collaborative drawings, rendered through the same card template
     // as the home grid and paginated through the same sentinel. Sensitive posts
@@ -397,6 +441,7 @@ pub async fn collaborate_lobby(
     }
 
     tx.commit().await?;
+    attach_lobby_previews(&state, &mut viewer_sessions, &mut active_sessions).await;
 
     let template = state.env.get_template("collaborate_lobby.jinja")?;
 
@@ -578,8 +623,10 @@ pub async fn get_active_sessions_json(
     let mut tx = state.db_pool.begin().await?;
     // Same list the lobby renders, so the two cannot disagree about which
     // sessions exist. Full ones are included and flagged rather than dropped.
-    let active_sessions = find_public_sessions(&mut tx, Some(user.id)).await?;
+    let mut active_sessions = find_public_sessions(&mut tx, Some(user.id)).await?;
     tx.commit().await?;
+    let mut all: Vec<&mut SessionWithCounts> = active_sessions.iter_mut().collect();
+    attach_preview_versions(&state, &mut all).await;
 
     Ok(Json(active_sessions))
 }
@@ -621,6 +668,7 @@ mod tests {
             "community_slug": "open",
             "is_owner": false,
             "viewer_is_participant": false,
+            "preview_version": null,
         });
         for (key, value) in overrides.as_object().expect("object") {
             session[key] = value.clone();
@@ -896,6 +944,50 @@ mod tests {
             .expect("renders");
         // The class also appears in the page's <style> block, so match the tag.
         assert!(!rendered.contains("<p class=\"session-community\">"));
+    }
+
+    /// A session nobody has drawn in yet has no preview, and a card that
+    /// pointed at one anyway would render a broken image on every poll.
+    #[test]
+    fn session_cards_omit_the_preview_until_one_has_been_uploaded() {
+        let env = test_support::env();
+        let rendered = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template")
+            .render(lobby_context_with_sessions(
+                true,
+                vec![],
+                vec![sample_session(json!({}))],
+                vec![],
+            ))
+            .expect("render");
+        assert!(!rendered.contains("session-preview"));
+        assert!(!rendered.contains("/preview?v="));
+    }
+
+    /// The version rides on the URL so a refreshed canvas is a different image
+    /// to the browser; without it every card would keep showing whatever it
+    /// cached the first time.
+    #[test]
+    fn session_cards_show_the_preview_at_its_uploaded_version() {
+        let env = test_support::env();
+        let rendered = env
+            .get_template("collaborate_lobby.jinja")
+            .expect("template")
+            .render(lobby_context_with_sessions(
+                true,
+                vec![],
+                vec![sample_session(json!({"preview_version": 1_700_000_000_123u64}))],
+                vec![],
+            ))
+            .expect("render");
+        assert!(rendered.contains(
+            "/collaborate/00000000-0000-0000-0000-000000000009/preview?v=1700000000123"
+        ));
+        // The canvas's own dimensions, so the card reserves the right shape
+        // before the image arrives.
+        assert!(rendered.contains("width=\"300\""));
+        assert!(rendered.contains("height=\"300\""));
     }
 
     #[test]

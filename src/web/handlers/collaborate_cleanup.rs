@@ -1,3 +1,4 @@
+use super::collaborate::preview::PreviewStore;
 use super::collaborate::redis_messages;
 use crate::web::state::AppState;
 use anyhow;
@@ -233,6 +234,19 @@ async fn cleanup_ended_sessions(
             removed_items.push("redis_room_state");
         }
 
+        // The lobby preview. It would expire on its own and is unreachable
+        // once the session has an ended_at, but a room being cleaned up is
+        // exactly when there is no reason to keep it.
+        let preview_store = PreviewStore::new(state.redis_pool.clone());
+        if let Err(e) = preview_store.cleanup(session_id).await {
+            error!(
+                "Failed to cleanup the preview for session {}: {}",
+                session_id, e
+            );
+        } else {
+            removed_items.push("redis_preview");
+        }
+
         if !removed_items.is_empty() {
             debug!(
                 "Cleaned up ended session {}: removed {}",
@@ -387,6 +401,19 @@ async fn cleanup_inactive_sessions(
             );
         } else {
             removed_items.push("redis_room_state");
+        }
+
+        // The lobby preview. It would expire on its own and is unreachable
+        // once the session has an ended_at, but a room being cleaned up is
+        // exactly when there is no reason to keep it.
+        let preview_store = PreviewStore::new(state.redis_pool.clone());
+        if let Err(e) = preview_store.cleanup(session_id).await {
+            error!(
+                "Failed to cleanup the preview for session {}: {}",
+                session_id, e
+            );
+        } else {
+            removed_items.push("redis_preview");
         }
 
         info!(

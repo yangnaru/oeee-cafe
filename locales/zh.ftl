@@ -223,6 +223,7 @@ collaborate-community-hint = 保存会话后，完成的作品会发布到这里
 community-draw-together = 一起画画
 collaborate-session-created = 创建于
 collaborate-join-session = 加入会话
+collaborate-session-preview-alt = 此画布的当前状态
 
 welcome = 欢迎，{ $name }！
 

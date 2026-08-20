@@ -223,6 +223,7 @@ collaborate-community-hint = セッションを保存すると、完成した絵
 community-draw-together = 一緒に描く
 collaborate-session-created = 作成日時
 collaborate-join-session = セッションに参加
+collaborate-session-preview-alt = 現在のキャンバスの様子
 
 welcome = { $name }さん、ようこそ！
 

@@ -10,6 +10,7 @@ use tokio::task::JoinHandle;
 use tokio_tungstenite::{accept_async, connect_async, tungstenite::Message};
 use uuid::Uuid;
 
+use super::preview::{ImageKind, PreviewStore};
 use super::redis_messages::{self, RedisMessageStore, Sequenced};
 use super::redis_state::{RedisStateManager, RoomBroadcast};
 use super::room_fanout::RoomFanout;
@@ -471,6 +472,126 @@ async fn reconnect_replays_missed_operations_once_and_reports_exact_position() {
     })
     .await
     .expect("reconnect scenario timed out");
+}
+
+/// The window is what paces previews, and it opens for exactly one client.
+///
+/// Without this every participant would render and upload the same canvas on
+/// the same timer -- the expensive half of the work, done N times for one
+/// picture.
+#[tokio::test]
+async fn only_one_client_holds_a_preview_window_at_a_time() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let harness = start_harness().await;
+        let store = PreviewStore::new(harness.pool.clone());
+
+        let first = store.claim(harness.room).await.expect("claim");
+        let second = store.claim(harness.room).await.expect("claim again");
+        assert!(first.is_some());
+        assert_eq!(second, None);
+
+        // A different room is a different window; one busy room must not stop
+        // the rest of the lobby refreshing.
+        assert!(store.claim(Uuid::new_v4()).await.expect("claim").is_some());
+    })
+    .await
+    .expect("preview claim scenario timed out");
+}
+
+/// The token is what makes an upload attributable to a window. A client that
+/// claimed, took too long, and came back with a canvas from a minute ago must
+/// not overwrite whatever the room agreed on since.
+#[tokio::test]
+async fn a_preview_is_stored_only_against_the_token_that_claimed_it() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let harness = start_harness().await;
+        let store = PreviewStore::new(harness.pool.clone());
+        let token = store.claim(harness.room).await.expect("claim").expect("token");
+
+        assert_eq!(
+            store
+                .store(harness.room, "not-the-token", ImageKind::Webp, b"nope")
+                .await
+                .expect("store with a wrong token"),
+            None
+        );
+        assert!(store.load(harness.room).await.expect("load").is_none());
+
+        let version = store
+            .store(harness.room, &token, ImageKind::Webp, b"first")
+            .await
+            .expect("store")
+            .expect("stored");
+
+        // Spent, not merely used: the same token cannot deliver twice, so a
+        // retry after a response that got lost cannot land on top of a newer
+        // preview.
+        assert_eq!(
+            store
+                .store(harness.room, &token, ImageKind::Webp, b"second")
+                .await
+                .expect("store again"),
+            None
+        );
+
+        let stored = store.load(harness.room).await.expect("load").expect("preview");
+        assert_eq!(stored.bytes, b"first");
+        assert_eq!(stored.kind, ImageKind::Webp);
+        assert_eq!(stored.version, version);
+        assert_eq!(
+            store.version(harness.room).await.expect("version"),
+            Some(version)
+        );
+    })
+    .await
+    .expect("preview store scenario timed out");
+}
+
+/// The lobby asks about every card it is rendering at once, and has to be able
+/// to tell "no preview" from "preview" per room -- it decides whether to emit
+/// an `<img>` at all from this.
+#[tokio::test]
+async fn preview_versions_come_back_per_room_in_the_order_asked() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let harness = start_harness().await;
+        let store = PreviewStore::new(harness.pool.clone());
+        let empty = Uuid::new_v4();
+        let other = Uuid::new_v4();
+
+        let token = store.claim(harness.room).await.expect("claim").expect("token");
+        let version = store
+            .store(harness.room, &token, ImageKind::Png, b"drawing")
+            .await
+            .expect("store")
+            .expect("stored");
+        let other_token = store.claim(other).await.expect("claim").expect("token");
+        let other_version = store
+            .store(other, &other_token, ImageKind::Png, b"drawing")
+            .await
+            .expect("store")
+            .expect("stored");
+
+        assert_eq!(
+            store
+                .versions(&[empty, harness.room, other])
+                .await
+                .expect("versions"),
+            vec![None, Some(version), Some(other_version)]
+        );
+        assert_eq!(store.versions(&[]).await.expect("versions"), Vec::new());
+
+        store.cleanup(harness.room).await.expect("cleanup");
+        assert_eq!(
+            store.versions(&[harness.room]).await.expect("versions"),
+            vec![None]
+        );
+        assert!(store.load(harness.room).await.expect("load").is_none());
+        // Cleanup releases the window too, so a session id that somehow comes
+        // back is not locked out by a claim nobody can spend.
+        assert!(store.claim(harness.room).await.expect("claim").is_some());
+    })
+    .await
+    .expect("preview versions scenario timed out");
 }
 
 #[tokio::test]

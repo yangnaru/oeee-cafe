@@ -223,6 +223,7 @@ collaborate-community-hint = 세션을 저장하면 완성된 그림이 여기�
 community-draw-together = 넷캔
 collaborate-session-created = 생성됨
 collaborate-join-session = 세션 참가
+collaborate-session-preview-alt = 지금 이 캔버스의 모습
 
 welcome = { $name }님, 환영합니다!
 

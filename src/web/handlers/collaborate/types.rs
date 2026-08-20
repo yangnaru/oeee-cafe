@@ -48,6 +48,14 @@ pub struct SessionWithCounts {
     pub community_slug: Option<String>,
     pub is_owner: bool,
     pub viewer_is_participant: bool,
+    /// When this session's preview was last uploaded, in epoch milliseconds,
+    /// or None where no participant has uploaded one yet.
+    ///
+    /// A card with None shows no image at all rather than a broken one, and
+    /// the value doubles as the `?v=` that gets a refreshed preview past the
+    /// browser cache. Filled in from Redis after the query -- the previews
+    /// live there, not in the row.
+    pub preview_version: Option<u64>,
 }
 
 #[derive(Serialize)]

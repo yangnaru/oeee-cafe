@@ -1,6 +1,7 @@
 pub mod db;
 pub mod http_handlers;
 pub mod messages;
+pub mod preview;
 pub mod protocol;
 pub mod redis_messages;
 pub mod redis_state;
@@ -11,6 +12,7 @@ pub mod websocket;
 
 // Re-export the public interface
 pub use http_handlers::*;
+pub use preview::{claim_session_preview, serve_session_preview, upload_session_preview};
 pub use types::*;
 pub use websocket::websocket_collaborate_handler;
 

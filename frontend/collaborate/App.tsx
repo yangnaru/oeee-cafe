@@ -42,11 +42,22 @@ import {
 } from "./binaryProtocol";
 import { useWebSocket, type ConnectionState, type SyncProgress } from "./hooks/useWebSocket";
 import { useRemoteCursors } from "./hooks/useRemoteCursors";
+import { refreshSessionPreview } from "./preview";
 import type { CollaborationMeta, Participant } from "./types";
 
 /** How long the owner waits for the server to confirm the end of the session
  * before going to the saved post anyway. */
 const SAVE_CONFIRMATION_TIMEOUT_MS = 5000;
+
+/**
+ * How often this client offers to refresh the lobby's picture of this canvas.
+ *
+ * Shorter than the window the server paces refreshes with, so whoever ticks
+ * first after one opens takes it; the lobby's own poll is what decides how
+ * quickly a new preview then appears on a card. Every tick that finds nothing
+ * new to show, or a window somebody else holds, costs one small request.
+ */
+const PREVIEW_ATTEMPT_INTERVAL_MS = 15000;
 
 /**
  * The shortest gap between two cursor positions going out.
@@ -712,6 +723,60 @@ export default function App() {
   // wsRef is created by the WebSocket hook below and is stable for its lifetime.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drainCanonical]);
+
+  /**
+   * The canonical position this client's last uploaded preview described.
+   *
+   * Zero is "nothing drawn yet", so a room nobody has touched shows no card
+   * picture rather than a white rectangle, and a client joining a room that is
+   * already underway refreshes it once instead of waiting for the next stroke.
+   */
+  const previewSequenceRef = useRef(0);
+  /** So a slow render cannot have the next tick start a second one on top. */
+  const previewInFlightRef = useRef(false);
+
+  const refreshPreview = useCallback(async () => {
+    const painter = painterRef.current;
+    if (!painter || previewInFlightRef.current) return;
+    // The same readiness a checkpoint needs, for the same reason: a canvas
+    // still catching up, or holding an optimistic fork, is not what the room
+    // looks like. Unlike a checkpoint this one does not wait for it -- there
+    // is another tick along shortly, and a preview is never worth blocking on.
+    if (!canUploadCheckpoint()) return;
+    // Nothing has moved since this client last uploaded, so whatever is on the
+    // lobby is already current. Other clients keep their own count and will
+    // each refresh once after their own last upload, which is what eventually
+    // settles an idle room into uploading nothing at all.
+    //
+    // Different from, rather than ahead of: a checkpoint or a replaced history
+    // can put the canonical position *behind* where this client last uploaded
+    // from, and a room that had been drawn in would then never refresh again.
+    const sequence = appliedSequenceRef.current;
+    if (sequence === previewSequenceRef.current) return;
+    previewInFlightRef.current = true;
+    try {
+      const uploaded = await refreshSessionPreview(getSessionId(), () =>
+        painter.exportPng(),
+      );
+      if (uploaded) previewSequenceRef.current = sequence;
+    } catch {
+      // A preview is decoration on somebody else's page. Losing one must never
+      // reach the person drawing.
+    } finally {
+      previewInFlightRef.current = false;
+    }
+  }, [canUploadCheckpoint]);
+
+  // Stops as the session winds down: the canvas is about to become a post, and
+  // the room's preview is deleted with the rest of its state. One that landed
+  // after that would be about a session the lobby no longer lists.
+  useEffect(() => {
+    if (!canvasMeta || sessionEnding) return;
+    const timer = window.setInterval(() => {
+      void refreshPreview();
+    }, PREVIEW_ATTEMPT_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [canvasMeta, sessionEnding, refreshPreview]);
 
   const { wsRef, connect } = useWebSocket({
     canvasMeta, userIdRef, userLoginNameRef, localUserJoinTimeRef,

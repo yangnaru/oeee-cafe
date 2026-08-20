@@ -20,9 +20,10 @@ use crate::web::handlers::auth::{
     api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup,
 };
 use crate::web::handlers::collaborate::{
-    collaborate_lobby, collaborate_sessions_fragment, create_collaborative_session,
-    get_active_sessions_json, get_auth_info, get_collaboration_meta, load_more_collaborative_posts,
-    save_collaborative_session, serve_collaborative_app, websocket_collaborate_handler,
+    claim_session_preview, collaborate_lobby, collaborate_sessions_fragment,
+    create_collaborative_session, get_active_sessions_json, get_auth_info, get_collaboration_meta,
+    load_more_collaborative_posts, save_collaborative_session, serve_collaborative_app,
+    serve_session_preview, upload_session_preview, websocket_collaborate_handler,
 };
 use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
@@ -528,6 +529,21 @@ impl App {
                 get(serve_collaborative_app).post(save_collaborative_session),
             )
             .route("/collaborate/:uuid/ws", get(websocket_collaborate_handler))
+            // What the room's canvas looks like right now, rendered by a
+            // participant's browser because the server cannot draw. See
+            // handlers/collaborate/preview.rs.
+            .route(
+                "/collaborate/:uuid/preview",
+                get(serve_session_preview).put(upload_session_preview).layer(
+                    DefaultBodyLimit::max(
+                        crate::web::handlers::collaborate::preview::MAX_PREVIEW_BYTES,
+                    ),
+                ),
+            )
+            .route(
+                "/collaborate/:uuid/preview/claim",
+                post(claim_session_preview),
+            )
             .route("/api/auth", get(get_auth_info))
             .route("/collaboration/:uuid/meta", get(get_collaboration_meta))
             .route("/about", get(about))

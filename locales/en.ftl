@@ -221,6 +221,7 @@ collaborate-community-hint = The finished drawing is posted here when the sessio
 community-draw-together = Draw together
 collaborate-session-created = Created
 collaborate-join-session = Join Session
+collaborate-session-preview-alt = The canvas as it looks right now
 
 welcome = Welcome, { $name }!
 

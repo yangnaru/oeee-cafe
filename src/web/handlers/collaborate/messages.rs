@@ -498,6 +498,17 @@ pub async fn handle_end_session_message(data: &[u8], ctx: EndSessionContext<'_>)
                             );
                         }
 
+                        // And the lobby preview, which is about a canvas that
+                        // is now a post.
+                        let preview_store =
+                            super::preview::PreviewStore::new(ctx.state.redis_pool.clone());
+                        if let Err(e) = preview_store.cleanup(ctx.room_uuid).await {
+                            error!(
+                                "Failed to cleanup the preview for ended session {}: {}",
+                                ctx.room_uuid, e
+                            );
+                        }
+
                         // Broadcast END_SESSION to all participants in the room (including sender) via Redis pub/sub
                         let room_message = super::redis_state::RoomBroadcast {
                             from_connection: ctx.connection_id.to_string(),
