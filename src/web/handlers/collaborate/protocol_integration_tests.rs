@@ -714,6 +714,37 @@ async fn the_archive_buffer_is_drained_only_by_the_flusher_that_claimed_it() {
     .expect("archive flush claim scenario timed out");
 }
 
+/// The sweeper revisits every ended session on every pass, so anything it
+/// does per session it does forever. Sealing a room with nothing buffered
+/// wrote a manifest each time -- thousands of objects an hour describing
+/// sessions that had no recording at all.
+#[tokio::test]
+async fn a_room_with_nothing_buffered_has_nothing_left_to_seal() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let harness = start_harness().await;
+        let store = RedisMessageStore::new(harness.pool.clone());
+        let buffer = ArchiveBuffer::new(harness.pool.clone());
+        let channel = format!("oeee:pubsub:{}", harness.room);
+
+        // A room nobody ever drew in.
+        assert_eq!(buffer.pending(harness.room).await.expect("pending"), 0);
+
+        // One that did, and has not been flushed.
+        store
+            .sequence_and_publish(harness.room, &[0x16, 0x01], "conn-a", &channel)
+            .await
+            .expect("sequence");
+        assert_eq!(buffer.pending(harness.room).await.expect("pending"), 1);
+
+        // And once its entries are gone, it is finished with: an emptied
+        // buffer is what says the recording has already been written out.
+        buffer.drop_front(harness.room, 1).await.expect("drop");
+        assert_eq!(buffer.pending(harness.room).await.expect("pending"), 0);
+    })
+    .await
+    .expect("seal skipping scenario timed out");
+}
+
 /// The recording outlives the working set. A checkpoint squashes history at
 /// its base and the room keeps drawing; the archive still holds every message
 /// from before it, which is the whole reason it exists.

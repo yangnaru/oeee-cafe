@@ -486,7 +486,7 @@ pub async fn handle_end_session_message(data: &[u8], ctx: EndSessionContext<'_>)
                         // Before the cleanup below: sealing reads the
                         // participant map, and that map is one of the keys
                         // that goes.
-                        super::archive::seal_room(ctx.state, ctx.room_uuid).await;
+                        super::archive::seal_room(ctx.state, ctx.room_uuid, true).await;
 
                         // Clean up Redis message history when session is explicitly ended
                         let redis_store =

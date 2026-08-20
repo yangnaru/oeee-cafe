@@ -394,9 +394,29 @@ async fn write_chunks(state: &AppState, room_uuid: Uuid, buffer: &ArchiveBuffer)
 ///
 /// Called where a session ends, before the room's Redis state is cleaned up --
 /// the participant map the manifest needs is one of the keys that goes.
-pub async fn seal_room(state: &AppState, room_uuid: Uuid) {
+///
+/// `force` is for the one place that knows a session has just ended, which is
+/// worth a manifest even if the last flush already emptied the buffer. The
+/// sweeper does not know that: it re-examines every ended session on every
+/// pass, so sealing unconditionally there wrote a manifest per session per
+/// five minutes -- thousands of objects an hour, for sessions that had nothing
+/// recorded at all. A room with nothing buffered has nothing left to seal.
+pub async fn seal_room(state: &AppState, room_uuid: Uuid, force: bool) {
     if bucket(&state.config).is_none() {
         return;
+    }
+    if !force {
+        match ArchiveBuffer::new(state.redis_pool.clone())
+            .pending(room_uuid)
+            .await
+        {
+            Ok(0) => return,
+            Ok(_) => {}
+            Err(e) => {
+                warn!("Failed to read the archive buffer for room {}: {}", room_uuid, e);
+                return;
+            }
+        }
     }
     let flushed = flush_room(state, room_uuid).await;
     if let Err(e) = write_manifest(state, room_uuid, true).await {

@@ -214,9 +214,10 @@ async fn cleanup_ended_sessions(
         let mut removed_items = Vec::new();
 
         // The recording is sealed first: everything below reads or removes
-        // the state its manifest is written from.
-        super::collaborate::archive::seal_room(state, session_id).await;
-        removed_items.push("archive_sealed");
+        // the state its manifest is written from. Not forced -- this loop
+        // revisits every ended session on every pass, and a room with nothing
+        // buffered has already been sealed or never had anything to seal.
+        super::collaborate::archive::seal_room(state, session_id, false).await;
 
         // Clean up Redis message history
         let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
@@ -388,9 +389,10 @@ async fn cleanup_inactive_sessions(
         let mut removed_items = Vec::new();
 
         // The recording is sealed first: everything below reads or removes
-        // the state its manifest is written from.
-        super::collaborate::archive::seal_room(state, session_id).await;
-        removed_items.push("archive_sealed");
+        // the state its manifest is written from. Not forced -- this loop
+        // revisits every ended session on every pass, and a room with nothing
+        // buffered has already been sealed or never had anything to seal.
+        super::collaborate::archive::seal_room(state, session_id, false).await;
 
         // Clean up Redis message history
         let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
