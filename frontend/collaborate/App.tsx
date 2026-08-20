@@ -149,6 +149,16 @@ const blankLayer = (width: number, height: number): Promise<Blob> => {
   );
 };
 
+/** One line of the session chat, as the chat window and the socket both spell it. */
+type ChatMessage = {
+  id: string;
+  type: "join" | "leave" | "user";
+  userId: string;
+  username: string;
+  message: string;
+  timestamp: number;
+};
+
 export default function App() {
   const { t } = useLingui();
   const [canvasMeta, setCanvasMeta] = useState<CollaborationMeta | null>(null);
@@ -244,22 +254,29 @@ export default function App() {
   const { createOrUpdateCursor, hideCursor, clearCursors } = useRemoteCursors(
     painterElementRef, localIdRef,
   );
-  const chatAddMessageRef = useRef<((message: {
-    id: string; type: "join" | "leave" | "user"; userId: string;
-    username: string; message: string; timestamp: number;
-  }) => void) | null>(null);
+  const chatAddMessageRef = useRef<((message: ChatMessage) => void) | null>(null);
   /**
-   * Stable identities for the chat's two callbacks.
+   * Stable identities for the chat's three callbacks.
    *
    * Written inline they were new functions on every render of this component,
    * and the chat re-runs an effect on the one it is handed -- so a render
    * caused by anything at all, a progress counter most of all, re-ran it. They
    * close over nothing that changes.
+   *
+   * `addChatMessage` is handed to the WebSocket hook rather than to the chat,
+   * where an unstable identity cost more than a re-run effect: it is one of
+   * the dependencies `connectWebSocket` is built from, so an inline arrow here
+   * rebuilt the socket callback on every render and re-fired the effect that
+   * opens the connection. See the connect effect below.
    */
   const holdChatAddMessage = useCallback(
     (add: NonNullable<typeof chatAddMessageRef.current>) => {
       chatAddMessageRef.current = add;
     },
+    [],
+  );
+  const addChatMessage = useCallback(
+    (message: ChatMessage) => chatAddMessageRef.current?.(message),
     [],
   );
   const noopChatMessage = useCallback(() => {}, []);
@@ -696,7 +713,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drainCanonical]);
 
-  const { wsRef, connectWebSocket } = useWebSocket({
+  const { wsRef, connect } = useWebSocket({
     canvasMeta, userIdRef, userLoginNameRef, localUserJoinTimeRef,
     participantsRef, localIdRef, lastSeqRef, shouldConnectRef,
     catchupTimeoutRef, processingMessageRef, isCatchingUpRef,
@@ -705,7 +722,7 @@ export default function App() {
     onSynchronizationError: handleSynchronizationError,
     createOrUpdateCursor, hideCursor,
     addParticipant, clearParticipants,
-    addChatMessage: (message) => chatAddMessageRef.current?.(message),
+    addChatMessage,
     handleResetRequest, canUploadCheckpoint, onReconnectCanvas, onCanvasMessage,
     onWelcome: handleWelcome,
     onResetPoint: handleResetPoint,
@@ -758,9 +775,14 @@ export default function App() {
     joinedRef.current = true;
     void initializeApp();
   }, [initializeApp]);
+  // Opens the socket once the session is known. `connect` is stable on
+  // purpose: this effect must fire when the session arrives and at no other
+  // time, or a render becomes a reconnect. Everything after the first
+  // connection -- a dropped socket, a redeploy -- comes back through the
+  // hook's own backoff.
   useEffect(() => {
-    if (canvasMeta && painterRef.current && shouldConnectRef.current) void connectWebSocket();
-  }, [canvasMeta, connectWebSocket]);
+    if (canvasMeta && painterRef.current && shouldConnectRef.current) connect();
+  }, [canvasMeta, connect]);
   useEffect(() => () => { shouldConnectRef.current = false; wsRef.current?.close(); }, [wsRef]);
 
   const downloadPng = useCallback(async () => {

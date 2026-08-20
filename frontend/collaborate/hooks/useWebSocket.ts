@@ -909,6 +909,24 @@ export const useWebSocket = ({
     };
   }, [connectWebSocket]);
 
+  /**
+   * Opens the connection, with an identity that never changes.
+   *
+   * `connectWebSocket` is rebuilt whenever any of the many callbacks it closes
+   * over is, which is to say on most renders of the session view. An effect
+   * that depended on it therefore re-ran on most renders and called it again,
+   * and every path that decides *not* to reconnect -- the backoff timer, a
+   * 1008 refusal from a session that is over -- ends by setting connection
+   * state, which is itself a render. So the decision not to reconnect
+   * scheduled the next reconnect: the timer was cleared and a fresh socket
+   * opened at the speed of a round trip, and a refused join was retried
+   * forever. Callers get this instead, so opening the socket is something only
+   * a real event can ask for.
+   */
+  const connect = useCallback(() => {
+    connectRef.current();
+  }, []);
+
   // Cleanup WebSocket on unmount
   useEffect(() => {
     return () => {
@@ -926,7 +944,7 @@ export const useWebSocket = ({
 
   return {
     wsRef,
-    connectWebSocket,
+    connect,
     getWebSocketUrl,
   };
 };
