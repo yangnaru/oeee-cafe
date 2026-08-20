@@ -221,6 +221,8 @@ export interface HistoryTraceEvent {
    * - `echo` -- matched the head of our own fork, already on the canvas
    * - `concurrent` -- someone else's, touching none of our pending pixels
    * - `replay` -- overlapped pending work, so history was rebuilt under it
+   * - `abandoned` -- matched our fork further down; the entries before it
+   *   never reached the server and were dropped
    * - `diverged` -- our own id from elsewhere; the fork was dropped
    * - `fallbehind` -- the fork waited too long and was given up on
    * - `applied` -- nothing pending, applied straight
@@ -229,6 +231,7 @@ export interface HistoryTraceEvent {
     | "echo"
     | "concurrent"
     | "replay"
+    | "abandoned"
     | "diverged"
     | "fallbehind"
     | "applied";
@@ -831,6 +834,46 @@ export class CanvasHistory {
       } else {
         this.entries.push({ seq, msg, undo: "done" });
       }
+      this.maybeSavepoint();
+      this.notify();
+      return;
+    }
+
+    // Our own work, echoed back, but not from the head of the fork: whatever
+    // sits in front of it was never sequenced. A connection delivers its
+    // messages in the order they were sent and the server sequences them as
+    // they arrive, so an echo of a later one is proof the earlier ones are
+    // never coming -- a send the host declined because the socket was not
+    // open, or one that went out on a socket that did not survive.
+    //
+    // So they are dropped and the rest of the fork kept. Falling through to
+    // the divergence below instead cleared the whole fork, which left every
+    // echo still in flight arriving to a fork that no longer held it: each one
+    // diverged in turn and rebuilt history again, so a single unsent operation
+    // cost a savepoint restore, a replay and a repaint of every participant's
+    // layers per message for the rest of the stroke.
+    const abandoned = this.fork.findIndex((entry) => entry.id === id);
+    if (abandoned > 0) {
+      this.record({ source: "canonical", op: msg.type, actor, seq, action: "abandoned" });
+      console.warn(
+        `Canvas history: ${abandoned} local operation(s) never reached the server`
+      );
+      this.fork.splice(0, abandoned + 1);
+      if (this.fork.length === 0) this.forkFallbehind = 0;
+      let first = -1;
+      if (msg.type === "undo") {
+        first = this.markUndo(msg.userId, msg.redo);
+      } else if (msg.type === "undoPoint") {
+        this.appendUndoPoint(msg, seq);
+      } else {
+        this.entries.push({ seq, msg, undo: "done" });
+      }
+      // Once, to take the abandoned operations' pixels off the canvas. The
+      // fork that remains is re-applied on top, so the echoes behind this one
+      // meet a fork that still has them at its head and cost nothing again.
+      await this.replayFrom(
+        first >= 0 ? this.savepointFor(first) : this.latestSavepoint()
+      );
       this.maybeSavepoint();
       this.notify();
       return;

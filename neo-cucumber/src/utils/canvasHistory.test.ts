@@ -340,6 +340,70 @@ describe("the optimistic fork's patience", () => {
    * `MAX_FALLBEHIND`, because showing a canvas nobody else has is worse than
    * losing the work that was never acknowledged.
    */
+  /**
+   * The painter registers a local operation in the fork and then hands it to
+   * the host to send, and a host declines to send while the socket is not
+   * open, the session id is unknown, or a catch-up is running. The fork entry
+   * stays either way, and nothing will ever echo it.
+   *
+   * The echo of the operation behind it is proof of that: one connection
+   * delivers its messages in order and the server sequences them as they
+   * arrive, so nothing that was actually sent can be overtaken. Treating this
+   * as a divergence cleared the whole fork, which made every echo still in
+   * flight diverge in turn -- a savepoint restore, a replay and a repaint of
+   * every participant's layers per message, for the rest of the stroke.
+   */
+  it("drops the operations a send never carried, and rebuilds once", async () => {
+    const { engine, history } = setup();
+    history.setLocalUserId("1");
+
+    const dot = (x: number, y: number, r: number) => ({
+      kind: "stroke" as const,
+      layer: "foreground" as const,
+      brushSize: 1,
+      brush: "solid" as const,
+      color: { r, g: 0, b: 0, a: 255 },
+      points: [{ x, y }],
+      mask: { type: 0, r: 0, g: 0, b: 0 },
+    });
+    // What a controlled mount does: the interactive canvas paints, and the
+    // history is told the operation happened.
+    const paint = (id: string, x: number, y: number, r: number) => {
+      engine.drawLine(engine.layersFor("1").foreground, x, y, x, y, 1, "solid", r);
+      history.registerOptimisticOperation({ id, actorId: "1", operation: dot(x, y, r) });
+    };
+    const echo = (id: string, x: number, y: number, r: number, sequence: number) =>
+      history.handleCanonicalOperation({
+        id, actorId: "1", sequence, operation: dot(x, y, r),
+      });
+
+    paint("unsent", 2, 2, 90);
+    paint("sent:1", 4, 4, 110);
+    paint("sent:2", 6, 6, 130);
+
+    engine.repaints.length = 0;
+    await echo("sent:1", 4, 4, 110, 1);
+
+    // The abandoned operation's pixels come off the canvas, because nobody
+    // else ever had them; the rest of the fork keeps its own. The two that
+    // remain are one gesture with no boundary between them, so the second
+    // joins onto the first and owns the colour where they meet -- which is
+    // exactly what the rebuild has to reproduce.
+    expect(redFor(engine, "1", 2, 2)).toBe(0);
+    expect(redFor(engine, "1", 4, 4)).toBe(130);
+    expect(redFor(engine, "1", 6, 6)).toBe(130);
+    expect(engine.repaints).toContain("all:foreground");
+
+    // And the echo behind it is free: it is at the head of the fork again.
+    engine.repaints.length = 0;
+    await echo("sent:2", 6, 6, 130, 2);
+    expect(engine.repaints).toEqual([]);
+    expect(history.hasPendingLocal).toBe(false);
+    expect(
+      history.synchronizationTrace().flatMap((event) => event.action ?? []),
+    ).toEqual(["abandoned", "echo"]);
+  });
+
   it("gives up on a fork whose echoes never arrive", async () => {
     const { engine, history } = setup();
     history.handleLocalOperation({
