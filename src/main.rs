@@ -64,6 +64,19 @@ fn main() {
         tracing::warn!("sentry_dsn not configured, error reporting is disabled");
     }
 
+    // Said out loud at boot because the failure mode is silence: a deployment
+    // with nowhere private to keep recordings keeps none, and there is nothing
+    // else about a running server that would tell you which it is.
+    match oeee_cafe::web::handlers::collaborate::archive::bucket(&cfg) {
+        Some(bucket) => tracing::info!(
+            "Collaborative sessions are recorded to bucket {}",
+            bucket
+        ),
+        None => tracing::warn!(
+            "archive_s3_bucket not configured, collaborative sessions are not recorded"
+        ),
+    }
+
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
