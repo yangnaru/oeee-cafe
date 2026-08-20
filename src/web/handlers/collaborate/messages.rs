@@ -686,7 +686,13 @@ pub async fn sequence_and_broadcast(
     let redis_store = redis_messages::RedisMessageStore::new(state.redis_pool.clone());
     let channel = state.redis_state.get_room_channel(room_uuid);
     let outcome = redis_store
-        .sequence_and_publish(room_uuid, &payload, connection_id, &channel)
+        .sequence_and_publish_recording(
+            room_uuid,
+            &payload,
+            connection_id,
+            &channel,
+            super::archive::bucket(&state.config).is_some(),
+        )
         .await?;
 
     match outcome {

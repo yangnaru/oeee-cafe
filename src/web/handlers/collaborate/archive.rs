@@ -70,6 +70,24 @@ const CHUNK_MAGIC: [u8; 8] = *b"OEEELOG\x01";
 /// Where a session's objects live, under the bucket the images already use.
 const ARCHIVE_R2_PREFIX: &str = "collaborate-archive";
 
+/// Where recordings go, or None when this deployment has not been given
+/// anywhere private to put them.
+///
+/// Deliberately not defaulted to the image bucket: that one is served straight
+/// to browsers from `r2_public_endpoint_url`, so a recording written there
+/// would be readable by anyone holding the session's id. Recording nothing is
+/// the right failure.
+pub fn bucket(config: &AppConfig) -> Option<&str> {
+    selected_bucket(config.archive_s3_bucket.as_deref())
+}
+
+/// A blank setting means the same as an absent one: a config written out with
+/// the key empty is a deployment that has not chosen a bucket, not one that
+/// has chosen the empty bucket.
+fn selected_bucket(configured: Option<&str>) -> Option<&str> {
+    configured.filter(|name| !name.is_empty())
+}
+
 /// Named by the sequencer, which appends to it in the same step it assigns a
 /// position.
 pub fn buffer_key(room_uuid: Uuid) -> String {
@@ -284,6 +302,9 @@ fn manifest_key(room_uuid: Uuid) -> String {
 /// handle: a recording is not worth failing a drawing over, and what does not
 /// flush now stays buffered for the next attempt.
 pub async fn flush_room(state: &AppState, room_uuid: Uuid) -> usize {
+    if bucket(&state.config).is_none() {
+        return 0;
+    }
     let buffer = ArchiveBuffer::new(state.redis_pool.clone());
     match buffer.claim(room_uuid).await {
         Ok(true) => {}
@@ -308,6 +329,9 @@ pub async fn flush_room(state: &AppState, room_uuid: Uuid) -> usize {
 }
 
 async fn write_chunks(state: &AppState, room_uuid: Uuid, buffer: &ArchiveBuffer) -> usize {
+    let Some(bucket) = bucket(&state.config) else {
+        return 0;
+    };
     let client = s3_client(&state.config);
     let mut written = 0usize;
     loop {
@@ -337,7 +361,7 @@ async fn write_chunks(state: &AppState, room_uuid: Uuid, buffer: &ArchiveBuffer)
 
         if let Err(e) = client
             .put_object()
-            .bucket(&state.config.aws_s3_bucket)
+            .bucket(bucket)
             .key(chunk_key(room_uuid, first_seq))
             .body(ByteStream::from(body))
             .send()
@@ -371,6 +395,9 @@ async fn write_chunks(state: &AppState, room_uuid: Uuid, buffer: &ArchiveBuffer)
 /// Called where a session ends, before the room's Redis state is cleaned up --
 /// the participant map the manifest needs is one of the keys that goes.
 pub async fn seal_room(state: &AppState, room_uuid: Uuid) {
+    if bucket(&state.config).is_none() {
+        return;
+    }
     let flushed = flush_room(state, room_uuid).await;
     if let Err(e) = write_manifest(state, room_uuid, true).await {
         warn!("Failed to seal the archive for room {}: {}", room_uuid, e);
@@ -434,9 +461,12 @@ async fn write_manifest(
         updated_at: chrono::Utc::now().to_rfc3339(),
     };
 
+    let Some(bucket) = bucket(&state.config) else {
+        return Ok(());
+    };
     s3_client(&state.config)
         .put_object()
-        .bucket(&state.config.aws_s3_bucket)
+        .bucket(bucket)
         .key(manifest_key(room_uuid))
         .content_type("application/json")
         .body(ByteStream::from(serde_json::to_vec(&manifest)?))
@@ -450,10 +480,13 @@ async fn write_manifest(
 /// Read from the listing rather than remembered, so a manifest rewritten by a
 /// later flush describes what is actually in the bucket.
 async fn archived_bounds(state: &AppState, room_uuid: Uuid) -> (Option<u64>, Option<u64>) {
+    let Some(bucket) = bucket(&state.config) else {
+        return (None, None);
+    };
     let client = s3_client(&state.config);
     let listed = client
         .list_objects_v2()
-        .bucket(&state.config.aws_s3_bucket)
+        .bucket(bucket)
         .prefix(format!("{ARCHIVE_R2_PREFIX}/{room_uuid}/"))
         .send()
         .await;
@@ -479,6 +512,40 @@ async fn archived_bounds(state: &AppState, room_uuid: Uuid) -> (Option<u64>, Opt
     (first, last)
 }
 
+/// The largest report accepted. The trace is bounded at 512 events by the
+/// painter, so this is headroom rather than a limit anyone should meet.
+pub const MAX_DIAGNOSTIC_BYTES: usize = 512 * 1024;
+
+/// Files one client's account of what it believed, beside the session's log.
+///
+/// Under the archive's own prefix on purpose: a report is only ever read
+/// together with the stream it disagrees with, and keeping them in two places
+/// is how one of them gets cleaned up without the other.
+pub async fn store_diagnostic(
+    state: &AppState,
+    room_uuid: Uuid,
+    user_login_name: &str,
+    body: Vec<u8>,
+) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    let Some(bucket) = bucket(&state.config) else {
+        return Ok(None);
+    };
+    let key = format!(
+        "{ARCHIVE_R2_PREFIX}/{room_uuid}/diagnostics/{}-{}.json",
+        chrono::Utc::now().format("%Y%m%dT%H%M%S%.3fZ"),
+        user_login_name,
+    );
+    s3_client(&state.config)
+        .put_object()
+        .bucket(bucket)
+        .key(&key)
+        .content_type("application/json")
+        .body(ByteStream::from(body))
+        .send()
+        .await?;
+    Ok(Some(key))
+}
+
 /// Everything stored for a session, its objects end to end, and the manifest
 /// beside them.
 ///
@@ -491,12 +558,15 @@ pub async fn download_session(
     state: &AppState,
     room_uuid: Uuid,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    let Some(bucket) = bucket(&state.config) else {
+        return Ok(Vec::new());
+    };
     flush_room(state, room_uuid).await;
 
     let client = s3_client(&state.config);
     let listed = client
         .list_objects_v2()
-        .bucket(&state.config.aws_s3_bucket)
+        .bucket(bucket)
         .prefix(format!("{ARCHIVE_R2_PREFIX}/{room_uuid}/"))
         .send()
         .await?;
@@ -515,7 +585,7 @@ pub async fn download_session(
     for key in keys {
         let object = client
             .get_object()
-            .bucket(&state.config.aws_s3_bucket)
+            .bucket(bucket)
             .key(&key)
             .send()
             .await?;
@@ -524,13 +594,59 @@ pub async fn download_session(
     Ok(out)
 }
 
+/// Every synchronisation report filed for a session, newest last.
+///
+/// Returned as one JSON array so a session's reports can be read together:
+/// what matters is usually the difference between what two clients believed at
+/// the same moment, which is a comparison and not a file.
+pub async fn download_diagnostics(
+    state: &AppState,
+    room_uuid: Uuid,
+) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
+    let Some(bucket) = bucket(&state.config) else {
+        return Ok(Vec::new());
+    };
+    let client = s3_client(&state.config);
+    let listed = client
+        .list_objects_v2()
+        .bucket(bucket)
+        .prefix(format!("{ARCHIVE_R2_PREFIX}/{room_uuid}/diagnostics/"))
+        .send()
+        .await?;
+
+    // The key begins with the moment it was filed, so this is chronological.
+    let mut keys: Vec<String> = listed
+        .contents()
+        .iter()
+        .filter_map(|object| object.key())
+        .map(|key| key.to_string())
+        .collect();
+    keys.sort();
+
+    let mut reports = Vec::new();
+    for key in keys {
+        let object = client
+            .get_object()
+            .bucket(bucket)
+            .key(&key)
+            .send()
+            .await?;
+        let bytes = object.body.collect().await?.into_bytes();
+        match serde_json::from_slice(&bytes) {
+            Ok(report) => reports.push(report),
+            Err(e) => warn!("Skipping unreadable diagnostic {}: {}", key, e),
+        }
+    }
+    Ok(reports)
+}
+
 /// Records a message that has just been sequenced, when the sequence says so.
 ///
 /// Spawned rather than awaited: a flush is a handful of round trips to object
 /// storage, and the connection that happened to send the five-hundredth
 /// message is in the middle of a stroke.
 pub fn maybe_flush(state: &AppState, room_uuid: Uuid, seq: u64) {
-    if seq == 0 || !seq.is_multiple_of(FLUSH_EVERY) {
+    if seq == 0 || !seq.is_multiple_of(FLUSH_EVERY) || bucket(&state.config).is_none() {
         return;
     }
     let state = state.clone();
@@ -648,6 +764,22 @@ mod tests {
             .filter(|seq| seq.is_multiple_of(FLUSH_EVERY))
             .collect();
         assert_eq!(asked, vec![FLUSH_EVERY, FLUSH_EVERY * 2]);
+    }
+
+    /// Recording is off unless somewhere private has been named for it.
+    ///
+    /// The image bucket is served straight to browsers, so defaulting to it
+    /// would publish every session's traffic to anyone holding the id. An
+    /// empty setting is the same as an absent one, because a config written
+    /// out with the key blank means the same thing as one without it.
+    #[test]
+    fn recording_is_off_until_a_bucket_is_named_for_it() {
+        assert_eq!(selected_bucket(None), None);
+        assert_eq!(selected_bucket(Some("")), None);
+        assert_eq!(
+            selected_bucket(Some("oeee-cafe-archive")),
+            Some("oeee-cafe-archive")
+        );
     }
 
     #[test]

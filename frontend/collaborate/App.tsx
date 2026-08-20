@@ -42,6 +42,7 @@ import {
 } from "./binaryProtocol";
 import { useWebSocket, type ConnectionState, type SyncProgress } from "./hooks/useWebSocket";
 import { useRemoteCursors } from "./hooks/useRemoteCursors";
+import { reportDiagnostics, type DiagnosticContext } from "./diagnostics";
 import { refreshSessionPreview } from "./preview";
 import type { CollaborationMeta, Participant } from "./types";
 
@@ -620,6 +621,27 @@ export default function App() {
     await painterRef.current.applyCheckpoint(checkpoint);
   }, [canvasMeta, clearCursors]);
 
+  /**
+   * What this client believed, for a report about why it was wrong.
+   *
+   * Every field here is a ref in this closure and nothing outside the tab can
+   * read any of them, which is why a canvas that came out wrong could only be
+   * reasoned about from the outside last time.
+   */
+  const diagnosticContext = useCallback(
+    (reason: string, detail?: string): DiagnosticContext => ({
+      reason,
+      detail,
+      localId: localIdRef.current,
+      appliedSequence: appliedSequenceRef.current,
+      expectedSequence: expectedSequenceRef.current,
+      lastSeq: lastSeqRef.current,
+      catchingUp: isCatchingUpRef.current,
+      settled: painterRef.current?.isSynchronizationSettled() ?? false,
+    }),
+    [],
+  );
+
   const handleResetPoint = useCallback(async (
     baseSequence: number, sequence: number | undefined, snapshotCount: number,
   ) => {
@@ -645,6 +667,14 @@ export default function App() {
       console.error(
         `Checkpoint at ${baseSequence} could not be applied; leaving the canonical position behind`,
       );
+      reportDiagnostics(
+        getSessionId(),
+        painter,
+        diagnosticContext(
+          "checkpoint-not-applied",
+          `base ${baseSequence}, ${snapshotCount} snapshots announced`,
+        ),
+      );
       return;
     }
     await painter.compactCanonicalHistory(baseSequence);
@@ -652,7 +682,7 @@ export default function App() {
       appliedSequenceRef.current = sequence;
       expectedSequenceRef.current = sequence + 1;
     }
-  }, [drainCanonical]);
+  }, [drainCanonical, diagnosticContext]);
 
   const verifyCanonicalPosition = useCallback(async (): Promise<boolean> => {
     await drainCanonical();
@@ -681,7 +711,15 @@ export default function App() {
 
   const handleSynchronizationError = useCallback((error: Error | null) => {
     setSynchronizationError(error?.message ?? null);
-  }, []);
+    // Only the failures, not the clearing of one.
+    if (error) {
+      reportDiagnostics(
+        getSessionId(),
+        painterRef.current,
+        diagnosticContext("synchronization-error", error.message),
+      );
+    }
+  }, [diagnosticContext]);
 
   const handleSessionEnded = useCallback((postUrl: string) => {
     setSessionEnding(true);

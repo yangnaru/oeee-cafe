@@ -589,6 +589,24 @@ pub async fn download_collaborative_archive(
         .into_response())
 }
 
+/// GET /admin/collaborative-sessions/:uuid/diagnostics — what each client
+/// believed about its own position, for the moments one of them said
+/// something was wrong.
+///
+/// Staff only, like the recording it belongs to: a report carries one
+/// person's session in enough detail to reconstruct it.
+pub async fn download_collaborative_diagnostics(
+    _admin: AdminUser,
+    Path(room_uuid): Path<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Response, AppError> {
+    let reports =
+        crate::web::handlers::collaborate::archive::download_diagnostics(&state, room_uuid)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to read the reports: {}", e))?;
+    Ok(axum::Json(reports).into_response())
+}
+
 #[cfg(test)]
 mod tests {
     //! `cargo check` validates the handlers but not the Jinja, so render every
@@ -1049,6 +1067,11 @@ mod tests {
         ));
         assert!(rendered.contains(
             "/admin/collaborative-sessions/00000000-0000-0000-0000-00000000000c/archive"
+        ));
+        // And the reports filed against it, which are read together with the
+        // stream they disagree with.
+        assert!(rendered.contains(
+            "/admin/collaborative-sessions/00000000-0000-0000-0000-000000000009/diagnostics"
         ));
     }
 

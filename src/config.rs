@@ -40,6 +40,21 @@ pub struct AppConfig {
     pub r2_endpoint_url: String,
     pub r2_public_endpoint_url: String,
 
+    /// Where collaborative session recordings and the reports that go with
+    /// them are kept.
+    ///
+    /// A bucket of its own, and one that is **not** served publicly.
+    /// `aws_s3_bucket` is: every image on the site is fetched straight from
+    /// `r2_public_endpoint_url`, so anything written there is readable by
+    /// anyone holding the URL. A recording is the whole of a private drawing
+    /// session and is meant for staff alone.
+    ///
+    /// Unset means no recording at all, which is the safe way round: a
+    /// deployment that has not been given somewhere private to put these
+    /// should keep none rather than publish them.
+    #[serde(default)]
+    pub archive_s3_bucket: Option<String>,
+
     pub smtp_host: String,
     pub smtp_port: u16,
     pub smtp_user: String,

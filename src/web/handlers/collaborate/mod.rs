@@ -13,7 +13,10 @@ pub mod websocket;
 
 // Re-export the public interface
 pub use http_handlers::*;
-pub use preview::{claim_session_preview, serve_session_preview, upload_session_preview};
+pub use preview::{
+    claim_session_preview, report_session_diagnostics, serve_session_preview,
+    upload_session_preview,
+};
 pub use types::*;
 pub use websocket::websocket_collaborate_handler;
 

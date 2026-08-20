@@ -136,8 +136,10 @@ redis.call('PUBLISH', KEYS[3], frame)
 -- position is recorded with it, once and in that order: recording afterwards
 -- leaves a window in which a message is canonical and unrecorded, which is
 -- exactly the message a post-mortem wants. See collaborate::archive.
-redis.call('RPUSH', KEYS[9], ARGV[8] .. ':' .. frame)
-redis.call('EXPIRE', KEYS[9], tonumber(ARGV[9]))
+if ARGV[10] == '1' then
+    redis.call('RPUSH', KEYS[9], ARGV[8] .. ':' .. frame)
+    redis.call('EXPIRE', KEYS[9], tonumber(ARGV[9]))
+end
 -- Both auto-reset meters, read here because the write already had to touch
 -- every key they are computed from. The caller decides on them without asking
 -- again.
@@ -280,6 +282,23 @@ impl RedisMessageStore {
         from_connection: &str,
         channel: &str,
     ) -> Result<Sequenced, Box<dyn std::error::Error + Send + Sync>> {
+        self.sequence_and_publish_recording(room_uuid, payload, from_connection, channel, true)
+            .await
+    }
+
+    /// The same, told whether this deployment keeps a recording.
+    ///
+    /// A room whose recording has nowhere private to go buffers nothing:
+    /// entries that will never be flushed are memory held for an hour to no
+    /// end. See `archive::bucket`.
+    pub async fn sequence_and_publish_recording(
+        &self,
+        room_uuid: Uuid,
+        payload: &[u8],
+        from_connection: &str,
+        channel: &str,
+        recording: bool,
+    ) -> Result<Sequenced, Box<dyn std::error::Error + Send + Sync>> {
         let mut conn = self.pool.get().await.map_err(|e| {
             error!("Failed to get Redis connection: {}", e);
             e
@@ -321,6 +340,7 @@ impl RedisMessageStore {
                 .arg(super::redis_state::ACTIVITY_TTL)
                 .arg(now_millis)
                 .arg(super::archive::ARCHIVE_BUFFER_TTL)
+                .arg(if recording { "1" } else { "0" })
                 .invoke_async(&mut *conn)
                 .await
                 .map_err(|e| {

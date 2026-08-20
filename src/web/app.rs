@@ -15,6 +15,7 @@ use crate::web::handlers::admin::{
     admin_banners, admin_banners_fragment, admin_collaborative_sessions, admin_communities,
     admin_community_posts, admin_flag_banner, admin_flag_post, admin_post_detail, admin_posts,
     admin_posts_fragment, admin_user_posts, admin_users, download_collaborative_archive,
+    download_collaborative_diagnostics,
 };
 use crate::web::handlers::auth::{
     api_login, api_logout, api_me, api_signup, do_login, do_logout, do_signup, login, signup,
@@ -22,8 +23,9 @@ use crate::web::handlers::auth::{
 use crate::web::handlers::collaborate::{
     claim_session_preview, collaborate_lobby, collaborate_sessions_fragment,
     create_collaborative_session, get_active_sessions_json, get_auth_info, get_collaboration_meta,
-    load_more_collaborative_posts, save_collaborative_session, serve_collaborative_app,
-    serve_session_preview, upload_session_preview, websocket_collaborate_handler,
+    load_more_collaborative_posts, report_session_diagnostics, save_collaborative_session,
+    serve_collaborative_app, serve_session_preview, upload_session_preview,
+    websocket_collaborate_handler,
 };
 use crate::web::handlers::collaborate_cleanup::cleanup_collaborative_sessions;
 use crate::web::handlers::community::{
@@ -291,6 +293,10 @@ impl App {
                 "/admin/collaborative-sessions/:uuid/archive",
                 get(download_collaborative_archive),
             )
+            .route(
+                "/admin/collaborative-sessions/:uuid/diagnostics",
+                get(download_collaborative_diagnostics),
+            )
             .route("/admin/banners", get(admin_banners))
             .route("/admin/banners-fragment", get(admin_banners_fragment))
             .route(
@@ -551,6 +557,14 @@ impl App {
             .route(
                 "/collaborate/:uuid/preview/claim",
                 post(claim_session_preview),
+            )
+            // What a client believed about its own position when something
+            // told it otherwise. See handlers/collaborate/archive.rs.
+            .route(
+                "/collaborate/:uuid/diagnostics",
+                post(report_session_diagnostics).layer(DefaultBodyLimit::max(
+                    crate::web::handlers::collaborate::archive::MAX_DIAGNOSTIC_BYTES,
+                )),
             )
             .route("/api/auth", get(get_auth_info))
             .route("/collaboration/:uuid/meta", get(get_collaboration_meta))

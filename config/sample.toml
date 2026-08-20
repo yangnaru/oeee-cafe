@@ -25,6 +25,12 @@ aws_s3_bucket = "aws_s3_bucket"
 r2_endpoint_url = "r2_endpoint_url"
 r2_public_endpoint_url = "r2_public_endpoint_url"
 
+# Collaborative session recordings and synchronisation reports. Must be a
+# bucket of its own with no public access: aws_s3_bucket above is served
+# straight to browsers, and a recording is a whole private drawing session.
+# Leave it unset to record nothing.
+# archive_s3_bucket = "oeee-cafe-archive"
+
 smtp_host = ""
 smtp_port = 587
 smtp_user = ""

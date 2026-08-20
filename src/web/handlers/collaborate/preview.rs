@@ -459,6 +459,38 @@ async fn session_is_live(
 ///
 /// Not "may watch" -- a preview is a claim about what the canvas looks like,
 /// and only a client with the canvas can make it honestly.
+/// Whether this viewer has ever drawn in this room, active or not.
+///
+/// Looser than `viewer_may_upload` on purpose: a client filing a report about
+/// a session it has just fallen out of is exactly the report worth having, and
+/// by then its participant row is no longer active.
+pub async fn viewer_is_participant(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    room_uuid: Uuid,
+    user_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT EXISTS(
+            SELECT 1
+            FROM collaborative_sessions cs
+            WHERE cs.id = $1
+              AND (
+                cs.owner_id = $2
+                OR EXISTS(
+                    SELECT 1 FROM collaborative_sessions_participants csp
+                    WHERE csp.session_id = cs.id AND csp.user_id = $2
+                )
+              )
+        ) AS "exists!"
+        "#,
+        room_uuid,
+        user_id,
+    )
+    .fetch_one(db)
+    .await
+}
+
 async fn viewer_may_upload(
     db: &sqlx::Pool<sqlx::Postgres>,
     room_uuid: Uuid,
@@ -616,6 +648,53 @@ pub async fn upload_session_preview(
         // spent. Somebody else's preview is the current one and this canvas is
         // the older news.
         None => Ok(StatusCode::CONFLICT.into_response()),
+    }
+}
+
+/// POST /collaborate/:uuid/diagnostics -- one client's account of where it
+/// thought it was.
+///
+/// The counterpart to the canonical archive, and the half that catches what
+/// the archive cannot: a stream can be recorded perfectly and still be applied
+/// wrongly, which is what happened to session c9b8321d. Filed by the client on
+/// trouble, so a healthy session posts nothing.
+pub async fn report_session_diagnostics(
+    Path(room_uuid): Path<Uuid>,
+    auth_session: AuthSession,
+    State(state): State<AppState>,
+    body: Bytes,
+) -> Result<Response, AppError> {
+    let user = auth_session.user.ok_or(AppError::Unauthorized)?;
+
+    if !viewer_is_participant(&state.db_pool, room_uuid, user.id).await? {
+        return Err(AppError::Forbidden);
+    }
+    if body.len() > super::archive::MAX_DIAGNOSTIC_BYTES {
+        return Ok(StatusCode::PAYLOAD_TOO_LARGE.into_response());
+    }
+    // Stored as sent, but only once it is known to be the shape it claims:
+    // this is written to object storage under an admin-readable prefix, and
+    // "whatever the client posted" is not a thing to keep there.
+    if serde_json::from_slice::<serde_json::Value>(&body).is_err() {
+        return Err(AppError::InvalidFormData(
+            "diagnostic report is not JSON".to_string(),
+        ));
+    }
+
+    match super::archive::store_diagnostic(&state, room_uuid, &user.login_name, body.to_vec()).await
+    {
+        Ok(Some(key)) => {
+            warn!(
+                "Stored a synchronization report from {} for room {} at {}",
+                user.login_name, room_uuid, key
+            );
+            Ok(StatusCode::NO_CONTENT.into_response())
+        }
+        // Nowhere private to keep it. Accepted rather than refused: the client
+        // has nothing to do differently, and a report is not worth an error on
+        // a path that is already going wrong.
+        Ok(None) => Ok(StatusCode::NO_CONTENT.into_response()),
+        Err(e) => Err(anyhow::anyhow!("Failed to store a diagnostic report: {}", e).into()),
     }
 }
 

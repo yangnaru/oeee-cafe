@@ -28,6 +28,15 @@ Two consequences for anything that touches the database:
 - Both colours are briefly up at once, each with its own pool, against a
   Postgres shared with other apps on that host. Watch `db_max_connections`.
 
+Collaborative session recordings (`handlers/collaborate/archive.rs`) go to
+`archive_s3_bucket`, which has to be a **separate bucket with no public
+access**. `aws_s3_bucket` is served straight to browsers from
+`r2_public_endpoint_url`, and a public session's id is printed on the lobby for
+anyone to read — so a recording written there would be downloadable by anyone
+who loaded `/collaborate`. Unset means nothing is recorded, which is the
+intended default for a deployment that has not been given somewhere private to
+put them. `config/` is gitignored, so this lives only on the server.
+
 Rolling back before the next deploy: point `proxy/upstream.caddy` at the other
 colour, `docker compose start` it, and
 `docker compose exec proxy caddy reload --config /etc/caddy/Caddyfile`. The
