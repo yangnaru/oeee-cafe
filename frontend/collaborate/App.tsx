@@ -561,7 +561,12 @@ export default function App() {
     if (message.type === "snapshot") {
       const pngBytes = new Uint8Array(message.pngData).slice();
       const owners = snapshotPairsRef.current.get(sequence) ?? new Map();
-      const actorId = String(message.userId);
+      // Whose layer this is, not who sent it. One client uploads the whole
+      // checkpoint on everyone's behalf, so `userId` is the same uploader for
+      // every snapshot in it -- keying by that collapsed all of them onto one
+      // participant, left the checkpoint one pair short of the count that says
+      // it is whole, and so stopped it from ever being applied.
+      const actorId = String(message.targetOwner);
       const pair = owners.get(actorId) ?? {};
       pair[message.layer] = new Blob([pngBytes.buffer as ArrayBuffer], { type: "image/png" });
       owners.set(actorId, pair);
@@ -624,6 +629,24 @@ export default function App() {
     // how many there are is what lets the drain tell whole from half-arrived.
     snapshotCountsRef.current.set(baseSequence, snapshotCount);
     await drainCanonical();
+    // A client that was in the room for the checkpoint is already past its
+    // base and has nothing to restore: the server broadcasts the point alone,
+    // never the snapshots, so the drain above had none to apply and none to
+    // wait for. A client replaying history has just been given them, and if
+    // the drain could not put them on the canvas then advancing here would
+    // step the position over every message the checkpoint stands for -- and
+    // leave this client certain it was caught up on a canvas missing all of
+    // them, which is exactly how a session lost its drawing and told nobody.
+    //
+    // Staying put instead leaves the position behind `lastSeq`, which is what
+    // `verifyCanonicalPosition` already watches for: the socket closes on the
+    // gap and the replay is asked for again.
+    if (appliedSequenceRef.current < baseSequence) {
+      console.error(
+        `Checkpoint at ${baseSequence} could not be applied; leaving the canonical position behind`,
+      );
+      return;
+    }
     await painter.compactCanonicalHistory(baseSequence);
     if (sequence !== undefined) {
       appliedSequenceRef.current = sequence;
@@ -742,7 +765,13 @@ export default function App() {
     // still catching up, or holding an optimistic fork, is not what the room
     // looks like. Unlike a checkpoint this one does not wait for it -- there
     // is another tick along shortly, and a preview is never worth blocking on.
-    if (!canUploadCheckpoint()) return;
+    //
+    // `canUploadCheckpoint` alone is not enough during a replay: it compares
+    // the applied position against the highest sequence *seen*, which while
+    // history is streaming is the replay's own cursor rather than its target.
+    // Every tick mid-replay therefore looks caught up, and the lobby would get
+    // whatever fraction of the drawing had arrived by then.
+    if (isCatchingUpRef.current || !canUploadCheckpoint()) return;
     // Nothing has moved since this client last uploaded, so whatever is on the
     // lobby is already current. Other clients keep their own count and will
     // each refresh once after their own last upload, which is what eventually
