@@ -490,7 +490,10 @@ pub struct AdminSessionsQuery {
     pub page: Option<i64>,
     #[serde(default)]
     pub sort: AdminSort,
-    /// Missing or unrecognised statuses show everything.
+    /// Omit to show everything. A value that is not one of the three is a 400
+    /// rather than a fallback -- `serde(default)` covers a missing key, not an
+    /// unknown one -- which is the same deal `sort` above has offered since it
+    /// was written.
     #[serde(default)]
     pub status: AdminSessionStatus,
 }
